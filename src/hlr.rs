@@ -1,35 +1,51 @@
+#[derive(Debug, PartialEq, Eq)]
 pub struct Program {
     pub functions: Vec<Function>,
     pub structs: Vec<Struct>,
 }
 
+impl Program {
+    pub fn new() -> Self {
+        Self {
+            functions: Vec::new(),
+            structs: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Function {
     pub name: String,
-    pub return_type: Option<String>,
     pub parameters: Vec<Parameter>,
+    pub return_type: Option<String>,
     pub body: Block,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
     pub param_type: String,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Struct {
     pub name: String,
     pub fields: Vec<StructField>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct StructField {
     pub name: String,
     pub field_type: String,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Block {
     pub statements: Vec<Statement>,
     pub return_expression: Option<Box<Expression>>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Statement {
     Let {
         name: String,
@@ -37,10 +53,11 @@ pub enum Statement {
         value: Expression,
     },
     Expression(Expression),
-    Return(Expression),
+    Return(Option<Expression>),
     Break,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expression {
     Literal(Literal),
     Variable(String),
@@ -50,11 +67,11 @@ pub enum Expression {
         right: Box<Expression>,
     },
     Assignment {
-        target: String,
+        target: Box<Expression>,
         value: Box<Expression>,
     },
     FunctionCall {
-        name: String,
+        function: Box<Expression>,
         arguments: Vec<Expression>,
     },
     StructInit {
@@ -69,13 +86,16 @@ pub enum Expression {
     Loop {
         body: Block,
     },
+    Block(Block),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
     Bool(bool),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum BinaryOperator {
     Add,
     Subtract,

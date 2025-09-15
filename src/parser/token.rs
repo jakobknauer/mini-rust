@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq, Clone)]
-pub(super) enum Token {
+pub enum Token {
     Keyword(Keyword),
     Identifier(String),
     NumLiteral(String),
@@ -13,17 +13,26 @@ pub(super) enum Token {
     Comma,              // ,
     Equal,              // =
     EqualEqual,         // ==
+    BangEqual,          // !=
     Dot,                // .
     Colon,              // :
     AmpersandAmpersand, // &&
     PipePipe,           // ||
+    Arrow,              // ->
+    Plus,               // +
+    Minus,              // -
+    Asterisk,           // *
+    Slash,              // /
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(super) enum Keyword {
+pub enum Keyword {
     Let,
     Fn,
     Struct,
     Return,
     Break,
+    If,
+    Else,
+    Loop,
 }
