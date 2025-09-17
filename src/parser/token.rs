@@ -27,12 +27,13 @@ pub enum Token {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
-    Let,
-    Fn,
-    Struct,
-    Return,
     Break,
-    If,
     Else,
+    Enum,
+    Fn,
+    If,
+    Let,
     Loop,
+    Return,
+    Struct,
 }

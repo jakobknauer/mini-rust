@@ -158,6 +158,7 @@ fn try_into_keyword_token(keyword: &str) -> Option<Token> {
         "if" => Some(Token::Keyword(Keyword::If)),
         "else" => Some(Token::Keyword(Keyword::Else)),
         "loop" => Some(Token::Keyword(Keyword::Loop)),
+        "enum" => Some(Token::Keyword(Keyword::Enum)),
         _ => None,
     }
 }

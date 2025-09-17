@@ -2,6 +2,7 @@
 pub struct Program {
     pub functions: Vec<Function>,
     pub structs: Vec<Struct>,
+    pub enums: Vec<Enum>,
 }
 
 impl Program {
@@ -9,6 +10,7 @@ impl Program {
         Self {
             functions: Vec::new(),
             structs: Vec::new(),
+            enums: Vec::new(),
         }
     }
 }
@@ -37,6 +39,17 @@ pub struct Struct {
 pub struct StructField {
     pub name: String,
     pub field_type: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Enum {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct EnumVariant {
+    pub name: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]

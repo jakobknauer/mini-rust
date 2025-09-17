@@ -2,7 +2,10 @@ mod lexer;
 mod token;
 
 use crate::{
-    hlr::{BinaryOperator, Block, Expression, Function, Literal, Parameter, Program, Statement, Struct, StructField},
+    hlr::{
+        BinaryOperator, Block, Enum, EnumVariant, Expression, Function, Literal, Parameter, Program, Statement, Struct,
+        StructField,
+    },
     parser::token::Keyword,
 };
 
@@ -101,6 +104,7 @@ impl<'a> HlrParser<'a> {
             match token {
                 Token::Keyword(Keyword::Fn) => program.functions.push(self.parse_function()?),
                 Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
+                Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
                 token => return Err(ParserError::UnexpectedToken(token.clone())),
             }
         }
@@ -183,6 +187,34 @@ impl<'a> HlrParser<'a> {
         self.expect_token(Token::Colon)?;
         let field_type = self.expect_identifier()?;
         Ok(StructField { name, field_type })
+    }
+
+    fn parse_enum(&mut self) -> Result<Enum, ParserError> {
+        self.expect_keyword(Keyword::Enum)?;
+        let name = self.expect_identifier()?;
+
+        self.expect_token(Token::LBrace)?;
+        let variants = self.parse_enum_variants()?;
+        self.expect_token(Token::RBrace)?;
+
+        Ok(Enum { name, variants })
+    }
+
+    fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant>, ParserError> {
+        let mut variants = Vec::new();
+        while let Some(Token::Identifier(_)) = self.current() {
+            variants.push(self.parse_enum_variant()?);
+
+            if !self.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        Ok(variants)
+    }
+
+    fn parse_enum_variant(&mut self) -> Result<EnumVariant, ParserError> {
+        let name = self.expect_identifier()?;
+        Ok(EnumVariant { name })
     }
 
     /// TODO allow loop/if/block expression statements without delimiting semicolon
@@ -451,12 +483,15 @@ mod tests {
         }
 
         #[test]
-        fn test_empty_function_and_empty_struct() {
+        fn test_empty_program_items() {
             let input = r#"
                 fn empty() {
                 }
 
                 struct Empty {
+                }
+
+                enum Empty {
                 }
                 "#;
 
@@ -473,6 +508,10 @@ mod tests {
                 structs: vec![Struct {
                     name: "Empty".to_string(),
                     fields: vec![],
+                }],
+                enums: vec![Enum {
+                    name: "Empty".to_string(),
+                    variants: vec![],
                 }],
             };
 
@@ -511,6 +550,7 @@ mod tests {
                     },
                 }],
                 structs: vec![],
+                enums: vec![],
             };
 
             parse_and_compare(input, expected);
@@ -536,6 +576,36 @@ mod tests {
                         StructField {
                             name: "y".to_string(),
                             field_type: "int".to_string(),
+                        },
+                    ],
+                }],
+                enums: vec![],
+            };
+
+            parse_and_compare(input, expected);
+        }
+
+        #[test]
+        fn test_parse_simple_enum() {
+            let input = r#"
+                enum State {
+                    Off,
+                    On,
+                    Unknown,
+                }"#;
+
+            let expected = Program {
+                functions: vec![],
+                structs: vec![],
+                enums: vec![Enum {
+                    name: "State".to_string(),
+                    variants: vec![
+                        EnumVariant {
+                            name: "Off".to_string(),
+                        },
+                        EnumVariant { name: "On".to_string() },
+                        EnumVariant {
+                            name: "Unknown".to_string(),
                         },
                     ],
                 }],
