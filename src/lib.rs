@@ -2,3 +2,4 @@
 
 mod hlr;
 mod parser;
+mod types;
