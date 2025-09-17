@@ -3,3 +3,4 @@
 mod hlr;
 mod parser;
 mod types;
+mod type_registry;
