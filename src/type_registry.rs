@@ -76,4 +76,22 @@ impl TypeRegistry {
         let type_id = self.get_type_id_by_name(name)?;
         self.types.get(&type_id).cloned()
     }
+
+    pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
+        let type_ = self.get_type_by_name(name)?;
+        if let Type::NamedType(NamedType::Struct(struct_id)) = type_ {
+            self.structs.get_mut(&struct_id)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut_enum_definition_by_name(&mut self, name: &str) -> Option<&mut EnumDefinition> {
+        let type_ = self.get_type_by_name(name)?;
+        if let Type::NamedType(NamedType::Enum(enum_id)) = type_ {
+            self.enums.get_mut(&enum_id)
+        } else {
+            None
+        }
+    }
 }
