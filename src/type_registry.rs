@@ -68,11 +68,11 @@ impl TypeRegistry {
         Ok(type_id)
     }
 
-    pub fn get_type_id_by_name(&mut self, name: &str) -> Option<TypeId> {
+    pub fn get_type_id_by_name(&self, name: &str) -> Option<TypeId> {
         self.named_types.get(name).cloned()
     }
 
-    pub fn get_type_by_name(&mut self, name: &str) -> Option<Type> {
+    pub fn get_type_by_name(&self, name: &str) -> Option<Type> {
         let type_id = self.get_type_id_by_name(name)?;
         self.types.get(&type_id).cloned()
     }

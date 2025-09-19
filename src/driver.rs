@@ -54,9 +54,9 @@ fn build_function_registry(
 ) -> Result<function_registry::FunctionRegistry, ()> {
     let mut function_registry = function_registry::FunctionRegistry::new();
 
-    for function in program.functions {
+    for function in &program.functions {
         let return_type = type_registry
-            .get_type_id_by_name(&function.return_type.unwrap())
+            .get_type_id_by_name(&function.return_type.as_ref().unwrap())
             .unwrap();
 
         let parameters = function
