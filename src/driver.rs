@@ -1,8 +1,9 @@
-use crate::{hlr, parser, type_registry, types};
+use crate::{function_registry, functions, hlr, parser, type_registry, types};
 
 pub fn compile(source: &str) -> () {
     let hlr = parser::parse_hlr(&source).unwrap();
-    let type_registry = build_type_registry(&hlr);
+    let type_registry = build_type_registry(&hlr).unwrap();
+    let function_registry = build_function_registry(&hlr, &type_registry);
 }
 
 fn build_type_registry(program: &hlr::Program) -> Result<type_registry::TypeRegistry, ()> {
@@ -45,4 +46,35 @@ fn build_type_registry(program: &hlr::Program) -> Result<type_registry::TypeRegi
     }
 
     Ok(type_registry)
+}
+
+fn build_function_registry(
+    program: &hlr::Program,
+    type_registry: &type_registry::TypeRegistry,
+) -> Result<function_registry::FunctionRegistry, ()> {
+    let mut function_registry = function_registry::FunctionRegistry::new();
+
+    for function in program.functions {
+        let return_type = type_registry
+            .get_type_id_by_name(&function.return_type.unwrap())
+            .unwrap();
+
+        let parameters = function
+            .parameters
+            .iter()
+            .map(|parameter| functions::FunctionParameter {
+                name: parameter.name.clone(),
+                type_: type_registry.get_type_id_by_name(&parameter.param_type).unwrap(),
+            })
+            .collect();
+
+        let signature = functions::FunctionSignature {
+            return_type,
+            parameters,
+        };
+
+        function_registry.register_function(&function.name, signature)?;
+    }
+
+    Ok(function_registry)
 }
