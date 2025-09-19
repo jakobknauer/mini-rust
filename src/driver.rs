@@ -1,7 +1,7 @@
-use crate::{function_registry, functions, hlr, parser, type_registry, types};
+use crate::{function_registry, functions, hlr, type_registry, types};
 
 pub fn compile(source: &str) -> () {
-    let hlr = parser::parse_hlr(&source).unwrap();
+    let hlr = hlr::build_program(&source).unwrap();
     let type_registry = build_type_registry(&hlr).unwrap();
     let function_registry = build_function_registry(&hlr, &type_registry);
 }

@@ -1,30 +1,20 @@
-mod lexer;
-mod token;
+use crate::hlr::{defs::*, lexer, token::Keyword};
 
-use crate::{
-    hlr::{
-        BinaryOperator, Block, Enum, EnumVariant, Expression, Function, Literal, Parameter, Program, Statement, Struct,
-        StructField,
-    },
-    parser::token::Keyword,
-};
+pub use crate::hlr::{lexer::LexerError, token::Token};
 
-pub use lexer::LexerError;
-pub use token::Token;
-
-pub fn parse_hlr(input: &str) -> Result<Program, ParserError> {
+pub fn build_program(input: &str) -> Result<Program, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_program()
 }
 
-fn parse_hlr_expr(input: &str) -> Result<Expression, ParserError> {
+fn build_expr(input: &str) -> Result<Expression, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_expression()
 }
 
-fn parse_hlr_block(input: &str) -> Result<Block, ParserError> {
+fn build_block(input: &str) -> Result<Block, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_block()
@@ -478,7 +468,7 @@ mod tests {
         use super::*;
 
         fn parse_and_compare(input: &str, expected: Program) {
-            let parsed = parse_hlr(input).expect("Failed to parse HLR");
+            let parsed = build_program(input).expect("Failed to parse HLR");
             assert_eq!(parsed, expected);
         }
 
@@ -619,7 +609,7 @@ mod tests {
         use super::*;
 
         fn parse_and_compare(input: &str, expected: Block) {
-            let parsed = parse_hlr_block(input).expect("Failed to parse HLR");
+            let parsed = build_block(input).expect("Failed to parse HLR");
             assert_eq!(parsed, expected);
         }
 
@@ -703,7 +693,7 @@ mod tests {
         use super::*;
 
         fn parse_and_compare(input: &str, expected: Expression) {
-            let parsed = parse_hlr_expr(input).expect("Failed to parse HLR");
+            let parsed = build_expr(input).expect("Failed to parse HLR");
             assert_eq!(parsed, expected);
         }
 
