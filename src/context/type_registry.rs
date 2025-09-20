@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::{EnumDefinition, EnumId, NamedType, PrimitiveType, StructDefinition, StructId, Type, TypeId};
+use crate::context::types::*;
 
 pub struct TypeRegistry {
     types: HashMap<TypeId, Type>,

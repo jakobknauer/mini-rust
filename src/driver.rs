@@ -1,4 +1,7 @@
-use crate::{function_registry, functions, hlr, type_registry, types};
+use crate::{
+    context::{function_registry, functions, type_registry, types},
+    hlr,
+};
 
 pub fn compile(source: &str) -> () {
     let hlr = hlr::build_program(&source).unwrap();

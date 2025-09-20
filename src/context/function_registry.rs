@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::functions::{FnId, FunctionSignature};
+use crate::context::functions::{FnId, FunctionSignature};
 
 pub struct FunctionRegistry {
     function_names: HashMap<String, FnId>,

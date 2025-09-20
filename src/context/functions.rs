@@ -1,4 +1,4 @@
-use crate::types::TypeId;
+use crate::context::types::TypeId;
 
 pub struct FunctionSignature {
     pub return_type: TypeId,
