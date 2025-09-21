@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::context::{functions::FnId, types::TypeId};
 
+#[derive(Debug)]
 pub struct Mlr {
     pub expressions: HashMap<ExprId, Expression>,
     pub statements: HashMap<StmtId, Statement>,
@@ -23,26 +24,27 @@ impl Mlr {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StmtId(pub usize);
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ExprId(pub usize);
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LocId(pub usize);
 
-const RETURN_VALUE: ExprId = ExprId(0);
-
+#[derive(Debug)]
 pub enum Statement {
     Assign { loc: LocId, value: ExprId },
     Return { value: LocId },
 }
 
+#[derive(Debug)]
 pub enum Expression {
     Block(Block),
     Constant(Constant),
     Var(LocId),
+    AddressOf(LocId),
     Call {
         callable: LocId,
         args: Vec<LocId>,
@@ -50,20 +52,23 @@ pub enum Expression {
     Function(FnId),
     If {
         condition: LocId,
-        then_block: ExprId,
-        else_block: Option<ExprId>,
+        then_block: Block,
+        else_block: Block,
     },
     Loop {
         body: ExprId,
     },
 }
 
+#[derive(Debug)]
 pub struct Block {
     pub statements: Vec<StmtId>,
     pub output: LocId,
 }
 
+#[derive(Debug)]
 pub enum Constant {
     Int(i64),
     Bool(bool),
+    Unit,
 }

@@ -10,5 +10,5 @@ pub struct FunctionParameter {
     pub type_: TypeId,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FnId(pub usize);

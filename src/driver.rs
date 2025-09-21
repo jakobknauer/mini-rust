@@ -6,7 +6,13 @@ use crate::{
 pub fn compile(source: &str) -> () {
     let hlr = hlr::build_program(&source).unwrap();
     let type_registry = build_type_registry(&hlr).unwrap();
-    let function_registry = build_function_registry(&hlr, &type_registry);
+    let mut function_registry = build_function_registry(&hlr, &type_registry).unwrap();
+
+    for function in &hlr.functions {
+        let mlr_builder = crate::mlr::MlrBuilder::new(&function, &type_registry, &function_registry);
+        let mlr = mlr_builder.build();
+        function_registry.register_function_mlr(&function.name, mlr);
+    }
 }
 
 fn build_type_registry(program: &hlr::Program) -> Result<type_registry::TypeRegistry, ()> {
@@ -56,6 +62,23 @@ fn build_function_registry(
     type_registry: &type_registry::TypeRegistry,
 ) -> Result<function_registry::FunctionRegistry, ()> {
     let mut function_registry = function_registry::FunctionRegistry::new();
+
+    function_registry.register_function(
+        "add::<i32>",
+        functions::FunctionSignature {
+            return_type: type_registry.get_type_id_by_name("i32").unwrap(),
+            parameters: vec![
+                functions::FunctionParameter {
+                    name: "a".to_string(),
+                    type_: type_registry.get_type_id_by_name("i32").unwrap(),
+                },
+                functions::FunctionParameter {
+                    name: "b".to_string(),
+                    type_: type_registry.get_type_id_by_name("i32").unwrap(),
+                },
+            ],
+        },
+    )?;
 
     for function in &program.functions {
         let return_type = type_registry
