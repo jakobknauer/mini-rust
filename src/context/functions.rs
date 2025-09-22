@@ -1,6 +1,7 @@
 use crate::context::types::TypeId;
 
 pub struct FunctionSignature {
+    pub name: String,
     pub return_type: TypeId,
     pub parameters: Vec<FunctionParameter>,
 }

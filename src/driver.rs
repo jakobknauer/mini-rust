@@ -1,6 +1,7 @@
 use crate::{
     context::{function_registry, functions, type_registry, types},
     hlr,
+    util::print,
 };
 
 pub fn compile(source: &str) -> () {
@@ -11,6 +12,7 @@ pub fn compile(source: &str) -> () {
     for function in &hlr.functions {
         let mlr_builder = crate::mlr::MlrBuilder::new(&function, &type_registry, &function_registry);
         let mlr = mlr_builder.build();
+        print::print_mlr(&mlr, &type_registry, &function_registry);
         function_registry.register_function_mlr(&function.name, mlr);
     }
 }
@@ -63,22 +65,20 @@ fn build_function_registry(
 ) -> Result<function_registry::FunctionRegistry, ()> {
     let mut function_registry = function_registry::FunctionRegistry::new();
 
-    function_registry.register_function(
-        "add::<i32>",
-        functions::FunctionSignature {
-            return_type: type_registry.get_type_id_by_name("i32").unwrap(),
-            parameters: vec![
-                functions::FunctionParameter {
-                    name: "a".to_string(),
-                    type_: type_registry.get_type_id_by_name("i32").unwrap(),
-                },
-                functions::FunctionParameter {
-                    name: "b".to_string(),
-                    type_: type_registry.get_type_id_by_name("i32").unwrap(),
-                },
-            ],
-        },
-    )?;
+    function_registry.register_function(functions::FunctionSignature {
+        name: "add::<i32>".to_string(),
+        return_type: type_registry.get_type_id_by_name("i32").unwrap(),
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: type_registry.get_type_id_by_name("i32").unwrap(),
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: type_registry.get_type_id_by_name("i32").unwrap(),
+            },
+        ],
+    })?;
 
     for function in &program.functions {
         let return_type = type_registry
@@ -95,11 +95,12 @@ fn build_function_registry(
             .collect();
 
         let signature = functions::FunctionSignature {
+            name: function.name.clone(),
             return_type,
             parameters,
         };
 
-        function_registry.register_function(&function.name, signature)?;
+        function_registry.register_function(signature)?;
     }
 
     Ok(function_registry)
