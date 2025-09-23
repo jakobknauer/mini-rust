@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::context::{functions::FnId, types::TypeId};
 
@@ -32,6 +32,12 @@ pub struct ExprId(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LocId(pub usize);
+
+impl Display for LocId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_{}", self.0)
+    }
+}
 
 #[derive(Debug)]
 pub enum Statement {

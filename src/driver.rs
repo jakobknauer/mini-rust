@@ -12,7 +12,7 @@ pub fn compile(source: &str) -> () {
     for function in &hlr.functions {
         let mlr_builder = crate::mlr::MlrBuilder::new(&function, &type_registry, &function_registry);
         let mlr = mlr_builder.build();
-        print::print_mlr(&mlr, &type_registry, &function_registry);
+        print::print_mlr(&mlr, &type_registry, &function_registry, &mut std::io::stdout()).unwrap();
         function_registry.register_function_mlr(&function.name, mlr);
     }
 }
