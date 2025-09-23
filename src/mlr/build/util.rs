@@ -33,16 +33,16 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&self, name: &str) -> mlr::Expression {
+    pub fn resolve_name(&self, name: &str) -> mlr::build::Result<mlr::Expression> {
         // Try to resolve as variable
         let loc_id = self.resolve_name_to_location(name);
 
         if let Some(loc_id) = loc_id {
-            mlr::Expression::Var(loc_id)
+            Ok(mlr::Expression::Var(loc_id))
+        } else if let Some(fn_id) = self.function_registry.get_function_by_name(name) {
+            Ok(mlr::Expression::Function(fn_id))
         } else {
-            // Try to resolve as function
-            let fn_id = self.function_registry.get_function_by_name(name).unwrap();
-            mlr::Expression::Function(fn_id)
+            Err(super::MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }
     }
 
