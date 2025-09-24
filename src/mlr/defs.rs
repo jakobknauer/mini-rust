@@ -2,6 +2,15 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::context::{functions::FnId, types::TypeId};
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct StmtId(pub usize);
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ExprId(pub usize);
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct LocId(pub usize);
+
 #[derive(Debug)]
 pub struct Mlr {
     pub expressions: HashMap<ExprId, Expression>,
@@ -17,25 +26,10 @@ impl Mlr {
             statements: HashMap::new(),
             types: HashMap::new(),
             body: Block {
-                statements: vec![],
+                statements: Vec::new(),
                 output: LocId(0),
             },
         }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct StmtId(pub usize);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ExprId(pub usize);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct LocId(pub usize);
-
-impl Display for LocId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "_{}", self.0)
     }
 }
 
@@ -77,4 +71,10 @@ pub enum Constant {
     Int(i64),
     Bool(bool),
     Unit,
+}
+
+impl Display for LocId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_{}", self.0)
+    }
 }
