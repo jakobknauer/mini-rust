@@ -17,6 +17,7 @@ pub enum NamedType {
 pub enum PrimitiveType {
     Integer32,
     Boolean,
+    Unit,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

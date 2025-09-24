@@ -1,18 +1,23 @@
 use std::io::Write;
 
 use crate::{
-    context::{function_registry::FunctionRegistry, type_registry::TypeRegistry},
+    context::{
+        function_registry::FunctionRegistry,
+        functions::{FnId, FunctionSignature},
+        type_registry::TypeRegistry,
+    },
     mlr::*,
 };
 
 pub fn print_mlr<W: Write>(
-    mlr: &Mlr,
+    fn_id: FnId,
     type_registry: &TypeRegistry,
     function_registry: &FunctionRegistry,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
-        mlr,
+        mlr: function_registry.get_function_mlr(fn_id).unwrap(),
+        signature: function_registry.get_signature_by_id(fn_id).unwrap(),
         type_registry,
         function_registry,
         indent_level: 0,
@@ -23,6 +28,7 @@ pub fn print_mlr<W: Write>(
 
 struct MlrPrinter<'a, W: Write> {
     mlr: &'a Mlr,
+    signature: &'a FunctionSignature,
     type_registry: &'a TypeRegistry,
     function_registry: &'a FunctionRegistry,
     indent_level: usize,
@@ -33,7 +39,29 @@ const INDENT: &str = "    ";
 
 impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_mlr(&mut self) -> Result<(), std::io::Error> {
+        self.print_signature()?;
+        write!(self.writer, " ")?;
         self.print_block(&self.mlr.body)
+    }
+
+    fn print_signature(&mut self) -> Result<(), std::io::Error> {
+        write!(self.writer, "fn {}(", self.signature.name)?;
+        for (i, param) in self.signature.parameters.iter().enumerate() {
+            if i > 0 {
+                write!(self.writer, ", ")?;
+            }
+            let type_name = self.type_registry.get_type_name_by_id(param.type_);
+            match type_name {
+                Some(name) => write!(self.writer, "{}: {}", param.name, name)?,
+                None => write!(self.writer, "<unknown type id {}>", param.type_.0)?,
+            };
+        }
+        write!(self.writer, ") -> ")?;
+        let return_type_name = self.type_registry.get_type_name_by_id(self.signature.return_type);
+        match return_type_name {
+            Some(name) => write!(self.writer, "{}", name),
+            None => write!(self.writer, "<unknown type id {}>", self.signature.return_type.0),
+        }
     }
 
     fn print_block(&mut self, block: &Block) -> Result<(), std::io::Error> {

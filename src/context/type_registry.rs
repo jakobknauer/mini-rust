@@ -47,6 +47,7 @@ impl TypeRegistry {
     pub fn register_primitive_types(&mut self) -> Result<(), ()> {
         self.register_named_type("i32", Type::NamedType(NamedType::Primitve(PrimitiveType::Integer32)))?;
         self.register_named_type("bool", Type::NamedType(NamedType::Primitve(PrimitiveType::Boolean)))?;
+        self.register_named_type("()", Type::NamedType(NamedType::Primitve(PrimitiveType::Unit)))?;
         Ok(())
     }
 
@@ -93,5 +94,13 @@ impl TypeRegistry {
         } else {
             None
         }
+    }
+
+    pub fn get_type_name_by_id(&self, r#type: TypeId) -> Option<&str> {
+        self.named_types.iter().find_map(
+            |(name, type_id)| {
+                if *type_id == r#type { Some(name.as_str()) } else { None }
+            },
+        )
     }
 }

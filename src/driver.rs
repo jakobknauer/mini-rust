@@ -12,8 +12,12 @@ pub fn compile(source: &str) -> () {
     for function in &hlr.functions {
         let mlr_builder = crate::mlr::MlrBuilder::new(&function, &type_registry, &function_registry);
         let mlr = mlr_builder.build().unwrap();
-        print::print_mlr(&mlr, &type_registry, &function_registry, &mut std::io::stdout()).unwrap();
+
         function_registry.register_function_mlr(&function.name, mlr);
+        let fn_id = function_registry.get_function_by_name(&function.name).unwrap();
+
+        print::print_mlr(fn_id, &type_registry, &function_registry, &mut std::io::stdout()).unwrap();
+        println!();
     }
 }
 
@@ -65,25 +69,41 @@ fn build_function_registry(
 ) -> Result<function_registry::FunctionRegistry, ()> {
     let mut function_registry = function_registry::FunctionRegistry::new();
 
+    let i32_t = type_registry.get_type_id_by_name("i32").unwrap();
     function_registry.register_function(functions::FunctionSignature {
         name: "add::<i32>".to_string(),
-        return_type: type_registry.get_type_id_by_name("i32").unwrap(),
+        return_type: i32_t,
         parameters: vec![
             functions::FunctionParameter {
                 name: "a".to_string(),
-                type_: type_registry.get_type_id_by_name("i32").unwrap(),
+                type_: i32_t,
             },
             functions::FunctionParameter {
                 name: "b".to_string(),
-                type_: type_registry.get_type_id_by_name("i32").unwrap(),
+                type_: i32_t,
+            },
+        ],
+    })?;
+    function_registry.register_function(functions::FunctionSignature {
+        name: "mul::<i32>".to_string(),
+        return_type: i32_t,
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: i32_t,
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: i32_t,
             },
         ],
     })?;
 
     for function in &program.functions {
-        let return_type = type_registry
-            .get_type_id_by_name(&function.return_type.as_ref().unwrap())
-            .unwrap();
+        let return_type = match function.return_type.as_ref() {
+            Some(type_id) => type_registry.get_type_id_by_name(type_id).unwrap(),
+            None => type_registry.get_type_id_by_name("()").unwrap(),
+        };
 
         let parameters = function
             .parameters

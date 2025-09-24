@@ -144,11 +144,20 @@ impl<'a> MlrBuilder<'a> {
 
         let (op_loc, op_stmt) = assign_to_new_loc!(self, {
             // TODO resolve function based on operator (and argument types...)
-            let fn_id = self.function_registry.get_function_by_name("add::<i32>").ok_or(
-                MlrBuilderError::MissingOperatorImpl {
-                    name: "add::<i32>".to_string(),
-                },
-            )?;
+            let fn_id = match operator {
+                hlr::BinaryOperator::Add => self.function_registry.get_function_by_name("add::<i32>").ok_or(
+                    MlrBuilderError::MissingOperatorImpl {
+                        name: "add::<i32>".to_string(),
+                    },
+                )?,
+                hlr::BinaryOperator::Multiply => self.function_registry.get_function_by_name("mul::<i32>").ok_or(
+                    MlrBuilderError::MissingOperatorImpl {
+                        name: "mul::<i32>".to_string(),
+                    },
+                )?,
+                _ => todo!("implement builtin operators"),
+            };
+
             let init = mlr::Expression::Function(fn_id);
             self.insert_expr(init)
         });
