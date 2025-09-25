@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod context;
+mod ctxt;
 pub mod driver;
 mod hlr;
 mod mlr;

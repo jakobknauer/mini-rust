@@ -39,7 +39,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         if let Some(loc_id) = loc_id {
             Ok(mlr::Expression::Var(loc_id))
-        } else if let Some(fn_id) = self.function_registry.get_function_by_name(name) {
+        } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
             Ok(mlr::Expression::Function(fn_id))
         } else {
             Err(super::MlrBuilderError::UnresolvableSymbol { name: name.to_string() })

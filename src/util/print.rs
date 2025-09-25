@@ -1,26 +1,19 @@
 use std::io::Write;
 
 use crate::{
-    context::{
-        function_registry::FunctionRegistry,
+    ctxt::{
+        self,
         functions::{FnId, FunctionSignature},
-        type_registry::TypeRegistry,
     },
     mlr::*,
 };
 
-pub fn print_mlr<W: Write>(
-    fn_id: FnId,
-    type_registry: &TypeRegistry,
-    function_registry: &FunctionRegistry,
-    writer: &mut W,
-) -> Result<(), std::io::Error> {
+pub fn print_mlr<W: Write>(fn_id: FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         fn_id,
-        mlr: function_registry.get_function_mlr(fn_id),
-        signature: function_registry.get_signature_by_id(fn_id),
-        type_registry,
-        function_registry,
+        mlr: ctxt.function_registry.get_function_mlr(fn_id),
+        signature: ctxt.function_registry.get_signature_by_id(fn_id),
+        ctxt,
         indent_level: 0,
         writer,
     };
@@ -31,8 +24,7 @@ struct MlrPrinter<'a, W: Write> {
     fn_id: FnId,
     mlr: Option<&'a Mlr>,
     signature: Option<&'a FunctionSignature>,
-    type_registry: &'a TypeRegistry,
-    function_registry: &'a FunctionRegistry,
+    ctxt: &'a ctxt::Ctxt,
     indent_level: usize,
     writer: &'a mut W,
 }
@@ -61,14 +53,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let type_name = self.type_registry.get_type_name_by_id(param.type_);
+            let type_name = self.ctxt.type_registry.get_type_name_by_id(param.type_);
             match type_name {
                 Some(name) => write!(self.writer, "{}: {}", param.name, name)?,
                 None => write!(self.writer, "<unknown type id {}>", param.type_.0)?,
             };
         }
         write!(self.writer, ") -> ")?;
-        let return_type_name = self.type_registry.get_type_name_by_id(signature.return_type);
+        let return_type_name = self.ctxt.type_registry.get_type_name_by_id(signature.return_type);
         match return_type_name {
             Some(name) => write!(self.writer, "{}", name),
             None => write!(self.writer, "<unknown type id {}>", signature.return_type.0),
@@ -143,7 +135,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, ")")
                 }
                 Expression::Function(fn_id) => {
-                    if let Some(func) = self.function_registry.get_signature_by_id(*fn_id) {
+                    if let Some(func) = self.ctxt.function_registry.get_signature_by_id(*fn_id) {
                         write!(self.writer, "fn {}()", func.name)
                     } else {
                         write!(self.writer, "<unknown fn id {}>", fn_id.0)

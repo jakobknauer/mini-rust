@@ -1,30 +1,32 @@
 use crate::{
-    context::{function_registry, functions, type_registry, types},
-    hlr,
+    ctxt::{self, functions, types},
+    hlr, mlr,
     util::print,
 };
 
 pub fn compile(source: &str) -> Option<()> {
+    let mut ctxt = ctxt::Ctxt::new();
+
     let hlr = hlr::build_program(&source).ok()?;
-    let type_registry = build_type_registry(&hlr)?;
-    let mut function_registry = build_function_registry(&hlr, &type_registry)?;
+
+    register_and_define_types(&hlr, &mut ctxt.type_registry)?;
+    register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
 
     for function in &hlr.functions {
-        let mlr_builder = crate::mlr::MlrBuilder::new(&function, &type_registry, &function_registry);
+        let mlr_builder = mlr::MlrBuilder::new(&function, &ctxt);
         let mlr = mlr_builder.build().ok()?;
 
-        function_registry.register_function_mlr(&function.name, mlr);
-        let fn_id = function_registry.get_function_by_name(&function.name)?;
+        ctxt.function_registry.register_function_mlr(&function.name, mlr);
+        let fn_id = ctxt.function_registry.get_function_by_name(&function.name)?;
 
-        print::print_mlr(fn_id, &type_registry, &function_registry, &mut std::io::stdout()).ok()?;
+        print::print_mlr(fn_id, &ctxt, &mut std::io::stdout()).ok()?;
         println!();
     }
 
     Some(())
 }
 
-fn build_type_registry(program: &hlr::Program) -> Option<type_registry::TypeRegistry> {
-    let mut type_registry = type_registry::TypeRegistry::new();
+fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Option<()> {
     type_registry.register_primitive_types().ok()?;
 
     for struct_ in &program.structs {
@@ -64,15 +66,14 @@ fn build_type_registry(program: &hlr::Program) -> Option<type_registry::TypeRegi
         enum_definition.variants = variants;
     }
 
-    Some(type_registry)
+    Some(())
 }
 
-fn build_function_registry(
+fn register_functions(
     program: &hlr::Program,
-    type_registry: &type_registry::TypeRegistry,
-) -> Option<function_registry::FunctionRegistry> {
-    let mut function_registry = function_registry::FunctionRegistry::new();
-
+    type_registry: &ctxt::TypeRegistry,
+    function_registry: &mut ctxt::FunctionRegistry,
+) -> Option<()> {
     let i32_t = type_registry.get_type_id_by_name("i32")?;
     function_registry
         .register_function(functions::FunctionSignature {
@@ -133,5 +134,5 @@ fn build_function_registry(
         function_registry.register_function(signature).ok()?;
     }
 
-    Some(function_registry)
+    Some(())
 }

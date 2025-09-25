@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::context::types::*;
+use crate::ctxt::types::*;
 
 pub struct TypeRegistry {
     types: HashMap<TypeId, Type>,

@@ -7,15 +7,11 @@ mod macros;
 
 use itertools::Itertools;
 
-use crate::{
-    context::{function_registry, type_registry},
-    hlr, mlr,
-};
+use crate::{ctxt::Ctxt, hlr, mlr};
 
 pub struct MlrBuilder<'a> {
     function: &'a hlr::Function,
-    type_registry: &'a type_registry::TypeRegistry,
-    function_registry: &'a function_registry::FunctionRegistry,
+    ctxt: &'a Ctxt,
     output: mlr::Mlr,
     scopes: VecDeque<Scope>,
     next_expr_id: mlr::ExprId,
@@ -42,15 +38,10 @@ impl Scope {
 }
 
 impl<'a> MlrBuilder<'a> {
-    pub fn new(
-        function: &'a hlr::Function,
-        type_registry: &'a type_registry::TypeRegistry,
-        function_registry: &'a function_registry::FunctionRegistry,
-    ) -> Self {
+    pub fn new(function: &'a hlr::Function, ctxt: &'a Ctxt) -> Self {
         Self {
             function,
-            type_registry,
-            function_registry,
+            ctxt,
             output: mlr::Mlr::new(),
             scopes: VecDeque::new(),
             next_expr_id: mlr::ExprId(0),
@@ -145,12 +136,12 @@ impl<'a> MlrBuilder<'a> {
         let (op_loc, op_stmt) = assign_to_new_loc!(self, {
             // TODO resolve function based on operator (and argument types...)
             let fn_id = match operator {
-                hlr::BinaryOperator::Add => self.function_registry.get_function_by_name("add::<i32>").ok_or(
+                hlr::BinaryOperator::Add => self.ctxt.function_registry.get_function_by_name("add::<i32>").ok_or(
                     MlrBuilderError::MissingOperatorImpl {
                         name: "add::<i32>".to_string(),
                     },
                 )?,
-                hlr::BinaryOperator::Multiply => self.function_registry.get_function_by_name("mul::<i32>").ok_or(
+                hlr::BinaryOperator::Multiply => self.ctxt.function_registry.get_function_by_name("mul::<i32>").ok_or(
                     MlrBuilderError::MissingOperatorImpl {
                         name: "mul::<i32>".to_string(),
                     },

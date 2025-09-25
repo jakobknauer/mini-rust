@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    context::functions::{FnId, FunctionSignature},
+    ctxt::functions::{FnId, FunctionSignature},
     mlr::Mlr,
 };
 
