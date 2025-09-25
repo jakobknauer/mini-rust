@@ -16,8 +16,9 @@ pub fn print_mlr<W: Write>(
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
-        mlr: function_registry.get_function_mlr(fn_id).unwrap(),
-        signature: function_registry.get_signature_by_id(fn_id).unwrap(),
+        fn_id,
+        mlr: function_registry.get_function_mlr(fn_id),
+        signature: function_registry.get_signature_by_id(fn_id),
         type_registry,
         function_registry,
         indent_level: 0,
@@ -27,8 +28,9 @@ pub fn print_mlr<W: Write>(
 }
 
 struct MlrPrinter<'a, W: Write> {
-    mlr: &'a Mlr,
-    signature: &'a FunctionSignature,
+    fn_id: FnId,
+    mlr: Option<&'a Mlr>,
+    signature: Option<&'a FunctionSignature>,
     type_registry: &'a TypeRegistry,
     function_registry: &'a FunctionRegistry,
     indent_level: usize,
@@ -41,12 +43,21 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_mlr(&mut self) -> Result<(), std::io::Error> {
         self.print_signature()?;
         write!(self.writer, " ")?;
-        self.print_block(&self.mlr.body)
+
+        if let Some(mlr) = self.mlr {
+            self.print_block(&mlr.body)
+        } else {
+            write!(self.writer, "<undefined definition for fn id {}>", self.fn_id.0)
+        }
     }
 
     fn print_signature(&mut self) -> Result<(), std::io::Error> {
-        write!(self.writer, "fn {}(", self.signature.name)?;
-        for (i, param) in self.signature.parameters.iter().enumerate() {
+        let Some(signature) = self.signature else {
+            return write!(self.writer, "<undefined signature for fn id {}>", self.fn_id.0);
+        };
+
+        write!(self.writer, "fn {}(", signature.name)?;
+        for (i, param) in signature.parameters.iter().enumerate() {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
@@ -57,10 +68,10 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             };
         }
         write!(self.writer, ") -> ")?;
-        let return_type_name = self.type_registry.get_type_name_by_id(self.signature.return_type);
+        let return_type_name = self.type_registry.get_type_name_by_id(signature.return_type);
         match return_type_name {
             Some(name) => write!(self.writer, "{}", name),
-            None => write!(self.writer, "<unknown type id {}>", self.signature.return_type.0),
+            None => write!(self.writer, "<unknown type id {}>", signature.return_type.0),
         }
     }
 
@@ -81,7 +92,8 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     }
 
     fn print_statement(&mut self, stmt_id: StmtId) -> Result<(), std::io::Error> {
-        let stmt = &self.mlr.statements.get(&stmt_id);
+        let stmt = &self.mlr.expect("self.mlr should not be empty").statements.get(&stmt_id);
+
         match stmt {
             Some(stmt) => match stmt {
                 Statement::Assign { loc, value } => {
@@ -100,7 +112,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     }
 
     fn print_expression(&mut self, expr_id: ExprId) -> Result<(), std::io::Error> {
-        let expr = &self.mlr.expressions.get(&expr_id);
+        let expr = &self
+            .mlr
+            .expect("self.mlr should not be empty")
+            .expressions
+            .get(&expr_id);
+
         match expr {
             Some(expr) => match expr {
                 Expression::Block(block) => self.print_block(block),

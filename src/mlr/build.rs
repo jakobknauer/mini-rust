@@ -60,7 +60,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn current_scope(&mut self) -> &mut Scope {
-        self.scopes.back_mut().expect("No current scope")
+        self.scopes.back_mut().expect("self.scopes should never be empty")
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
@@ -135,7 +135,7 @@ impl<'a> MlrBuilder<'a> {
     fn build_binary_op(
         &mut self,
         left: &hlr::Expression,
-        #[allow(unused)] operator: &hlr::BinaryOperator,
+        operator: &hlr::BinaryOperator,
         right: &hlr::Expression,
     ) -> Result<mlr::Expression> {
         let (left_loc, left_stmt) = assign_to_new_loc!(self, self.build_expression(left)?);
