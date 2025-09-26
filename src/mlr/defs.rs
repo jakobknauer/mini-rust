@@ -15,7 +15,8 @@ pub struct LocId(pub usize);
 pub struct Mlr {
     pub expressions: HashMap<ExprId, Expression>,
     pub statements: HashMap<StmtId, Statement>,
-    pub types: HashMap<LocId, TypeId>,
+    pub loc_types: HashMap<LocId, TypeId>,
+    pub expr_types: HashMap<ExprId, TypeId>,
     pub body: Block,
 }
 
@@ -24,7 +25,8 @@ impl Mlr {
         Self {
             expressions: HashMap::new(),
             statements: HashMap::new(),
-            types: HashMap::new(),
+            loc_types: HashMap::new(),
+            expr_types: HashMap::new(),
             body: Block {
                 statements: Vec::new(),
                 output: LocId(0),

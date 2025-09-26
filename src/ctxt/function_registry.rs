@@ -9,7 +9,7 @@ pub struct FunctionRegistry {
     function_names: HashMap<String, FnId>,
     signatures: HashMap<FnId, FunctionSignature>,
     next_function_id: FnId,
-    mlrs: HashMap<FnId, Mlr>,
+    defs: HashMap<FnId, Mlr>,
 }
 
 impl FunctionRegistry {
@@ -18,7 +18,7 @@ impl FunctionRegistry {
             function_names: HashMap::new(),
             signatures: HashMap::new(),
             next_function_id: FnId(0),
-            mlrs: HashMap::new(),
+            defs: HashMap::new(),
         }
     }
 
@@ -44,13 +44,13 @@ impl FunctionRegistry {
         self.function_names.get(name).cloned()
     }
 
-    pub fn register_function_mlr(&mut self, name: &str, mlr: Mlr) {
+    pub fn add_function_def(&mut self, name: &str, mlr: Mlr) {
         if let Some(&fn_id) = self.function_names.get(name) {
-            self.mlrs.insert(fn_id, mlr);
+            self.defs.insert(fn_id, mlr);
         }
     }
 
     pub fn get_function_mlr(&self, fn_id: FnId) -> Option<&Mlr> {
-        self.mlrs.get(&fn_id)
+        self.defs.get(&fn_id)
     }
 }

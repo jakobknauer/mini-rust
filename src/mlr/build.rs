@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
+mod type_util;
 mod util;
 
 #[macro_use]
@@ -7,11 +8,15 @@ mod macros;
 
 use itertools::Itertools;
 
-use crate::{ctxt::Ctxt, hlr, mlr};
+use crate::{
+    ctxt::{self, functions::FnId},
+    hlr, mlr,
+};
 
 pub struct MlrBuilder<'a> {
     function: &'a hlr::Function,
-    ctxt: &'a Ctxt,
+    fn_id: FnId,
+    ctxt: &'a ctxt::Ctxt,
     output: mlr::Mlr,
     scopes: VecDeque<Scope>,
     next_expr_id: mlr::ExprId,
@@ -21,8 +26,17 @@ pub struct MlrBuilder<'a> {
 
 #[derive(Debug)]
 pub enum MlrBuilderError {
-    MissingOperatorImpl { name: String },
-    UnresolvableSymbol { name: String },
+    MissingOperatorImpl {
+        name: String,
+    },
+    UnresolvableSymbol {
+        name: String,
+    },
+    ReassignTypeMismatch {
+        loc: mlr::LocId,
+        expected: ctxt::types::TypeId,
+        actual: ctxt::types::TypeId,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;
@@ -38,9 +52,10 @@ impl Scope {
 }
 
 impl<'a> MlrBuilder<'a> {
-    pub fn new(function: &'a hlr::Function, ctxt: &'a Ctxt) -> Self {
+    pub fn new(function: &'a hlr::Function, fn_id: FnId, ctxt: &'a ctxt::Ctxt) -> Self {
         Self {
             function,
+            fn_id,
             ctxt,
             output: mlr::Mlr::new(),
             scopes: VecDeque::new(),
@@ -56,11 +71,17 @@ impl<'a> MlrBuilder<'a> {
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
         self.scopes.push_back(Scope::new());
-        for param in &self.function.parameters {
+
+        let signature = self.ctxt.function_registry.get_signature_by_id(self.fn_id).unwrap();
+
+        for param in &signature.parameters {
             let loc = self.get_next_loc_id();
             self.current_scope().vars.insert(param.name.clone(), loc);
+            self.output.loc_types.insert(loc, param.type_);
         }
+
         self.output.body = self.build_block(&self.function.body)?;
+
         Ok(self.output)
     }
 
@@ -77,7 +98,7 @@ impl<'a> MlrBuilder<'a> {
             self,
             match &block.return_expression {
                 Some(expr) => self.build_expression(expr)?,
-                None => self.create_unit_value(),
+                None => self.create_unit_value()?,
             }
         );
 
@@ -108,7 +129,7 @@ impl<'a> MlrBuilder<'a> {
             hlr::Expression::Block(block) => mlr::Expression::Block(self.build_block(block)?),
         };
 
-        Ok(self.insert_expr(expr))
+        self.insert_expr(expr)
     }
 
     fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Expression> {
@@ -150,7 +171,7 @@ impl<'a> MlrBuilder<'a> {
             };
 
             let init = mlr::Expression::Function(fn_id);
-            self.insert_expr(init)
+            self.insert_expr(init)?
         });
 
         let (call_loc, call_stmt) = assign_to_new_loc!(self, {
@@ -158,7 +179,7 @@ impl<'a> MlrBuilder<'a> {
                 callable: op_loc,
                 args: vec![left_loc, right_loc],
             };
-            self.insert_expr(init)
+            self.insert_expr(init)?
         });
 
         Ok(mlr::Expression::Block(mlr::Block {
@@ -176,10 +197,10 @@ impl<'a> MlrBuilder<'a> {
                 _ => unimplemented!("Only variables are supported as assignment targets."),
             };
             let value = self.build_expression(value)?;
-            self.insert_assign_stmt(assign_loc, value)
+            self.insert_assign_stmt(assign_loc, value)?
         };
 
-        let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_value());
+        let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
 
         Ok(mlr::Expression::Block(mlr::Block {
             statements: vec![assign_stmt, unit_stmt],
@@ -204,7 +225,7 @@ impl<'a> MlrBuilder<'a> {
                 callable: function_loc,
                 args: arg_locs,
             };
-            self.insert_expr(init)
+            self.insert_expr(init)?
         });
 
         let statements: Vec<_> = std::iter::once(function_stmt)
@@ -232,10 +253,10 @@ impl<'a> MlrBuilder<'a> {
                 then_block: self.build_block(then_block)?,
                 else_block: match else_block {
                     Some(block) => self.build_block(block)?,
-                    None => self.create_unit_block(),
+                    None => self.create_unit_block()?,
                 },
             };
-            self.insert_expr(init)
+            self.insert_expr(init)?
         });
 
         Ok(mlr::Expression::Block(mlr::Block {
@@ -246,7 +267,7 @@ impl<'a> MlrBuilder<'a> {
 
     fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::Expression> {
         let body = mlr::Expression::Block(self.build_block(body)?);
-        let body = self.insert_expr(body);
+        let body = self.insert_expr(body)?;
         Ok(mlr::Expression::Loop { body })
     }
 
@@ -264,7 +285,7 @@ impl<'a> MlrBuilder<'a> {
         let loc = self.get_next_loc_id();
         self.current_scope().vars.insert(name.to_string(), loc);
         let value = self.build_expression(value)?;
-        Ok(self.insert_assign_stmt(loc, value))
+        self.insert_assign_stmt(loc, value)
     }
 
     fn build_expression_statement(&mut self, expression: &hlr::Expression) -> Result<mlr::StmtId> {
@@ -275,7 +296,7 @@ impl<'a> MlrBuilder<'a> {
     fn build_return_statement(&mut self, expression: Option<&hlr::Expression>) -> Result<mlr::StmtId> {
         let (expr_loc, expr_stmt) = match expression {
             Some(expression) => assign_to_new_loc!(self, self.build_expression(expression)?),
-            None => assign_to_new_loc!(self, self.create_unit_value()),
+            None => assign_to_new_loc!(self, self.create_unit_value()?),
         };
 
         let return_stmt = {
@@ -287,7 +308,7 @@ impl<'a> MlrBuilder<'a> {
             statements: vec![expr_stmt, return_stmt],
             output: expr_loc,
         });
-        let block = self.insert_expr(block);
+        let block = self.insert_expr(block)?;
 
         let (_, block_stmt) = assign_to_new_loc!(self, block);
         Ok(block_stmt)

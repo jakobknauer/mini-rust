@@ -1,3 +1,5 @@
+use std::collections::hash_map::Entry;
+
 use crate::mlr;
 
 impl<'a> mlr::MlrBuilder<'a> {
@@ -19,10 +21,14 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
-    pub fn insert_expr(&mut self, expr: mlr::Expression) -> mlr::ExprId {
+    pub fn insert_expr(&mut self, expr: mlr::Expression) -> mlr::build::Result<mlr::ExprId> {
         let expr_id = self.get_next_expr_id();
         self.output.expressions.insert(expr_id, expr);
-        expr_id
+
+        let type_id = self.infer_type(expr_id)?;
+        self.output.expr_types.insert(expr_id, type_id);
+
+        Ok(expr_id)
     }
 
     pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> mlr::StmtId {
@@ -55,24 +61,42 @@ impl<'a> mlr::MlrBuilder<'a> {
             .cloned()
     }
 
-    pub fn create_unit_value(&mut self) -> mlr::ExprId {
+    pub fn create_unit_value(&mut self) -> mlr::build::Result<mlr::ExprId> {
         let expr = mlr::Expression::Constant(mlr::Constant::Unit);
         self.insert_expr(expr)
     }
 
-    pub fn create_unit_block(&mut self) -> mlr::Block {
+    pub fn create_unit_block(&mut self) -> mlr::build::Result<mlr::Block> {
         let loc = self.get_next_loc_id();
-        let init = self.create_unit_value();
+        let init = self.create_unit_value()?;
         let stmt = mlr::Statement::Assign { loc: loc, value: init };
         let stmt = self.insert_stmt(stmt);
-        mlr::Block {
+        Ok(mlr::Block {
             statements: vec![stmt],
             output: loc,
-        }
+        })
     }
 
-    pub fn insert_assign_stmt(&mut self, loc: mlr::LocId, expr: mlr::ExprId) -> mlr::StmtId {
+    pub fn insert_assign_stmt(&mut self, loc: mlr::LocId, expr: mlr::ExprId) -> mlr::build::Result<mlr::StmtId> {
+        let expr_type = self.output.expr_types.get(&expr).expect("type of expr should be known");
+
+        match self.output.loc_types.entry(loc) {
+            Entry::Occupied(occupied_entry) => {
+                let loc_type = occupied_entry.get();
+                if !self.ctxt.type_registry.types_equal(*expr_type, *loc_type) {
+                    return Err(mlr::build::MlrBuilderError::ReassignTypeMismatch {
+                        loc: loc,
+                        expected: *loc_type,
+                        actual: *expr_type,
+                    });
+                }
+            }
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(*expr_type);
+            }
+        };
+
         let stmt = mlr::Statement::Assign { loc, value: expr };
-        self.insert_stmt(stmt)
+        Ok(self.insert_stmt(stmt))
     }
 }

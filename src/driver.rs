@@ -13,13 +13,15 @@ pub fn compile(source: &str) -> Option<()> {
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
 
     for function in &hlr.functions {
-        let mlr_builder = mlr::MlrBuilder::new(&function, &ctxt);
-        let mlr = mlr_builder.build().ok()?;
-
-        ctxt.function_registry.register_function_mlr(&function.name, mlr);
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name)?;
 
+        let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, &ctxt);
+        let mlr = mlr_builder.build().ok()?;
+
+        ctxt.function_registry.add_function_def(&function.name, mlr);
+
         print::print_mlr(fn_id, &ctxt, &mut std::io::stdout()).ok()?;
+
         println!();
     }
 
