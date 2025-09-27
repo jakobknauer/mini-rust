@@ -141,11 +141,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         write!(self.writer, "<unknown fn id {}>", fn_id.0)
                     }
                 }
-                Expression::If {
+                Expression::If(If {
                     condition,
                     then_block,
                     else_block,
-                } => {
+                }) => {
                     write!(self.writer, "if {} ", condition)?;
                     self.print_block(then_block)?;
                     self.indent()?;

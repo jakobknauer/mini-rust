@@ -15,7 +15,7 @@ pub fn compile(source: &str) -> Option<()> {
     for function in &hlr.functions {
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name)?;
 
-        let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, &ctxt);
+        let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, &mut ctxt);
         let mlr = mlr_builder.build().ok()?;
 
         ctxt.function_registry.add_function_def(&function.name, mlr);

@@ -47,19 +47,10 @@ pub enum Expression {
     Constant(Constant),
     Var(LocId),
     AddressOf(LocId),
-    Call {
-        callable: LocId,
-        args: Vec<LocId>,
-    },
+    Call { callable: LocId, args: Vec<LocId> },
     Function(FnId),
-    If {
-        condition: LocId,
-        then_block: Block,
-        else_block: Block,
-    },
-    Loop {
-        body: ExprId,
-    },
+    If(If),
+    Loop { body: ExprId },
 }
 
 #[derive(Debug)]
@@ -73,6 +64,13 @@ pub enum Constant {
     Int(i64),
     Bool(bool),
     Unit,
+}
+
+#[derive(Debug)]
+pub struct If {
+    pub condition: LocId,
+    pub then_block: Block,
+    pub else_block: Block,
 }
 
 impl Display for LocId {

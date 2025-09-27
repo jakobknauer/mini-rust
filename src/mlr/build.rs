@@ -9,14 +9,17 @@ mod macros;
 use itertools::Itertools;
 
 use crate::{
-    ctxt::{self, functions::FnId},
+    ctxt::{
+        self,
+        functions::{FnId, FunctionParameter},
+    },
     hlr, mlr,
 };
 
 pub struct MlrBuilder<'a> {
     function: &'a hlr::Function,
     fn_id: FnId,
-    ctxt: &'a ctxt::Ctxt,
+    ctxt: &'a mut ctxt::Ctxt,
     output: mlr::Mlr,
     scopes: VecDeque<Scope>,
     next_expr_id: mlr::ExprId,
@@ -37,6 +40,24 @@ pub enum MlrBuilderError {
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,
     },
+    UnknownPrimitiveType,
+    ExpressionNotCallable,
+    CallArgumentTypeMismatch {
+        index: usize,
+        expected: ctxt::types::TypeId,
+        actual: ctxt::types::TypeId,
+    },
+    CallArgumentCountMismatch {
+        expected: usize,
+        actual: usize,
+    },
+    IfConditionNotBoolean {
+        actual: ctxt::types::TypeId,
+    },
+    IfBranchTypeMismatch {
+        then_type: ctxt::types::TypeId,
+        else_type: ctxt::types::TypeId,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;
@@ -52,7 +73,7 @@ impl Scope {
 }
 
 impl<'a> MlrBuilder<'a> {
-    pub fn new(function: &'a hlr::Function, fn_id: FnId, ctxt: &'a ctxt::Ctxt) -> Self {
+    pub fn new(function: &'a hlr::Function, fn_id: FnId, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
             function,
             fn_id,
@@ -70,16 +91,17 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
-        self.scopes.push_back(Scope::new());
+        let mut scope = Scope::new();
 
         let signature = self.ctxt.function_registry.get_signature_by_id(self.fn_id).unwrap();
 
-        for param in &signature.parameters {
+        for FunctionParameter { name, type_ } in signature.parameters.clone() {
             let loc = self.get_next_loc_id();
-            self.current_scope().vars.insert(param.name.clone(), loc);
-            self.output.loc_types.insert(loc, param.type_);
+            scope.vars.insert(name, loc);
+            self.output.loc_types.insert(loc, type_);
         }
 
+        self.scopes.push_back(scope);
         self.output.body = self.build_block(&self.function.body)?;
 
         Ok(self.output)
@@ -248,14 +270,14 @@ impl<'a> MlrBuilder<'a> {
         let (cond_loc, cond_stmt) = assign_to_new_loc!(self, self.build_expression(condition)?);
 
         let (if_loc, if_stmt) = assign_to_new_loc!(self, {
-            let init = mlr::Expression::If {
+            let init = mlr::Expression::If(mlr::If {
                 condition: cond_loc,
                 then_block: self.build_block(then_block)?,
                 else_block: match else_block {
                     Some(block) => self.build_block(block)?,
                     None => self.create_unit_block()?,
                 },
-            };
+            });
             self.insert_expr(init)?
         });
 

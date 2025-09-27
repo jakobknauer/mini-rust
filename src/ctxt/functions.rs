@@ -1,6 +1,6 @@
 use crate::ctxt::types::TypeId;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct FnId(pub usize);
 
 pub struct FunctionSignature {
@@ -9,6 +9,7 @@ pub struct FunctionSignature {
     pub parameters: Vec<FunctionParameter>,
 }
 
+#[derive(Clone)]
 pub struct FunctionParameter {
     pub name: String,
     pub type_: TypeId,

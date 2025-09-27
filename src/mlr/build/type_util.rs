@@ -1,9 +1,13 @@
-use crate::mlr;
-
-use crate::ctxt::types::*;
+use crate::{
+    ctxt::functions::FnId,
+    ctxt::types::*,
+    mlr::{self, build::MlrBuilderError},
+};
 
 impl<'a> mlr::MlrBuilder<'a> {
     pub fn infer_type(&mut self, expr: mlr::ExprId) -> mlr::build::Result<TypeId> {
+        use mlr::Expression::*;
+
         let expr = self
             .output
             .expressions
@@ -11,18 +15,160 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type should only be called with a valid ExprId");
 
         match expr {
-            mlr::Expression::Block(block) => todo!(),
-            mlr::Expression::Constant(constant) => todo!(),
-            mlr::Expression::Var(loc_id) => todo!(),
-            mlr::Expression::AddressOf(loc_id) => todo!(),
-            mlr::Expression::Call { callable, args } => todo!(),
-            mlr::Expression::Function(fn_id) => todo!(),
-            mlr::Expression::If {
-                condition,
-                then_block,
-                else_block,
-            } => todo!(),
-            mlr::Expression::Loop { body } => todo!(),
+            Block(block) => self.infer_type_of_block(block),
+            Constant(constant) => self.infer_type_of_constant(constant),
+            Var(loc_id) => self.infer_type_of_location(*loc_id),
+            AddressOf(..) => todo!(),
+            Call { callable, args } => self.infer_type_of_call(*callable, args),
+            Function(fn_id) => self.infer_type_of_function(*fn_id),
+            If(if_) => self.infer_type_of_if(if_),
+            Loop { .. } => self
+                .ctxt
+                .type_registry
+                .get_primitive_type_id(PrimitiveType::Unit)
+                .ok_or(MlrBuilderError::UnknownPrimitiveType),
+        }
+    }
+
+    fn infer_type_of_block(&self, block: &mlr::Block) -> mlr::build::Result<TypeId> {
+        Ok(self
+            .output
+            .loc_types
+            .get(&block.output)
+            .expect("type of block.output should have been inferred before")
+            .clone())
+    }
+
+    fn infer_type_of_constant(&self, constant: &mlr::Constant) -> mlr::build::Result<TypeId> {
+        let type_ = match constant {
+            mlr::Constant::Int(_) => PrimitiveType::Integer32,
+            mlr::Constant::Bool(_) => PrimitiveType::Boolean,
+            mlr::Constant::Unit => PrimitiveType::Unit,
+        };
+
+        self.ctxt
+            .type_registry
+            .get_primitive_type_id(type_)
+            .ok_or(MlrBuilderError::UnknownPrimitiveType)
+    }
+
+    fn infer_type_of_location(&self, loc_id: mlr::LocId) -> mlr::build::Result<TypeId> {
+        Ok(self
+            .output
+            .loc_types
+            .get(&loc_id)
+            .expect("type of loc_id should be registered")
+            .clone())
+    }
+
+    fn infer_type_of_call(
+        &self,
+        callable: mlr::LocId,
+        args: &[mlr::LocId],
+    ) -> std::result::Result<TypeId, MlrBuilderError> {
+        let callable_type = self
+            .output
+            .loc_types
+            .get(&callable)
+            .expect("type of location should be registered");
+        let callable_type = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(*callable_type)
+            .expect("type of callable should be registered");
+
+        let Type::Function {
+            param_types,
+            return_type,
+        } = callable_type
+        else {
+            return Err(MlrBuilderError::ExpressionNotCallable);
+        };
+
+        let arg_types = args.into_iter().map(|arg_loc| {
+            self.output
+                .loc_types
+                .get(arg_loc)
+                .expect("type of location should be registered")
+        });
+
+        if param_types.len() != arg_types.len() {
+            return Err(MlrBuilderError::CallArgumentCountMismatch {
+                expected: param_types.len(),
+                actual: arg_types.len(),
+            });
+        }
+
+        for (i, (param_type, arg_type)) in param_types.iter().zip(arg_types).enumerate() {
+            if !self.ctxt.type_registry.types_equal(*param_type, *arg_type) {
+                return Err(MlrBuilderError::CallArgumentTypeMismatch {
+                    index: i,
+                    expected: *param_type,
+                    actual: *arg_type,
+                });
+            }
+        }
+
+        Ok(*return_type)
+    }
+
+    fn infer_type_of_function(&mut self, fn_id: FnId) -> mlr::build::Result<TypeId> {
+        let signature = self
+            .ctxt
+            .function_registry
+            .get_signature_by_id(fn_id)
+            .expect("function signature should be registered");
+
+        let param_types = signature.parameters.iter().map(|param| param.type_).collect();
+        let return_type = signature.return_type;
+
+        let function_type = Type::Function {
+            param_types,
+            return_type,
+        };
+
+        let function_type_id = self.ctxt.type_registry.register_type(function_type);
+
+        Ok(function_type_id)
+    }
+
+    fn infer_type_of_if(&self, if_: &mlr::If) -> mlr::build::Result<TypeId> {
+        let condition_type = self
+            .output
+            .loc_types
+            .get(&if_.condition)
+            .expect("type of condition should be registered");
+
+        let bool_type_id = self
+            .ctxt
+            .type_registry
+            .get_primitive_type_id(PrimitiveType::Boolean)
+            .expect("boolean primitive type should be registered");
+
+        if !self.ctxt.type_registry.types_equal(*condition_type, bool_type_id) {
+            return Err(MlrBuilderError::IfConditionNotBoolean {
+                actual: *condition_type,
+            });
+        }
+
+        let then_type = self
+            .output
+            .loc_types
+            .get(&if_.then_block.output)
+            .expect("type of then_block.output should be registered")
+            .clone();
+
+        let else_type = self
+            .output
+            .loc_types
+            .get(&if_.else_block.output)
+            .expect("type of else_block.output should be registered")
+            .clone();
+
+        if self.ctxt.type_registry.types_equal(then_type, else_type) {
+            Ok(then_type)
+        } else {
+            Err(MlrBuilderError::IfBranchTypeMismatch { then_type, else_type })
         }
     }
 }

@@ -7,6 +7,10 @@ pub struct TypeRegistry {
     structs: HashMap<StructId, StructDefinition>,
     enums: HashMap<EnumId, EnumDefinition>,
 
+    i32_type: Option<TypeId>,
+    bool_type: Option<TypeId>,
+    unit_type: Option<TypeId>,
+
     named_types: HashMap<String, TypeId>,
 
     next_type_id: TypeId,
@@ -20,6 +24,9 @@ impl TypeRegistry {
             types: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
+            i32_type: None,
+            bool_type: None,
+            unit_type: None,
             named_types: HashMap::new(),
             next_type_id: TypeId(0),
             next_struct_id: StructId(0),
@@ -27,7 +34,7 @@ impl TypeRegistry {
         }
     }
 
-    fn register_type(&mut self, type_: Type) -> TypeId {
+    pub fn register_type(&mut self, type_: Type) -> TypeId {
         let type_id = self.next_type_id;
         self.next_type_id.0 += 1;
         self.types.insert(type_id, type_);
@@ -45,9 +52,12 @@ impl TypeRegistry {
     }
 
     pub fn register_primitive_types(&mut self) -> Result<(), ()> {
-        self.register_named_type("i32", Type::NamedType(NamedType::Primitve(PrimitiveType::Integer32)))?;
-        self.register_named_type("bool", Type::NamedType(NamedType::Primitve(PrimitiveType::Boolean)))?;
-        self.register_named_type("()", Type::NamedType(NamedType::Primitve(PrimitiveType::Unit)))?;
+        self.i32_type =
+            Some(self.register_named_type("i32", Type::NamedType(NamedType::Primitve(PrimitiveType::Integer32)))?);
+        self.bool_type =
+            Some(self.register_named_type("bool", Type::NamedType(NamedType::Primitve(PrimitiveType::Boolean)))?);
+        self.unit_type =
+            Some(self.register_named_type("()", Type::NamedType(NamedType::Primitve(PrimitiveType::Unit)))?);
         Ok(())
     }
 
@@ -69,19 +79,23 @@ impl TypeRegistry {
         Ok(type_id)
     }
 
+    pub fn get_type_by_id(&self, id: TypeId) -> Option<&Type> {
+        self.types.get(&id)
+    }
+
     pub fn get_type_id_by_name(&self, name: &str) -> Option<TypeId> {
         self.named_types.get(name).cloned()
     }
 
-    pub fn get_type_by_name(&self, name: &str) -> Option<Type> {
+    pub fn get_type_by_name(&self, name: &str) -> Option<&Type> {
         let type_id = self.get_type_id_by_name(name)?;
-        self.types.get(&type_id).cloned()
+        self.types.get(&type_id)
     }
 
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
         let type_ = self.get_type_by_name(name)?;
         if let Type::NamedType(NamedType::Struct(struct_id)) = type_ {
-            self.structs.get_mut(&struct_id)
+            self.structs.get_mut(&struct_id.clone())
         } else {
             None
         }
@@ -90,7 +104,7 @@ impl TypeRegistry {
     pub fn get_mut_enum_definition_by_name(&mut self, name: &str) -> Option<&mut EnumDefinition> {
         let type_ = self.get_type_by_name(name)?;
         if let Type::NamedType(NamedType::Enum(enum_id)) = type_ {
-            self.enums.get_mut(&enum_id)
+            self.enums.get_mut(&enum_id.clone())
         } else {
             None
         }
@@ -131,6 +145,14 @@ impl TypeRegistry {
                     && self.types_equal(*r1, *r2)
             }
             _ => false,
+        }
+    }
+
+    pub fn get_primitive_type_id(&self, type_: PrimitiveType) -> Option<TypeId> {
+        match type_ {
+            PrimitiveType::Integer32 => self.i32_type,
+            PrimitiveType::Boolean => self.bool_type,
+            PrimitiveType::Unit => self.unit_type,
         }
     }
 }
