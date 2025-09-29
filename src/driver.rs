@@ -7,7 +7,10 @@ use crate::{
 pub fn compile(source: &str) -> Option<()> {
     let mut ctxt = ctxt::Ctxt::new();
 
-    let hlr = hlr::build_program(&source).ok()?;
+    let Ok(hlr) = hlr::build_program(&source) else {
+        eprintln!("Error: Failed to parse HLR program");
+        return None;
+    };
 
     register_and_define_types(&hlr, &mut ctxt.type_registry)?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
@@ -16,7 +19,25 @@ pub fn compile(source: &str) -> Option<()> {
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name)?;
 
         let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, &mut ctxt);
-        let mlr = mlr_builder.build().ok()?;
+        let mlr = match mlr_builder.build() {
+            Ok(mlr) => mlr,
+            Err(mlr::MlrBuilderError::TypeError(err)) => {
+                print_type_error(&function.name, err, &ctxt);
+                return None;
+            }
+            Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
+                eprintln!("Error: Missing operator implementation for {}", name);
+                return None;
+            }
+            Err(mlr::MlrBuilderError::UnresolvableSymbol { name }) => {
+                eprintln!("Error: Unresolvable symbol {}", name);
+                return None;
+            }
+            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => {
+                eprintln!("Error: Unknown primitive type");
+                return None;
+            }
+        };
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
 
@@ -137,4 +158,69 @@ fn register_functions(
     }
 
     Some(())
+}
+
+fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
+    match err {
+        mlr::TypeError::ReassignTypeMismatch { loc, expected, actual } => eprintln!(
+            "Type error in function '{}': Cannot reassign location {:?} of type '{}' with value of type '{}'",
+            name,
+            loc,
+            ctxt.type_registry
+                .get_type_name_by_id(expected)
+                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry
+                .get_type_name_by_id(actual)
+                .unwrap_or(&"<unknown>".to_string()),
+        ),
+        mlr::TypeError::ExpressionNotCallable => {
+            eprintln!("Type error in function '{}': Expression is not callable", name)
+        }
+        mlr::TypeError::CallArgumentTypeMismatch {
+            index,
+            expected,
+            actual,
+        } => eprintln!(
+            "Type error in function '{}': Argument {} type mismatch: expected '{}', got '{}'",
+            name,
+            index,
+            ctxt.type_registry
+                .get_type_name_by_id(expected)
+                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry
+                .get_type_name_by_id(actual)
+                .unwrap_or(&"<unknown>".to_string()),
+        ),
+        mlr::TypeError::CallArgumentCountMismatch { expected, actual } => eprintln!(
+            "Type error in function '{}': Argument count mismatch: expected {}, got {}",
+            name, expected, actual
+        ),
+        mlr::TypeError::IfConditionNotBoolean { actual } => eprintln!(
+            "Type error in function '{}': If condition must be of type 'bool', got '{}'",
+            name,
+            ctxt.type_registry
+                .get_type_name_by_id(actual)
+                .unwrap_or(&"<unknown>".to_string()),
+        ),
+        mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => eprintln!(
+            "Type error in function '{}': If branches must have the same type: then is '{}', else is '{}'",
+            name,
+            ctxt.type_registry
+                .get_type_name_by_id(then_type)
+                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry
+                .get_type_name_by_id(else_type)
+                .unwrap_or(&"<unknown>".to_string()),
+        ),
+        mlr::TypeError::ReturnTypeMismatch { expected, actual } => eprintln!(
+            "Type error in function '{}': Return type mismatch: expected '{}', got '{}'",
+            name,
+            ctxt.type_registry
+                .get_type_name_by_id(expected)
+                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry
+                .get_type_name_by_id(actual)
+                .unwrap_or(&"<unknown>".to_string()),
+        ),
+    };
 }

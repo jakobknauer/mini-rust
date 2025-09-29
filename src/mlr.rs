@@ -1,5 +1,5 @@
 mod build;
 mod defs;
 
-pub use build::MlrBuilder;
+pub use build::{MlrBuilder, MlrBuilderError, TypeError};
 pub use defs::*;

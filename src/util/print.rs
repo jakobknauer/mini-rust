@@ -8,7 +8,7 @@ use crate::{
     mlr::*,
 };
 
-pub fn print_mlr<W: Write>(fn_id: FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
+pub fn print_mlr<W: Write>(fn_id: FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> std::result::Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         fn_id,
         mlr: ctxt.function_registry.get_function_mlr(fn_id),
@@ -32,7 +32,7 @@ struct MlrPrinter<'a, W: Write> {
 const INDENT: &str = "    ";
 
 impl<'a, W: Write> MlrPrinter<'a, W> {
-    fn print_mlr(&mut self) -> Result<(), std::io::Error> {
+    fn print_mlr(&mut self) -> std::result::Result<(), std::io::Error> {
         self.print_signature()?;
         write!(self.writer, " ")?;
 
@@ -43,7 +43,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn print_signature(&mut self) -> Result<(), std::io::Error> {
+    fn print_signature(&mut self) -> std::result::Result<(), std::io::Error> {
         let Some(signature) = self.signature else {
             return write!(self.writer, "<undefined signature for fn id {}>", self.fn_id.0);
         };
@@ -67,7 +67,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn print_block(&mut self, block: &Block) -> Result<(), std::io::Error> {
+    fn print_block(&mut self, block: &Block) -> std::result::Result<(), std::io::Error> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
@@ -83,7 +83,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "}}")
     }
 
-    fn print_statement(&mut self, stmt_id: StmtId) -> Result<(), std::io::Error> {
+    fn print_statement(&mut self, stmt_id: StmtId) -> std::result::Result<(), std::io::Error> {
         let stmt = &self.mlr.expect("self.mlr should not be empty").statements.get(&stmt_id);
 
         match stmt {
@@ -103,7 +103,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn print_expression(&mut self, expr_id: ExprId) -> Result<(), std::io::Error> {
+    fn print_expression(&mut self, expr_id: ExprId) -> std::result::Result<(), std::io::Error> {
         let expr = &self
             .mlr
             .expect("self.mlr should not be empty")
@@ -161,7 +161,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn indent(&mut self) -> Result<(), std::io::Error> {
+    fn indent(&mut self) -> std::result::Result<(), std::io::Error> {
         for _ in 0..self.indent_level {
             write!(self.writer, "{}", INDENT)?;
         }

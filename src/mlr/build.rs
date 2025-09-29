@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
+mod err;
 mod type_util;
 mod util;
 
@@ -11,10 +12,12 @@ use itertools::Itertools;
 use crate::{
     ctxt::{
         self,
-        functions::{FnId, FunctionParameter},
+        functions::{FnId, FunctionParameter, FunctionSignature},
     },
     hlr, mlr,
 };
+
+pub use err::{MlrBuilderError, Result, TypeError};
 
 pub struct MlrBuilder<'a> {
     function: &'a hlr::Function,
@@ -26,41 +29,6 @@ pub struct MlrBuilder<'a> {
     next_stmt_id: mlr::StmtId,
     next_loc_id: mlr::LocId,
 }
-
-#[derive(Debug)]
-pub enum MlrBuilderError {
-    MissingOperatorImpl {
-        name: String,
-    },
-    UnresolvableSymbol {
-        name: String,
-    },
-    ReassignTypeMismatch {
-        loc: mlr::LocId,
-        expected: ctxt::types::TypeId,
-        actual: ctxt::types::TypeId,
-    },
-    UnknownPrimitiveType,
-    ExpressionNotCallable,
-    CallArgumentTypeMismatch {
-        index: usize,
-        expected: ctxt::types::TypeId,
-        actual: ctxt::types::TypeId,
-    },
-    CallArgumentCountMismatch {
-        expected: usize,
-        actual: usize,
-    },
-    IfConditionNotBoolean {
-        actual: ctxt::types::TypeId,
-    },
-    IfBranchTypeMismatch {
-        then_type: ctxt::types::TypeId,
-        else_type: ctxt::types::TypeId,
-    },
-}
-
-pub type Result<T> = std::result::Result<T, MlrBuilderError>;
 
 struct Scope {
     vars: HashMap<String, mlr::LocId>,
@@ -91,19 +59,37 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
+        let FunctionSignature {
+            parameters,
+            return_type,
+            ..
+        } = self
+            .ctxt
+            .function_registry
+            .get_signature_by_id(self.fn_id)
+            .cloned()
+            .unwrap();
+
         let mut scope = Scope::new();
-
-        let signature = self.ctxt.function_registry.get_signature_by_id(self.fn_id).unwrap();
-
-        for FunctionParameter { name, type_ } in signature.parameters.clone() {
+        for FunctionParameter { name, type_ } in parameters {
             let loc = self.get_next_loc_id();
             scope.vars.insert(name, loc);
             self.output.loc_types.insert(loc, type_);
         }
-
         self.scopes.push_back(scope);
-        self.output.body = self.build_block(&self.function.body)?;
 
+        let body = self.build_block(&self.function.body)?;
+
+        let output_type = self.output.loc_types.get(&body.output).unwrap();
+        if !self.ctxt.type_registry.types_equal(return_type, *output_type) {
+            return TypeError::ReturnTypeMismatch {
+                expected: return_type,
+                actual: *output_type,
+            }
+            .into();
+        };
+
+        self.output.body = body;
         Ok(self.output)
     }
 
@@ -321,10 +307,7 @@ impl<'a> MlrBuilder<'a> {
             None => assign_to_new_loc!(self, self.create_unit_value()?),
         };
 
-        let return_stmt = {
-            let stmt = mlr::Statement::Return { value: expr_loc };
-            self.insert_stmt(stmt)
-        };
+        let return_stmt = self.insert_return_stmt(expr_loc)?;
 
         let block = mlr::Expression::Block(mlr::Block {
             statements: vec![expr_stmt, return_stmt],

@@ -3,6 +3,7 @@ use crate::ctxt::types::TypeId;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct FnId(pub usize);
 
+#[derive(Clone)]
 pub struct FunctionSignature {
     pub name: String,
     pub return_type: TypeId,

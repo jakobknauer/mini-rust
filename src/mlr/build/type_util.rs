@@ -1,7 +1,9 @@
 use crate::{
-    ctxt::functions::FnId,
-    ctxt::types::*,
-    mlr::{self, build::MlrBuilderError},
+    ctxt::{functions::FnId, types::*},
+    mlr::{
+        self,
+        build::{MlrBuilderError, TypeError},
+    },
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
@@ -82,7 +84,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             return_type,
         } = callable_type
         else {
-            return Err(MlrBuilderError::ExpressionNotCallable);
+            return TypeError::ExpressionNotCallable.into();
         };
 
         let arg_types = args.into_iter().map(|arg_loc| {
@@ -93,19 +95,21 @@ impl<'a> mlr::MlrBuilder<'a> {
         });
 
         if param_types.len() != arg_types.len() {
-            return Err(MlrBuilderError::CallArgumentCountMismatch {
+            return TypeError::CallArgumentCountMismatch {
                 expected: param_types.len(),
                 actual: arg_types.len(),
-            });
+            }
+            .into();
         }
 
         for (i, (param_type, arg_type)) in param_types.iter().zip(arg_types).enumerate() {
             if !self.ctxt.type_registry.types_equal(*param_type, *arg_type) {
-                return Err(MlrBuilderError::CallArgumentTypeMismatch {
+                return TypeError::CallArgumentTypeMismatch {
                     index: i,
                     expected: *param_type,
                     actual: *arg_type,
-                });
+                }
+                .into();
             }
         }
 
@@ -146,9 +150,10 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("boolean primitive type should be registered");
 
         if !self.ctxt.type_registry.types_equal(*condition_type, bool_type_id) {
-            return Err(MlrBuilderError::IfConditionNotBoolean {
+            return TypeError::IfConditionNotBoolean {
                 actual: *condition_type,
-            });
+            }
+            .into();
         }
 
         let then_type = self
@@ -168,7 +173,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         if self.ctxt.type_registry.types_equal(then_type, else_type) {
             Ok(then_type)
         } else {
-            Err(MlrBuilderError::IfBranchTypeMismatch { then_type, else_type })
+            TypeError::IfBranchTypeMismatch { then_type, else_type }.into()
         }
     }
 }
