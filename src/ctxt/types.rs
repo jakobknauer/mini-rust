@@ -9,7 +9,7 @@ pub struct EnumId(pub usize);
 
 #[derive(Clone)]
 pub enum Type {
-    NamedType(NamedType),
+    NamedType(String, NamedType),
     Function {
         param_types: Vec<TypeId>,
         return_type: TypeId,

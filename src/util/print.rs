@@ -39,13 +39,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         if let Some(mlr) = self.mlr {
             self.print_block(&mlr.body)
         } else {
-            write!(self.writer, "<undefined definition for fn id {}>", self.fn_id.0)
+            write!(self.writer, "<mlr for fn id {}>", self.fn_id.0)
         }
     }
 
     fn print_signature(&mut self) -> std::result::Result<(), std::io::Error> {
         let Some(signature) = self.signature else {
-            return write!(self.writer, "<undefined signature for fn id {}>", self.fn_id.0);
+            return write!(self.writer, "<signature for fn id {}>", self.fn_id.0);
         };
 
         write!(self.writer, "fn {}(", signature.name)?;
@@ -53,18 +53,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let type_name = self.ctxt.type_registry.get_type_name_by_id(param.type_);
-            match type_name {
-                Some(name) => write!(self.writer, "{}: {}", param.name, name)?,
-                None => write!(self.writer, "<unknown type id {}>", param.type_.0)?,
-            };
+            let param_type = self.ctxt.type_registry.get_string_rep(param.type_);
+            write!(self.writer, "{}: {}", param.name, param_type)?;
         }
         write!(self.writer, ") -> ")?;
-        let return_type_name = self.ctxt.type_registry.get_type_name_by_id(signature.return_type);
-        match return_type_name {
-            Some(name) => write!(self.writer, "{}", name),
-            None => write!(self.writer, "<unknown type id {}>", signature.return_type.0),
-        }
+
+        let return_type = self.ctxt.type_registry.get_string_rep(signature.return_type);
+        write!(self.writer, "{}", return_type)
     }
 
     fn print_block(&mut self, block: &Block) -> std::result::Result<(), std::io::Error> {
@@ -90,7 +85,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             Some(stmt) => match stmt {
                 Statement::Assign { loc, value } => {
                     self.indent()?;
-                    write!(self.writer, "let {} = ", loc)?;
+                    let loc_type = self
+                        .mlr
+                        .expect("self.mlr should not be empty")
+                        .loc_types
+                        .get(loc)
+                        .expect("local should have a type");
+                    let type_name = self.ctxt.type_registry.get_string_rep(*loc_type);
+                    write!(self.writer, "let {}: {} = ", loc, type_name)?;
                     self.print_expression(*value)?;
                     writeln!(self.writer, ";")
                 }
@@ -99,7 +101,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     writeln!(self.writer, "return {};", value)
                 }
             },
-            None => writeln!(self.writer, "<unknown stmt id {}>", stmt_id.0),
+            None => writeln!(self.writer, "<stmt id {}>", stmt_id.0),
         }
     }
 
@@ -136,9 +138,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
                 Expression::Function(fn_id) => {
                     if let Some(func) = self.ctxt.function_registry.get_signature_by_id(*fn_id) {
-                        write!(self.writer, "fn {}()", func.name)
+                        write!(self.writer, "fn {}", func.name)
                     } else {
-                        write!(self.writer, "<unknown fn id {}>", fn_id.0)
+                        write!(self.writer, "<fn id {}>", fn_id.0)
                     }
                 }
                 Expression::If(If {
@@ -157,7 +159,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_expression(*body)
                 }
             },
-            None => write!(self.writer, "<unknown expr id {}>", expr_id.0),
+            None => write!(self.writer, "<expr id {}>", expr_id.0),
         }
     }
 

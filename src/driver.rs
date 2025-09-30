@@ -101,7 +101,7 @@ fn register_functions(
     type_registry: &ctxt::TypeRegistry,
     function_registry: &mut ctxt::FunctionRegistry,
 ) -> Option<()> {
-    let i32_t = type_registry.get_type_id_by_name("i32")?;
+    let i32_t = type_registry.get_primitive_type_id(types::PrimitiveType::Integer32)?;
     function_registry
         .register_function(functions::FunctionSignature {
             name: "add::<i32>".to_string(),
@@ -180,12 +180,8 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
             "Type error in function '{}': Cannot reassign location {:?} of type '{}' with value of type '{}'",
             name,
             loc,
-            ctxt.type_registry
-                .get_type_name_by_id(expected)
-                .unwrap_or(&"<unknown>".to_string()),
-            ctxt.type_registry
-                .get_type_name_by_id(actual)
-                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry.get_string_rep(expected),
+            ctxt.type_registry.get_string_rep(actual)
         ),
         mlr::TypeError::ExpressionNotCallable => {
             eprintln!("Type error in function '{}': Expression is not callable", name)
@@ -198,12 +194,8 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
             "Type error in function '{}': Argument {} type mismatch: expected '{}', got '{}'",
             name,
             index,
-            ctxt.type_registry
-                .get_type_name_by_id(expected)
-                .unwrap_or(&"<unknown>".to_string()),
-            ctxt.type_registry
-                .get_type_name_by_id(actual)
-                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry.get_string_rep(expected),
+            ctxt.type_registry.get_string_rep(actual)
         ),
         mlr::TypeError::CallArgumentCountMismatch { expected, actual } => eprintln!(
             "Type error in function '{}': Argument count mismatch: expected {}, got {}",
@@ -212,29 +204,19 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
         mlr::TypeError::IfConditionNotBoolean { actual } => eprintln!(
             "Type error in function '{}': If condition must be of type 'bool', got '{}'",
             name,
-            ctxt.type_registry
-                .get_type_name_by_id(actual)
-                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry.get_string_rep(actual)
         ),
         mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => eprintln!(
             "Type error in function '{}': If branches must have the same type: then is '{}', else is '{}'",
             name,
-            ctxt.type_registry
-                .get_type_name_by_id(then_type)
-                .unwrap_or(&"<unknown>".to_string()),
-            ctxt.type_registry
-                .get_type_name_by_id(else_type)
-                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry.get_string_rep(then_type),
+            ctxt.type_registry.get_string_rep(else_type)
         ),
         mlr::TypeError::ReturnTypeMismatch { expected, actual } => eprintln!(
             "Type error in function '{}': Return type mismatch: expected '{}', got '{}'",
             name,
-            ctxt.type_registry
-                .get_type_name_by_id(expected)
-                .unwrap_or(&"<unknown>".to_string()),
-            ctxt.type_registry
-                .get_type_name_by_id(actual)
-                .unwrap_or(&"<unknown>".to_string()),
+            ctxt.type_registry.get_string_rep(expected),
+            ctxt.type_registry.get_string_rep(actual)
         ),
     };
 }
