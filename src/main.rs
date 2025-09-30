@@ -1,5 +1,5 @@
 fn main() {
-    let path = std::env::args().nth(1).unwrap();
-    let source = std::fs::read_to_string(path).unwrap();
+    let path = std::env::args().nth(1).expect("Please provide a file path");
+    let source = std::fs::read_to_string(path).expect("Could not read file");
     mini_rust::driver::compile(&source);
 }
