@@ -1,15 +1,19 @@
 use crate::{
     ctxt::{self, functions, types},
-    hlr, mlr,
+    hlr::{self},
+    mlr,
     util::print,
 };
 
 pub fn compile(source: &str) -> Option<()> {
     let mut ctxt = ctxt::Ctxt::new();
 
-    let Ok(hlr) = hlr::build_program(&source) else {
-        eprintln!("Error: Failed to parse HLR program");
-        return None;
+    let hlr = match hlr::build_program(&source) {
+        Ok(hlr) => hlr,
+        Err(err) => {
+            print_parser_error(&err, &source);
+            return None;
+        }
     };
 
     register_and_define_types(&hlr, &mut ctxt.type_registry)?;
@@ -158,6 +162,16 @@ fn register_functions(
     }
 
     Some(())
+}
+
+fn print_parser_error(err: &hlr::ParserError, _: &str) -> () {
+    match err {
+        hlr::ParserError::LexerError(lexer_error) => eprintln!("Lexer error at position {}", lexer_error.position),
+        hlr::ParserError::UnexpectedToken(token) => eprintln!("Parser error: Unexpected token {:?}", token),
+        hlr::ParserError::UndelimitedStatement => eprintln!("Parser error: Undelimited statement"),
+        hlr::ParserError::InvalidLiteral => eprintln!("Parser error: Invalid literal"),
+        hlr::ParserError::UnexpectedEOF => eprintln!("Parser error: Unexpected end of file"),
+    }
 }
 
 fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {

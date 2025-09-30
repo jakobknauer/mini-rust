@@ -4,5 +4,5 @@ mod defs;
 mod lexer;
 mod token;
 
-pub use build::build_program;
+pub use build::{LexerError, ParserError, build_program};
 pub use defs::*;

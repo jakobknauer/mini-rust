@@ -6,7 +6,7 @@ pub fn get_tokens(input: &str) -> Result<Vec<Token>, LexerError> {
 
 #[derive(Debug, Clone)]
 pub struct LexerError {
-    position: usize,
+    pub position: usize,
 }
 
 struct Lexer<'a> {
