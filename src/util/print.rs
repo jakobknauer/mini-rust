@@ -34,12 +34,12 @@ const INDENT: &str = "    ";
 impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_mlr(&mut self) -> std::result::Result<(), std::io::Error> {
         self.print_signature()?;
-        write!(self.writer, " ")?;
 
         if let Some(mlr) = self.mlr {
+            write!(self.writer, " ")?;
             self.print_block(&mlr.body)
         } else {
-            write!(self.writer, "<mlr for fn id {}>", self.fn_id.0)
+            write!(self.writer, ";")
         }
     }
 

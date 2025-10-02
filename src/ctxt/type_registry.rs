@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::ctxt::types::*;
 
@@ -12,7 +12,7 @@ pub struct TypeRegistry {
     bool_type: Option<TypeId>,
     unit_type: Option<TypeId>,
 
-    named_types: HashMap<String, TypeId>,
+    named_types: BTreeMap<String, TypeId>,
 
     next_type_id: TypeId,
     next_struct_id: StructId,
@@ -28,7 +28,7 @@ impl TypeRegistry {
             i32_type: None,
             bool_type: None,
             unit_type: None,
-            named_types: HashMap::new(),
+            named_types: BTreeMap::new(),
             next_type_id: TypeId(0),
             next_struct_id: StructId(0),
             next_enum_id: EnumId(0),

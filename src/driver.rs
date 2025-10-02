@@ -1,7 +1,6 @@
 use crate::{
     ctxt::{self, functions, types},
-    hlr::{self},
-    mlr,
+    hlr, mlr,
     util::print,
 };
 
@@ -44,9 +43,10 @@ pub fn compile(source: &str) -> Option<()> {
         };
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
+    }
 
+    for fn_id in ctxt.function_registry.get_all_functions() {
         print::print_mlr(fn_id, &ctxt, &mut std::io::stdout()).ok()?;
-
         println!();
     }
 

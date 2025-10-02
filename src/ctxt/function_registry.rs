@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     ctxt::functions::{FnId, FunctionSignature},
@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub struct FunctionRegistry {
-    function_names: HashMap<String, FnId>,
+    function_names: BTreeMap<String, FnId>,
     signatures: HashMap<FnId, FunctionSignature>,
     next_function_id: FnId,
     defs: HashMap<FnId, Mlr>,
@@ -15,7 +15,7 @@ pub struct FunctionRegistry {
 impl FunctionRegistry {
     pub fn new() -> FunctionRegistry {
         FunctionRegistry {
-            function_names: HashMap::new(),
+            function_names: BTreeMap::new(),
             signatures: HashMap::new(),
             next_function_id: FnId(0),
             defs: HashMap::new(),
@@ -52,5 +52,9 @@ impl FunctionRegistry {
 
     pub fn get_function_mlr(&self, fn_id: FnId) -> Option<&Mlr> {
         self.defs.get(&fn_id)
+    }
+
+    pub fn get_all_functions(&self) -> impl Iterator<Item = FnId> {
+        self.function_names.values().cloned()
     }
 }
