@@ -4,60 +4,28 @@ use crate::{
     util::print,
 };
 
-pub fn compile(source: &str) -> Option<()> {
+pub fn compile(source: &str) -> Result<(), ()> {
     let mut ctxt = ctxt::Ctxt::new();
 
     let hlr = match hlr::build_program(&source) {
         Ok(hlr) => hlr,
         Err(err) => {
             print_parser_error(&err, &source);
-            return None;
+            return Err(());
         }
     };
 
     register_and_define_types(&hlr, &mut ctxt.type_registry)?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
-
-    for function in &hlr.functions {
-        let fn_id = ctxt.function_registry.get_function_by_name(&function.name)?;
-
-        let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, &mut ctxt);
-        let mlr = match mlr_builder.build() {
-            Ok(mlr) => mlr,
-            Err(mlr::MlrBuilderError::TypeError(err)) => {
-                print_type_error(&function.name, err, &ctxt);
-                return None;
-            }
-            Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
-                eprintln!("Error: Missing operator implementation for {}", name);
-                return None;
-            }
-            Err(mlr::MlrBuilderError::UnresolvableSymbol { name }) => {
-                eprintln!("Error: Unresolvable symbol {}", name);
-                return None;
-            }
-            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => {
-                eprintln!("Error: Unknown primitive type");
-                return None;
-            }
-        };
-
-        ctxt.function_registry.add_function_def(&function.name, mlr);
-    }
-
-    for fn_id in ctxt.function_registry.get_all_functions() {
-        print::print_mlr(fn_id, &ctxt, &mut std::io::stdout()).ok()?;
-        println!();
-    }
-
-    Some(())
+    build_function_mlrs(&hlr, &mut ctxt)?;
+    print_functions(&ctxt)
 }
 
-fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Option<()> {
-    type_registry.register_primitive_types().ok()?;
+fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
+    type_registry.register_primitive_types()?;
 
     for struct_ in &program.structs {
-        type_registry.register_struct(&struct_.name).ok()?;
+        type_registry.register_struct(&struct_.name)?;
     }
 
     for enum_ in &program.enums {
@@ -69,14 +37,16 @@ fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::T
             .fields
             .iter()
             .map(|field| {
-                Some(types::StructField {
+                Ok(types::StructField {
                     name: field.name.clone(),
-                    type_id: type_registry.get_type_id_by_name(&field.field_type)?,
+                    type_id: type_registry.get_type_id_by_name(&field.field_type).ok_or(())?,
                 })
             })
-            .collect::<Option<_>>()?;
+            .collect::<Result<_, _>>()?;
 
-        let struct_definition = type_registry.get_mut_struct_definition_by_name(&struct_.name)?;
+        let struct_definition = type_registry
+            .get_mut_struct_definition_by_name(&struct_.name)
+            .ok_or(())?;
         struct_definition.fields = fields;
     }
 
@@ -89,68 +59,66 @@ fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::T
             })
             .collect();
 
-        let enum_definition = type_registry.get_mut_enum_definition_by_name(&enum_.name)?;
+        let enum_definition = type_registry.get_mut_enum_definition_by_name(&enum_.name).ok_or(())?;
         enum_definition.variants = variants;
     }
 
-    Some(())
+    Ok(())
 }
 
 fn register_functions(
-    program: &hlr::Program,
+    hlr: &hlr::Program,
     type_registry: &ctxt::TypeRegistry,
     function_registry: &mut ctxt::FunctionRegistry,
-) -> Option<()> {
-    let i32_t = type_registry.get_primitive_type_id(types::PrimitiveType::Integer32)?;
-    function_registry
-        .register_function(functions::FunctionSignature {
-            name: "add::<i32>".to_string(),
-            return_type: i32_t,
-            parameters: vec![
-                functions::FunctionParameter {
-                    name: "a".to_string(),
-                    type_: i32_t,
-                },
-                functions::FunctionParameter {
-                    name: "b".to_string(),
-                    type_: i32_t,
-                },
-            ],
-        })
-        .ok()?;
-    function_registry
-        .register_function(functions::FunctionSignature {
-            name: "mul::<i32>".to_string(),
-            return_type: i32_t,
-            parameters: vec![
-                functions::FunctionParameter {
-                    name: "a".to_string(),
-                    type_: i32_t,
-                },
-                functions::FunctionParameter {
-                    name: "b".to_string(),
-                    type_: i32_t,
-                },
-            ],
-        })
-        .ok()?;
+) -> Result<(), ()> {
+    let i32_t = type_registry
+        .get_primitive_type_id(types::PrimitiveType::Integer32)
+        .ok_or(())?;
+    function_registry.register_function(functions::FunctionSignature {
+        name: "add::<i32>".to_string(),
+        return_type: i32_t,
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: i32_t,
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: i32_t,
+            },
+        ],
+    })?;
+    function_registry.register_function(functions::FunctionSignature {
+        name: "mul::<i32>".to_string(),
+        return_type: i32_t,
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: i32_t,
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: i32_t,
+            },
+        ],
+    })?;
 
-    for function in &program.functions {
+    for function in &hlr.functions {
         let return_type = match function.return_type.as_ref() {
-            Some(type_id) => type_registry.get_type_id_by_name(type_id)?,
-            None => type_registry.get_type_id_by_name("()")?,
+            Some(type_id) => type_registry.get_type_id_by_name(type_id).ok_or(())?,
+            None => type_registry.get_type_id_by_name("()").ok_or(())?,
         };
 
         let parameters = function
             .parameters
             .iter()
             .map(|parameter| {
-                Some(functions::FunctionParameter {
+                Ok(functions::FunctionParameter {
                     name: parameter.name.clone(),
-                    type_: type_registry.get_type_id_by_name(&parameter.param_type)?,
+                    type_: type_registry.get_type_id_by_name(&parameter.param_type).ok_or(())?,
                 })
             })
-            .collect::<Option<_>>()?;
+            .collect::<Result<_, _>>()?;
 
         let signature = functions::FunctionSignature {
             name: function.name.clone(),
@@ -158,10 +126,41 @@ fn register_functions(
             parameters,
         };
 
-        function_registry.register_function(signature).ok()?;
+        function_registry.register_function(signature)?;
     }
 
-    Some(())
+    Ok(())
+}
+
+fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+    for function in &hlr.functions {
+        let fn_id = ctxt.function_registry.get_function_by_name(&function.name).ok_or(())?;
+
+        let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, ctxt);
+        let mlr = match mlr_builder.build() {
+            Ok(mlr) => mlr,
+            Err(mlr::MlrBuilderError::TypeError(err)) => {
+                print_type_error(&function.name, err, &ctxt);
+                return Err(());
+            }
+            Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
+                eprintln!("Error: Missing operator implementation for {}", name);
+                return Err(());
+            }
+            Err(mlr::MlrBuilderError::UnresolvableSymbol { name }) => {
+                eprintln!("Error: Unresolvable symbol {}", name);
+                return Err(());
+            }
+            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => {
+                eprintln!("Error: Unknown primitive type");
+                return Err(());
+            }
+        };
+
+        ctxt.function_registry.add_function_def(&function.name, mlr);
+    }
+
+    Ok(())
 }
 
 fn print_parser_error(err: &hlr::ParserError, _: &str) -> () {
@@ -219,4 +218,12 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
             ctxt.type_registry.get_string_rep(actual)
         ),
     };
+}
+
+fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
+    for fn_id in ctxt.function_registry.get_all_functions() {
+        print::print_mlr(fn_id, &ctxt, &mut std::io::stdout()).map_err(|_| ())?;
+        println!();
+    }
+    Ok(())
 }
