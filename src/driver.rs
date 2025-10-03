@@ -1,3 +1,5 @@
+mod generate;
+
 use crate::{
     ctxt::{self, functions, types},
     hlr, mlr,
@@ -18,7 +20,11 @@ pub fn compile(source: &str) -> Result<(), ()> {
     register_and_define_types(&hlr, &mut ctxt.type_registry)?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
     build_function_mlrs(&hlr, &mut ctxt)?;
-    print_functions(&ctxt)
+    print_functions(&ctxt)?;
+
+    generate::generate_llvm_ir(&ctxt);
+
+    Ok(())
 }
 
 fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {

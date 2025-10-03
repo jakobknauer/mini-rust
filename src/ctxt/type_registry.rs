@@ -90,6 +90,10 @@ impl TypeRegistry {
         self.types.get(&type_id)
     }
 
+    pub fn get_struct_definition(&self, struct_id: &StructId) -> Option<&StructDefinition> {
+        self.structs.get(struct_id)
+    }
+
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
         let type_ = self.get_type_by_name(name)?;
         if let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ {
@@ -162,5 +166,9 @@ impl TypeRegistry {
             PrimitiveType::Boolean => self.bool_type,
             PrimitiveType::Unit => self.unit_type,
         }
+    }
+
+    pub fn get_all_types(&self) -> impl IntoIterator<Item = (&TypeId, &Type)> {
+        &self.types
     }
 }
