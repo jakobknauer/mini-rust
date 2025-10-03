@@ -1,9 +1,9 @@
-use std::{any::TypeId, collections::HashMap};
+use std::collections::HashMap;
 
 use inkwell::{
     context::Context as IwContext,
     module::Module,
-    types::{AnyType, AnyTypeEnum, BasicType, BasicTypeEnum},
+    types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
 };
 
 use crate::ctxt::{self as mr_ctxt, types as mr_types};
@@ -14,17 +14,18 @@ pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
 
     generator.define_types();
     generator.declare_functions();
+
     let ir = generator.iw_module.print_to_string();
     println!("{}", ir.to_string());
 }
 
-struct Generator<'ctxt, 'a> {
-    iw_ctxt: &'ctxt IwContext,
-    iw_module: Module<'ctxt>,
+struct Generator<'iw, 'mr> {
+    iw_ctxt: &'iw IwContext,
+    iw_module: Module<'iw>,
 
-    mr_ctxt: &'a mr_ctxt::Ctxt,
+    mr_ctxt: &'mr mr_ctxt::Ctxt,
 
-    types: HashMap<mr_types::TypeId, AnyTypeEnum<'ctxt>>,
+    types: HashMap<mr_types::TypeId, AnyTypeEnum<'iw>>,
 }
 
 impl<'ctxt, 'a> Generator<'ctxt, 'a> {
@@ -66,11 +67,11 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
                 return_type,
             } => {
                 // TODO do we actually need function pointers here? (probably)
-                let return_type: BasicTypeEnum = self.get_or_define_type(return_type).cloned()?.try_into().unwrap();
+                let return_type: BasicTypeEnum = self.get_type_as_basic_type_enum(return_type).unwrap();
                 let param_types: Vec<_> = param_types
                     .iter()
-                    .map(|param_type| Some(self.get_or_define_type(param_type).cloned()?.try_into().unwrap()))
-                    .collect::<Option<_>>()?;
+                    .map(|param_type| self.get_type_as_basic_metadata_type_enum(param_type).unwrap())
+                    .collect();
                 return_type.fn_type(&param_types, false).as_any_type_enum()
             }
         };
@@ -79,6 +80,17 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
             self.types.insert(*type_id, inkwell_type);
         }
         return self.types.get(&type_id);
+    }
+
+    fn get_type_as_basic_type_enum(&mut self, type_id: &mr_types::TypeId) -> Option<BasicTypeEnum<'ctxt>> {
+        self.get_or_define_type(type_id)?.clone().try_into().ok()
+    }
+
+    fn get_type_as_basic_metadata_type_enum(
+        &mut self,
+        type_id: &mr_types::TypeId,
+    ) -> Option<BasicMetadataTypeEnum<'ctxt>> {
+        self.get_or_define_type(type_id)?.clone().try_into().ok()
     }
 
     fn define_struct(
@@ -94,13 +106,7 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
-            .map(|field| {
-                self.get_or_define_type(&field.type_id)
-                    .unwrap()
-                    .as_any_type_enum()
-                    .try_into()
-                    .unwrap()
-            })
+            .map(|field| self.get_type_as_basic_type_enum(&field.type_id).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);
@@ -110,22 +116,11 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
     fn declare_functions(&mut self) {
         for fn_id in self.mr_ctxt.function_registry.get_all_functions() {
             let signature = self.mr_ctxt.function_registry.get_signature_by_id(fn_id).unwrap();
-            let return_type: BasicTypeEnum = self
-                .get_or_define_type(&signature.return_type)
-                .cloned()
-                .unwrap()
-                .try_into()
-                .unwrap();
+            let return_type: BasicTypeEnum = self.get_type_as_basic_type_enum(&signature.return_type).unwrap();
             let param_types: Vec<_> = signature
                 .parameters
                 .iter()
-                .map(|param| {
-                    self.get_or_define_type(&param.type_)
-                        .unwrap()
-                        .as_any_type_enum()
-                        .try_into()
-                        .unwrap()
-                })
+                .map(|param| self.get_type_as_basic_metadata_type_enum(&param.type_).unwrap())
                 .collect();
             let fn_type = return_type.fn_type(&param_types, false);
             self.iw_module.add_function(&signature.name, fn_type, None);

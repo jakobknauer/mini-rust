@@ -1,8 +1,6 @@
-mod generate;
-
 use crate::{
     ctxt::{self, functions, types},
-    hlr, mlr,
+    generate, hlr, mlr,
     util::print,
 };
 
@@ -35,7 +33,7 @@ fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::T
     }
 
     for enum_ in &program.enums {
-        type_registry.register_enum(&enum_.name).ok();
+        type_registry.register_enum(&enum_.name)?;
     }
 
     for struct_ in &program.structs {
