@@ -45,12 +45,12 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
         }
     }
 
-    fn get_or_define_type(&mut self, type_id: &mr_types::TypeId) -> Option<&AnyTypeEnum<'ctxt>> {
-        if self.types.contains_key(&type_id) {
-            return self.types.get(&type_id);
+    fn get_or_define_type(&mut self, type_id: &mr_types::TypeId) -> Option<AnyTypeEnum<'ctxt>> {
+        if self.types.contains_key(type_id) {
+            return self.types.get(type_id).cloned();
         }
 
-        let type_ = self.mr_ctxt.type_registry.get_type_by_id(*type_id)?;
+        let type_ = self.mr_ctxt.type_registry.get_type_by_id(type_id)?;
 
         let inkwell_type = match type_ {
             mr_types::Type::NamedType(name, named_type) => match named_type {
@@ -59,8 +59,8 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
                     mr_types::PrimitiveType::Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                     mr_types::PrimitiveType::Unit => self.iw_ctxt.custom_width_int_type(0).as_any_type_enum(),
                 },
-                mr_types::NamedType::Struct(struct_id) => self.define_struct(name, &type_id, struct_id),
-                mr_types::NamedType::Enum(enum_id) => todo!(),
+                mr_types::NamedType::Struct(struct_id) => self.define_struct(name, type_id, struct_id),
+                mr_types::NamedType::Enum(..) => todo!(),
             },
             mr_types::Type::Function {
                 param_types,
@@ -76,21 +76,21 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
             }
         };
 
-        if !self.types.contains_key(&type_id) {
+        if !self.types.contains_key(type_id) {
             self.types.insert(*type_id, inkwell_type);
         }
-        return self.types.get(&type_id);
+        self.types.get(type_id).cloned()
     }
 
     fn get_type_as_basic_type_enum(&mut self, type_id: &mr_types::TypeId) -> Option<BasicTypeEnum<'ctxt>> {
-        self.get_or_define_type(type_id)?.clone().try_into().ok()
+        self.get_or_define_type(type_id)?.try_into().ok()
     }
 
     fn get_type_as_basic_metadata_type_enum(
         &mut self,
         type_id: &mr_types::TypeId,
     ) -> Option<BasicMetadataTypeEnum<'ctxt>> {
-        self.get_or_define_type(type_id)?.clone().try_into().ok()
+        self.get_or_define_type(type_id)?.try_into().ok()
     }
 
     fn define_struct(

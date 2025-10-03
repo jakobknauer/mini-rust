@@ -7,10 +7,10 @@ use crate::{
 pub fn compile(source: &str) -> Result<(), ()> {
     let mut ctxt = ctxt::Ctxt::new();
 
-    let hlr = match hlr::build_program(&source) {
+    let hlr = match hlr::build_program(source) {
         Ok(hlr) => hlr,
         Err(err) => {
-            print_parser_error(&err, &source);
+            print_parser_error(&err, source);
             return Err(());
         }
     };
@@ -140,11 +140,11 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     for function in &hlr.functions {
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name).ok_or(())?;
 
-        let mlr_builder = mlr::MlrBuilder::new(&function, fn_id, ctxt);
+        let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
         let mlr = match mlr_builder.build() {
             Ok(mlr) => mlr,
             Err(mlr::MlrBuilderError::TypeError(err)) => {
-                print_type_error(&function.name, err, &ctxt);
+                print_type_error(&function.name, err, ctxt);
                 return Err(());
             }
             Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
@@ -167,7 +167,7 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     Ok(())
 }
 
-fn print_parser_error(err: &hlr::ParserError, _: &str) -> () {
+fn print_parser_error(err: &hlr::ParserError, _: &str) {
     match err {
         hlr::ParserError::LexerError(lexer_error) => eprintln!("Lexer error at position {}", lexer_error.position),
         hlr::ParserError::UnexpectedToken(token) => eprintln!("Parser error: Unexpected token {:?}", token),
@@ -183,8 +183,8 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
             "Type error in function '{}': Cannot reassign location {:?} of type '{}' with value of type '{}'",
             name,
             loc,
-            ctxt.type_registry.get_string_rep(expected),
-            ctxt.type_registry.get_string_rep(actual)
+            ctxt.type_registry.get_string_rep(&expected),
+            ctxt.type_registry.get_string_rep(&actual)
         ),
         mlr::TypeError::ExpressionNotCallable => {
             eprintln!("Type error in function '{}': Expression is not callable", name)
@@ -197,8 +197,8 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
             "Type error in function '{}': Argument {} type mismatch: expected '{}', got '{}'",
             name,
             index,
-            ctxt.type_registry.get_string_rep(expected),
-            ctxt.type_registry.get_string_rep(actual)
+            ctxt.type_registry.get_string_rep(&expected),
+            ctxt.type_registry.get_string_rep(&actual)
         ),
         mlr::TypeError::CallArgumentCountMismatch { expected, actual } => eprintln!(
             "Type error in function '{}': Argument count mismatch: expected {}, got {}",
@@ -207,26 +207,26 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
         mlr::TypeError::IfConditionNotBoolean { actual } => eprintln!(
             "Type error in function '{}': If condition must be of type 'bool', got '{}'",
             name,
-            ctxt.type_registry.get_string_rep(actual)
+            ctxt.type_registry.get_string_rep(&actual)
         ),
         mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => eprintln!(
             "Type error in function '{}': If branches must have the same type: then is '{}', else is '{}'",
             name,
-            ctxt.type_registry.get_string_rep(then_type),
-            ctxt.type_registry.get_string_rep(else_type)
+            ctxt.type_registry.get_string_rep(&then_type),
+            ctxt.type_registry.get_string_rep(&else_type)
         ),
         mlr::TypeError::ReturnTypeMismatch { expected, actual } => eprintln!(
             "Type error in function '{}': Return type mismatch: expected '{}', got '{}'",
             name,
-            ctxt.type_registry.get_string_rep(expected),
-            ctxt.type_registry.get_string_rep(actual)
+            ctxt.type_registry.get_string_rep(&expected),
+            ctxt.type_registry.get_string_rep(&actual)
         ),
     };
 }
 
 fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
     for fn_id in ctxt.function_registry.get_all_functions() {
-        print::print_mlr(fn_id, &ctxt, &mut std::io::stdout()).map_err(|_| ())?;
+        print::print_mlr(fn_id, ctxt, &mut std::io::stdout()).map_err(|_| ())?;
         println!();
     }
     Ok(())

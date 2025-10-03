@@ -66,7 +66,7 @@ impl<'a> MlrBuilder<'a> {
         } = self
             .ctxt
             .function_registry
-            .get_signature_by_id(self.fn_id)
+            .get_signature_by_id(&self.fn_id)
             .cloned()
             .unwrap();
 
@@ -81,7 +81,7 @@ impl<'a> MlrBuilder<'a> {
         let body = self.build_block(&self.function.body)?;
 
         let output_type = self.output.loc_types.get(&body.output).unwrap();
-        if !self.ctxt.type_registry.types_equal(return_type, *output_type) {
+        if !self.ctxt.type_registry.types_equal(&return_type, output_type) {
             return TypeError::ReturnTypeMismatch {
                 expected: return_type,
                 actual: *output_type,

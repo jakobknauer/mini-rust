@@ -79,14 +79,14 @@ impl<'a> Lexer<'a> {
     }
 
     fn try_parse_number(&mut self) -> Option<Token> {
-        if !self.get_current_char()?.is_digit(10) {
+        if !self.get_current_char()?.is_ascii_digit() {
             return None;
         }
 
         let start = self.position;
 
         while let Some(next) = self.get_current_char()
-            && next.is_digit(10)
+            && next.is_ascii_digit()
         {
             self.position += 1;
         }
@@ -138,7 +138,7 @@ impl Iterator for Lexer<'_> {
             .or_else(|| self.try_parse_one_char_token())
             .or_else(|| self.try_parse_identifier_or_keyword())
             .or_else(|| self.try_parse_number())
-            .ok_or_else(|| LexerError {
+            .ok_or(LexerError {
                 position: self.position,
             });
 

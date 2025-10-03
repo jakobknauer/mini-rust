@@ -38,15 +38,15 @@ pub enum TypeError {
     },
 }
 
-impl<T> Into<Result<T>> for MlrBuilderError {
-    fn into(self) -> Result<T> {
-        Err(self)
+impl<T> From<MlrBuilderError> for Result<T> {
+    fn from(val: MlrBuilderError) -> Self {
+        Err(val)
     }
 }
 
-impl<T> Into<Result<T>> for TypeError {
-    fn into(self) -> Result<T> {
-        MlrBuilderError::TypeError(self).into()
+impl<T> From<TypeError> for Result<T> {
+    fn from(val: TypeError) -> Self {
+        MlrBuilderError::TypeError(val).into()
     }
 }
 

@@ -69,7 +69,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn create_unit_block(&mut self) -> mlr::build::Result<mlr::Block> {
         let loc = self.get_next_loc_id();
         let init = self.create_unit_value()?;
-        let stmt = mlr::Statement::Assign { loc: loc, value: init };
+        let stmt = mlr::Statement::Assign { loc, value: init };
         let stmt = self.insert_stmt(stmt)?;
         Ok(mlr::Block {
             statements: vec![stmt],
@@ -83,9 +83,9 @@ impl<'a> mlr::MlrBuilder<'a> {
         match self.output.loc_types.entry(loc) {
             Entry::Occupied(occupied_entry) => {
                 let loc_type = occupied_entry.get();
-                if !self.ctxt.type_registry.types_equal(*expr_type, *loc_type) {
+                if !self.ctxt.type_registry.types_equal(expr_type, loc_type) {
                     return mlr::build::TypeError::ReassignTypeMismatch {
-                        loc: loc,
+                        loc,
                         expected: *loc_type,
                         actual: *expr_type,
                     }
@@ -108,7 +108,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let signature = self
             .ctxt
             .function_registry
-            .get_signature_by_id(self.fn_id)
+            .get_signature_by_id(&self.fn_id)
             .expect("return stmt only valid in function");
         let return_type = signature.return_type;
 
@@ -118,7 +118,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get(&value)
             .expect("type of return value should be known");
 
-        if !self.ctxt.type_registry.types_equal(return_type, *value_type) {
+        if !self.ctxt.type_registry.types_equal(&return_type, value_type) {
             return mlr::build::TypeError::ReturnTypeMismatch {
                 expected: return_type,
                 actual: *value_type,

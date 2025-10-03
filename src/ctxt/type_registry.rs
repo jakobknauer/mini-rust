@@ -77,8 +77,8 @@ impl TypeRegistry {
         Ok(type_id)
     }
 
-    pub fn get_type_by_id(&self, id: TypeId) -> Option<&Type> {
-        self.types.get(&id)
+    pub fn get_type_by_id(&self, id: &TypeId) -> Option<&Type> {
+        self.types.get(id)
     }
 
     pub fn get_type_id_by_name(&self, name: &str) -> Option<TypeId> {
@@ -112,9 +112,9 @@ impl TypeRegistry {
         }
     }
 
-    pub fn get_string_rep(&self, type_: TypeId) -> String {
-        let Some(type_) = self.types.get(&type_) else {
-            return format!("<type id {}>", type_.0).to_string();
+    pub fn get_string_rep(&self, type_id: &TypeId) -> String {
+        let Some(type_) = self.types.get(type_id) else {
+            return format!("<type id {}>", type_id.0).to_string();
         };
 
         match type_ {
@@ -123,22 +123,22 @@ impl TypeRegistry {
                 param_types,
                 return_type,
             } => {
-                let mut param_names = param_types.iter().map(|t| self.get_string_rep(*t));
-                let return_name = self.get_string_rep(*return_type);
+                let mut param_names = param_types.iter().map(|pt| self.get_string_rep(pt));
+                let return_name = self.get_string_rep(return_type);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
         }
     }
 
-    pub fn types_equal(&self, t1: TypeId, t2: TypeId) -> bool {
+    pub fn types_equal(&self, t1: &TypeId, t2: &TypeId) -> bool {
         use Type::*;
 
         if t1 == t2 {
             return true;
         }
 
-        let t1 = self.types.get(&t1).unwrap();
-        let t2 = self.types.get(&t2).unwrap();
+        let t1 = self.types.get(t1).unwrap();
+        let t2 = self.types.get(t2).unwrap();
 
         match (t1, t2) {
             (NamedType(_, left), NamedType(_, right)) => left == right,
@@ -153,8 +153,8 @@ impl TypeRegistry {
                 },
             ) => {
                 p1.len() == p2.len()
-                    && p1.iter().zip(p2).all(|(p1, p2)| self.types_equal(*p1, *p2))
-                    && self.types_equal(*r1, *r2)
+                    && p1.iter().zip(p2).all(|(p1, p2)| self.types_equal(p1, p2))
+                    && self.types_equal(r1, r2)
             }
             _ => false,
         }

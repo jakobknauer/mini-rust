@@ -36,8 +36,8 @@ impl FunctionRegistry {
         Ok(fn_id)
     }
 
-    pub fn get_signature_by_id(&self, fn_id: FnId) -> Option<&FunctionSignature> {
-        self.signatures.get(&fn_id)
+    pub fn get_signature_by_id(&self, fn_id: &FnId) -> Option<&FunctionSignature> {
+        self.signatures.get(fn_id)
     }
 
     pub fn get_function_by_name(&self, name: &str) -> Option<FnId> {
@@ -50,11 +50,11 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn get_function_mlr(&self, fn_id: FnId) -> Option<&Mlr> {
-        self.defs.get(&fn_id)
+    pub fn get_function_mlr(&self, fn_id: &FnId) -> Option<&Mlr> {
+        self.defs.get(fn_id)
     }
 
-    pub fn get_all_functions(&self) -> impl Iterator<Item = FnId> {
-        self.function_names.values().cloned()
+    pub fn get_all_functions(&self) -> impl Iterator<Item = &FnId> {
+        self.function_names.values()
     }
 }

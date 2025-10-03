@@ -33,12 +33,11 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_block(&self, block: &mlr::Block) -> mlr::build::Result<TypeId> {
-        Ok(self
+        Ok(*self
             .output
             .loc_types
             .get(&block.output)
-            .expect("type of block.output should have been inferred before")
-            .clone())
+            .expect("type of block.output should have been inferred before"))
     }
 
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> mlr::build::Result<TypeId> {
@@ -55,12 +54,11 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_location(&self, loc_id: mlr::LocId) -> mlr::build::Result<TypeId> {
-        Ok(self
+        Ok(*self
             .output
             .loc_types
             .get(&loc_id)
-            .expect("type of loc_id should be registered")
-            .clone())
+            .expect("type of loc_id should be registered"))
     }
 
     fn infer_type_of_call(
@@ -76,7 +74,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let callable_type = self
             .ctxt
             .type_registry
-            .get_type_by_id(*callable_type)
+            .get_type_by_id(callable_type)
             .expect("type of callable should be registered");
 
         let Type::Function {
@@ -87,7 +85,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::ExpressionNotCallable.into();
         };
 
-        let arg_types = args.into_iter().map(|arg_loc| {
+        let arg_types = args.iter().map(|arg_loc| {
             self.output
                 .loc_types
                 .get(arg_loc)
@@ -103,7 +101,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
 
         for (i, (param_type, arg_type)) in param_types.iter().zip(arg_types).enumerate() {
-            if !self.ctxt.type_registry.types_equal(*param_type, *arg_type) {
+            if !self.ctxt.type_registry.types_equal(param_type, arg_type) {
                 return TypeError::CallArgumentTypeMismatch {
                     index: i,
                     expected: *param_type,
@@ -120,7 +118,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let signature = self
             .ctxt
             .function_registry
-            .get_signature_by_id(fn_id)
+            .get_signature_by_id(&fn_id)
             .expect("function signature should be registered");
 
         let param_types = signature.parameters.iter().map(|param| param.type_).collect();
@@ -149,28 +147,26 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get_primitive_type_id(PrimitiveType::Boolean)
             .expect("boolean primitive type should be registered");
 
-        if !self.ctxt.type_registry.types_equal(*condition_type, bool_type_id) {
+        if !self.ctxt.type_registry.types_equal(condition_type, &bool_type_id) {
             return TypeError::IfConditionNotBoolean {
                 actual: *condition_type,
             }
             .into();
         }
 
-        let then_type = self
+        let then_type = *self
             .output
             .loc_types
             .get(&if_.then_block.output)
-            .expect("type of then_block.output should be registered")
-            .clone();
+            .expect("type of then_block.output should be registered");
 
-        let else_type = self
+        let else_type = *self
             .output
             .loc_types
             .get(&if_.else_block.output)
-            .expect("type of else_block.output should be registered")
-            .clone();
+            .expect("type of else_block.output should be registered");
 
-        if self.ctxt.type_registry.types_equal(then_type, else_type) {
+        if self.ctxt.type_registry.types_equal(&then_type, &else_type) {
             Ok(then_type)
         } else {
             TypeError::IfBranchTypeMismatch { then_type, else_type }.into()

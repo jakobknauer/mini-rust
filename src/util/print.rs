@@ -8,9 +8,9 @@ use crate::{
     mlr::*,
 };
 
-pub fn print_mlr<W: Write>(fn_id: FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> std::result::Result<(), std::io::Error> {
+pub fn print_mlr<W: Write>(fn_id: &FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> std::result::Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
-        fn_id,
+        fn_id: *fn_id,
         mlr: ctxt.function_registry.get_function_mlr(fn_id),
         signature: ctxt.function_registry.get_signature_by_id(fn_id),
         ctxt,
@@ -53,12 +53,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let param_type = self.ctxt.type_registry.get_string_rep(param.type_);
+            let param_type = self.ctxt.type_registry.get_string_rep(&param.type_);
             write!(self.writer, "{}: {}", param.name, param_type)?;
         }
         write!(self.writer, ") -> ")?;
 
-        let return_type = self.ctxt.type_registry.get_string_rep(signature.return_type);
+        let return_type = self.ctxt.type_registry.get_string_rep(&signature.return_type);
         write!(self.writer, "{}", return_type)
     }
 
@@ -91,7 +91,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         .loc_types
                         .get(loc)
                         .expect("local should have a type");
-                    let type_name = self.ctxt.type_registry.get_string_rep(*loc_type);
+                    let type_name = self.ctxt.type_registry.get_string_rep(loc_type);
                     write!(self.writer, "let {}: {} = ", loc, type_name)?;
                     self.print_expression(*value)?;
                     writeln!(self.writer, ";")
@@ -137,7 +137,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, ")")
                 }
                 Expression::Function(fn_id) => {
-                    if let Some(func) = self.ctxt.function_registry.get_signature_by_id(*fn_id) {
+                    if let Some(func) = self.ctxt.function_registry.get_signature_by_id(fn_id) {
                         write!(self.writer, "fn {}", func.name)
                     } else {
                         write!(self.writer, "<fn id {}>", fn_id.0)
