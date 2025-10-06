@@ -1,10 +1,11 @@
+use bimap::BiMap;
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::ctxt::types::*;
 
 pub struct TypeRegistry {
-    types: HashMap<TypeId, Type>,
+    types: BiMap<TypeId, Type>,
     structs: HashMap<StructId, StructDefinition>,
     enums: HashMap<EnumId, EnumDefinition>,
 
@@ -22,24 +23,31 @@ pub struct TypeRegistry {
 impl TypeRegistry {
     pub fn new() -> TypeRegistry {
         TypeRegistry {
-            types: HashMap::new(),
+            types: BiMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
+
             i32_type: None,
             bool_type: None,
             unit_type: None,
+
             named_types: BTreeMap::new(),
+
             next_type_id: TypeId(0),
             next_struct_id: StructId(0),
             next_enum_id: EnumId(0),
         }
     }
 
-    pub fn register_type(&mut self, type_: Type) -> TypeId {
-        let type_id = self.next_type_id;
-        self.next_type_id.0 += 1;
-        self.types.insert(type_id, type_);
-        type_id
+    fn register_type(&mut self, type_: Type) -> TypeId {
+        if let Some(type_id) = self.types.get_by_right(&type_) {
+            *type_id
+        } else {
+            let type_id = self.next_type_id;
+            self.next_type_id.0 += 1;
+            self.types.insert(type_id, type_);
+            type_id
+        }
     }
 
     fn register_named_type(&mut self, name: &str, type_: NamedType) -> Result<TypeId, ()> {
@@ -77,8 +85,16 @@ impl TypeRegistry {
         Ok(type_id)
     }
 
+    pub fn register_function_type(&mut self, param_types: impl Into<Vec<TypeId>>, return_type: TypeId) -> TypeId {
+        let function_type = Type::Function {
+            param_types: param_types.into(),
+            return_type,
+        };
+        self.register_type(function_type)
+    }
+
     pub fn get_type_by_id(&self, id: &TypeId) -> Option<&Type> {
-        self.types.get(id)
+        self.types.get_by_left(id)
     }
 
     pub fn get_type_id_by_name(&self, name: &str) -> Option<TypeId> {
@@ -87,7 +103,7 @@ impl TypeRegistry {
 
     pub fn get_type_by_name(&self, name: &str) -> Option<&Type> {
         let type_id = self.get_type_id_by_name(name)?;
-        self.types.get(&type_id)
+        self.types.get_by_left(&type_id)
     }
 
     pub fn get_struct_definition(&self, struct_id: &StructId) -> Option<&StructDefinition> {
@@ -113,7 +129,7 @@ impl TypeRegistry {
     }
 
     pub fn get_string_rep(&self, type_id: &TypeId) -> String {
-        let Some(type_) = self.types.get(type_id) else {
+        let Some(type_) = self.types.get_by_left(type_id) else {
             return format!("<type id {}>", type_id.0).to_string();
         };
 
@@ -131,33 +147,7 @@ impl TypeRegistry {
     }
 
     pub fn types_equal(&self, t1: &TypeId, t2: &TypeId) -> bool {
-        use Type::*;
-
-        if t1 == t2 {
-            return true;
-        }
-
-        let t1 = self.types.get(t1).unwrap();
-        let t2 = self.types.get(t2).unwrap();
-
-        match (t1, t2) {
-            (NamedType(_, left), NamedType(_, right)) => left == right,
-            (
-                Function {
-                    param_types: p1,
-                    return_type: r1,
-                },
-                Function {
-                    param_types: p2,
-                    return_type: r2,
-                },
-            ) => {
-                p1.len() == p2.len()
-                    && p1.iter().zip(p2).all(|(p1, p2)| self.types_equal(p1, p2))
-                    && self.types_equal(r1, r2)
-            }
-            _ => false,
-        }
+        t1 == t2
     }
 
     pub fn get_primitive_type_id(&self, type_: PrimitiveType) -> Option<TypeId> {

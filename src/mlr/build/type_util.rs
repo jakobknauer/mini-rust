@@ -121,15 +121,9 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get_signature_by_id(&fn_id)
             .expect("function signature should be registered");
 
-        let param_types = signature.parameters.iter().map(|param| param.type_).collect();
+        let param_types: Vec<_> = signature.parameters.iter().map(|param| param.type_).collect();
         let return_type = signature.return_type;
-
-        let function_type = Type::Function {
-            param_types,
-            return_type,
-        };
-
-        let function_type_id = self.ctxt.type_registry.register_type(function_type);
+        let function_type_id = self.ctxt.type_registry.register_function_type(param_types, return_type);
 
         Ok(function_type_id)
     }

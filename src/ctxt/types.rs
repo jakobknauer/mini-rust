@@ -7,7 +7,7 @@ pub struct StructId(pub usize);
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnumId(pub usize);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     NamedType(String, NamedType),
     Function {
@@ -16,14 +16,14 @@ pub enum Type {
     },
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum NamedType {
     Primitve(PrimitiveType),
     Struct(StructId),
     Enum(EnumId),
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum PrimitiveType {
     Integer32,
     Boolean,
