@@ -4,9 +4,10 @@ use inkwell::{
     context::Context as IwContext,
     module::Module,
     types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
+    values::FunctionValue,
 };
 
-use crate::ctxt::{self as mr_ctxt, types as mr_types};
+use crate::ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types};
 
 pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
     let iw_ctxt = IwContext::create();
@@ -26,6 +27,7 @@ struct Generator<'iw, 'mr> {
     mr_ctxt: &'mr mr_ctxt::Ctxt,
 
     types: HashMap<mr_types::TypeId, AnyTypeEnum<'iw>>,
+    functions: HashMap<mr_functions::FnId, FunctionValue<'iw>>,
 }
 
 impl<'ctxt, 'a> Generator<'ctxt, 'a> {
@@ -36,6 +38,7 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
             iw_module,
             mr_ctxt,
             types: HashMap::new(),
+            functions: HashMap::new(),
         }
     }
 
@@ -123,7 +126,8 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
                 .map(|param| self.get_type_as_basic_metadata_type_enum(&param.type_).unwrap())
                 .collect();
             let fn_type = return_type.fn_type(&param_types, false);
-            self.iw_module.add_function(&signature.name, fn_type, None);
+            let fn_value = self.iw_module.add_function(&signature.name, fn_type, None);
+            self.functions.insert(*fn_id, fn_value);
         }
     }
 }
