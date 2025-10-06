@@ -30,8 +30,8 @@ struct Generator<'iw, 'mr> {
     functions: HashMap<mr_functions::FnId, FunctionValue<'iw>>,
 }
 
-impl<'ctxt, 'a> Generator<'ctxt, 'a> {
-    pub fn new(iw_ctxt: &'ctxt IwContext, mr_ctxt: &'a mr_ctxt::Ctxt) -> Self {
+impl<'iw, 'mr> Generator<'iw, 'mr> {
+    pub fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mr_ctxt::Ctxt) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         Generator {
             iw_ctxt,
@@ -48,7 +48,7 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
         }
     }
 
-    fn get_or_define_type(&mut self, type_id: &mr_types::TypeId) -> Option<AnyTypeEnum<'ctxt>> {
+    fn get_or_define_type(&mut self, type_id: &mr_types::TypeId) -> Option<AnyTypeEnum<'iw>> {
         if self.types.contains_key(type_id) {
             return self.types.get(type_id).cloned();
         }
@@ -85,14 +85,14 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
         self.types.get(type_id).cloned()
     }
 
-    fn get_type_as_basic_type_enum(&mut self, type_id: &mr_types::TypeId) -> Option<BasicTypeEnum<'ctxt>> {
+    fn get_type_as_basic_type_enum(&mut self, type_id: &mr_types::TypeId) -> Option<BasicTypeEnum<'iw>> {
         self.get_or_define_type(type_id)?.try_into().ok()
     }
 
     fn get_type_as_basic_metadata_type_enum(
         &mut self,
         type_id: &mr_types::TypeId,
-    ) -> Option<BasicMetadataTypeEnum<'ctxt>> {
+    ) -> Option<BasicMetadataTypeEnum<'iw>> {
         self.get_or_define_type(type_id)?.try_into().ok()
     }
 
@@ -101,7 +101,7 @@ impl<'ctxt, 'a> Generator<'ctxt, 'a> {
         name: &str,
         type_id: &mr_types::TypeId,
         struct_id: &mr_types::StructId,
-    ) -> AnyTypeEnum<'ctxt> {
+    ) -> AnyTypeEnum<'iw> {
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(name);
         self.types.insert(*type_id, iw_struct.as_any_type_enum());
 
