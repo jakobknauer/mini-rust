@@ -7,7 +7,10 @@ use inkwell::{
     values::FunctionValue,
 };
 
-use crate::ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types};
+use crate::{
+    ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types},
+    mlr::LocId,
+};
 
 pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
     let iw_ctxt = IwContext::create();
@@ -15,6 +18,7 @@ pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
 
     generator.define_types();
     generator.declare_functions();
+    generator.define_functions();
 
     let ir = generator.iw_module.print_to_string();
     println!("{}", ir.to_string());
@@ -129,5 +133,31 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             let fn_value = self.iw_module.add_function(&signature.name, fn_type, None);
             self.functions.insert(*fn_id, fn_value);
         }
+    }
+
+    fn define_functions(&mut self) {
+        for fn_id in self.mr_ctxt.function_registry.get_all_functions() {
+            let _ = self.define_function(fn_id);
+        }
+    }
+
+    fn define_function(&mut self, fn_id: &mr_functions::FnId) -> Result<(), ()> {
+        let signature = self.mr_ctxt.function_registry.get_signature_by_id(fn_id).unwrap();
+        let mlr = self.mr_ctxt.function_registry.get_function_mlr(fn_id).ok_or(())?;
+
+        let iw_fn = self.iw_module.get_function(&signature.name).unwrap();
+
+        let builder = self.iw_ctxt.create_builder();
+        let entry_block = self.iw_ctxt.append_basic_block(iw_fn, "entry");
+        builder.position_at_end(entry_block);
+
+        // allocate params
+        for (index, param) in signature.parameters.iter().enumerate() {
+            let mr_type = mlr.loc_types.get(&LocId(index)).unwrap();
+            let iw_type = self.get_type_as_basic_type_enum(mr_type).unwrap();
+            builder.build_alloca(iw_type, &param.name).map_err(|_| ())?;
+        }
+
+        Ok(())
     }
 }
