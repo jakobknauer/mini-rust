@@ -155,7 +155,10 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         for (index, param) in signature.parameters.iter().enumerate() {
             let mr_type = mlr.loc_types.get(&LocId(index)).unwrap();
             let iw_type = self.get_type_as_basic_type_enum(mr_type).unwrap();
-            builder.build_alloca(iw_type, &param.name).map_err(|_| ())?;
+            let param_loc = builder.build_alloca(iw_type, &param.name).map_err(|_| ())?;
+            builder
+                .build_store(param_loc, iw_fn.get_nth_param(index as u32).unwrap())
+                .map_err(|_| ())?;
         }
 
         Ok(())
