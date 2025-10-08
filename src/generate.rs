@@ -1,3 +1,5 @@
+mod fns;
+
 use std::collections::HashMap;
 
 use inkwell::{
@@ -7,7 +9,10 @@ use inkwell::{
     values::FunctionValue,
 };
 
-use crate::ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types};
+use crate::{
+    ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types},
+    generate::fns::FnGenerator,
+};
 
 pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
     let iw_ctxt = IwContext::create();
@@ -132,30 +137,9 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         }
     }
 
-    fn define_functions(&mut self) {
+    pub fn define_functions(&mut self) {
         for fn_id in self.mr_ctxt.function_registry.get_all_functions() {
-            let _ = self.define_function(fn_id);
+            let _ = FnGenerator::new(self, *fn_id).define_function();
         }
-    }
-
-    fn define_function(&mut self, fn_id: &mr_functions::FnId) -> Result<(), ()> {
-        let mlr = self.mr_ctxt.function_registry.get_function_mlr(fn_id).ok_or(())?;
-        let iw_fn = *self.functions.get(fn_id).unwrap();
-
-        let builder = self.iw_ctxt.create_builder();
-        let entry_block = self.iw_ctxt.append_basic_block(iw_fn, "entry");
-        builder.position_at_end(entry_block);
-
-        // allocate params
-        for (param_index, param_loc) in mlr.param_locs.iter().enumerate() {
-            let mr_type = mlr.loc_types.get(param_loc).unwrap();
-            let iw_type = self.get_type_as_basic_type_enum(mr_type).unwrap();
-            let param_loc = builder.build_alloca(iw_type, &param_loc.to_string()).map_err(|_| ())?;
-            builder
-                .build_store(param_loc, iw_fn.get_nth_param(param_index as u32).unwrap())
-                .map_err(|_| ())?;
-        }
-
-        Ok(())
     }
 }
