@@ -75,6 +75,7 @@ impl<'a> MlrBuilder<'a> {
             let loc = self.get_next_loc_id();
             scope.vars.insert(name, loc);
             self.output.loc_types.insert(loc, type_);
+            self.output.param_locs.push(loc);
         }
         self.scopes.push_back(scope);
 

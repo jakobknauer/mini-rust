@@ -18,6 +18,7 @@ pub struct Mlr {
     pub loc_types: HashMap<LocId, TypeId>,
     pub expr_types: HashMap<ExprId, TypeId>,
     pub body: Block,
+    pub param_locs: Vec<LocId>,
 }
 
 impl Mlr {
@@ -31,6 +32,7 @@ impl Mlr {
                 statements: Vec::new(),
                 output: LocId(0),
             },
+            param_locs: Vec::new(),
         }
     }
 }

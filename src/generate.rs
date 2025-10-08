@@ -7,10 +7,7 @@ use inkwell::{
     values::FunctionValue,
 };
 
-use crate::{
-    ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types},
-    mlr::LocId,
-};
+use crate::ctxt::{self as mr_ctxt, functions as mr_functions, types as mr_types};
 
 pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
     let iw_ctxt = IwContext::create();
@@ -142,22 +139,20 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn define_function(&mut self, fn_id: &mr_functions::FnId) -> Result<(), ()> {
-        let signature = self.mr_ctxt.function_registry.get_signature_by_id(fn_id).unwrap();
         let mlr = self.mr_ctxt.function_registry.get_function_mlr(fn_id).ok_or(())?;
-
-        let iw_fn = self.iw_module.get_function(&signature.name).unwrap();
+        let iw_fn = *self.functions.get(fn_id).unwrap();
 
         let builder = self.iw_ctxt.create_builder();
         let entry_block = self.iw_ctxt.append_basic_block(iw_fn, "entry");
         builder.position_at_end(entry_block);
 
         // allocate params
-        for (index, param) in signature.parameters.iter().enumerate() {
-            let mr_type = mlr.loc_types.get(&LocId(index)).unwrap();
+        for (param_index, param_loc) in mlr.param_locs.iter().enumerate() {
+            let mr_type = mlr.loc_types.get(param_loc).unwrap();
             let iw_type = self.get_type_as_basic_type_enum(mr_type).unwrap();
-            let param_loc = builder.build_alloca(iw_type, &param.name).map_err(|_| ())?;
+            let param_loc = builder.build_alloca(iw_type, &param_loc.to_string()).map_err(|_| ())?;
             builder
-                .build_store(param_loc, iw_fn.get_nth_param(index as u32).unwrap())
+                .build_store(param_loc, iw_fn.get_nth_param(param_index as u32).unwrap())
                 .map_err(|_| ())?;
         }
 
