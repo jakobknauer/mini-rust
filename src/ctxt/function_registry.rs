@@ -40,6 +40,10 @@ impl FunctionRegistry {
         self.signatures.get(fn_id)
     }
 
+    pub fn get_function_name_by_id(&self, fn_id: &FnId) -> Option<&str> {
+        self.signatures.get(fn_id).map(|sig| sig.name.as_str())
+    }
+
     pub fn get_function_by_name(&self, name: &str) -> Option<FnId> {
         self.function_names.get(name).cloned()
     }
