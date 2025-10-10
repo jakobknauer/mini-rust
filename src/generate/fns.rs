@@ -113,7 +113,32 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_expression(&mut self, _expr: &mlr::ExprId) -> Result<BasicValueEnum<'iw>, ()> {
-        let five = self.gtor.iw_ctxt.i32_type().const_int(5, false).as_basic_value_enum();
-        Ok(five)
+        let expr = self.mlr.expressions.get(_expr).ok_or(())?;
+        match expr {
+            mlr::Expression::Block(block) => {
+                self.build_block(block)?;
+                let output_loc_id = block.output;
+                let output_loc = *self.locs.get(&output_loc_id).ok_or(())?;
+                let output_type = self.mlr.loc_types.get(&output_loc_id).ok_or(())?;
+                let iw_type = self.gtor.get_type_as_basic_type_enum(output_type).ok_or(())?;
+                let ret_value = self
+                    .builder
+                    .build_load(iw_type, output_loc, "block_value")
+                    .map_err(|_| ())?;
+                Ok(ret_value)
+            }
+            _ => {
+                // Simply return the integer constant 42 for now
+                let int_type = self.gtor.iw_ctxt.i32_type();
+                Ok(int_type.const_int(42, false).as_basic_value_enum())
+            } //
+              // mlr::Expression::Constant(constant) => todo!(),
+              // mlr::Expression::Var(loc_id) => todo!(),
+              // mlr::Expression::AddressOf(loc_id) => todo!(),
+              // mlr::Expression::Call { callable, args } => todo!(),
+              // mlr::Expression::Function(fn_id) => todo!(),
+              // mlr::Expression::If(_) => todo!(),
+              // mlr::Expression::Loop { body } => todo!(),
+        }
     }
 }

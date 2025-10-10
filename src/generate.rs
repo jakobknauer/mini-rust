@@ -141,7 +141,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         for fn_id in self.mr_ctxt.function_registry.get_all_functions() {
             let fn_gen = FnGenerator::new(self, *fn_id);
             if let Some(mut fn_gen) = fn_gen {
-                fn_gen.define_function().unwrap();
+                let _ = fn_gen.define_function();
             }
         }
     }
