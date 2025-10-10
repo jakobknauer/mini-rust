@@ -3,6 +3,7 @@ mod fns;
 use std::collections::HashMap;
 
 use inkwell::{
+    AddressSpace,
     context::Context as IwContext,
     module::Module,
     types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
@@ -71,18 +72,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                 mr_types::NamedType::Struct(struct_id) => self.define_struct(name, type_id, struct_id),
                 mr_types::NamedType::Enum(..) => todo!(),
             },
-            mr_types::Type::Function {
-                param_types,
-                return_type,
-            } => {
-                // TODO do we actually need function pointers here? (probably)
-                let return_type: BasicTypeEnum = self.get_type_as_basic_type_enum(return_type).unwrap();
-                let param_types: Vec<_> = param_types
-                    .iter()
-                    .map(|param_type| self.get_type_as_basic_metadata_type_enum(param_type).unwrap())
-                    .collect();
-                return_type.fn_type(&param_types, false).as_any_type_enum()
-            }
+            mr_types::Type::Function { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
         };
 
         if !self.types.contains_key(type_id) {
