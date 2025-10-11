@@ -137,6 +137,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 let (iw_type, address) = self.get_iw_type_and_address_of_loc(loc_id)?;
                 self.builder.build_load(iw_type, address, "loaded_var").map_err(|_| ())
             }
+            mlr::Expression::Function(fn_id) => {
+                let iw_fn = *self.gtor.functions.get(fn_id).ok_or(())?;
+                Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
+            }
             _ => {
                 // Simply return the integer constant 42 for now
                 let int_type = self.gtor.iw_ctxt.i32_type();
@@ -144,7 +148,6 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             } //
               // mlr::Expression::AddressOf(loc_id) => todo!(),
               // mlr::Expression::Call { callable, args } => todo!(),
-              // mlr::Expression::Function(fn_id) => todo!(),
               // mlr::Expression::If(_) => todo!(),
               // mlr::Expression::Loop { body } => todo!(),
         }
