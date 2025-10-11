@@ -132,6 +132,20 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                     .map_err(|_| ())?;
                 Ok(ret_value)
             }
+            mlr::Expression::Constant(constant) => match constant {
+                mlr::Constant::Int(i) => {
+                    let int_type = self.gtor.iw_ctxt.i32_type();
+                    Ok(int_type.const_int(*i as u64, false).as_basic_value_enum())
+                }
+                mlr::Constant::Bool(b) => {
+                    let bool_type = self.gtor.iw_ctxt.bool_type();
+                    Ok(bool_type.const_int(*b as u64, false).as_basic_value_enum())
+                }
+                mlr::Constant::Unit => {
+                    let unit_type = self.gtor.iw_ctxt.custom_width_int_type(0);
+                    Ok(unit_type.const_int(0, false).as_basic_value_enum())
+                }
+            },
             _ => {
                 // Simply return the integer constant 42 for now
                 let int_type = self.gtor.iw_ctxt.i32_type();
