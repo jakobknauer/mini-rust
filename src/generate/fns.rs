@@ -34,6 +34,21 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
+    fn get_iw_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Result<inkwell::types::BasicTypeEnum<'iw>, ()> {
+        let mr_type = self.mlr.loc_types.get(loc_id).ok_or(())?;
+        let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(())?;
+        Ok(iw_type)
+    }
+
+    fn get_iw_type_and_address_of_loc(
+        &mut self,
+        loc_id: &mlr::LocId,
+    ) -> Result<(inkwell::types::BasicTypeEnum<'iw>, PointerValue<'iw>), ()> {
+        let iw_type = self.get_iw_type_of_loc(loc_id)?;
+        let address = *self.locs.get(loc_id).ok_or(())?;
+        Ok((iw_type, address))
+    }
+
     fn build_entry_block(&mut self) -> Result<(), ()> {
         let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
         let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
@@ -42,8 +57,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         // allocate params
         for (param_index, param_loc_id) in self.mlr.param_locs.iter().enumerate() {
-            let mr_type = self.mlr.loc_types.get(param_loc_id).unwrap();
-            let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).unwrap();
+            let iw_type = self.get_iw_type_of_loc(param_loc_id)?;
             let param_loc = self
                 .builder
                 .build_alloca(iw_type, &param_loc_id.to_string())
@@ -67,13 +81,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.build_block(&self.mlr.body)?;
 
         // return mlr.body.output
-        let output_loc_id = self.mlr.body.output;
-        let output_loc = *self.locs.get(&output_loc_id).ok_or(())?;
-        let output_type = self.mlr.loc_types.get(&output_loc_id).ok_or(())?;
-        let iw_type = self.gtor.get_type_as_basic_type_enum(output_type).ok_or(())?;
+        let (iw_type, output_address) = self.get_iw_type_and_address_of_loc(&self.mlr.body.output)?;
         let ret_value = self
             .builder
-            .build_load(iw_type, output_loc, "ret_value")
+            .build_load(iw_type, output_address, "ret_value")
             .map_err(|_| ())?;
         self.builder.build_return(Some(&ret_value)).map_err(|_| ())?;
 
@@ -92,20 +103,17 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         match stmt {
             mlr::Statement::Assign { loc, value } => {
                 if !self.locs.contains_key(loc) {
-                    let mr_type = self.mlr.loc_types.get(loc).ok_or(())?;
-                    let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(())?;
-                    let iw_loc = self.builder.build_alloca(iw_type, &loc.to_string()).map_err(|_| ())?;
-                    self.locs.insert(*loc, iw_loc);
+                    let iw_type = self.get_iw_type_of_loc(loc)?;
+                    let address = self.builder.build_alloca(iw_type, &loc.to_string()).map_err(|_| ())?;
+                    self.locs.insert(*loc, address);
                 }
-                let loc = *self.locs.get(loc).ok_or(())?;
+                let address = *self.locs.get(loc).ok_or(())?;
                 let value = self.build_expression(value).map_err(|_| ())?;
-                self.builder.build_store(loc, value).map_err(|_| ())?;
+                self.builder.build_store(address, value).map_err(|_| ())?;
             }
             mlr::Statement::Return { value } => {
-                let loc = *self.locs.get(value).ok_or(())?;
-                let loc_type = self.mlr.loc_types.get(value).ok_or(())?;
-                let iw_type = self.gtor.get_type_as_basic_type_enum(loc_type).ok_or(())?;
-                let ret_value = self.builder.build_load(iw_type, loc, "ret_value").map_err(|_| ())?;
+                let (iw_type, address) = self.get_iw_type_and_address_of_loc(value)?;
+                let ret_value = self.builder.build_load(iw_type, address, "ret_value").map_err(|_| ())?;
                 self.builder.build_return(Some(&ret_value)).map_err(|_| ())?;
             }
         }
@@ -117,13 +125,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         match expr {
             mlr::Expression::Block(block) => {
                 self.build_block(block)?;
-                let output_loc_id = block.output;
-                let output_loc = *self.locs.get(&output_loc_id).ok_or(())?;
-                let output_type = self.mlr.loc_types.get(&output_loc_id).ok_or(())?;
-                let iw_type = self.gtor.get_type_as_basic_type_enum(output_type).ok_or(())?;
+                let (iw_type, address) = self.get_iw_type_and_address_of_loc(&block.output)?;
                 let ret_value = self
                     .builder
-                    .build_load(iw_type, output_loc, "block_value")
+                    .build_load(iw_type, address, "block_value")
                     .map_err(|_| ())?;
                 Ok(ret_value)
             }
