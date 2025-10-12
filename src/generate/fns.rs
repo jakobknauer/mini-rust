@@ -4,7 +4,7 @@ use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
     types::{BasicType, BasicTypeEnum, FunctionType},
-    values::{BasicValue, BasicValueEnum, PointerValue},
+    values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::{ctxt::functions as mr_functions, ctxt::types as mr_types, mlr};
@@ -12,6 +12,7 @@ use crate::{ctxt::functions as mr_functions, ctxt::types as mr_types, mlr};
 pub struct FnGenerator<'a, 'iw, 'mr> {
     gtor: &'a mut super::Generator<'iw, 'mr>,
     fn_id: mr_functions::FnId,
+    iw_fn: FunctionValue<'iw>,
     builder: Builder<'iw>,
     mlr: &'a mlr::Mlr,
     locs: HashMap<mlr::LocId, PointerValue<'iw>>,
@@ -34,10 +35,12 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let builder = gtor.iw_ctxt.create_builder();
         let mlr = gtor.mr_ctxt.function_registry.get_function_mlr(&fn_id)?;
         let locs = HashMap::new();
+        let iw_fn = *gtor.functions.get(&fn_id)?;
 
         Some(Self {
             gtor,
             fn_id,
+            iw_fn,
             builder,
             mlr,
             locs,
@@ -139,25 +142,21 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_entry_block(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
-        let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
-
-        let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
+        let entry_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "entry");
         self.entry_block = Some(entry_block);
         self.builder.position_at_end(entry_block);
 
         for (param_index, param_loc_id) in self.mlr.param_locs.iter().enumerate() {
             let param_address = self.build_alloca_for_loc(param_loc_id)?;
             self.builder
-                .build_store(param_address, iw_fn.get_nth_param(param_index as u32).unwrap())?;
+                .build_store(param_address, self.iw_fn.get_nth_param(param_index as u32).unwrap())?;
         }
 
         Ok(entry_block)
     }
 
     fn build_function_body(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
-        let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
-
-        let body_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "body");
+        let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.builder.position_at_end(body_block);
         let output = self.build_block(&self.mlr.body)?;
 
@@ -262,10 +261,9 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .into_int_value();
 
         // Create blocks for then, else, and merge
-        let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
-        let then_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "then");
-        let else_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "else");
-        let merge_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "if_merge");
+        let then_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "then");
+        let else_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "else");
+        let merge_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "if_merge");
 
         // Allocate space for the result
         let result_type = self.get_iw_type_of_expr(expr_id)?;
