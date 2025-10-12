@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
-use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
+use inkwell::{
+    types::{BasicType, FunctionType},
+    values::{BasicValue, BasicValueEnum, PointerValue},
+};
 
-use crate::{ctxt::functions as mr_functions, mlr};
+use crate::{ctxt::functions as mr_functions, ctxt::types as mr_types, mlr};
 
 pub struct FnGenerator<'a, 'iw, 'mr> {
     gtor: &'a mut super::Generator<'iw, 'mr>,
@@ -141,15 +144,16 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 let iw_fn = *self.gtor.functions.get(fn_id).ok_or(())?;
                 Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
             }
+            mlr::Expression::Call { callable, args } => self.build_call(callable, args),
+
+            // mlr::Expression::AddressOf(loc_id) => todo!(),
+            // mlr::Expression::If(_) => todo!(),
+            // mlr::Expression::Loop { body } => todo!(),
             _ => {
                 // Simply return the integer constant 42 for now
                 let int_type = self.gtor.iw_ctxt.i32_type();
                 Ok(int_type.const_int(42, false).as_basic_value_enum())
-            } //
-              // mlr::Expression::AddressOf(loc_id) => todo!(),
-              // mlr::Expression::Call { callable, args } => todo!(),
-              // mlr::Expression::If(_) => todo!(),
-              // mlr::Expression::Loop { body } => todo!(),
+            }
         }
     }
 
@@ -168,5 +172,55 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 Ok(unit_type.const_int(0, false).as_basic_value_enum())
             }
         }
+    }
+
+    fn build_call(&mut self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<BasicValueEnum<'iw>, ()> {
+        let (iw_type, address) = self.get_iw_type_and_address_of_loc(callable)?;
+        let fn_ptr = self
+            .builder
+            .build_load(iw_type, address, "loaded_callable")
+            .map_err(|_| ())?
+            .into_pointer_value();
+
+        let mut arg_values = Vec::new();
+        for arg_loc in args {
+            let (arg_type, arg_address) = self.get_iw_type_and_address_of_loc(arg_loc)?;
+            let arg_value = self
+                .builder
+                .build_load(arg_type, arg_address, "arg_value")
+                .map_err(|_| ())?;
+            arg_values.push(arg_value.into());
+        }
+
+        let fn_type = self.get_function_type_of_loc(callable).ok_or(())?;
+
+        let call_site = self
+            .builder
+            .build_indirect_call(fn_type, fn_ptr, &arg_values, "call_site")
+            .map_err(|_| ())?;
+
+        match call_site.try_as_basic_value().left() {
+            Some(basic_value) => Ok(basic_value),
+            None => Err(()),
+        }
+    }
+
+    fn get_function_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Option<FunctionType<'iw>> {
+        let mr_type = self.mlr.loc_types.get(loc_id)?;
+        let mr_type = self.gtor.mr_ctxt.type_registry.get_type_by_id(mr_type)?;
+        let mr_types::Type::Function {
+            return_type,
+            param_types,
+        } = mr_type
+        else {
+            return None;
+        };
+        let return_type = self.gtor.get_type_as_basic_type_enum(return_type)?;
+        let param_types: Vec<_> = param_types
+            .iter()
+            .map(|param| self.gtor.get_type_as_basic_metadata_type_enum(param))
+            .collect::<Option<_>>()?;
+
+        Some(return_type.fn_type(&param_types, false))
     }
 }
