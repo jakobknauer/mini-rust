@@ -52,6 +52,25 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok((iw_type, address))
     }
 
+    fn get_function_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Option<FunctionType<'iw>> {
+        let mr_type = self.mlr.loc_types.get(loc_id)?;
+        let mr_type = self.gtor.mr_ctxt.type_registry.get_type_by_id(mr_type)?;
+        let mr_types::Type::Function {
+            return_type,
+            param_types,
+        } = mr_type
+        else {
+            return None;
+        };
+        let return_type = self.gtor.get_type_as_basic_type_enum(return_type)?;
+        let param_types: Vec<_> = param_types
+            .iter()
+            .map(|param| self.gtor.get_type_as_basic_metadata_type_enum(param))
+            .collect::<Option<_>>()?;
+
+        Some(return_type.fn_type(&param_types, false))
+    }
+
     fn build_entry_block(&mut self) -> Result<(), ()> {
         let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
         let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
@@ -81,23 +100,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.builder.build_unconditional_branch(body_block).map_err(|_| ())?;
         self.builder.position_at_end(body_block);
 
-        self.build_block(&self.mlr.body)?;
+        let output = self.build_block(&self.mlr.body)?;
 
-        // return mlr.body.output
-        let (iw_type, output_address) = self.get_iw_type_and_address_of_loc(&self.mlr.body.output)?;
-        let ret_value = self
-            .builder
-            .build_load(iw_type, output_address, "ret_value")
-            .map_err(|_| ())?;
-        self.builder.build_return(Some(&ret_value)).map_err(|_| ())?;
+        self.builder.build_return(Some(&output)).map_err(|_| ())?;
 
-        Ok(())
-    }
-
-    fn build_block(&mut self, body: &mlr::Block) -> Result<(), ()> {
-        for stmt in &body.statements {
-            self.build_statement(stmt)?;
-        }
         Ok(())
     }
 
@@ -123,27 +129,13 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn build_expression(&mut self, _expr: &mlr::ExprId) -> Result<BasicValueEnum<'iw>, ()> {
-        let expr = self.mlr.expressions.get(_expr).ok_or(())?;
+    fn build_expression(&mut self, expr: &mlr::ExprId) -> Result<BasicValueEnum<'iw>, ()> {
+        let expr = self.mlr.expressions.get(expr).ok_or(())?;
         match expr {
-            mlr::Expression::Block(block) => {
-                self.build_block(block)?;
-                let (iw_type, address) = self.get_iw_type_and_address_of_loc(&block.output)?;
-                let ret_value = self
-                    .builder
-                    .build_load(iw_type, address, "block_value")
-                    .map_err(|_| ())?;
-                Ok(ret_value)
-            }
+            mlr::Expression::Block(block) => self.build_block(block),
             mlr::Expression::Constant(constant) => self.build_constant(constant),
-            mlr::Expression::Var(loc_id) => {
-                let (iw_type, address) = self.get_iw_type_and_address_of_loc(loc_id)?;
-                self.builder.build_load(iw_type, address, "loaded_var").map_err(|_| ())
-            }
-            mlr::Expression::Function(fn_id) => {
-                let iw_fn = *self.gtor.functions.get(fn_id).ok_or(())?;
-                Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
-            }
+            mlr::Expression::Var(loc_id) => self.build_var(loc_id),
+            mlr::Expression::Function(fn_id) => self.build_global_function(fn_id),
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
 
             // mlr::Expression::AddressOf(loc_id) => todo!(),
@@ -155,6 +147,18 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 Ok(int_type.const_int(42, false).as_basic_value_enum())
             }
         }
+    }
+
+    fn build_block(&mut self, body: &mlr::Block) -> Result<BasicValueEnum<'iw>, ()> {
+        for stmt in &body.statements {
+            self.build_statement(stmt)?;
+        }
+        let (iw_type, address) = self.get_iw_type_and_address_of_loc(&body.output)?;
+        let ret_value = self
+            .builder
+            .build_load(iw_type, address, "block_output")
+            .map_err(|_| ())?;
+        Ok(ret_value)
     }
 
     fn build_constant(&mut self, constant: &mlr::Constant) -> Result<BasicValueEnum<'iw>, ()> {
@@ -174,6 +178,16 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
+    fn build_var(&mut self, loc_id: &mlr::LocId) -> Result<BasicValueEnum<'iw>, ()> {
+        let (iw_type, address) = self.get_iw_type_and_address_of_loc(loc_id)?;
+        self.builder.build_load(iw_type, address, "loaded_var").map_err(|_| ())
+    }
+
+    fn build_global_function(&mut self, fn_id: &mr_functions::FnId) -> Result<BasicValueEnum<'iw>, ()> {
+        let iw_fn = *self.gtor.functions.get(fn_id).ok_or(())?;
+        Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
+    }
+
     fn build_call(&mut self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<BasicValueEnum<'iw>, ()> {
         let (iw_type, address) = self.get_iw_type_and_address_of_loc(callable)?;
         let fn_ptr = self
@@ -181,18 +195,18 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .build_load(iw_type, address, "loaded_callable")
             .map_err(|_| ())?
             .into_pointer_value();
-
-        let mut arg_values = Vec::new();
-        for arg_loc in args {
-            let (arg_type, arg_address) = self.get_iw_type_and_address_of_loc(arg_loc)?;
-            let arg_value = self
-                .builder
-                .build_load(arg_type, arg_address, "arg_value")
-                .map_err(|_| ())?;
-            arg_values.push(arg_value.into());
-        }
-
         let fn_type = self.get_function_type_of_loc(callable).ok_or(())?;
+
+        let arg_values = args
+            .iter()
+            .map(|arg_loc| {
+                let (arg_type, arg_address) = self.get_iw_type_and_address_of_loc(arg_loc).unwrap();
+                self.builder
+                    .build_load(arg_type, arg_address, "arg_value")
+                    .unwrap()
+                    .into()
+            })
+            .collect::<Vec<_>>();
 
         let call_site = self
             .builder
@@ -203,24 +217,5 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Some(basic_value) => Ok(basic_value),
             None => Err(()),
         }
-    }
-
-    fn get_function_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Option<FunctionType<'iw>> {
-        let mr_type = self.mlr.loc_types.get(loc_id)?;
-        let mr_type = self.gtor.mr_ctxt.type_registry.get_type_by_id(mr_type)?;
-        let mr_types::Type::Function {
-            return_type,
-            param_types,
-        } = mr_type
-        else {
-            return None;
-        };
-        let return_type = self.gtor.get_type_as_basic_type_enum(return_type)?;
-        let param_types: Vec<_> = param_types
-            .iter()
-            .map(|param| self.gtor.get_type_as_basic_metadata_type_enum(param))
-            .collect::<Option<_>>()?;
-
-        Some(return_type.fn_type(&param_types, false))
     }
 }
