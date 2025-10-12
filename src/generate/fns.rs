@@ -137,9 +137,9 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             mlr::Expression::Var(loc_id) => self.build_var(loc_id),
             mlr::Expression::Function(fn_id) => self.build_global_function(fn_id),
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
+            mlr::Expression::If(if_expr) => self.build_if(if_expr),
 
             // mlr::Expression::AddressOf(loc_id) => todo!(),
-            // mlr::Expression::If(_) => todo!(),
             // mlr::Expression::Loop { body } => todo!(),
             _ => {
                 // Simply return the integer constant 42 for now
@@ -217,5 +217,46 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Some(basic_value) => Ok(basic_value),
             None => Err(()),
         }
+    }
+
+    fn build_if(&mut self, if_expr: &mlr::If) -> Result<BasicValueEnum<'iw>, ()> {
+        // Build condition
+        let (cond_type, cond_address) = self.get_iw_type_and_address_of_loc(&if_expr.condition)?;
+        let cond_value = self
+            .builder
+            .build_load(cond_type, cond_address, "if_condition")
+            .map_err(|_| ())?
+            .into_int_value();
+
+        // Create blocks for then, else, and merge
+        let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
+        let then_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "then");
+        let else_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "else");
+        let merge_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "if_merge");
+
+        // Build conditional branch
+        self.builder
+            .build_conditional_branch(cond_value, then_block, else_block)
+            .map_err(|_| ())?;
+
+        // Build then block
+        self.builder.position_at_end(then_block);
+        let then_value = self.build_block(&if_expr.then_block)?;
+        self.builder.build_unconditional_branch(merge_block).map_err(|_| ())?;
+
+        // Build else block
+        self.builder.position_at_end(else_block);
+        let else_value = self.build_block(&if_expr.else_block)?;
+        self.builder.build_unconditional_branch(merge_block).map_err(|_| ())?;
+
+        // Build merge block
+        self.builder.position_at_end(merge_block);
+        let phi = self
+            .builder
+            .build_phi(then_value.get_type(), "if_result")
+            .map_err(|_| ())?;
+        phi.add_incoming(&[(&then_value, then_block), (&else_value, else_block)]);
+
+        Ok(phi.as_basic_value())
     }
 }
