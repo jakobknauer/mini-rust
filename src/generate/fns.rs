@@ -234,6 +234,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let else_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "else");
         let merge_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "if_merge");
 
+        // Allocate space for the result
+        let result_type = self.get_iw_type_of_loc(&if_expr.then_block.output)?;
+        let result_address = self.builder.build_alloca(result_type, "if_result").map_err(|_| ())?;
+
         // Build conditional branch
         self.builder
             .build_conditional_branch(cond_value, then_block, else_block)
@@ -242,21 +246,21 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         // Build then block
         self.builder.position_at_end(then_block);
         let then_value = self.build_block(&if_expr.then_block)?;
+        self.builder.build_store(result_address, then_value).map_err(|_| ())?;
         self.builder.build_unconditional_branch(merge_block).map_err(|_| ())?;
 
         // Build else block
         self.builder.position_at_end(else_block);
         let else_value = self.build_block(&if_expr.else_block)?;
+        self.builder.build_store(result_address, else_value).map_err(|_| ())?;
         self.builder.build_unconditional_branch(merge_block).map_err(|_| ())?;
 
         // Build merge block
         self.builder.position_at_end(merge_block);
-        let phi = self
+        let result_value = self
             .builder
-            .build_phi(then_value.get_type(), "if_result")
+            .build_load(result_type, result_address, "if_result_value")
             .map_err(|_| ())?;
-        phi.add_incoming(&[(&then_value, then_block), (&else_value, else_block)]);
-
-        Ok(phi.as_basic_value())
+        Ok(result_value)
     }
 }
