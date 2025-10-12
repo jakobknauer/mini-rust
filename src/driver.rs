@@ -4,9 +4,10 @@ use crate::{
     util::print,
 };
 
-pub fn compile(source: &str) -> Result<String, ()> {
+pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, ()> {
     let mut ctxt = ctxt::Ctxt::new();
 
+    print_fn("Building HLR from source");
     let hlr = match hlr::build_program(source) {
         Ok(hlr) => hlr,
         Err(err) => {
@@ -15,12 +16,16 @@ pub fn compile(source: &str) -> Result<String, ()> {
         }
     };
 
+    print_fn("Building MLR from HLR");
     register_and_define_types(&hlr, &mut ctxt.type_registry)?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
     build_function_mlrs(&hlr, &mut ctxt)?;
     print_functions(&ctxt)?;
 
-    Ok(generate::generate_llvm_ir(&ctxt))
+    print_fn("Building LLVM IR from MLR");
+    let llvm_ir = generate::generate_llvm_ir(&ctxt);
+
+    Ok(llvm_ir)
 }
 
 fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
