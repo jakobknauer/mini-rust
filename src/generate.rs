@@ -15,7 +15,7 @@ use crate::{
     generate::fns::FnGenerator,
 };
 
-pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
+pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) -> String {
     let iw_ctxt = IwContext::create();
     let mut generator = Generator::new(&iw_ctxt, ctxt);
 
@@ -24,7 +24,7 @@ pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) {
     generator.define_functions();
 
     let ir = generator.iw_module.print_to_string();
-    println!("{}", ir.to_string());
+    ir.to_string()
 }
 
 struct Generator<'iw, 'mr> {

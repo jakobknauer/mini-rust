@@ -4,7 +4,7 @@ use crate::{
     util::print,
 };
 
-pub fn compile(source: &str) -> Result<(), ()> {
+pub fn compile(source: &str) -> Result<String, ()> {
     let mut ctxt = ctxt::Ctxt::new();
 
     let hlr = match hlr::build_program(source) {
@@ -20,9 +20,7 @@ pub fn compile(source: &str) -> Result<(), ()> {
     build_function_mlrs(&hlr, &mut ctxt)?;
     print_functions(&ctxt)?;
 
-    generate::generate_llvm_ir(&ctxt);
-
-    Ok(())
+    Ok(generate::generate_llvm_ir(&ctxt))
 }
 
 fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
