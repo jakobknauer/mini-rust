@@ -13,6 +13,7 @@ pub struct FnGenerator<'a, 'iw, 'mr> {
     builder: inkwell::builder::Builder<'iw>,
     mlr: &'a mlr::Mlr,
     locs: HashMap<mlr::LocId, PointerValue<'iw>>,
+    entry_block: Option<inkwell::basic_block::BasicBlock<'iw>>,
 }
 
 impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
@@ -27,18 +28,28 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             builder,
             mlr,
             locs,
+            entry_block: None,
         })
     }
 
     pub fn define_function(&mut self) -> Result<(), ()> {
-        self.build_entry_block()?;
-        self.build_function_body()?;
+        let entry_block = self.build_entry_block()?;
+        let body_block = self.build_function_body()?;
+
+        self.builder.position_at_end(entry_block);
+        self.builder.build_unconditional_branch(body_block).map_err(|_| ())?;
 
         Ok(())
     }
 
     fn get_iw_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Result<inkwell::types::BasicTypeEnum<'iw>, ()> {
         let mr_type = self.mlr.loc_types.get(loc_id).ok_or(())?;
+        let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(())?;
+        Ok(iw_type)
+    }
+
+    fn get_iw_type_of_expr(&mut self, expr_id: &mlr::ExprId) -> Result<inkwell::types::BasicTypeEnum<'iw>, ()> {
+        let mr_type = self.mlr.expr_types.get(expr_id).ok_or(())?;
         let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(())?;
         Ok(iw_type)
     }
@@ -76,40 +87,59 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.builder.build_load(iw_type, address, name).map_err(|_| ())
     }
 
-    fn build_entry_block(&mut self) -> Result<(), ()> {
-        let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
-        let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
-
-        self.builder.position_at_end(entry_block);
-
-        // allocate params
-        for (param_index, param_loc_id) in self.mlr.param_locs.iter().enumerate() {
-            let iw_type = self.get_iw_type_of_loc(param_loc_id)?;
-            let param_loc = self
-                .builder
-                .build_alloca(iw_type, &param_loc_id.to_string())
-                .map_err(|_| ())?;
-            self.builder
-                .build_store(param_loc, iw_fn.get_nth_param(param_index as u32).unwrap())
-                .map_err(|_| ())?;
-            self.locs.insert(*param_loc_id, param_loc);
-        }
-
-        Ok(())
+    fn build_alloca_for_loc(&mut self, loc_id: &mlr::LocId) -> Result<PointerValue<'iw>, ()> {
+        let iw_type = self.get_iw_type_of_loc(loc_id)?;
+        let name = loc_id.to_string();
+        let address = self.build_alloca(iw_type, &name)?;
+        self.locs.insert(*loc_id, address);
+        Ok(address)
     }
 
-    fn build_function_body(&mut self) -> Result<(), ()> {
+    fn build_alloca(
+        &mut self,
+        iw_type: inkwell::types::BasicTypeEnum<'iw>,
+        name: &str,
+    ) -> Result<PointerValue<'iw>, ()> {
+        // Remember current block to restore later
+        let current_block = self.builder.get_insert_block().ok_or(())?;
+        // Position builder at the entry block to ensure allocations are at the start
+        let entry_block = self.entry_block.ok_or(())?;
+        self.builder.position_at_end(entry_block);
+        // Allocate
+        let address = self.builder.build_alloca(iw_type, name).map_err(|_| ())?;
+        // Restore builder position
+        self.builder.position_at_end(current_block);
+
+        Ok(address)
+    }
+
+    fn build_entry_block(&mut self) -> Result<inkwell::basic_block::BasicBlock<'iw>, ()> {
         let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
+
+        let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
+        self.entry_block = Some(entry_block);
+        self.builder.position_at_end(entry_block);
+
+        for (param_index, param_loc_id) in self.mlr.param_locs.iter().enumerate() {
+            let param_address = self.build_alloca_for_loc(param_loc_id)?;
+            self.builder
+                .build_store(param_address, iw_fn.get_nth_param(param_index as u32).unwrap())
+                .map_err(|_| ())?;
+        }
+
+        Ok(entry_block)
+    }
+
+    fn build_function_body(&mut self) -> Result<inkwell::basic_block::BasicBlock<'iw>, ()> {
+        let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
+
         let body_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "body");
-
-        self.builder.build_unconditional_branch(body_block).map_err(|_| ())?;
         self.builder.position_at_end(body_block);
-
         let output = self.build_block(&self.mlr.body)?;
 
         self.builder.build_return(Some(&output)).map_err(|_| ())?;
 
-        Ok(())
+        Ok(body_block)
     }
 
     fn build_statement(&mut self, _stmt: &mlr::StmtId) -> Result<(), ()> {
@@ -117,9 +147,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         match stmt {
             mlr::Statement::Assign { loc, value } => {
                 if !self.locs.contains_key(loc) {
-                    let iw_type = self.get_iw_type_of_loc(loc)?;
-                    let address = self.builder.build_alloca(iw_type, &loc.to_string()).map_err(|_| ())?;
-                    self.locs.insert(*loc, address);
+                    self.build_alloca_for_loc(loc)?;
                 }
                 let address = *self.locs.get(loc).ok_or(())?;
                 let value = self.build_expression(value).map_err(|_| ())?;
@@ -134,14 +162,13 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_expression(&mut self, expr: &mlr::ExprId) -> Result<BasicValueEnum<'iw>, ()> {
-        let expr = self.mlr.expressions.get(expr).ok_or(())?;
-        match expr {
+        match self.mlr.expressions.get(expr).ok_or(())? {
             mlr::Expression::Block(block) => self.build_block(block),
             mlr::Expression::Constant(constant) => self.build_constant(constant),
             mlr::Expression::Var(loc_id) => self.build_var(loc_id),
             mlr::Expression::Function(fn_id) => self.build_global_function(fn_id),
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
-            mlr::Expression::If(if_expr) => self.build_if(if_expr),
+            mlr::Expression::If(if_) => self.build_if(if_, expr),
 
             // mlr::Expression::AddressOf(loc_id) => todo!(),
             // mlr::Expression::Loop { body } => todo!(),
@@ -208,10 +235,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_if(&mut self, if_expr: &mlr::If) -> Result<BasicValueEnum<'iw>, ()> {
+    fn build_if(&mut self, if_: &mlr::If, expr_id: &mlr::ExprId) -> Result<BasicValueEnum<'iw>, ()> {
         // Build condition
         let cond_value = self
-            .build_load_from_loc(&if_expr.condition, "if_condition")?
+            .build_load_from_loc(&if_.condition, "if_condition")?
             .into_int_value();
 
         // Create blocks for then, else, and merge
@@ -221,8 +248,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let merge_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "if_merge");
 
         // Allocate space for the result
-        let result_type = self.get_iw_type_of_loc(&if_expr.then_block.output)?;
-        let result_address = self.builder.build_alloca(result_type, "if_result").map_err(|_| ())?;
+        let result_type = self.get_iw_type_of_expr(expr_id)?;
+        let result_address = self.build_alloca(result_type, "if_result").map_err(|_| ())?;
 
         // Build conditional branch
         self.builder
@@ -231,13 +258,13 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         // Build then block
         self.builder.position_at_end(then_block);
-        let then_value = self.build_block(&if_expr.then_block)?;
+        let then_value = self.build_block(&if_.then_block)?;
         self.builder.build_store(result_address, then_value).map_err(|_| ())?;
         self.builder.build_unconditional_branch(merge_block).map_err(|_| ())?;
 
         // Build else block
         self.builder.position_at_end(else_block);
-        let else_value = self.build_block(&if_expr.else_block)?;
+        let else_value = self.build_block(&if_.else_block)?;
         self.builder.build_store(result_address, else_value).map_err(|_| ())?;
         self.builder.build_unconditional_branch(merge_block).map_err(|_| ())?;
 
