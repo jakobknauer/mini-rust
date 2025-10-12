@@ -4,11 +4,11 @@
 - ~~Functions, structs, enums, builtin-types (bool and i32 will do for now)~~
 - ~~Basic arithmetic and flow control (if, loop)~~
 - ~~Parse into AST (no type annotations in functions necessary)~~
-- Type checking, ~~transforming to typed IR~~
+- ~~Type checking, transforming to typed IR~~
     - ~~Resolve variables and functions~~
     - ~~Replace operators by functions~~
     - ~~Make temporary values explicit (and define their lifetime using blocks; this makes dropping easier later on)~~
-    - Determine all types (bidirectional; no HM-style, as we don't have generics yet)
+    - ~~Determine all types (bidirectional; no HM-style, as we don't have generics yet)~~
 - Generate LLVM IR from typed IR
 
 ## Version 2
