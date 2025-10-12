@@ -71,6 +71,11 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Some(return_type.fn_type(&param_types, false))
     }
 
+    fn build_load_from_loc(&mut self, loc_id: &mlr::LocId, name: &str) -> Result<BasicValueEnum<'iw>, ()> {
+        let (iw_type, address) = self.get_iw_type_and_address_of_loc(loc_id)?;
+        self.builder.build_load(iw_type, address, name).map_err(|_| ())
+    }
+
     fn build_entry_block(&mut self) -> Result<(), ()> {
         let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
         let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
@@ -121,8 +126,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 self.builder.build_store(address, value).map_err(|_| ())?;
             }
             mlr::Statement::Return { value } => {
-                let (iw_type, address) = self.get_iw_type_and_address_of_loc(value)?;
-                let ret_value = self.builder.build_load(iw_type, address, "ret_value").map_err(|_| ())?;
+                let ret_value = self.build_load_from_loc(value, "ret_value")?;
                 self.builder.build_return(Some(&ret_value)).map_err(|_| ())?;
             }
         }
@@ -153,12 +157,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         for stmt in &body.statements {
             self.build_statement(stmt)?;
         }
-        let (iw_type, address) = self.get_iw_type_and_address_of_loc(&body.output)?;
-        let ret_value = self
-            .builder
-            .build_load(iw_type, address, "block_output")
-            .map_err(|_| ())?;
-        Ok(ret_value)
+        self.build_load_from_loc(&body.output, "block_output")
     }
 
     fn build_constant(&mut self, constant: &mlr::Constant) -> Result<BasicValueEnum<'iw>, ()> {
@@ -179,8 +178,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_var(&mut self, loc_id: &mlr::LocId) -> Result<BasicValueEnum<'iw>, ()> {
-        let (iw_type, address) = self.get_iw_type_and_address_of_loc(loc_id)?;
-        self.builder.build_load(iw_type, address, "loaded_var").map_err(|_| ())
+        self.build_load_from_loc(loc_id, "loaded_var")
     }
 
     fn build_global_function(&mut self, fn_id: &mr_functions::FnId) -> Result<BasicValueEnum<'iw>, ()> {
@@ -189,23 +187,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_call(&mut self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<BasicValueEnum<'iw>, ()> {
-        let (iw_type, address) = self.get_iw_type_and_address_of_loc(callable)?;
         let fn_ptr = self
-            .builder
-            .build_load(iw_type, address, "loaded_callable")
-            .map_err(|_| ())?
+            .build_load_from_loc(callable, "loaded_callable")?
             .into_pointer_value();
         let fn_type = self.get_function_type_of_loc(callable).ok_or(())?;
 
         let arg_values = args
             .iter()
-            .map(|arg_loc| {
-                let (arg_type, arg_address) = self.get_iw_type_and_address_of_loc(arg_loc).unwrap();
-                self.builder
-                    .build_load(arg_type, arg_address, "arg_value")
-                    .unwrap()
-                    .into()
-            })
+            .map(|arg_loc| self.build_load_from_loc(arg_loc, "arg_value").unwrap().into())
             .collect::<Vec<_>>();
 
         let call_site = self
@@ -221,11 +210,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
     fn build_if(&mut self, if_expr: &mlr::If) -> Result<BasicValueEnum<'iw>, ()> {
         // Build condition
-        let (cond_type, cond_address) = self.get_iw_type_and_address_of_loc(&if_expr.condition)?;
         let cond_value = self
-            .builder
-            .build_load(cond_type, cond_address, "if_condition")
-            .map_err(|_| ())?
+            .build_load_from_loc(&if_expr.condition, "if_condition")?
             .into_int_value();
 
         // Create blocks for then, else, and merge
