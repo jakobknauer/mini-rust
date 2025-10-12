@@ -4,23 +4,18 @@ use crate::{
     util::print,
 };
 
-pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, ()> {
+pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, String> {
     let mut ctxt = ctxt::Ctxt::new();
 
     print_fn("Building HLR from source");
-    let hlr = match hlr::build_program(source) {
-        Ok(hlr) => hlr,
-        Err(err) => {
-            print_parser_error(&err, source);
-            return Err(());
-        }
-    };
+    let hlr = hlr::build_program(source).map_err(|parser_error| print_parser_error(&parser_error, source))?;
 
     print_fn("Building MLR from HLR");
-    register_and_define_types(&hlr, &mut ctxt.type_registry)?;
-    register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)?;
-    build_function_mlrs(&hlr, &mut ctxt)?;
-    print_functions(&ctxt)?;
+    register_and_define_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error defining types")?;
+    register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)
+        .map_err(|_| "Error registering functions")?;
+    build_function_mlrs(&hlr, &mut ctxt).map_err(|_| "Error building MLR")?;
+    print_functions(&ctxt).map_err(|_| "Error printing MLR")?;
 
     print_fn("Building LLVM IR from MLR");
     let llvm_ir = generate::generate_llvm_ir(&ctxt);
@@ -139,29 +134,21 @@ fn register_functions(
     Ok(())
 }
 
-fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
     for function in &hlr.functions {
-        let fn_id = ctxt.function_registry.get_function_by_name(&function.name).ok_or(())?;
+        let fn_id = ctxt.function_registry.get_function_by_name(&function.name).unwrap();
 
         let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
         let mlr = match mlr_builder.build() {
             Ok(mlr) => mlr,
-            Err(mlr::MlrBuilderError::TypeError(err)) => {
-                print_type_error(&function.name, err, ctxt);
-                return Err(());
-            }
+            Err(mlr::MlrBuilderError::TypeError(err)) => return Err(print_type_error(&function.name, err, ctxt)),
             Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
-                eprintln!("Error: Missing operator implementation for {}", name);
-                return Err(());
+                return Err(format!("Error: Missing operator implementation for {}", name));
             }
             Err(mlr::MlrBuilderError::UnresolvableSymbol { name }) => {
-                eprintln!("Error: Unresolvable symbol {}", name);
-                return Err(());
+                return Err(format!("Error: Unresolvable symbol {}", name));
             }
-            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => {
-                eprintln!("Error: Unknown primitive type");
-                return Err(());
-            }
+            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => return Err("Error: Unknown primitive type".to_string()),
         };
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
@@ -170,19 +157,19 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     Ok(())
 }
 
-fn print_parser_error(err: &hlr::ParserError, _: &str) {
+fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     match err {
-        hlr::ParserError::LexerError(lexer_error) => eprintln!("Lexer error at position {}", lexer_error.position),
-        hlr::ParserError::UnexpectedToken(token) => eprintln!("Parser error: Unexpected token {:?}", token),
-        hlr::ParserError::UndelimitedStatement => eprintln!("Parser error: Undelimited statement"),
-        hlr::ParserError::InvalidLiteral => eprintln!("Parser error: Invalid literal"),
-        hlr::ParserError::UnexpectedEOF => eprintln!("Parser error: Unexpected end of file"),
+        hlr::ParserError::LexerError(lexer_error) => format!("Lexer error at position {}", lexer_error.position),
+        hlr::ParserError::UnexpectedToken(token) => format!("Parser error: Unexpected token {:?}", token),
+        hlr::ParserError::UndelimitedStatement => "Parser error: Undelimited statement".to_string(),
+        hlr::ParserError::InvalidLiteral => "Parser error: Invalid literal".to_string(),
+        hlr::ParserError::UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
     }
 }
 
-fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
+fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> String {
     match err {
-        mlr::TypeError::ReassignTypeMismatch { loc, expected, actual } => eprintln!(
+        mlr::TypeError::ReassignTypeMismatch { loc, expected, actual } => format!(
             "Type error in function '{}': Cannot reassign location {:?} of type '{}' with value of type '{}'",
             name,
             loc,
@@ -190,41 +177,41 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) {
             ctxt.type_registry.get_string_rep(&actual)
         ),
         mlr::TypeError::ExpressionNotCallable => {
-            eprintln!("Type error in function '{}': Expression is not callable", name)
+            format!("Type error in function '{}': Expression is not callable", name)
         }
         mlr::TypeError::CallArgumentTypeMismatch {
             index,
             expected,
             actual,
-        } => eprintln!(
+        } => format!(
             "Type error in function '{}': Argument {} type mismatch: expected '{}', got '{}'",
             name,
             index,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::CallArgumentCountMismatch { expected, actual } => eprintln!(
+        mlr::TypeError::CallArgumentCountMismatch { expected, actual } => format!(
             "Type error in function '{}': Argument count mismatch: expected {}, got {}",
             name, expected, actual
         ),
-        mlr::TypeError::IfConditionNotBoolean { actual } => eprintln!(
+        mlr::TypeError::IfConditionNotBoolean { actual } => format!(
             "Type error in function '{}': If condition must be of type 'bool', got '{}'",
             name,
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => eprintln!(
+        mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => format!(
             "Type error in function '{}': If branches must have the same type: then is '{}', else is '{}'",
             name,
             ctxt.type_registry.get_string_rep(&then_type),
             ctxt.type_registry.get_string_rep(&else_type)
         ),
-        mlr::TypeError::ReturnTypeMismatch { expected, actual } => eprintln!(
+        mlr::TypeError::ReturnTypeMismatch { expected, actual } => format!(
             "Type error in function '{}': Return type mismatch: expected '{}', got '{}'",
             name,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-    };
+    }
 }
 
 fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
