@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use inkwell::{
-    types::{BasicType, FunctionType},
+    basic_block::BasicBlock,
+    builder::Builder,
+    types::{BasicType, BasicTypeEnum, FunctionType},
     values::{BasicValue, BasicValueEnum, PointerValue},
 };
 
@@ -10,10 +12,10 @@ use crate::{ctxt::functions as mr_functions, ctxt::types as mr_types, mlr};
 pub struct FnGenerator<'a, 'iw, 'mr> {
     gtor: &'a mut super::Generator<'iw, 'mr>,
     fn_id: mr_functions::FnId,
-    builder: inkwell::builder::Builder<'iw>,
+    builder: Builder<'iw>,
     mlr: &'a mlr::Mlr,
     locs: HashMap<mlr::LocId, PointerValue<'iw>>,
-    entry_block: Option<inkwell::basic_block::BasicBlock<'iw>>,
+    entry_block: Option<BasicBlock<'iw>>,
 }
 
 impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
@@ -42,13 +44,13 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn get_iw_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Result<inkwell::types::BasicTypeEnum<'iw>, ()> {
+    fn get_iw_type_of_loc(&mut self, loc_id: &mlr::LocId) -> Result<BasicTypeEnum<'iw>, ()> {
         let mr_type = self.mlr.loc_types.get(loc_id).ok_or(())?;
         let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(())?;
         Ok(iw_type)
     }
 
-    fn get_iw_type_of_expr(&mut self, expr_id: &mlr::ExprId) -> Result<inkwell::types::BasicTypeEnum<'iw>, ()> {
+    fn get_iw_type_of_expr(&mut self, expr_id: &mlr::ExprId) -> Result<BasicTypeEnum<'iw>, ()> {
         let mr_type = self.mlr.expr_types.get(expr_id).ok_or(())?;
         let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(())?;
         Ok(iw_type)
@@ -57,7 +59,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn get_iw_type_and_address_of_loc(
         &mut self,
         loc_id: &mlr::LocId,
-    ) -> Result<(inkwell::types::BasicTypeEnum<'iw>, PointerValue<'iw>), ()> {
+    ) -> Result<(BasicTypeEnum<'iw>, PointerValue<'iw>), ()> {
         let iw_type = self.get_iw_type_of_loc(loc_id)?;
         let address = *self.locs.get(loc_id).ok_or(())?;
         Ok((iw_type, address))
@@ -95,11 +97,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(address)
     }
 
-    fn build_alloca(
-        &mut self,
-        iw_type: inkwell::types::BasicTypeEnum<'iw>,
-        name: &str,
-    ) -> Result<PointerValue<'iw>, ()> {
+    fn build_alloca(&mut self, iw_type: BasicTypeEnum<'iw>, name: &str) -> Result<PointerValue<'iw>, ()> {
         // Remember current block to restore later
         let current_block = self.builder.get_insert_block().ok_or(())?;
         // Position builder at the entry block to ensure allocations are at the start
@@ -113,7 +111,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(address)
     }
 
-    fn build_entry_block(&mut self) -> Result<inkwell::basic_block::BasicBlock<'iw>, ()> {
+    fn build_entry_block(&mut self) -> Result<BasicBlock<'iw>, ()> {
         let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
 
         let entry_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "entry");
@@ -130,7 +128,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(entry_block)
     }
 
-    fn build_function_body(&mut self) -> Result<inkwell::basic_block::BasicBlock<'iw>, ()> {
+    fn build_function_body(&mut self) -> Result<BasicBlock<'iw>, ()> {
         let iw_fn = *self.gtor.functions.get(&self.fn_id).unwrap();
 
         let body_block = self.gtor.iw_ctxt.append_basic_block(iw_fn, "body");
