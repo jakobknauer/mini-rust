@@ -2,3 +2,4 @@
 !stdlib.ll
 
 *.out
+*.opt
