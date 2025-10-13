@@ -9,7 +9,14 @@
     - ~~Replace operators by functions~~
     - ~~Make temporary values explicit (and define their lifetime using blocks; this makes dropping easier later on)~~
     - ~~Determine all types (bidirectional; no HM-style, as we don't have generics yet)~~
-- Generate LLVM IR from typed IR
+- ~~Generate LLVM IR from typed IR~~
+- Missing:
+    - breaking out of loops
+    - creating struct and enum values
+    - accessing struct fields
+    - equality operators
+    - logical operators
+    - more arithmetic operators
 
 ## Version 2
 - Higher-order functions / functions as first-class citizens
