@@ -129,15 +129,12 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
 
     pub fn define_functions(&mut self) {
         for fn_id in self.mr_ctxt.function_registry.get_all_functions() {
-            let fn_gen = FnGenerator::new(self, *fn_id);
-            if let Some(mut fn_gen) = fn_gen {
-                match fn_gen.define_function() {
-                    Ok(_) => (),
-                    Err(_) => {
-                        let fn_name = self.mr_ctxt.function_registry.get_function_name_by_id(fn_id).unwrap();
-                        eprintln!("Failed to define function {fn_name}");
-                    }
-                }
+            let Some(mut fn_gen) = FnGenerator::new(self, *fn_id) else {
+                continue;
+            };
+            if fn_gen.define_function().is_err() {
+                let fn_name = self.mr_ctxt.function_registry.get_function_name_by_id(fn_id).unwrap();
+                eprintln!("Failed to define function {fn_name}");
             }
         }
     }
