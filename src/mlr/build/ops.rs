@@ -4,57 +4,62 @@ use crate::{
     mlr::{self, MlrBuilderError, TypeError},
 };
 
+macro_rules! op_match {
+    (
+        $operator:expr, $left:expr, $right:expr,
+        $(
+            ($op:pat, $left_ty:ident, $right_ty:ident) => $fn_name:expr
+        ),* $(,)?
+    ) => {
+        match ($operator, $left, $right) {
+            $(
+                ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
+            )*
+            _ => {
+                return TypeError::OperatorResolutionFailed {
+                    operator: format!("{{$operator:?}}"),
+                    operand_types: ($left, $right),
+                }
+                .into();
+            }
+        }
+    };
+}
+
 impl<'a> mlr::MlrBuilder<'a> {
     pub fn resolve_operator(
         &self,
         operator: &hlr::BinaryOperator,
         (left, right): (TypeId, TypeId),
     ) -> Result<FnId, mlr::build::MlrBuilderError> {
+        use MlrBuilderError::UnknownPrimitiveType;
+        use PrimitiveType::*;
         use hlr::BinaryOperator::*;
 
-        let i32_t = self
-            .ctxt
-            .type_registry
-            .get_primitive_type_id(PrimitiveType::Integer32)
-            .ok_or(MlrBuilderError::UnknownPrimitiveType)?;
-        let bool_t = self
-            .ctxt
-            .type_registry
-            .get_primitive_type_id(PrimitiveType::Boolean)
-            .ok_or(MlrBuilderError::UnknownPrimitiveType)?;
-        let unit_t = self
-            .ctxt
-            .type_registry
-            .get_primitive_type_id(PrimitiveType::Unit)
-            .ok_or(MlrBuilderError::UnknownPrimitiveType)?;
+        let tr = &self.ctxt.type_registry;
+        let i32 = tr.get_primitive_type_id(Integer32).ok_or(UnknownPrimitiveType)?;
+        let bool = tr.get_primitive_type_id(Boolean).ok_or(UnknownPrimitiveType)?;
+        let unit = tr.get_primitive_type_id(Unit).ok_or(UnknownPrimitiveType)?;
 
-        let fn_name = match (operator, left, right) {
-            (Add, l, r) if l == i32_t && r == i32_t => "add::<i32>",
-            (Subtract, l, r) if l == i32_t && r == i32_t => "sub::<i32>",
-            (Multiply, l, r) if l == i32_t && r == i32_t => "mul::<i32>",
-            (Divide, l, r) if l == i32_t && r == i32_t => "div::<i32>",
-            (Remainder, l, r) if l == i32_t && r == i32_t => "rem::<i32>",
+        let fn_name = op_match!(operator, left, right,
+            (Add,       i32, i32) => "add::<i32>",
+            (Subtract,  i32, i32) => "sub::<i32>",
+            (Multiply,  i32, i32) => "mul::<i32>",
+            (Divide,    i32, i32) => "div::<i32>",
+            (Remainder, i32, i32) => "rem::<i32>",
 
-            (Equal, l, r) if l == i32_t && r == i32_t => "eq::<i32>",
-            (NotEqual, l, r) if l == i32_t && r == i32_t => "ne::<i32>",
-            (Equal, l, r) if l == bool_t && r == bool_t => "eq::<bool>",
-            (NotEqual, l, r) if l == bool_t && r == bool_t => "ne::<bool>",
-            (Equal, l, r) if l == unit_t && r == unit_t => "eq::<()>",
-            (NotEqual, l, r) if l == unit_t && r == unit_t => "ne::<()>",
-
-            _ => {
-                return TypeError::OperatorResolutionFailed {
-                    operator: format!("{operator:?}"),
-                    operand_types: (left, right),
-                }
-                .into();
-            }
-        };
+            (Equal,     i32, i32) => "eq::<i32>",
+            (NotEqual,  i32, i32) => "ne::<i32>",
+            (Equal,     bool, bool) => "eq::<bool>",
+            (NotEqual,  bool, bool) => "ne::<bool>",
+            (Equal,     unit, unit) => "eq::<()>",
+            (NotEqual,  unit, unit) => "ne::<()>",
+        );
 
         self.ctxt
             .function_registry
             .get_function_by_name(fn_name)
-            .ok_or(mlr::MlrBuilderError::MissingOperatorImpl {
+            .ok_or(MlrBuilderError::MissingOperatorImpl {
                 name: fn_name.to_string(),
             })
     }
