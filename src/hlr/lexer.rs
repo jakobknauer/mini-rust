@@ -28,6 +28,7 @@ const ONE_CHAR_TOKENS: &[(char, Token)] = &[
     ('-', Token::Minus),
     ('*', Token::Asterisk),
     ('/', Token::Slash),
+    ('%', Token::Percent),
 ];
 
 const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[

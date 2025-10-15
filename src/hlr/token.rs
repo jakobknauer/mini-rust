@@ -23,6 +23,7 @@ pub enum Token {
     Minus,              // -
     Asterisk,           // *
     Slash,              // /
+    Percent,            // %
 }
 
 #[derive(Debug, PartialEq, Clone)]

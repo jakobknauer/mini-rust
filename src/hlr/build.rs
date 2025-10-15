@@ -348,10 +348,11 @@ impl<'a> HlrParser<'a> {
     fn parse_product_expression(&mut self) -> Result<Expression, ParserError> {
         let mut acc = self.parse_function_call()?;
 
-        while let Some(op @ (Token::Asterisk | Token::Slash)) = self.current() {
+        while let Some(op @ (Token::Asterisk | Token::Slash | Token::Percent)) = self.current() {
             let operator = match op {
                 Token::Asterisk => BinaryOperator::Multiply,
                 Token::Slash => BinaryOperator::Divide,
+                Token::Percent => BinaryOperator::Remainder,
                 _ => unreachable!(),
             };
             self.position += 1; // consume operator

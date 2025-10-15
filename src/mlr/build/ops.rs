@@ -30,10 +30,15 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let fn_name = match (operator, left, right) {
             (Add, l, r) if l == i32_t && r == i32_t => "add::<i32>",
+            (Subtract, l, r) if l == i32_t && r == i32_t => "sub::<i32>",
             (Multiply, l, r) if l == i32_t && r == i32_t => "mul::<i32>",
+            (Divide, l, r) if l == i32_t && r == i32_t => "div::<i32>",
+            (Remainder, l, r) if l == i32_t && r == i32_t => "rem::<i32>",
+
             (Equal, l, r) if l == i32_t && r == i32_t => "eq::<i32>",
             (Equal, l, r) if l == bool_t && r == bool_t => "eq::<bool>",
             (Equal, l, r) if l == unit_t && r == unit_t => "eq::<()>",
+
             _ => {
                 return TypeError::OperatorResolutionFailed {
                     operator: format!("{operator:?}"),

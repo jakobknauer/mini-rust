@@ -28,7 +28,11 @@ pub fn register_functions(
     let unit = type_registry.get_primitive_type_id(Unit).ok_or(())?;
 
     register_function!(function_registry, "add::<i32>", (a: i32, b: i32) -> i32);
+    register_function!(function_registry, "sub::<i32>", (a: i32, b: i32) -> i32);
     register_function!(function_registry, "mul::<i32>", (a: i32, b: i32) -> i32);
+    register_function!(function_registry, "div::<i32>", (a: i32, b: i32) -> i32);
+    register_function!(function_registry, "rem::<i32>", (a: i32, b: i32) -> i32);
+
     register_function!(function_registry, "eq::<i32>", (a: i32, b: i32) -> bool);
     register_function!(function_registry, "eq::<bool>", (a: bool, b: bool) -> bool);
     register_function!(function_registry, "eq::<()>", (a: unit, b: unit) -> bool);

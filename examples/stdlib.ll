@@ -8,9 +8,27 @@ entry:
   ret i32 %2
 }
 
+define i32 @"sub::<i32>"(i32 %0, i32 %1) {
+entry:
+  %2 = sub i32 %0, %1
+  ret i32 %2
+}
+
 define i32 @"mul::<i32>"(i32 %0, i32 %1) {
 entry:
   %2 = mul i32 %0, %1
+  ret i32 %2
+}
+
+define i32 @"div::<i32>"(i32 %0, i32 %1) {
+entry:
+  %2 = sdiv i32 %0, %1
+  ret i32 %2
+}
+
+define i32 @"rem::<i32>"(i32 %0, i32 %1) {
+entry:
+  %2 = srem i32 %0, %1
   ret i32 %2
 }
 
