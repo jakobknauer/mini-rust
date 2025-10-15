@@ -38,13 +38,30 @@ entry:
   ret i1 %2
 }
 
+define i1 @"ne::<i32>"(i32 %0, i32 %1) {
+entry:
+  %2 = icmp ne i32 %0, %1
+  ret i1 %2
+}
+
 define i1 @"eq::<bool>"(i1 %0, i1 %1) {
 entry:
   %2 = icmp eq i1 %0, %1
   ret i1 %2
 }
 
+define i1 @"ne::<bool>"(i1 %0, i1 %1) {
+entry:
+  %2 = icmp ne i1 %0, %1
+  ret i1 %2
+}
+
 define i1 @"eq::<()>"({} %0, {} %1) {
 entry:
   ret i1 true
+}
+
+define i1 @"ne::<()>"({} %0, {} %1) {
+entry:
+  ret i1 false
 }

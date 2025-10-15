@@ -36,8 +36,11 @@ impl<'a> mlr::MlrBuilder<'a> {
             (Remainder, l, r) if l == i32_t && r == i32_t => "rem::<i32>",
 
             (Equal, l, r) if l == i32_t && r == i32_t => "eq::<i32>",
+            (NotEqual, l, r) if l == i32_t && r == i32_t => "ne::<i32>",
             (Equal, l, r) if l == bool_t && r == bool_t => "eq::<bool>",
+            (NotEqual, l, r) if l == bool_t && r == bool_t => "ne::<bool>",
             (Equal, l, r) if l == unit_t && r == unit_t => "eq::<()>",
+            (NotEqual, l, r) if l == unit_t && r == unit_t => "ne::<()>",
 
             _ => {
                 return TypeError::OperatorResolutionFailed {

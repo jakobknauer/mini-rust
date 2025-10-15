@@ -34,8 +34,11 @@ pub fn register_functions(
     register_function!(function_registry, "rem::<i32>", (a: i32, b: i32) -> i32);
 
     register_function!(function_registry, "eq::<i32>", (a: i32, b: i32) -> bool);
+    register_function!(function_registry, "ne::<i32>", (a: i32, b: i32) -> bool);
     register_function!(function_registry, "eq::<bool>", (a: bool, b: bool) -> bool);
+    register_function!(function_registry, "ne::<bool>", (a: bool, b: bool) -> bool);
     register_function!(function_registry, "eq::<()>", (a: unit, b: unit) -> bool);
+    register_function!(function_registry, "ne::<()>", (a: unit, b: unit) -> bool);
 
     Ok(())
 }
