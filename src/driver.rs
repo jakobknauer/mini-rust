@@ -1,3 +1,5 @@
+mod stdlib;
+
 use crate::{
     ctxt::{self, functions, types},
     generate, hlr, mlr,
@@ -73,87 +75,7 @@ fn register_functions(
     type_registry: &ctxt::TypeRegistry,
     function_registry: &mut ctxt::FunctionRegistry,
 ) -> Result<(), ()> {
-    let i32_t = type_registry
-        .get_primitive_type_id(types::PrimitiveType::Integer32)
-        .ok_or(())?;
-    let bool_t = type_registry
-        .get_primitive_type_id(types::PrimitiveType::Boolean)
-        .ok_or(())?;
-    let unit_t = type_registry
-        .get_primitive_type_id(types::PrimitiveType::Unit)
-        .ok_or(())?;
-
-    function_registry.register_function(functions::FunctionSignature {
-        name: "add::<i32>".to_string(),
-        return_type: i32_t,
-        parameters: vec![
-            functions::FunctionParameter {
-                name: "a".to_string(),
-                type_: i32_t,
-            },
-            functions::FunctionParameter {
-                name: "b".to_string(),
-                type_: i32_t,
-            },
-        ],
-    })?;
-    function_registry.register_function(functions::FunctionSignature {
-        name: "mul::<i32>".to_string(),
-        return_type: i32_t,
-        parameters: vec![
-            functions::FunctionParameter {
-                name: "a".to_string(),
-                type_: i32_t,
-            },
-            functions::FunctionParameter {
-                name: "b".to_string(),
-                type_: i32_t,
-            },
-        ],
-    })?;
-
-    function_registry.register_function(functions::FunctionSignature {
-        name: "eq::<i32>".to_string(),
-        return_type: bool_t,
-        parameters: vec![
-            functions::FunctionParameter {
-                name: "a".to_string(),
-                type_: i32_t,
-            },
-            functions::FunctionParameter {
-                name: "b".to_string(),
-                type_: i32_t,
-            },
-        ],
-    })?;
-    function_registry.register_function(functions::FunctionSignature {
-        name: "eq::<bool>".to_string(),
-        return_type: bool_t,
-        parameters: vec![
-            functions::FunctionParameter {
-                name: "a".to_string(),
-                type_: bool_t,
-            },
-            functions::FunctionParameter {
-                name: "b".to_string(),
-                type_: bool_t,
-            },
-        ],
-    })?;
-    function_registry.register_function(functions::FunctionSignature {
-        name: "eq::<()>".to_string(),
-        return_type: bool_t,
-        parameters: vec![
-            functions::FunctionParameter {
-                name: "a".to_string(),
-                type_: unit_t,
-            },
-            functions::FunctionParameter {
-                name: "b".to_string(),
-                type_: unit_t,
-            },
-        ],
-    })?;
+    stdlib::register_functions(type_registry, function_registry)?;
 
     for function in &hlr.functions {
         let return_type = match function.return_type.as_ref() {
