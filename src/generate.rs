@@ -19,6 +19,7 @@ pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) -> String {
     let iw_ctxt = IwContext::create();
     let mut generator = Generator::new(&iw_ctxt, ctxt);
 
+    generator.set_target_triple();
     generator.define_types();
     generator.declare_functions();
     generator.define_functions();
@@ -47,6 +48,11 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             types: HashMap::new(),
             functions: HashMap::new(),
         }
+    }
+
+    fn set_target_triple(&self) {
+        let target_triple = inkwell::targets::TargetTriple::create("x86_64-pc-linux-gnu");
+        self.iw_module.set_triple(&target_triple);
     }
 
     fn define_types(&mut self) {

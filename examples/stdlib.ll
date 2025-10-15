@@ -1,5 +1,6 @@
 ; ModuleID = 'stdlib'
 source_filename = "stdlib"
+target triple = "x86_64-pc-linux-gnu"
 
 define i32 @"add::<i32>"(i32 %0, i32 %1) {
 entry:
