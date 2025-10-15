@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 mod err;
+mod ops;
 mod type_util;
 mod util;
 
@@ -164,56 +165,17 @@ impl<'a> MlrBuilder<'a> {
         let (right_loc, right_stmt) = assign_to_new_loc!(self, self.build_expression(right)?);
 
         let (op_loc, op_stmt) = assign_to_new_loc!(self, {
-            // TODO resolve function based on operator (and argument types...)
-            let fn_id = match operator {
-                hlr::BinaryOperator::Add => self.ctxt.function_registry.get_function_by_name("add::<i32>").ok_or(
-                    MlrBuilderError::MissingOperatorImpl {
-                        name: "add::<i32>".to_string(),
-                    },
-                )?,
-                hlr::BinaryOperator::Multiply => self.ctxt.function_registry.get_function_by_name("mul::<i32>").ok_or(
-                    MlrBuilderError::MissingOperatorImpl {
-                        name: "mul::<i32>".to_string(),
-                    },
-                )?,
-                hlr::BinaryOperator::Equal => {
-                    let left_type = self.output.loc_types.get(&left_loc).unwrap();
-                    let right_type = self.output.loc_types.get(&right_loc).unwrap();
-
-                    if !self.ctxt.type_registry.types_equal(left_type, right_type) {
-                        return TypeError::OperatorResolutionFailed {
-                            operator: "==".to_string(),
-                            operand_types: (*left_type, *right_type),
-                        }
-                        .into();
-                    }
-
-                    let type_ = self.ctxt.type_registry.get_type_by_id(left_type).unwrap();
-                    let overload_name = match type_ {
-                        ctxt::types::Type::NamedType(_, ctxt::types::NamedType::Primitve(primitive)) => match primitive
-                        {
-                            ctxt::types::PrimitiveType::Integer32 => "eq::<i32>",
-                            ctxt::types::PrimitiveType::Boolean => "eq::<bool>",
-                            ctxt::types::PrimitiveType::Unit => "eq::<()>",
-                        },
-                        _ => {
-                            return TypeError::OperatorResolutionFailed {
-                                operator: "==".to_string(),
-                                operand_types: (*left_type, *right_type),
-                            }
-                            .into();
-                        }
-                    };
-
-                    self.ctxt.function_registry.get_function_by_name(overload_name).ok_or(
-                        MlrBuilderError::MissingOperatorImpl {
-                            name: overload_name.to_string(),
-                        },
-                    )?
-                }
-                _ => todo!("implement builtin operators"),
-            };
-
+            let left_type = self
+                .output
+                .loc_types
+                .get(&left_loc)
+                .expect("type of left_loc should be registered");
+            let right_type = self
+                .output
+                .loc_types
+                .get(&right_loc)
+                .expect("type of right_loc should be registered");
+            let fn_id = self.resolve_operator(operator, (*left_type, *right_type))?;
             let init = mlr::Expression::Function(fn_id);
             self.insert_expr(init)?
         });
