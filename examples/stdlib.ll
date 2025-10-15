@@ -25,8 +25,7 @@ entry:
   ret i1 %2
 }
 
-%unit = type {}
-define i1 @"eq::<()>"(%unit %0, %unit %1) {
+define i1 @"eq::<()>"({} %0, {} %1) {
 entry:
   ret i1 true
 }
