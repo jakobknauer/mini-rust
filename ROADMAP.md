@@ -14,9 +14,9 @@
     - breaking out of loops
     - creating struct and enum values
     - accessing struct fields
-    - equality operators
+    - ~~equality operators~~
     - logical operators
-    - more arithmetic operators
+    - ~~more arithmetic operators~~
 
 ## Version 2
 - Higher-order functions / functions as first-class citizens
