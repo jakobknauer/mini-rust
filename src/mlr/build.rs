@@ -176,6 +176,41 @@ impl<'a> MlrBuilder<'a> {
                         name: "mul::<i32>".to_string(),
                     },
                 )?,
+                hlr::BinaryOperator::Equal => {
+                    let left_type = self.output.loc_types.get(&left_loc).unwrap();
+                    let right_type = self.output.loc_types.get(&right_loc).unwrap();
+
+                    if !self.ctxt.type_registry.types_equal(left_type, right_type) {
+                        return TypeError::OperatorResolutionFailed {
+                            operator: "==".to_string(),
+                            operand_types: (*left_type, *right_type),
+                        }
+                        .into();
+                    }
+
+                    let type_ = self.ctxt.type_registry.get_type_by_id(left_type).unwrap();
+                    let overload_name = match type_ {
+                        ctxt::types::Type::NamedType(_, ctxt::types::NamedType::Primitve(primitive)) => match primitive
+                        {
+                            ctxt::types::PrimitiveType::Integer32 => "eq::<i32>",
+                            ctxt::types::PrimitiveType::Boolean => "eq::<bool>",
+                            ctxt::types::PrimitiveType::Unit => "eq::<()>",
+                        },
+                        _ => {
+                            return TypeError::OperatorResolutionFailed {
+                                operator: "==".to_string(),
+                                operand_types: (*left_type, *right_type),
+                            }
+                            .into();
+                        }
+                    };
+
+                    self.ctxt.function_registry.get_function_by_name(overload_name).ok_or(
+                        MlrBuilderError::MissingOperatorImpl {
+                            name: overload_name.to_string(),
+                        },
+                    )?
+                }
                 _ => todo!("implement builtin operators"),
             };
 

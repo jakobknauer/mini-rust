@@ -12,3 +12,21 @@ entry:
   %2 = mul i32 %0, %1
   ret i32 %2
 }
+
+define i1 @"eq::<i32>"(i32 %0, i32 %1) {
+entry:
+  %2 = icmp eq i32 %0, %1
+  ret i1 %2
+}
+
+define i1 @"eq::<bool>"(i1 %0, i1 %1) {
+entry:
+  %2 = icmp eq i1 %0, %1
+  ret i1 %2
+}
+
+%unit = type {}
+define i1 @"eq::<()>"(%unit %0, %unit %1) {
+entry:
+  ret i1 true
+}

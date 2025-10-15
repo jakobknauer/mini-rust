@@ -36,6 +36,10 @@ pub enum TypeError {
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,
     },
+    OperatorResolutionFailed {
+        operator: String,
+        operand_types: (ctxt::types::TypeId, ctxt::types::TypeId),
+    },
 }
 
 impl<T> From<MlrBuilderError> for Result<T> {

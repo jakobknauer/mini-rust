@@ -14,7 +14,7 @@ pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, String> 
     register_and_define_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)
         .map_err(|_| "Error registering functions")?;
-    build_function_mlrs(&hlr, &mut ctxt).map_err(|_| "Error building MLR")?;
+    build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
     print_functions(&ctxt).map_err(|_| "Error printing MLR")?;
 
     print_fn("Building LLVM IR from MLR");
@@ -76,6 +76,13 @@ fn register_functions(
     let i32_t = type_registry
         .get_primitive_type_id(types::PrimitiveType::Integer32)
         .ok_or(())?;
+    let bool_t = type_registry
+        .get_primitive_type_id(types::PrimitiveType::Boolean)
+        .ok_or(())?;
+    let unit_t = type_registry
+        .get_primitive_type_id(types::PrimitiveType::Unit)
+        .ok_or(())?;
+
     function_registry.register_function(functions::FunctionSignature {
         name: "add::<i32>".to_string(),
         return_type: i32_t,
@@ -101,6 +108,49 @@ fn register_functions(
             functions::FunctionParameter {
                 name: "b".to_string(),
                 type_: i32_t,
+            },
+        ],
+    })?;
+
+    function_registry.register_function(functions::FunctionSignature {
+        name: "eq::<i32>".to_string(),
+        return_type: bool_t,
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: i32_t,
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: i32_t,
+            },
+        ],
+    })?;
+    function_registry.register_function(functions::FunctionSignature {
+        name: "eq::<bool>".to_string(),
+        return_type: bool_t,
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: bool_t,
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: bool_t,
+            },
+        ],
+    })?;
+    function_registry.register_function(functions::FunctionSignature {
+        name: "eq::<()>".to_string(),
+        return_type: bool_t,
+        parameters: vec![
+            functions::FunctionParameter {
+                name: "a".to_string(),
+                type_: unit_t,
+            },
+            functions::FunctionParameter {
+                name: "b".to_string(),
+                type_: unit_t,
             },
         ],
     })?;
@@ -143,12 +193,12 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
             Ok(mlr) => mlr,
             Err(mlr::MlrBuilderError::TypeError(err)) => return Err(print_type_error(&function.name, err, ctxt)),
             Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
-                return Err(format!("Error: Missing operator implementation for {}", name));
+                return Err(format!("Missing operator implementation for {}", name));
             }
             Err(mlr::MlrBuilderError::UnresolvableSymbol { name }) => {
-                return Err(format!("Error: Unresolvable symbol {}", name));
+                return Err(format!("Unresolvable symbol {}", name));
             }
-            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => return Err("Error: Unknown primitive type".to_string()),
+            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => return Err("Unknown primitive type".to_string()),
         };
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
@@ -168,50 +218,52 @@ fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
 }
 
 fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> String {
-    match err {
+    let desc = match err {
         mlr::TypeError::ReassignTypeMismatch { loc, expected, actual } => format!(
-            "Type error in function '{}': Cannot reassign location {:?} of type '{}' with value of type '{}'",
-            name,
+            "Cannot reassign location {:?} of type '{}' with value of type '{}'",
             loc,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::ExpressionNotCallable => {
-            format!("Type error in function '{}': Expression is not callable", name)
-        }
+        mlr::TypeError::ExpressionNotCallable => "Expression is not callable".to_string(),
         mlr::TypeError::CallArgumentTypeMismatch {
             index,
             expected,
             actual,
         } => format!(
-            "Type error in function '{}': Argument {} type mismatch: expected '{}', got '{}'",
-            name,
+            "Argument {} type mismatch: expected '{}', got '{}'",
             index,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::CallArgumentCountMismatch { expected, actual } => format!(
-            "Type error in function '{}': Argument count mismatch: expected {}, got {}",
-            name, expected, actual
-        ),
+        mlr::TypeError::CallArgumentCountMismatch { expected, actual } => {
+            format!("Argument count mismatch: expected {}, got {}", expected, actual)
+        }
         mlr::TypeError::IfConditionNotBoolean { actual } => format!(
-            "Type error in function '{}': If condition must be of type 'bool', got '{}'",
-            name,
+            "If condition must be of type 'bool', got '{}'",
             ctxt.type_registry.get_string_rep(&actual)
         ),
         mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => format!(
-            "Type error in function '{}': If branches must have the same type: then is '{}', else is '{}'",
-            name,
+            "If branches must have the same type: then is '{}', else is '{}'",
             ctxt.type_registry.get_string_rep(&then_type),
             ctxt.type_registry.get_string_rep(&else_type)
         ),
         mlr::TypeError::ReturnTypeMismatch { expected, actual } => format!(
-            "Type error in function '{}': Return type mismatch: expected '{}', got '{}'",
-            name,
+            "Return type mismatch: expected '{}', got '{}'",
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-    }
+        mlr::TypeError::OperatorResolutionFailed {
+            operator,
+            operand_types: (left, right),
+        } => format!(
+            "Cannot resolve operator '{}' for operand types '{}' and '{}'",
+            operator,
+            ctxt.type_registry.get_string_rep(&left),
+            ctxt.type_registry.get_string_rep(&right)
+        ),
+    };
+    format!("Type error in function '{}': {}", name, desc)
 }
 
 fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {

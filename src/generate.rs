@@ -67,7 +67,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                 mr_types::NamedType::Primitve(primitive_type) => match primitive_type {
                     mr_types::PrimitiveType::Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                     mr_types::PrimitiveType::Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
-                    mr_types::PrimitiveType::Unit => self.iw_ctxt.custom_width_int_type(0).as_any_type_enum(),
+                    mr_types::PrimitiveType::Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
                 mr_types::NamedType::Struct(struct_id) => self.define_struct(name, type_id, struct_id),
                 mr_types::NamedType::Enum(..) => todo!(),
