@@ -26,6 +26,10 @@ pub enum Token {
     Asterisk,           // *
     Slash,              // /
     Percent,            // %
+    Smaller,            // <
+    Greater,            // >
+    SmallerEqual,       // <=
+    GreaterEqual,       // >=
 }
 
 #[derive(Debug, PartialEq, Clone)]

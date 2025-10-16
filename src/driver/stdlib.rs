@@ -43,5 +43,10 @@ pub fn register_functions(
     register_function!(function_registry, "bitor::<bool>", (a: bool, b: bool) -> bool);
     register_function!(function_registry, "bitand::<bool>", (a: bool, b: bool) -> bool);
 
+    register_function!(function_registry, "lt::<i32>", (a: i32, b: i32) -> bool);
+    register_function!(function_registry, "gt::<i32>", (a: i32, b: i32) -> bool);
+    register_function!(function_registry, "le::<i32>", (a: i32, b: i32) -> bool);
+    register_function!(function_registry, "ge::<i32>", (a: i32, b: i32) -> bool);
+
     Ok(())
 }

@@ -77,3 +77,27 @@ entry:
   %2 = and i1 %0, %1
   ret i1 %2
 }
+
+define i1 @"lt::<i32>"(i1 %0, i1 %1) {
+entry:
+  %2 = icmp slt i1 %0, %1
+  ret i1 %2
+}
+
+define i1 @"gt::<i32>"(i1 %0, i1 %1) {
+entry:
+  %2 = icmp sgt i1 %0, %1
+  ret i1 %2
+}
+
+define i1 @"le::<i32>"(i1 %0, i1 %1) {
+entry:
+  %2 = icmp sle i1 %0, %1
+  ret i1 %2
+}
+
+define i1 @"ge::<i32>"(i1 %0, i1 %1) {
+entry:
+  %2 = icmp sge i1 %0, %1
+  ret i1 %2
+}

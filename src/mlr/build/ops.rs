@@ -57,6 +57,11 @@ impl<'a> mlr::MlrBuilder<'a> {
 
             (BitOr,     bool, bool) => "bitor::<bool>",
             (BitAnd,    bool, bool) => "bitand::<bool>",
+
+            (LessThan,           i32, i32) => "lt::<i32>",
+            (GreaterThan,        i32, i32) => "gt::<i32>",
+            (LessThanOrEqual,    i32, i32) => "le::<i32>",
+            (GreaterThanOrEqual, i32, i32) => "ge::<i32>",
         );
 
         self.ctxt

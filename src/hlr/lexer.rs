@@ -31,6 +31,8 @@ const ONE_CHAR_TOKENS: &[(char, Token)] = &[
     ('%', Token::Percent),
     ('|', Token::Pipe),
     ('&', Token::Ampersand),
+    ('<', Token::Smaller),
+    ('>', Token::Greater),
 ];
 
 const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
@@ -39,6 +41,8 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
     ('&', '&', Token::AmpersandAmpersand),
     ('|', '|', Token::PipePipe),
     ('-', '>', Token::Arrow),
+    ('<', '=', Token::SmallerEqual),
+    ('>', '=', Token::GreaterEqual),
 ];
 
 impl<'a> Lexer<'a> {

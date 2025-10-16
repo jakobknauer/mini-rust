@@ -336,12 +336,37 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_equality_expression(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_sum_expression()?;
+        let mut acc = self.parse_comparison()?;
 
         while let Some(op @ (Token::EqualEqual | Token::BangEqual)) = self.current() {
             let operator = match op {
                 Token::EqualEqual => BinaryOperator::Equal,
                 Token::BangEqual => BinaryOperator::NotEqual,
+                _ => unreachable!(),
+            };
+            self.position += 1; // consume operator
+            let right = self.parse_comparison()?;
+            acc = Expression::BinaryOp {
+                left: Box::new(acc),
+                operator,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(acc)
+    }
+
+    fn parse_comparison(&mut self) -> Result<Expression, ParserError> {
+        let mut acc = self.parse_sum_expression()?;
+
+        while let Some(op @ (Token::Smaller | Token::Greater | Token::SmallerEqual | Token::GreaterEqual)) =
+            self.current()
+        {
+            let operator = match op {
+                Token::Smaller => BinaryOperator::LessThan,
+                Token::Greater => BinaryOperator::GreaterThan,
+                Token::SmallerEqual => BinaryOperator::LessThanOrEqual,
+                Token::GreaterEqual => BinaryOperator::GreaterThanOrEqual,
                 _ => unreachable!(),
             };
             self.position += 1; // consume operator
