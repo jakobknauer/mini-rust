@@ -65,3 +65,15 @@ define i1 @"ne::<()>"({} %0, {} %1) {
 entry:
   ret i1 false
 }
+
+define i1 @"bitor::<bool>"(i1 %0, i1 %1) {
+entry:
+  %2 = or i1 %0, %1
+  ret i1 %2
+}
+
+define i1 @"bitand::<bool>"(i1 %0, i1 %1) {
+entry:
+  %2 = and i1 %0, %1
+  ret i1 %2
+}

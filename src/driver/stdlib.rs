@@ -40,5 +40,8 @@ pub fn register_functions(
     register_function!(function_registry, "eq::<()>", (a: unit, b: unit) -> bool);
     register_function!(function_registry, "ne::<()>", (a: unit, b: unit) -> bool);
 
+    register_function!(function_registry, "bitor::<bool>", (a: bool, b: bool) -> bool);
+    register_function!(function_registry, "bitand::<bool>", (a: bool, b: bool) -> bool);
+
     Ok(())
 }

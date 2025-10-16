@@ -291,9 +291,9 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_assignment_expression(&mut self) -> Result<Expression, ParserError> {
-        let target = self.parse_equality_expression()?;
+        let target = self.parse_disjunction()?;
         if self.advance_if(Token::Equal) {
-            let value = self.parse_sum_expression()?;
+            let value = self.parse_conjunction()?;
             Ok(Expression::Assignment {
                 target: Box::new(target),
                 value: Box::new(value),
@@ -301,6 +301,38 @@ impl<'a> HlrParser<'a> {
         } else {
             Ok(target)
         }
+    }
+
+    fn parse_disjunction(&mut self) -> Result<Expression, ParserError> {
+        let mut acc = self.parse_conjunction()?;
+
+        while let Some(Token::Pipe) = self.current() {
+            self.position += 1;
+            let right = self.parse_conjunction()?;
+            acc = Expression::BinaryOp {
+                left: Box::new(acc),
+                operator: BinaryOperator::BitOr,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(acc)
+    }
+
+    fn parse_conjunction(&mut self) -> Result<Expression, ParserError> {
+        let mut acc = self.parse_equality_expression()?;
+
+        while let Some(Token::Ampersand) = self.current() {
+            self.position += 1;
+            let right = self.parse_equality_expression()?;
+            acc = Expression::BinaryOp {
+                left: Box::new(acc),
+                operator: BinaryOperator::BitAnd,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(acc)
     }
 
     fn parse_equality_expression(&mut self) -> Result<Expression, ParserError> {

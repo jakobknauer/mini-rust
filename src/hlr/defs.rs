@@ -121,4 +121,6 @@ pub enum BinaryOperator {
     LessThanOrEqual,
     GreaterThanOrEqual,
     Remainder,
+    BitOr,
+    BitAnd,
 }

@@ -54,6 +54,9 @@ impl<'a> mlr::MlrBuilder<'a> {
             (NotEqual,  bool, bool) => "ne::<bool>",
             (Equal,     unit, unit) => "eq::<()>",
             (NotEqual,  unit, unit) => "ne::<()>",
+
+            (BitOr,     bool, bool) => "bitor::<bool>",
+            (BitAnd,    bool, bool) => "bitand::<bool>",
         );
 
         self.ctxt

@@ -7,5 +7,5 @@ fn g(x: i32) -> i32 {
 }
 
 fn h(b1: bool, b2: bool) -> i32 {
-    if b1 == b2 { 3 } else { 5 }
+    if (b1 == b2 & true) | false { 3 } else { 5 }
 }
