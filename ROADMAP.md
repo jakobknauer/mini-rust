@@ -15,7 +15,7 @@
     - creating struct and enum values
     - accessing struct fields
     - ~~equality operators~~
-    - logical operators
+    - ~~logical operators~~
     - ~~more arithmetic operators~~
 
 ## Version 2
