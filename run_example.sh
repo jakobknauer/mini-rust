@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Compile .rs to .ll
-cargo run -- "examples/example.rs"
+cargo run -- "examples/example.mrs"
 
 # Create alternative optimized version of .ll (allows easier debugging of control flow etc.)
 opt-18 -passes=mem2reg,simplifycfg -S "examples/example.ll" -o "examples/example.ll.opt"

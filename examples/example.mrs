@@ -15,7 +15,7 @@ fn fac(n: i32) -> i32 {
     loop {
         if n == 0 {
             break;
-        } else {};
+        } else { };
         result = result * n;
         n = n - 1;
     };
