@@ -52,7 +52,7 @@ pub enum Expression {
     Call { callable: LocId, args: Vec<LocId> },
     Function(FnId),
     If(If),
-    Loop { body: ExprId },
+    Loop { body: Block },
 }
 
 #[derive(Debug)]

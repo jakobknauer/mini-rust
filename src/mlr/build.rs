@@ -272,8 +272,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::Expression> {
-        let body = mlr::Expression::Block(self.build_block(body)?);
-        let body = self.insert_expr(body)?;
+        let body = self.build_block(body)?;
         Ok(mlr::Expression::Loop { body })
     }
 

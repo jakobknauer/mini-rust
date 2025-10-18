@@ -150,13 +150,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }) => {
                     write!(self.writer, "if {} ", condition)?;
                     self.print_block(then_block)?;
-                    self.indent()?;
-                    write!(self.writer, "else ")?;
+                    write!(self.writer, " else ")?;
                     self.print_block(else_block)
                 }
                 Expression::Loop { body } => {
                     write!(self.writer, "loop ")?;
-                    self.print_expression(*body)
+                    self.print_block(body)
                 }
             },
             None => write!(self.writer, "<expr id {}>", expr_id.0),

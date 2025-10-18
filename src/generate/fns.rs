@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
-    types::{BasicType, BasicTypeEnum, FunctionType},
+    types::{BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
@@ -17,6 +17,7 @@ pub struct FnGenerator<'a, 'iw, 'mr> {
     mlr: &'a mlr::Mlr,
     locs: HashMap<mlr::LocId, PointerValue<'iw>>,
     entry_block: Option<BasicBlock<'iw>>,
+    after_loop_blocks: VecDeque<BasicBlock<'iw>>,
 }
 
 #[derive(Debug)]
@@ -36,6 +37,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let mlr = gtor.mr_ctxt.function_registry.get_function_mlr(&fn_id)?;
         let locs = HashMap::new();
         let iw_fn = *gtor.functions.get(&fn_id)?;
+        let after_loop_blocks = VecDeque::new();
 
         Some(Self {
             gtor,
@@ -45,6 +47,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             mlr,
             locs,
             entry_block: None,
+            after_loop_blocks,
         })
     }
 
@@ -141,6 +144,18 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(address)
     }
 
+    fn build_unit_value(&mut self) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        let mr_unit_type = self
+            .gtor
+            .mr_ctxt
+            .type_registry
+            .get_primitive_type_id(mr_types::PrimitiveType::Unit)
+            .ok_or(FnGeneratorError)?;
+        let iw_type = self.gtor.get_or_define_type(&mr_unit_type).ok_or(FnGeneratorError)?;
+        let iw_type: StructType = iw_type.try_into().map_err(|_| FnGeneratorError)?;
+        Ok(iw_type.const_named_struct(&[]).as_basic_value_enum())
+    }
+
     fn build_entry_block(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
         let entry_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "entry");
         self.entry_block = Some(entry_block);
@@ -192,9 +207,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             mlr::Expression::Function(fn_id) => self.build_global_function(fn_id),
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
             mlr::Expression::If(if_) => self.build_if(if_, expr),
-
+            mlr::Expression::Loop { body } => self.build_loop(body),
             // mlr::Expression::AddressOf(loc_id) => todo!(),
-            // mlr::Expression::Loop { body } => todo!(),
             _ => {
                 // Simply return the integer constant 42 for now
                 let int_type = self.gtor.iw_ctxt.i32_type();
@@ -220,10 +234,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 let bool_type = self.gtor.iw_ctxt.bool_type();
                 Ok(bool_type.const_int(*b as u64, false).as_basic_value_enum())
             }
-            mlr::Constant::Unit => {
-                let unit_type = self.gtor.iw_ctxt.custom_width_int_type(0);
-                Ok(unit_type.const_int(0, false).as_basic_value_enum())
-            }
+            mlr::Constant::Unit => self.build_unit_value(),
         }
     }
 
@@ -291,5 +302,20 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .builder
             .build_load(result_type, result_address, "if_result_value")?;
         Ok(result_value)
+    }
+
+    fn build_loop(&mut self, body: &mlr::Block) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "loop");
+        let after_loop = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "loop_after");
+
+        self.builder.build_unconditional_branch(body_block)?;
+        self.after_loop_blocks.push_back(after_loop);
+        self.builder.position_at_end(body_block);
+        self.build_block(body)?;
+        self.builder.build_unconditional_branch(body_block)?;
+        self.after_loop_blocks.pop_back();
+
+        self.builder.position_at_end(after_loop);
+        self.build_unit_value()
     }
 }
