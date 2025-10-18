@@ -11,7 +11,7 @@
     - ~~Determine all types (bidirectional; no HM-style, as we don't have generics yet)~~
 - ~~Generate LLVM IR from typed IR~~
 - Missing:
-    - breaking out of loops
+    - ~~breaking out of loops~~
     - creating struct and enum values
     - accessing struct fields
     - ~~equality operators~~
