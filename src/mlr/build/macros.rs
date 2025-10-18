@@ -6,3 +6,5 @@ macro_rules! assign_to_new_loc {
         (loc, stmt)
     }};
 }
+
+pub(crate) use assign_to_new_loc;

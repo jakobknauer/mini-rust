@@ -2,6 +2,8 @@ use std::collections::hash_map::Entry;
 
 use crate::mlr;
 
+use crate::mlr::build::macros::assign_to_new_loc;
+
 impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_next_expr_id(&mut self) -> mlr::ExprId {
         let id = self.next_expr_id;
@@ -67,10 +69,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn create_unit_block(&mut self) -> mlr::build::Result<mlr::Block> {
-        let loc = self.get_next_loc_id();
-        let init = self.create_unit_value()?;
-        let stmt = mlr::Statement::Assign { loc, value: init };
-        let stmt = self.insert_stmt(stmt)?;
+        let (loc, stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
         Ok(mlr::Block {
             statements: vec![stmt],
             output: loc,
