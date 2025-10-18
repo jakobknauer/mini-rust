@@ -100,6 +100,10 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.indent()?;
                     writeln!(self.writer, "return {};", value)
                 }
+                Statement::Break => {
+                    self.indent()?;
+                    writeln!(self.writer, "break;")
+                }
             },
             None => writeln!(self.writer, "<stmt id {}>", stmt_id.0),
         }

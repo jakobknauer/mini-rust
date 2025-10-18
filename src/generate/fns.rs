@@ -195,6 +195,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 let ret_value = self.build_load_from_loc(value, "ret_value")?;
                 self.builder.build_return(Some(&ret_value))?;
             }
+            mlr::Statement::Break => {
+                let after_loop_block = self.after_loop_blocks.back().ok_or(FnGeneratorError)?;
+                self.builder.build_unconditional_branch(*after_loop_block)?;
+            }
         }
         Ok(())
     }

@@ -41,6 +41,7 @@ impl Mlr {
 pub enum Statement {
     Assign { loc: LocId, value: ExprId },
     Return { value: LocId },
+    Break,
 }
 
 #[derive(Debug)]

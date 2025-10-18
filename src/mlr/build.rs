@@ -281,7 +281,7 @@ impl<'a> MlrBuilder<'a> {
             hlr::Statement::Let { name, value, .. } => self.build_let_statement(name, value)?,
             hlr::Statement::Expression(expression) => self.build_expression_statement(expression)?,
             hlr::Statement::Return(expression) => self.build_return_statement(expression.as_ref())?,
-            hlr::Statement::Break => todo!("break statements"),
+            hlr::Statement::Break => self.build_break_statement()?,
         };
         Ok(stmt)
     }
@@ -314,5 +314,9 @@ impl<'a> MlrBuilder<'a> {
 
         let (_, block_stmt) = assign_to_new_loc!(self, block);
         Ok(block_stmt)
+    }
+
+    fn build_break_statement(&mut self) -> Result<mlr::StmtId> {
+        self.insert_stmt(mlr::Statement::Break)
     }
 }
