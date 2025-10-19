@@ -14,7 +14,7 @@ pub fn build_program(input: &str) -> Result<Program, ParserError> {
 fn build_expr(input: &str) -> Result<Expression, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
-    parser.parse_expression()
+    parser.parse_expression(true)
 }
 
 fn build_block(input: &str) -> Result<Block, ParserError> {
@@ -265,7 +265,7 @@ impl<'a> HlrParser<'a> {
             None
         };
         self.expect_token(Token::Equal)?;
-        let value = self.parse_expression()?;
+        let value = self.parse_expression(true)?;
         Ok(Statement::Let { name, var_type, value })
     }
 
@@ -274,7 +274,7 @@ impl<'a> HlrParser<'a> {
         if let Some(Token::Semicolon) = self.current() {
             Ok(Statement::Return(None))
         } else {
-            let expr = self.parse_expression()?;
+            let expr = self.parse_expression(true)?;
             Ok(Statement::Return(Some(expr)))
         }
     }
@@ -285,18 +285,18 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_expression_statement(&mut self) -> Result<Statement, ParserError> {
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression(true)?;
         Ok(Statement::Expression(expr))
     }
 
-    fn parse_expression(&mut self) -> Result<Expression, ParserError> {
-        self.parse_assignment_expression()
+    fn parse_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+        self.parse_assignment_expression(allow_top_level_struct_expr)
     }
 
-    fn parse_assignment_expression(&mut self) -> Result<Expression, ParserError> {
-        let target = self.parse_disjunction()?;
+    fn parse_assignment_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+        let target = self.parse_disjunction(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
-            let value = self.parse_conjunction()?;
+            let value = self.parse_disjunction(allow_top_level_struct_expr)?;
             Ok(Expression::Assignment {
                 target: Box::new(target),
                 value: Box::new(value),
@@ -337,13 +337,14 @@ impl<'a> HlrParser<'a> {
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_function_call(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_atomic_expression()?;
+    fn parse_function_call(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+        let mut acc = self.parse_atomic_expression(allow_top_level_struct_expr)?;
 
         while self.advance_if(Token::LParen) {
             let mut arguments = Vec::new();
             while self.current() != Some(&Token::RParen) {
-                arguments.push(self.parse_expression()?);
+                let argument = self.parse_expression(true)?; // Allow top-level struct expression in argument
+                arguments.push(argument);
                 if !self.advance_if(Token::Comma) {
                     break;
                 }
@@ -358,7 +359,7 @@ impl<'a> HlrParser<'a> {
         Ok(acc)
     }
 
-    fn parse_atomic_expression(&mut self) -> Result<Expression, ParserError> {
+    fn parse_atomic_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
         let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
 
         match current {
@@ -376,30 +377,30 @@ impl<'a> HlrParser<'a> {
                 let ident = ident.clone();
                 self.position += 1;
 
-                // if self.advance_if(Token::LBrace) {
-                //     let mut fields = Vec::new();
-                //     while let Some(Token::Identifier(field_name)) = self.current() {
-                //         let field_name = field_name.clone();
-                //         self.position += 1; // consume LBrace
-                //         self.expect_token(Token::Colon)?;
-                //         let field_value = self.parse_expression()?;
-                //         fields.push((field_name, field_value));
-                //         if !self.advance_if(Token::Comma) {
-                //             break;
-                //         }
-                //     }
-                //     self.expect_token(Token::RBrace)?;
-                //     Ok(Expression::StructInit {
-                //         struct_name: ident,
-                //         fields,
-                //     })
-                // } else {
-                Ok(Expression::Variable(ident))
-                // }
+                if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
+                    let mut fields = Vec::new();
+                    while let Some(Token::Identifier(field_name)) = self.current() {
+                        let field_name = field_name.clone();
+                        self.position += 1; // consume LBrace
+                        self.expect_token(Token::Colon)?;
+                        let field_value = self.parse_expression(true)?;
+                        fields.push((field_name, field_value));
+                        if !self.advance_if(Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(Token::RBrace)?;
+                    Ok(Expression::StructInit {
+                        struct_name: ident,
+                        fields,
+                    })
+                } else {
+                    Ok(Expression::Variable(ident))
+                }
             }
             Token::LParen => {
                 self.position += 1;
-                let expr = self.parse_expression()?;
+                let expr = self.parse_expression(true)?; // Allow top-level struct expression in parens
                 self.expect_token(Token::RParen)?;
                 Ok(expr)
             }
@@ -409,7 +410,7 @@ impl<'a> HlrParser<'a> {
             }
             Token::Keyword(Keyword::If) => {
                 self.position += 1;
-                let condition = self.parse_expression()?;
+                let condition = self.parse_expression(false)?; // Don't allow top-level struct in if condition
                 let then_block = self.parse_block()?;
                 let else_block = if self.advance_if(Token::Keyword(Keyword::Else)) {
                     Some(self.parse_block()?)
@@ -694,7 +695,6 @@ mod tests {
             parse_and_compare(input, expected);
         }
 
-        #[ignore]
         #[test]
         fn parse_struct_initializer() {
             let input = r#"
