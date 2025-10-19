@@ -87,7 +87,7 @@ pub enum Expression {
         function: Box<Expression>,
         arguments: Vec<Expression>,
     },
-    StructInit {
+    StructExpr {
         struct_name: String,
         fields: Vec<(String, Expression)>,
     },

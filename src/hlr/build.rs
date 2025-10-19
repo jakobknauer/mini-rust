@@ -390,7 +390,7 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    Ok(Expression::StructInit {
+                    Ok(Expression::StructExpr {
                         struct_name: ident,
                         fields,
                     })
@@ -696,19 +696,19 @@ mod tests {
         }
 
         #[test]
-        fn parse_struct_initializer() {
+        fn parse_struct_expr() {
             let input = r#"
                 Circle {
                     center: Point { x: 1, y: 2 },
                     radius: 3
                 }"#;
 
-            let expected = Expression::StructInit {
+            let expected = Expression::StructExpr {
                 struct_name: "Circle".to_string(),
                 fields: vec![
                     (
                         "center".to_string(),
-                        Expression::StructInit {
+                        Expression::StructExpr {
                             struct_name: "Point".to_string(),
                             fields: vec![
                                 ("x".to_string(), Expression::Literal(Literal::Int(1))),

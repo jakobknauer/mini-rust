@@ -129,7 +129,7 @@ impl<'a> MlrBuilder<'a> {
             hlr::Expression::BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?,
             hlr::Expression::Assignment { target, value } => self.build_assignment(target, value)?,
             hlr::Expression::FunctionCall { function, arguments } => self.build_function_call(function, arguments)?,
-            hlr::Expression::StructInit { .. } => todo!("lowering of struct initializers"),
+            hlr::Expression::StructExpr { .. } => todo!("lowering of struct initializers"),
             hlr::Expression::If {
                 condition,
                 then_block,
