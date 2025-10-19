@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+
 use crate::hlr::{defs::*, lexer, token::Keyword};
 
 pub use crate::hlr::{lexer::LexerError, token::Token};
@@ -303,126 +306,36 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_disjunction(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_conjunction()?;
+    parse_left_associative!(parse_disjunction, parse_conjunction, [
+        Token::Pipe => BinaryOperator::BitOr
+    ]);
 
-        while let Some(Token::Pipe) = self.current() {
-            self.position += 1;
-            let right = self.parse_conjunction()?;
-            acc = Expression::BinaryOp {
-                left: Box::new(acc),
-                operator: BinaryOperator::BitOr,
-                right: Box::new(right),
-            };
-        }
+    parse_left_associative!(parse_conjunction, parse_equality_expression, [
+        Token::Ampersand => BinaryOperator::BitAnd
+    ]);
 
-        Ok(acc)
-    }
+    parse_left_associative!(parse_equality_expression, parse_comparison, [
+        Token::EqualEqual => BinaryOperator::Equal,
+        Token::BangEqual => BinaryOperator::NotEqual
+    ]);
 
-    fn parse_conjunction(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_equality_expression()?;
+    parse_left_associative!(parse_comparison, parse_sum_expression, [
+        Token::Smaller => BinaryOperator::LessThan,
+        Token::Greater => BinaryOperator::GreaterThan,
+        Token::SmallerEqual => BinaryOperator::LessThanOrEqual,
+        Token::GreaterEqual => BinaryOperator::GreaterThanOrEqual
+    ]);
 
-        while let Some(Token::Ampersand) = self.current() {
-            self.position += 1;
-            let right = self.parse_equality_expression()?;
-            acc = Expression::BinaryOp {
-                left: Box::new(acc),
-                operator: BinaryOperator::BitAnd,
-                right: Box::new(right),
-            };
-        }
+    parse_left_associative!(parse_sum_expression, parse_product_expression, [
+        Token::Plus => BinaryOperator::Add,
+        Token::Minus => BinaryOperator::Subtract
+    ]);
 
-        Ok(acc)
-    }
-
-    fn parse_equality_expression(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_comparison()?;
-
-        while let Some(op @ (Token::EqualEqual | Token::BangEqual)) = self.current() {
-            let operator = match op {
-                Token::EqualEqual => BinaryOperator::Equal,
-                Token::BangEqual => BinaryOperator::NotEqual,
-                _ => unreachable!(),
-            };
-            self.position += 1; // consume operator
-            let right = self.parse_comparison()?;
-            acc = Expression::BinaryOp {
-                left: Box::new(acc),
-                operator,
-                right: Box::new(right),
-            };
-        }
-
-        Ok(acc)
-    }
-
-    fn parse_comparison(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_sum_expression()?;
-
-        while let Some(op @ (Token::Smaller | Token::Greater | Token::SmallerEqual | Token::GreaterEqual)) =
-            self.current()
-        {
-            let operator = match op {
-                Token::Smaller => BinaryOperator::LessThan,
-                Token::Greater => BinaryOperator::GreaterThan,
-                Token::SmallerEqual => BinaryOperator::LessThanOrEqual,
-                Token::GreaterEqual => BinaryOperator::GreaterThanOrEqual,
-                _ => unreachable!(),
-            };
-            self.position += 1; // consume operator
-            let right = self.parse_sum_expression()?;
-            acc = Expression::BinaryOp {
-                left: Box::new(acc),
-                operator,
-                right: Box::new(right),
-            };
-        }
-
-        Ok(acc)
-    }
-
-    fn parse_sum_expression(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_product_expression()?;
-
-        while let Some(op @ (Token::Plus | Token::Minus)) = self.current() {
-            let operator = match op {
-                Token::Plus => BinaryOperator::Add,
-                Token::Minus => BinaryOperator::Subtract,
-                _ => unreachable!(),
-            };
-            self.position += 1; // consume operator
-            let right = self.parse_product_expression()?;
-            acc = Expression::BinaryOp {
-                left: Box::new(acc),
-                operator,
-                right: Box::new(right),
-            };
-        }
-
-        Ok(acc)
-    }
-
-    fn parse_product_expression(&mut self) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_function_call()?;
-
-        while let Some(op @ (Token::Asterisk | Token::Slash | Token::Percent)) = self.current() {
-            let operator = match op {
-                Token::Asterisk => BinaryOperator::Multiply,
-                Token::Slash => BinaryOperator::Divide,
-                Token::Percent => BinaryOperator::Remainder,
-                _ => unreachable!(),
-            };
-            self.position += 1; // consume operator
-            let right = self.parse_function_call()?;
-            acc = Expression::BinaryOp {
-                left: Box::new(acc),
-                operator,
-                right: Box::new(right),
-            };
-        }
-
-        Ok(acc)
-    }
+    parse_left_associative!(parse_product_expression, parse_function_call, [
+        Token::Asterisk => BinaryOperator::Multiply,
+        Token::Slash => BinaryOperator::Divide,
+        Token::Percent => BinaryOperator::Remainder
+    ]);
 
     fn parse_function_call(&mut self) -> Result<Expression, ParserError> {
         let mut acc = self.parse_atomic_expression()?;
