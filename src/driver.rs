@@ -190,8 +190,10 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> Strin
 
 fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
     for fn_id in ctxt.function_registry.get_all_functions() {
-        print::print_mlr(fn_id, ctxt, &mut std::io::stdout()).map_err(|_| ())?;
-        println!();
+        if ctxt.function_registry.is_function_defined(fn_id) {
+            print::print_mlr(fn_id, ctxt, &mut std::io::stdout()).map_err(|_| ())?;
+            println!();
+        }
     }
     Ok(())
 }

@@ -54,6 +54,10 @@ impl FunctionRegistry {
         }
     }
 
+    pub fn is_function_defined(&self, fn_id: &FnId) -> bool {
+        self.defs.contains_key(fn_id)
+    }
+
     pub fn get_function_mlr(&self, fn_id: &FnId) -> Option<&Mlr> {
         self.defs.get(fn_id)
     }
