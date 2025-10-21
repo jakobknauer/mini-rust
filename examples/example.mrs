@@ -14,7 +14,7 @@ fn fac(n: i32) -> i32 {
     let result = 1;
     loop {
         if n == 0 {
-            break;
+            return result;
         };
         result = result * n;
         n = n - 1;

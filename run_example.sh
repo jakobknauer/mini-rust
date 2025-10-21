@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Compile .rs to .ll
 cargo run -- "examples/example.mrs"
 
