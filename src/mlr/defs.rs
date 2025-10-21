@@ -1,9 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::ctxt::{
-    functions::FnId,
-    types::TypeId,
-};
+use crate::ctxt::{functions::FnId, types::TypeId};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StmtId(pub usize);
