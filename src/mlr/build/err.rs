@@ -40,7 +40,12 @@ pub enum TypeError {
         operator: String,
         operand_types: (ctxt::types::TypeId, ctxt::types::TypeId),
     },
+    UnresolvableTypeName {
+        struct_name: String,
+    },
 }
+
+pub type Result<T> = std::result::Result<T, MlrBuilderError>;
 
 impl<T> From<MlrBuilderError> for Result<T> {
     fn from(val: MlrBuilderError) -> Self {
@@ -53,5 +58,3 @@ impl<T> From<TypeError> for Result<T> {
         MlrBuilderError::TypeError(val).into()
     }
 }
-
-pub type Result<T> = std::result::Result<T, MlrBuilderError>;

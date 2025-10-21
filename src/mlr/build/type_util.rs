@@ -29,6 +29,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .type_registry
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
+            Struct { type_id, .. } => Ok(*type_id),
         }
     }
 

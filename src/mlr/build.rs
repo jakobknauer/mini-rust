@@ -129,7 +129,7 @@ impl<'a> MlrBuilder<'a> {
             hlr::Expression::BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?,
             hlr::Expression::Assignment { target, value } => self.build_assignment(target, value)?,
             hlr::Expression::FunctionCall { function, arguments } => self.build_function_call(function, arguments)?,
-            hlr::Expression::StructExpr { .. } => todo!("lowering of struct initializers"),
+            hlr::Expression::StructExpr { struct_name, fields } => self.build_struct_expression(struct_name, fields)?,
             hlr::Expression::If {
                 condition,
                 then_block,
@@ -318,5 +318,45 @@ impl<'a> MlrBuilder<'a> {
 
     fn build_break_statement(&mut self) -> Result<mlr::StmtId> {
         self.insert_stmt(mlr::Statement::Break)
+    }
+
+    fn build_struct_expression(
+        &mut self,
+        struct_name: &str,
+        fields: &[(String, hlr::Expression)],
+    ) -> Result<mlr::Expression> {
+        let type_id = self
+            .ctxt
+            .type_registry
+            .get_type_id_by_name(struct_name)
+            .ok_or(MlrBuilderError::TypeError(TypeError::UnresolvableTypeName {
+                struct_name: struct_name.to_string(),
+            }))?;
+
+        let (member_locs, member_stmts): (Vec<_>, Vec<_>) = fields
+            .iter()
+            .map(|(field_name, expr)| {
+                let (field_loc, field_stmt) = assign_to_new_loc!(self, self.build_expression(expr)?);
+                Ok(((field_name.clone(), field_loc), field_stmt))
+            })
+            .process_results(|it| it.unzip())?;
+
+        let (struct_expr_loc, struct_expr_stmt) = assign_to_new_loc!(self, {
+            let struct_expr = mlr::Expression::Struct {
+                type_id,
+                members: member_locs,
+            };
+            self.insert_expr(struct_expr)?
+        });
+
+        let statements: Vec<_> = member_stmts
+            .into_iter()
+            .chain(std::iter::once(struct_expr_stmt))
+            .collect();
+
+        Ok(mlr::Expression::Block(mlr::Block {
+            statements,
+            output: struct_expr_loc,
+        }))
     }
 }

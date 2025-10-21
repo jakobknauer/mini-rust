@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::ctxt::{functions::FnId, types::TypeId};
+use crate::ctxt::{
+    functions::FnId,
+    types::TypeId,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StmtId(pub usize);
@@ -50,10 +53,19 @@ pub enum Expression {
     Constant(Constant),
     Var(LocId),
     AddressOf(LocId),
-    Call { callable: LocId, args: Vec<LocId> },
+    Call {
+        callable: LocId,
+        args: Vec<LocId>,
+    },
     Function(FnId),
     If(If),
-    Loop { body: Block },
+    Loop {
+        body: Block,
+    },
+    Struct {
+        type_id: TypeId,
+        members: Vec<(String, LocId)>,
+    },
 }
 
 #[derive(Debug)]

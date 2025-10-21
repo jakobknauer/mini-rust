@@ -184,6 +184,9 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> Strin
             ctxt.type_registry.get_string_rep(&left),
             ctxt.type_registry.get_string_rep(&right)
         ),
+        mlr::TypeError::UnresolvableTypeName { struct_name } => {
+            format!("Cannot find struct type with name '{}'", struct_name)
+        }
     };
     format!("Type error in function '{}': {}", name, desc)
 }

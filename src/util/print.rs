@@ -161,6 +161,19 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "loop ")?;
                     self.print_block(body)
                 }
+                Expression::Struct { type_id, members } => {
+                    let struct_name = self.ctxt.type_registry.get_string_rep(type_id);
+                    writeln!(self.writer, "struct {} {{", struct_name)?;
+                    self.indent_level += 1;
+                    for (name, loc) in members {
+                        self.indent()?;
+                        writeln!(self.writer, "{}: {},", name, loc)?;
+                    }
+                    self.indent_level -= 1;
+
+                    self.indent()?;
+                    write!(self.writer, "}}")
+                }
             },
             None => write!(self.writer, "<expr id {}>", expr_id.0),
         }

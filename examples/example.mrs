@@ -21,3 +21,13 @@ fn fac(n: i32) -> i32 {
     };
     result
 }
+
+fn get_point() -> Point {
+    let p = Point { x: 1, y: 2 + 3};
+    p
+}
+
+struct Point {
+    x: i32,
+    y: i32,
+}
