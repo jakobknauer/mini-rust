@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     ctxt::{functions::FnId, types::*},
     mlr::{
@@ -29,7 +31,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .type_registry
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
-            Struct { type_id, .. } => Ok(*type_id),
+            Struct { type_id, members } => self.infer_type_of_struct(type_id, members),
         }
     }
 
@@ -166,5 +168,78 @@ impl<'a> mlr::MlrBuilder<'a> {
         } else {
             TypeError::IfBranchTypeMismatch { then_type, else_type }.into()
         }
+    }
+
+    fn infer_type_of_struct(
+        &self,
+        type_id: &TypeId,
+        members: &[(String, mlr::LocId)],
+    ) -> std::result::Result<TypeId, MlrBuilderError> {
+        // Get struct definition
+        let struct_def = {
+            let type_ = self.ctxt.type_registry.get_type_by_id(type_id).unwrap();
+            let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ else {
+                return TypeError::NotAStruct { type_id: *type_id }.into();
+            };
+            self.ctxt
+                .type_registry
+                .get_struct_definition(struct_id)
+                .expect("struct definition should be registered")
+        };
+
+        // Check for missing or extra members
+        let specified_member_names: HashSet<_> = members.iter().map(|(name, _)| name.as_str()).collect();
+        let struct_member_names: HashSet<_> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
+
+        let missing_members: Vec<_> = struct_member_names
+            .difference(&specified_member_names)
+            .cloned()
+            .collect();
+        if !missing_members.is_empty() {
+            return TypeError::StructExpressionMissingMembers {
+                missing_members: missing_members.into_iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let extra_members: Vec<_> = specified_member_names
+            .difference(&struct_member_names)
+            .cloned()
+            .collect();
+        if !extra_members.is_empty() {
+            return TypeError::StructExpressionExtraMembers {
+                extra_members: extra_members.into_iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        // Check for type mismatches
+        for StructField {
+            name: field_name,
+            type_id: field_type_id,
+        } in &struct_def.fields
+        {
+            let specified_type_id = members
+                .iter()
+                .find(|(name, _)| name == field_name)
+                .map(|(_, loc_id)| {
+                    self.output
+                        .loc_types
+                        .get(loc_id)
+                        .expect("type of location should be registered")
+                })
+                .unwrap();
+
+            if !self.ctxt.type_registry.types_equal(field_type_id, specified_type_id) {
+                return TypeError::StructExpressionTypeMismatch {
+                    member_name: field_name.clone(),
+                    expected: *field_type_id,
+                    actual: *specified_type_id,
+                }
+                .into();
+            }
+        }
+
+        Ok(*type_id)
     }
 }

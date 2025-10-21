@@ -43,6 +43,20 @@ pub enum TypeError {
     UnresolvableTypeName {
         struct_name: String,
     },
+    NotAStruct {
+        type_id: ctxt::types::TypeId,
+    },
+    StructExpressionMissingMembers {
+        missing_members: Vec<String>,
+    },
+    StructExpressionExtraMembers {
+        extra_members: Vec<String>,
+    },
+    StructExpressionTypeMismatch {
+        member_name: String,
+        expected: ctxt::types::TypeId,
+        actual: ctxt::types::TypeId,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;
