@@ -5,7 +5,7 @@ use colored::Colorize;
 fn main() {
     let version = env!("CARGO_PKG_VERSION");
     print_pretty(format!("Mini Rust Compiler v{}", version).as_str());
-    
+
     let (major, minor, patch) = inkwell::support::get_llvm_version();
     println!("Inkwell linked to LLVM version {}.{}.{}", major, minor, patch);
 
