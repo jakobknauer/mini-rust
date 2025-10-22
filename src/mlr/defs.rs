@@ -61,7 +61,7 @@ pub enum Expression {
     },
     Struct {
         type_id: TypeId,
-        members: Vec<(String, LocId)>,
+        field_initializers: Vec<(String, LocId)>,
     },
 }
 

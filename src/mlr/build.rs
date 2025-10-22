@@ -333,7 +333,7 @@ impl<'a> MlrBuilder<'a> {
                 struct_name: struct_name.to_string(),
             }))?;
 
-        let (member_locs, member_stmts): (Vec<_>, Vec<_>) = fields
+        let (field_init_locs, field_init_stmts): (Vec<_>, Vec<_>) = fields
             .iter()
             .map(|(field_name, expr)| {
                 let (field_loc, field_stmt) = assign_to_new_loc!(self, self.build_expression(expr)?);
@@ -344,12 +344,12 @@ impl<'a> MlrBuilder<'a> {
         let (struct_expr_loc, struct_expr_stmt) = assign_to_new_loc!(self, {
             let struct_expr = mlr::Expression::Struct {
                 type_id,
-                members: member_locs,
+                field_initializers: field_init_locs,
             };
             self.insert_expr(struct_expr)?
         });
 
-        let statements: Vec<_> = member_stmts
+        let statements: Vec<_> = field_init_stmts
             .into_iter()
             .chain(std::iter::once(struct_expr_stmt))
             .collect();

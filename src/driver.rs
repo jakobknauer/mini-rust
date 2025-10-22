@@ -191,19 +191,19 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> Strin
             "Type '{}' is not a struct type",
             ctxt.type_registry.get_string_rep(&type_id)
         ),
-        mlr::TypeError::StructExpressionMissingMembers { missing_members } => {
-            format!("Struct expression is missing members: {}", missing_members.join(", "))
+        mlr::TypeError::StructExpressionMissingFields { missing_fields } => {
+            format!("Struct expression is missing fields: {}", missing_fields.join(", "))
         }
-        mlr::TypeError::StructExpressionExtraMembers { extra_members } => {
-            format!("Struct expression has extra members: {}", extra_members.join(", "))
+        mlr::TypeError::StructExpressionExtraFields { extra_fields } => {
+            format!("Struct expression has extra fields: {}", extra_fields.join(", "))
         }
         mlr::TypeError::StructExpressionTypeMismatch {
-            member_name,
+            field_name,
             expected,
             actual,
         } => format!(
-            "Struct member '{}' type mismatch: expected '{}', got '{}'",
-            member_name,
+            "Struct field '{}' type mismatch: expected '{}', got '{}'",
+            field_name,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),

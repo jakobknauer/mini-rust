@@ -46,14 +46,14 @@ pub enum TypeError {
     NotAStruct {
         type_id: ctxt::types::TypeId,
     },
-    StructExpressionMissingMembers {
-        missing_members: Vec<String>,
+    StructExpressionMissingFields {
+        missing_fields: Vec<String>,
     },
-    StructExpressionExtraMembers {
-        extra_members: Vec<String>,
+    StructExpressionExtraFields {
+        extra_fields: Vec<String>,
     },
     StructExpressionTypeMismatch {
-        member_name: String,
+        field_name: String,
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,
     },

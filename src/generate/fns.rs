@@ -212,7 +212,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
             mlr::Expression::If(if_) => self.build_if(if_, expr),
             mlr::Expression::Loop { body } => self.build_loop(body),
-            mlr::Expression::Struct { type_id, members } => self.build_struct_expr(type_id, members),
+            mlr::Expression::Struct {
+                type_id,
+                field_initializers,
+            } => self.build_struct_expr(type_id, field_initializers),
             // mlr::Expression::AddressOf(loc_id) => todo!(),
             _ => {
                 // Simply return the integer constant 42 for now
@@ -327,48 +330,39 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_struct_expr(
         &mut self,
         type_id: &mr_types::TypeId,
-        members: &[(String, mlr::LocId)],
+        field_initializers: &[(String, mlr::LocId)],
     ) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let mr_type = self
-            .gtor
-            .mr_ctxt
-            .type_registry
-            .get_type_by_id(type_id)
-            .ok_or(FnGeneratorError)?;
-        let mr_types::Type::NamedType(_, mr_types::NamedType::Struct(struct_id)) = mr_type else {
-            return Err(FnGeneratorError);
-        };
         let struct_def = self
             .gtor
             .mr_ctxt
             .type_registry
-            .get_struct_definition(struct_id)
+            .get_struct_definition_by_type_id(type_id)
             .ok_or(FnGeneratorError)?;
 
         let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
         let iw_struct_type: StructType<'iw> = iw_type.try_into().map_err(|_| FnGeneratorError)?;
 
-        let mut member_values = vec![None; struct_def.fields.len()];
-        for (_member_name, loc_id) in members {
-            let member_value = self.build_load_from_loc(loc_id, "struct_member_value")?;
-            let member_index = struct_def
+        let mut init_values = vec![None; struct_def.fields.len()];
+        for (field_name, init_loc) in field_initializers {
+            let init_value = self.build_load_from_loc(init_loc, "field_init")?;
+            let field_index = struct_def
                 .fields
                 .iter()
-                .position(|mr_types::StructField { name, .. }| name == _member_name)
+                .position(|mr_types::StructField { name, .. }| name == field_name)
                 .ok_or(FnGeneratorError)?;
-            member_values[member_index] = Some(member_value);
+            init_values[field_index] = Some(init_value);
         }
-        let member_values: Vec<BasicValueEnum<'iw>> = member_values
+        let init_values: Vec<BasicValueEnum<'iw>> = init_values
             .into_iter()
             .map(|opt| opt.ok_or(FnGeneratorError))
             .collect::<Result<_, _>>()?;
 
         let struct_value_ptr = self.build_alloca(iw_type, "struct_value")?;
-        for (index, member_value) in member_values.iter().enumerate() {
-            let member_ptr =
+        for (index, field_value) in init_values.iter().enumerate() {
+            let field_ptr =
                 self.builder
-                    .build_struct_gep(iw_struct_type, struct_value_ptr, index as u32, "member_ptr")?;
-            self.builder.build_store(member_ptr, *member_value)?;
+                    .build_struct_gep(iw_struct_type, struct_value_ptr, index as u32, "field_ptr")?;
+            self.builder.build_store(field_ptr, *field_value)?;
         }
         let struct_value = self
             .builder

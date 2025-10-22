@@ -110,6 +110,15 @@ impl TypeRegistry {
         self.structs.get(struct_id)
     }
 
+    pub fn get_struct_definition_by_type_id(&self, type_id: &TypeId) -> Option<&StructDefinition> {
+        let type_ = self.get_type_by_id(type_id)?;
+        if let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ {
+            self.structs.get(struct_id)
+        } else {
+            None
+        }
+    }
+
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
         let type_ = self.get_type_by_name(name)?;
         if let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ {

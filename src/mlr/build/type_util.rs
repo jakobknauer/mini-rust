@@ -21,7 +21,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         match expr {
             Block(block) => self.infer_type_of_block(block),
             Constant(constant) => self.infer_type_of_constant(constant),
-            Var(loc_id) => self.infer_type_of_location(*loc_id),
+            Var(loc_id) => self.infer_type_of_location(loc_id),
             AddressOf(..) => todo!(),
             Call { callable, args } => self.infer_type_of_call(*callable, args),
             Function(fn_id) => self.infer_type_of_function(*fn_id),
@@ -31,7 +31,10 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .type_registry
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
-            Struct { type_id, members } => self.infer_type_of_struct(type_id, members),
+            Struct {
+                type_id,
+                field_initializers,
+            } => self.infer_type_of_struct(type_id, field_initializers),
         }
     }
 
@@ -56,7 +59,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
     }
 
-    fn infer_type_of_location(&self, loc_id: mlr::LocId) -> mlr::build::Result<TypeId> {
+    fn infer_type_of_location(&self, loc_id: &mlr::LocId) -> mlr::build::Result<TypeId> {
         Ok(*self
             .output
             .loc_types
@@ -173,42 +176,37 @@ impl<'a> mlr::MlrBuilder<'a> {
     fn infer_type_of_struct(
         &self,
         type_id: &TypeId,
-        members: &[(String, mlr::LocId)],
+        field_initializers: &[(String, mlr::LocId)],
     ) -> std::result::Result<TypeId, MlrBuilderError> {
         // Get struct definition
-        let struct_def = {
-            let type_ = self.ctxt.type_registry.get_type_by_id(type_id).unwrap();
-            let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ else {
-                return TypeError::NotAStruct { type_id: *type_id }.into();
-            };
-            self.ctxt
-                .type_registry
-                .get_struct_definition(struct_id)
-                .expect("struct definition should be registered")
-        };
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition_by_type_id(type_id)
+            .ok_or(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id }))?;
 
-        // Check for missing or extra members
-        let specified_member_names: HashSet<_> = members.iter().map(|(name, _)| name.as_str()).collect();
-        let struct_member_names: HashSet<_> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
+        // Check for missing or extra fields
+        let specified_field_names: HashSet<_> = field_initializers.iter().map(|(name, _)| name.as_str()).collect();
+        let required_field_names: HashSet<_> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
 
-        let missing_members: Vec<_> = struct_member_names
-            .difference(&specified_member_names)
+        let missing_fields: Vec<_> = required_field_names
+            .difference(&specified_field_names)
             .cloned()
             .collect();
-        if !missing_members.is_empty() {
-            return TypeError::StructExpressionMissingMembers {
-                missing_members: missing_members.into_iter().map(|s| s.to_string()).collect(),
+        if !missing_fields.is_empty() {
+            return TypeError::StructExpressionMissingFields {
+                missing_fields: missing_fields.into_iter().map(|s| s.to_string()).collect(),
             }
             .into();
         }
 
-        let extra_members: Vec<_> = specified_member_names
-            .difference(&struct_member_names)
+        let extra_fields: Vec<_> = specified_field_names
+            .difference(&required_field_names)
             .cloned()
             .collect();
-        if !extra_members.is_empty() {
-            return TypeError::StructExpressionExtraMembers {
-                extra_members: extra_members.into_iter().map(|s| s.to_string()).collect(),
+        if !extra_fields.is_empty() {
+            return TypeError::StructExpressionExtraFields {
+                extra_fields: extra_fields.into_iter().map(|s| s.to_string()).collect(),
             }
             .into();
         }
@@ -219,7 +217,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             type_id: field_type_id,
         } in &struct_def.fields
         {
-            let specified_type_id = members
+            let specified_type_id = field_initializers
                 .iter()
                 .find(|(name, _)| name == field_name)
                 .map(|(_, loc_id)| {
@@ -232,7 +230,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
             if !self.ctxt.type_registry.types_equal(field_type_id, specified_type_id) {
                 return TypeError::StructExpressionTypeMismatch {
-                    member_name: field_name.clone(),
+                    field_name: field_name.clone(),
                     expected: *field_type_id,
                     actual: *specified_type_id,
                 }
