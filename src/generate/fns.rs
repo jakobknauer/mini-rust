@@ -212,6 +212,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
             mlr::Expression::If(if_) => self.build_if(if_, expr),
             mlr::Expression::Loop { body } => self.build_loop(body),
+            mlr::Expression::Struct { type_id, members } => self.build_struct_expr(type_id, members),
             // mlr::Expression::AddressOf(loc_id) => todo!(),
             _ => {
                 // Simply return the integer constant 42 for now
@@ -321,5 +322,58 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         self.builder.position_at_end(after_loop);
         self.build_unit_value()
+    }
+
+    fn build_struct_expr(
+        &mut self,
+        type_id: &mr_types::TypeId,
+        members: &[(String, mlr::LocId)],
+    ) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        let mr_type = self
+            .gtor
+            .mr_ctxt
+            .type_registry
+            .get_type_by_id(type_id)
+            .ok_or(FnGeneratorError)?;
+        let mr_types::Type::NamedType(_, mr_types::NamedType::Struct(struct_id)) = mr_type else {
+            return Err(FnGeneratorError);
+        };
+        let struct_def = self
+            .gtor
+            .mr_ctxt
+            .type_registry
+            .get_struct_definition(struct_id)
+            .ok_or(FnGeneratorError)?;
+
+        let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
+        let iw_struct_type: StructType<'iw> = iw_type.try_into().map_err(|_| FnGeneratorError)?;
+
+        let mut member_values = vec![None; struct_def.fields.len()];
+        for (_member_name, loc_id) in members {
+            let member_value = self.build_load_from_loc(loc_id, "struct_member_value")?;
+            let member_index = struct_def
+                .fields
+                .iter()
+                .position(|mr_types::StructField { name, .. }| name == _member_name)
+                .ok_or(FnGeneratorError)?;
+            member_values[member_index] = Some(member_value);
+        }
+        let member_values: Vec<BasicValueEnum<'iw>> = member_values
+            .into_iter()
+            .map(|opt| opt.ok_or(FnGeneratorError))
+            .collect::<Result<_, _>>()?;
+
+        let struct_value_ptr = self.build_alloca(iw_type, "struct_value")?;
+        for (index, member_value) in member_values.iter().enumerate() {
+            let member_ptr =
+                self.builder
+                    .build_struct_gep(iw_struct_type, struct_value_ptr, index as u32, "member_ptr")?;
+            self.builder.build_store(member_ptr, *member_value)?;
+        }
+        let struct_value = self
+            .builder
+            .build_load(iw_type, struct_value_ptr, "loaded_struct_value")?;
+
+        Ok(struct_value)
     }
 }
