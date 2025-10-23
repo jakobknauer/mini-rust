@@ -338,7 +338,7 @@ impl<'a> HlrParser<'a> {
     ]);
 
     fn parse_function_call(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_atomic_expression(allow_top_level_struct_expr)?;
+        let mut acc = self.parse_primary_expression(allow_top_level_struct_expr)?;
 
         while self.advance_if(Token::LParen) {
             let mut arguments = Vec::new();
@@ -359,7 +359,7 @@ impl<'a> HlrParser<'a> {
         Ok(acc)
     }
 
-    fn parse_atomic_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+    fn parse_primary_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
         let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
 
         match current {
@@ -378,6 +378,7 @@ impl<'a> HlrParser<'a> {
                 self.position += 1;
 
                 if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
+                    // parse struct expr
                     let mut fields = Vec::new();
                     while let Some(Token::Identifier(field_name)) = self.current() {
                         let field_name = field_name.clone();
@@ -408,28 +409,33 @@ impl<'a> HlrParser<'a> {
                 let block = self.parse_block()?;
                 Ok(Expression::Block(block))
             }
-            Token::Keyword(Keyword::If) => {
-                self.position += 1;
-                let condition = self.parse_expression(false)?; // Don't allow top-level struct in if condition
-                let then_block = self.parse_block()?;
-                let else_block = if self.advance_if(Token::Keyword(Keyword::Else)) {
-                    Some(self.parse_block()?)
-                } else {
-                    None
-                };
-                Ok(Expression::If {
-                    condition: Box::new(condition),
-                    then_block,
-                    else_block,
-                })
-            }
-            Token::Keyword(Keyword::Loop) => {
-                self.position += 1;
-                let body = self.parse_block()?;
-                Ok(Expression::Loop { body })
-            }
+            Token::Keyword(Keyword::If) => self.parse_if_expr(),
+            Token::Keyword(Keyword::Loop) => self.parse_loop(),
+
             token => Err(ParserError::UnexpectedToken(token.clone())),
         }
+    }
+
+    fn parse_if_expr(&mut self) -> Result<Expression, ParserError> {
+        self.expect_keyword(Keyword::If)?;
+        let condition = self.parse_expression(false)?; // Don't allow top-level struct in if condition
+        let then_block = self.parse_block()?;
+        let else_block = if self.advance_if(Token::Keyword(Keyword::Else)) {
+            Some(self.parse_block()?)
+        } else {
+            None
+        };
+        Ok(Expression::If {
+            condition: Box::new(condition),
+            then_block,
+            else_block,
+        })
+    }
+
+    fn parse_loop(&mut self) -> Result<Expression, ParserError> {
+        self.expect_keyword(Keyword::Loop)?;
+        let body = self.parse_block()?;
+        Ok(Expression::Loop { body })
     }
 }
 
