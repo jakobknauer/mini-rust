@@ -11,6 +11,7 @@ opt-18 -passes=mem2reg,simplifycfg -S "examples/example.ll" -o "examples/example
 # Compile unoptimized .ll to executable
 clang-18 examples/*.ll -o examples/example.out
 
+set +e
 # Run executable
 ./examples/example.out
 
