@@ -46,7 +46,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let loc_id = self.resolve_name_to_location(name);
 
         if let Some(loc_id) = loc_id {
-            Ok(mlr::Expression::Var(loc_id))
+            Ok(mlr::Expression::Load(loc_id))
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
             Ok(mlr::Expression::Function(fn_id))
         } else {
@@ -76,27 +76,41 @@ impl<'a> mlr::MlrBuilder<'a> {
         })
     }
 
-    pub fn insert_assign_stmt(&mut self, loc: mlr::LocId, expr: mlr::ExprId) -> mlr::build::Result<mlr::StmtId> {
-        let expr_type = self.output.expr_types.get(&expr).expect("type of expr should be known");
+    pub fn insert_assign_stmt(&mut self, place: mlr::ExprId, value: mlr::ExprId) -> mlr::build::Result<mlr::StmtId> {
+        let value_type = self
+            .output
+            .expr_types
+            .get(&value)
+            .expect("type of value should be known");
 
-        match self.output.loc_types.entry(loc) {
+        let place_expr = self
+            .output
+            .expressions
+            .get(&place)
+            .expect("expression should be registered");
+
+        let mlr::Expression::Loc(loc_id) = place_expr else {
+            return Err(super::mlr::MlrBuilderError::NotAPlace(place));
+        };
+
+        match self.output.loc_types.entry(*loc_id) {
             Entry::Occupied(occupied_entry) => {
                 let loc_type = occupied_entry.get();
-                if !self.ctxt.type_registry.types_equal(expr_type, loc_type) {
+                if !self.ctxt.type_registry.types_equal(value_type, loc_type) {
                     return mlr::build::TypeError::ReassignTypeMismatch {
-                        loc,
+                        loc: *loc_id,
                         expected: *loc_type,
-                        actual: *expr_type,
+                        actual: *value_type,
                     }
                     .into();
                 }
             }
             Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(*expr_type);
+                vacant_entry.insert(*value_type);
             }
         };
 
-        let stmt = mlr::Statement::Assign { loc, value: expr };
+        let stmt = mlr::Statement::Assign { loc: place, value };
         self.insert_stmt(stmt)
     }
 

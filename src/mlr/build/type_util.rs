@@ -21,7 +21,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         match expr {
             Block(block) => self.infer_type_of_block(block),
             Constant(constant) => self.infer_type_of_constant(constant),
-            Var(loc_id) => self.infer_type_of_location(loc_id),
+            Load(loc_id) => self.infer_type_of_location(loc_id),
+            Loc(loc_id) => self.infer_type_of_location(loc_id), // Change to reference of that type later
             AddressOf(..) => todo!(),
             Call { callable, args } => self.infer_type_of_call(*callable, args),
             Function(fn_id) => self.infer_type_of_function(*fn_id),
@@ -63,7 +64,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(*self
             .output
             .loc_types
-            .get(&loc_id)
+            .get(loc_id)
             .expect("type of loc_id should be registered"))
     }
 

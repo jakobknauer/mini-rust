@@ -39,7 +39,7 @@ impl Mlr {
 
 #[derive(Debug)]
 pub enum Statement {
-    Assign { loc: LocId, value: ExprId },
+    Assign { loc: ExprId, value: ExprId },
     Return { value: LocId },
     Break,
 }
@@ -48,7 +48,8 @@ pub enum Statement {
 pub enum Expression {
     Block(Block),
     Constant(Constant),
-    Var(LocId),
+    Load(LocId),
+    Loc(LocId),
     AddressOf(LocId),
     Call {
         callable: LocId,

@@ -184,10 +184,11 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let stmt = self.mlr.statements.get(_stmt).unwrap();
         match stmt {
             mlr::Statement::Assign { loc, value } => {
-                if !self.locs.contains_key(loc) {
-                    self.build_alloca_for_loc(loc)?;
-                }
-                let address = *self.locs.get(loc).ok_or(FnGeneratorError)?;
+                // if !self.locs.contains_key(loc) {
+                //     self.build_alloca_for_loc(loc)?;
+                // }
+                // let address = *self.locs.get(loc).ok_or(FnGeneratorError)?;
+                let address = self.build_expression(loc)?.try_into().map_err(|_| FnGeneratorError)?;
                 let value = self.build_expression(value)?;
                 self.builder.build_store(address, value)?;
             }
@@ -207,7 +208,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         match self.mlr.expressions.get(expr).ok_or(FnGeneratorError)? {
             mlr::Expression::Block(block) => self.build_block(block),
             mlr::Expression::Constant(constant) => self.build_constant(constant),
-            mlr::Expression::Var(loc_id) => self.build_var(loc_id),
+            mlr::Expression::Load(loc_id) => self.build_var(loc_id),
+            mlr::Expression::Loc(loc_id) => self.build_loc_expr(loc_id),
             mlr::Expression::Function(fn_id) => self.build_global_function(fn_id),
             mlr::Expression::Call { callable, args } => self.build_call(callable, args),
             mlr::Expression::If(if_) => self.build_if(if_, expr),
@@ -369,5 +371,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .build_load(iw_type, struct_value_ptr, "loaded_struct_value")?;
 
         Ok(struct_value)
+    }
+
+    fn build_loc_expr(&mut self, loc_id: &mlr::LocId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        if !self.locs.contains_key(loc_id) {
+            self.build_alloca_for_loc(loc_id).map(|addr| addr.as_basic_value_enum())
+        } else {
+            let address = *self.locs.get(loc_id).ok_or(FnGeneratorError)?;
+            Ok(address.as_basic_value_enum())
+        }
     }
 }

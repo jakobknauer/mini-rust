@@ -6,6 +6,7 @@ pub enum MlrBuilderError {
     UnresolvableSymbol { name: String },
     UnknownPrimitiveType,
     TypeError(TypeError),
+    NotAPlace(mlr::ExprId),
 }
 
 #[derive(Debug)]

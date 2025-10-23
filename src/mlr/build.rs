@@ -196,14 +196,9 @@ impl<'a> MlrBuilder<'a> {
 
     fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::Expression> {
         let assign_stmt = {
-            let assign_loc = match target {
-                hlr::Expression::Variable(name) => self
-                    .resolve_name_to_location(name)
-                    .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?,
-                _ => unimplemented!("Only variables are supported as assignment targets."),
-            };
+            let loc = self.build_place_expression(target)?;
             let value = self.build_expression(value)?;
-            self.insert_assign_stmt(assign_loc, value)?
+            self.insert_assign_stmt(loc, value)?
         };
 
         let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
@@ -287,10 +282,18 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_let_statement(&mut self, name: &str, value: &hlr::Expression) -> Result<mlr::StmtId> {
+        let value = self.build_expression(value)?;
+
         let loc = self.get_next_loc_id();
         self.current_scope().vars.insert(name.to_string(), loc);
-        let value = self.build_expression(value)?;
-        self.insert_assign_stmt(loc, value)
+        self.output
+            .loc_types
+            .insert(loc, *self.output.expr_types.get(&value).unwrap());
+
+        let place_expr = mlr::Expression::Loc(loc);
+        let place_expr = self.insert_expr(place_expr)?;
+
+        self.insert_assign_stmt(place_expr, value)
     }
 
     fn build_expression_statement(&mut self, expression: &hlr::Expression) -> Result<mlr::StmtId> {
@@ -358,5 +361,19 @@ impl<'a> MlrBuilder<'a> {
             statements,
             output: struct_expr_loc,
         }))
+    }
+
+    fn build_place_expression(&mut self, target: &hlr::Expression) -> Result<mlr::ExprId> {
+        match target {
+            hlr::Expression::Variable(name) => {
+                let loc = self
+                    .resolve_name_to_location(name)
+                    .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
+
+                let place_expr = mlr::Expression::Loc(loc);
+                self.insert_expr(place_expr)
+            }
+            _ => unimplemented!("Only variables are supported as assignment targets."),
+        }
     }
 }

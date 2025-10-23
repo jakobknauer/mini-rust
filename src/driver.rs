@@ -141,6 +141,7 @@ fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &ctxt
         MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
         UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
         UnknownPrimitiveType => "Unknown primitive type".to_string(),
+        NotAPlace(expr_id) => format!("Expression {:?} is not a place", expr_id),
     }
 }
 

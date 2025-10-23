@@ -88,11 +88,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let loc_type = self
                         .mlr
                         .expect("self.mlr should not be empty")
-                        .loc_types
+                        .expr_types
                         .get(loc)
                         .expect("local should have a type");
                     let type_name = self.ctxt.type_registry.get_string_rep(loc_type);
-                    write!(self.writer, "let {}: {} = ", loc, type_name)?;
+
+                    write!(self.writer, "let ")?;
+                    self.print_expression(*loc)?;
+                    write!(self.writer, ": {} = ", type_name)?;
                     self.print_expression(*value)?;
                     writeln!(self.writer, ";")
                 }
@@ -124,8 +127,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     Constant::Bool(b) => write!(self.writer, "const {}", b),
                     Constant::Unit => write!(self.writer, "const ()"),
                 },
-                Expression::Var(loc) => {
+                Expression::Load(loc) => {
                     write!(self.writer, "copy {}", loc)
+                }
+                Expression::Loc(loc) => {
+                    write!(self.writer, "loc {}", loc)
                 }
                 Expression::AddressOf(loc) => {
                     write!(self.writer, "&{}", loc)
