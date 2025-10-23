@@ -111,17 +111,9 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name).unwrap();
 
         let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
-        let mlr = match mlr_builder.build() {
-            Ok(mlr) => mlr,
-            Err(mlr::MlrBuilderError::TypeError(err)) => return Err(print_type_error(&function.name, err, ctxt)),
-            Err(mlr::MlrBuilderError::MissingOperatorImpl { name }) => {
-                return Err(format!("Missing operator implementation for {}", name));
-            }
-            Err(mlr::MlrBuilderError::UnresolvableSymbol { name }) => {
-                return Err(format!("Unresolvable symbol {}", name));
-            }
-            Err(mlr::MlrBuilderError::UnknownPrimitiveType) => return Err("Unknown primitive type".to_string()),
-        };
+        let mlr = mlr_builder
+            .build()
+            .map_err(|err| print_mlr_builder_error(&function.name, err, ctxt))?;
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
     }
@@ -130,25 +122,40 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
 }
 
 fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
+    use hlr::ParserError::*;
+
     match err {
-        hlr::ParserError::LexerError(lexer_error) => format!("Lexer error at position {}", lexer_error.position),
-        hlr::ParserError::UnexpectedToken(token) => format!("Parser error: Unexpected token {:?}", token),
-        hlr::ParserError::UndelimitedStatement => "Parser error: Undelimited statement".to_string(),
-        hlr::ParserError::InvalidLiteral => "Parser error: Invalid literal".to_string(),
-        hlr::ParserError::UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
+        LexerError(lexer_error) => format!("Lexer error at position {}", lexer_error.position),
+        UnexpectedToken(token) => format!("Parser error: Unexpected token {:?}", token),
+        UndelimitedStatement => "Parser error: Undelimited statement".to_string(),
+        InvalidLiteral => "Parser error: Invalid literal".to_string(),
+        UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
     }
 }
 
-fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> String {
-    let desc = match err {
-        mlr::TypeError::ReassignTypeMismatch { loc, expected, actual } => format!(
+fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &ctxt::Ctxt) -> String {
+    use mlr::MlrBuilderError::*;
+
+    match err {
+        TypeError(err) => print_type_error(fn_name, err, ctxt),
+        MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
+        UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
+        UnknownPrimitiveType => "Unknown primitive type".to_string(),
+    }
+}
+
+fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> String {
+    use mlr::TypeError::*;
+
+    let msg = match err {
+        ReassignTypeMismatch { loc, expected, actual } => format!(
             "Cannot reassign location {:?} of type '{}' with value of type '{}'",
             loc,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::ExpressionNotCallable => "Expression is not callable".to_string(),
-        mlr::TypeError::CallArgumentTypeMismatch {
+        ExpressionNotCallable => "Expression is not callable".to_string(),
+        CallArgumentTypeMismatch {
             index,
             expected,
             actual,
@@ -158,24 +165,24 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> Strin
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::CallArgumentCountMismatch { expected, actual } => {
+        CallArgumentCountMismatch { expected, actual } => {
             format!("Argument count mismatch: expected {}, got {}", expected, actual)
         }
-        mlr::TypeError::IfConditionNotBoolean { actual } => format!(
+        IfConditionNotBoolean { actual } => format!(
             "If condition must be of type 'bool', got '{}'",
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::IfBranchTypeMismatch { then_type, else_type } => format!(
+        IfBranchTypeMismatch { then_type, else_type } => format!(
             "If branches must have the same type: then is '{}', else is '{}'",
             ctxt.type_registry.get_string_rep(&then_type),
             ctxt.type_registry.get_string_rep(&else_type)
         ),
-        mlr::TypeError::ReturnTypeMismatch { expected, actual } => format!(
+        ReturnTypeMismatch { expected, actual } => format!(
             "Return type mismatch: expected '{}', got '{}'",
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        mlr::TypeError::OperatorResolutionFailed {
+        OperatorResolutionFailed {
             operator,
             operand_types: (left, right),
         } => format!(
@@ -184,20 +191,20 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> Strin
             ctxt.type_registry.get_string_rep(&left),
             ctxt.type_registry.get_string_rep(&right)
         ),
-        mlr::TypeError::UnresolvableTypeName { struct_name } => {
+        UnresolvableTypeName { struct_name } => {
             format!("Cannot find struct type with name '{}'", struct_name)
         }
-        mlr::TypeError::NotAStruct { type_id } => format!(
+        NotAStruct { type_id } => format!(
             "Type '{}' is not a struct type",
             ctxt.type_registry.get_string_rep(&type_id)
         ),
-        mlr::TypeError::StructExpressionMissingFields { missing_fields } => {
+        StructExpressionMissingFields { missing_fields } => {
             format!("Struct expression is missing fields: {}", missing_fields.join(", "))
         }
-        mlr::TypeError::StructExpressionExtraFields { extra_fields } => {
+        StructExpressionExtraFields { extra_fields } => {
             format!("Struct expression has extra fields: {}", extra_fields.join(", "))
         }
-        mlr::TypeError::StructExpressionTypeMismatch {
+        StructExpressionTypeMismatch {
             field_name,
             expected,
             actual,
@@ -208,7 +215,7 @@ fn print_type_error(name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> Strin
             ctxt.type_registry.get_string_rep(&actual)
         ),
     };
-    format!("Type error in function '{}': {}", name, desc)
+    format!("Type error in function '{}': {}", fn_name, msg)
 }
 
 fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
