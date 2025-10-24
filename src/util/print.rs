@@ -93,7 +93,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         .expect("local should have a type");
                     let type_name = self.ctxt.type_registry.get_string_rep(loc_type);
 
-                    write!(self.writer, "let ")?;
+                    write!(self.writer, "assign ")?;
                     self.print_expression(*loc)?;
                     write!(self.writer, ": {} = ", type_name)?;
                     self.print_expression(*value)?;
@@ -131,7 +131,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "copy {}", loc)
                 }
                 Expression::Loc(loc) => {
-                    write!(self.writer, "loc {}", loc)
+                    write!(self.writer, "{}", loc)
                 }
                 Expression::AddressOf(loc) => {
                     write!(self.writer, "&{}", loc)
