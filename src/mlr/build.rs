@@ -282,18 +282,9 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_let_statement(&mut self, name: &str, value: &hlr::Expression) -> Result<mlr::StmtId> {
-        let value = self.build_expression(value)?;
-
-        let loc = self.get_next_loc_id();
-        self.current_scope().vars.insert(name.to_string(), loc);
-        self.output
-            .loc_types
-            .insert(loc, *self.output.expr_types.get(&value).unwrap());
-
-        let place_expr = mlr::Expression::Loc(loc);
-        let place_expr = self.insert_expr(place_expr)?;
-
-        self.insert_assign_stmt(place_expr, value)
+        let (loc, stmt) = assign_to_new_loc!(self, self.build_expression(value)?);
+        self.current_scope().vars.insert(name.to_owned(), loc);
+        Ok(stmt)
     }
 
     fn build_expression_statement(&mut self, expression: &hlr::Expression) -> Result<mlr::StmtId> {
@@ -373,7 +364,7 @@ impl<'a> MlrBuilder<'a> {
                 let place_expr = mlr::Expression::Loc(loc);
                 self.insert_expr(place_expr)
             }
-            _ => unimplemented!("Only variables are supported as assignment targets."),
+            _ => unimplemented!("Only variables are supported as place expressions."),
         }
     }
 }

@@ -184,10 +184,6 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let stmt = self.mlr.statements.get(_stmt).unwrap();
         match stmt {
             mlr::Statement::Assign { loc, value } => {
-                // if !self.locs.contains_key(loc) {
-                //     self.build_alloca_for_loc(loc)?;
-                // }
-                // let address = *self.locs.get(loc).ok_or(FnGeneratorError)?;
                 let address = self.build_expression(loc)?.try_into().map_err(|_| FnGeneratorError)?;
                 let value = self.build_expression(value)?;
                 self.builder.build_store(address, value)?;
