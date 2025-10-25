@@ -90,9 +90,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         })
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::ValId) -> mlr::build::Result<mlr::StmtId> {
-        let mlr::Place::Local(loc_id) = place;
-        let place = self.insert_place(place)?;
+    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> mlr::build::Result<mlr::StmtId> {
+        let mlr::Place::Local(loc_id) = *self.output.places.get(&place).expect("place should be valid");
 
         let value_type = self
             .output

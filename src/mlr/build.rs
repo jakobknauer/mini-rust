@@ -146,7 +146,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::Place> {
+    fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::PlaceId> {
         use hlr::Expression::*;
 
         let place = match expr {
@@ -160,7 +160,7 @@ impl<'a> MlrBuilder<'a> {
             _ => panic!("Only variables are supported as places."),
         };
 
-        Ok(place)
+        self.insert_place(place)
     }
 
     fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Value> {
