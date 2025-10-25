@@ -141,7 +141,6 @@ fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &ctxt
         MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
         UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
         UnknownPrimitiveType => "Unknown primitive type".to_string(),
-        NotAPlace(expr_id) => format!("Expression {:?} is not a place", expr_id),
     }
 }
 
@@ -155,7 +154,7 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),
-        ExpressionNotCallable => "Expression is not callable".to_string(),
+        ValNotCallable => "Val is not callable".to_string(),
         CallArgumentTypeMismatch {
             index,
             expected,
@@ -199,13 +198,13 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             "Type '{}' is not a struct type",
             ctxt.type_registry.get_string_rep(&type_id)
         ),
-        StructExpressionMissingFields { missing_fields } => {
-            format!("Struct expression is missing fields: {}", missing_fields.join(", "))
+        StructValMissingFields { missing_fields } => {
+            format!("Struct val is missing fields: {}", missing_fields.join(", "))
         }
-        StructExpressionExtraFields { extra_fields } => {
-            format!("Struct expression has extra fields: {}", extra_fields.join(", "))
+        StructValExtraFields { extra_fields } => {
+            format!("Struct val has extra fields: {}", extra_fields.join(", "))
         }
-        StructExpressionTypeMismatch {
+        StructValTypeMismatch {
             field_name,
             expected,
             actual,

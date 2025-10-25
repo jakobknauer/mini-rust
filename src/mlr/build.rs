@@ -26,7 +26,7 @@ pub struct MlrBuilder<'a> {
     ctxt: &'a mut ctxt::Ctxt,
     output: mlr::Mlr,
     scopes: VecDeque<Scope>,
-    next_expr_id: mlr::ExprId,
+    next_val_id: mlr::ValId,
     next_stmt_id: mlr::StmtId,
     next_loc_id: mlr::LocId,
 }
@@ -49,7 +49,7 @@ impl<'a> MlrBuilder<'a> {
             ctxt,
             output: mlr::Mlr::new(),
             scopes: VecDeque::new(),
-            next_expr_id: mlr::ExprId(0),
+            next_val_id: mlr::ValId(0),
             next_stmt_id: mlr::StmtId(0),
             next_loc_id: mlr::LocId(0),
         }
@@ -107,7 +107,7 @@ impl<'a> MlrBuilder<'a> {
         let (output_loc, output_stmt) = assign_to_new_loc!(
             self,
             match &block.return_expression {
-                Some(expr) => self.build_expression(expr)?,
+                Some(expr) => self.lower_to_val(expr)?,
                 None => self.create_unit_value()?,
             }
         );
@@ -122,35 +122,50 @@ impl<'a> MlrBuilder<'a> {
         })
     }
 
-    fn build_expression(&mut self, expr: &hlr::Expression) -> Result<mlr::ExprId> {
-        let expr = match expr {
+    fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::ValId> {
+        let val = match expr {
             hlr::Expression::Literal(literal) => self.build_literal(literal)?,
             hlr::Expression::Variable(name) => self.build_variable(name)?,
             hlr::Expression::BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?,
             hlr::Expression::Assignment { target, value } => self.build_assignment(target, value)?,
             hlr::Expression::FunctionCall { function, arguments } => self.build_function_call(function, arguments)?,
-            hlr::Expression::StructExpr { struct_name, fields } => self.build_struct_expression(struct_name, fields)?,
+            hlr::Expression::StructExpr { struct_name, fields } => self.build_struct_val(struct_name, fields)?,
             hlr::Expression::If {
                 condition,
                 then_block,
                 else_block,
             } => self.build_if(condition, then_block, else_block.as_ref())?,
             hlr::Expression::Loop { body } => self.build_loop(body)?,
-            hlr::Expression::Block(block) => mlr::Expression::Block(self.build_block(block)?),
+            hlr::Expression::Block(block) => mlr::Value::Block(self.build_block(block)?),
         };
 
-        self.insert_expr(expr)
+        self.insert_val(val)
     }
 
-    fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Expression> {
-        let expr = match literal {
-            hlr::Literal::Int(n) => mlr::Expression::Constant(mlr::Constant::Int(*n)),
-            hlr::Literal::Bool(b) => mlr::Expression::Constant(mlr::Constant::Bool(*b)),
+    fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::Place> {
+        let place = match expr {
+            hlr::Expression::Variable(name) => {
+                let loc = self
+                    .resolve_name_to_location(name)
+                    .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
+
+                mlr::Place::Local(loc)
+            }
+            _ => panic!("Only variables are supported as places."),
         };
-        Ok(expr)
+
+        Ok(place)
     }
 
-    fn build_variable(&mut self, name: &str) -> Result<mlr::Expression> {
+    fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Value> {
+        let val = match literal {
+            hlr::Literal::Int(n) => mlr::Value::Constant(mlr::Constant::Int(*n)),
+            hlr::Literal::Bool(b) => mlr::Value::Constant(mlr::Constant::Bool(*b)),
+        };
+        Ok(val)
+    }
+
+    fn build_variable(&mut self, name: &str) -> Result<mlr::Value> {
         self.resolve_name(name)
     }
 
@@ -159,10 +174,10 @@ impl<'a> MlrBuilder<'a> {
         left: &hlr::Expression,
         operator: &hlr::BinaryOperator,
         right: &hlr::Expression,
-    ) -> Result<mlr::Expression> {
-        let (left_loc, left_stmt) = assign_to_new_loc!(self, self.build_expression(left)?);
+    ) -> Result<mlr::Value> {
+        let (left_loc, left_stmt) = assign_to_new_loc!(self, self.lower_to_val(left)?);
 
-        let (right_loc, right_stmt) = assign_to_new_loc!(self, self.build_expression(right)?);
+        let (right_loc, right_stmt) = assign_to_new_loc!(self, self.lower_to_val(right)?);
 
         let (op_loc, op_stmt) = assign_to_new_loc!(self, {
             let left_type = self
@@ -176,57 +191,53 @@ impl<'a> MlrBuilder<'a> {
                 .get(&right_loc)
                 .expect("type of right_loc should be registered");
             let fn_id = self.resolve_operator(operator, (*left_type, *right_type))?;
-            let init = mlr::Expression::Function(fn_id);
-            self.insert_expr(init)?
+            let init = mlr::Value::Function(fn_id);
+            self.insert_val(init)?
         });
 
         let (call_loc, call_stmt) = assign_to_new_loc!(self, {
-            let init = mlr::Expression::Call {
+            let init = mlr::Value::Call {
                 callable: op_loc,
                 args: vec![left_loc, right_loc],
             };
-            self.insert_expr(init)?
+            self.insert_val(init)?
         });
 
-        Ok(mlr::Expression::Block(mlr::Block {
+        Ok(mlr::Value::Block(mlr::Block {
             statements: vec![left_stmt, right_stmt, op_stmt, call_stmt],
             output: call_loc,
         }))
     }
 
-    fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::Expression> {
+    fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::Value> {
         let assign_stmt = {
-            let loc = self.build_place_expression(target)?;
-            let value = self.build_expression(value)?;
+            let loc = self.lower_to_place(target)?;
+            let value = self.lower_to_val(value)?;
             self.insert_assign_stmt(loc, value)?
         };
 
         let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
 
-        Ok(mlr::Expression::Block(mlr::Block {
+        Ok(mlr::Value::Block(mlr::Block {
             statements: vec![assign_stmt, unit_stmt],
             output: unit_loc,
         }))
     }
 
-    fn build_function_call(
-        &mut self,
-        function: &hlr::Expression,
-        arguments: &[hlr::Expression],
-    ) -> Result<mlr::Expression> {
-        let (function_loc, function_stmt) = assign_to_new_loc!(self, self.build_expression(function)?);
+    fn build_function_call(&mut self, function: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::Value> {
+        let (function_loc, function_stmt) = assign_to_new_loc!(self, self.lower_to_val(function)?);
 
         let (arg_locs, arg_stmts): (Vec<_>, Vec<_>) = arguments
             .iter()
-            .map(|arg| Ok(assign_to_new_loc!(self, self.build_expression(arg)?)))
+            .map(|arg| Ok(assign_to_new_loc!(self, self.lower_to_val(arg)?)))
             .process_results(|it| it.unzip())?;
 
         let (call_loc, call_stmt) = assign_to_new_loc!(self, {
-            let init = mlr::Expression::Call {
+            let init = mlr::Value::Call {
                 callable: function_loc,
                 args: arg_locs,
             };
-            self.insert_expr(init)?
+            self.insert_val(init)?
         });
 
         let statements: Vec<_> = std::iter::once(function_stmt)
@@ -234,7 +245,7 @@ impl<'a> MlrBuilder<'a> {
             .chain(std::iter::once(call_stmt))
             .collect();
 
-        Ok(mlr::Expression::Block(mlr::Block {
+        Ok(mlr::Value::Block(mlr::Block {
             statements,
             output: call_loc,
         }))
@@ -245,11 +256,11 @@ impl<'a> MlrBuilder<'a> {
         condition: &hlr::Expression,
         then_block: &hlr::Block,
         else_block: Option<&hlr::Block>,
-    ) -> Result<mlr::Expression> {
-        let (cond_loc, cond_stmt) = assign_to_new_loc!(self, self.build_expression(condition)?);
+    ) -> Result<mlr::Value> {
+        let (cond_loc, cond_stmt) = assign_to_new_loc!(self, self.lower_to_val(condition)?);
 
         let (if_loc, if_stmt) = assign_to_new_loc!(self, {
-            let init = mlr::Expression::If(mlr::If {
+            let init = mlr::Value::If(mlr::If {
                 condition: cond_loc,
                 then_block: self.build_block(then_block)?,
                 else_block: match else_block {
@@ -257,18 +268,18 @@ impl<'a> MlrBuilder<'a> {
                     None => self.create_unit_block()?,
                 },
             });
-            self.insert_expr(init)?
+            self.insert_val(init)?
         });
 
-        Ok(mlr::Expression::Block(mlr::Block {
+        Ok(mlr::Value::Block(mlr::Block {
             statements: vec![cond_stmt, if_stmt],
             output: if_loc,
         }))
     }
 
-    fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::Expression> {
+    fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::Value> {
         let body = self.build_block(body)?;
-        Ok(mlr::Expression::Loop { body })
+        Ok(mlr::Value::Loop { body })
     }
 
     fn build_statement(&mut self, stmt: &hlr::Statement) -> Result<mlr::StmtId> {
@@ -282,29 +293,29 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_let_statement(&mut self, name: &str, value: &hlr::Expression) -> Result<mlr::StmtId> {
-        let (loc, stmt) = assign_to_new_loc!(self, self.build_expression(value)?);
+        let (loc, stmt) = assign_to_new_loc!(self, self.lower_to_val(value)?);
         self.current_scope().vars.insert(name.to_owned(), loc);
         Ok(stmt)
     }
 
     fn build_expression_statement(&mut self, expression: &hlr::Expression) -> Result<mlr::StmtId> {
-        let (_, stmt) = assign_to_new_loc!(self, self.build_expression(expression)?);
+        let (_, stmt) = assign_to_new_loc!(self, self.lower_to_val(expression)?);
         Ok(stmt)
     }
 
     fn build_return_statement(&mut self, expression: Option<&hlr::Expression>) -> Result<mlr::StmtId> {
-        let (expr_loc, expr_stmt) = match expression {
-            Some(expression) => assign_to_new_loc!(self, self.build_expression(expression)?),
+        let (val_loc, val_stmt) = match expression {
+            Some(expression) => assign_to_new_loc!(self, self.lower_to_val(expression)?),
             None => assign_to_new_loc!(self, self.create_unit_value()?),
         };
 
-        let return_stmt = self.insert_return_stmt(expr_loc)?;
+        let return_stmt = self.insert_return_stmt(val_loc)?;
 
-        let block = mlr::Expression::Block(mlr::Block {
-            statements: vec![expr_stmt, return_stmt],
-            output: expr_loc,
+        let block = mlr::Value::Block(mlr::Block {
+            statements: vec![val_stmt, return_stmt],
+            output: val_loc,
         });
-        let block = self.insert_expr(block)?;
+        let block = self.insert_val(block)?;
 
         let (_, block_stmt) = assign_to_new_loc!(self, block);
         Ok(block_stmt)
@@ -314,11 +325,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_stmt(mlr::Statement::Break)
     }
 
-    fn build_struct_expression(
-        &mut self,
-        struct_name: &str,
-        fields: &[(String, hlr::Expression)],
-    ) -> Result<mlr::Expression> {
+    fn build_struct_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expression)]) -> Result<mlr::Value> {
         let type_id = self
             .ctxt
             .type_registry
@@ -330,41 +337,28 @@ impl<'a> MlrBuilder<'a> {
         let (field_init_locs, field_init_stmts): (Vec<_>, Vec<_>) = fields
             .iter()
             .map(|(field_name, expr)| {
-                let (field_loc, field_stmt) = assign_to_new_loc!(self, self.build_expression(expr)?);
+                let (field_loc, field_stmt) = assign_to_new_loc!(self, self.lower_to_val(expr)?);
                 Ok(((field_name.clone(), field_loc), field_stmt))
             })
             .process_results(|it| it.unzip())?;
 
-        let (struct_expr_loc, struct_expr_stmt) = assign_to_new_loc!(self, {
-            let struct_expr = mlr::Expression::Struct {
+        let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
+            let struct_val = mlr::Value::Struct {
                 type_id,
                 field_initializers: field_init_locs,
             };
-            self.insert_expr(struct_expr)?
+            self.insert_val(struct_val)?
         });
 
         let statements: Vec<_> = field_init_stmts
             .into_iter()
-            .chain(std::iter::once(struct_expr_stmt))
+            .chain(std::iter::once(struct_val_stmt))
             .collect();
 
-        Ok(mlr::Expression::Block(mlr::Block {
+        Ok(mlr::Value::Block(mlr::Block {
             statements,
-            output: struct_expr_loc,
+            output: struct_val_loc,
         }))
     }
 
-    fn build_place_expression(&mut self, target: &hlr::Expression) -> Result<mlr::ExprId> {
-        match target {
-            hlr::Expression::Variable(name) => {
-                let loc = self
-                    .resolve_name_to_location(name)
-                    .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
-
-                let place_expr = mlr::Expression::Loc(loc);
-                self.insert_expr(place_expr)
-            }
-            _ => unimplemented!("Only variables are supported as place expressions."),
-        }
-    }
 }

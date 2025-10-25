@@ -83,20 +83,19 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match stmt {
             Some(stmt) => match stmt {
-                Statement::Assign { loc, value } => {
+                Statement::Assign { place, value } => {
                     self.indent()?;
+                    let Place::Local(loc_id) = place;
                     let loc_type = self
                         .mlr
                         .expect("self.mlr should not be empty")
-                        .expr_types
-                        .get(loc)
+                        .loc_types
+                        .get(loc_id)
                         .expect("local should have a type");
                     let type_name = self.ctxt.type_registry.get_string_rep(loc_type);
 
-                    write!(self.writer, "assign ")?;
-                    self.print_expression(*loc)?;
-                    write!(self.writer, ": {} = ", type_name)?;
-                    self.print_expression(*value)?;
+                    write!(self.writer, "assign {}: {} = ", loc_id, type_name)?;
+                    self.print_val(*value)?;
                     writeln!(self.writer, ";")
                 }
                 Statement::Return { value } => {
@@ -112,31 +111,24 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn print_expression(&mut self, expr_id: ExprId) -> std::result::Result<(), std::io::Error> {
-        let expr = &self
-            .mlr
-            .expect("self.mlr should not be empty")
-            .expressions
-            .get(&expr_id);
+    fn print_val(&mut self, val_id: ValId) -> std::result::Result<(), std::io::Error> {
+        let val = &self.mlr.expect("self.mlr should not be empty").vals.get(&val_id);
 
-        match expr {
-            Some(expr) => match expr {
-                Expression::Block(block) => self.print_block(block),
-                Expression::Constant(constant) => match constant {
+        match val {
+            Some(val) => match val {
+                Value::Block(block) => self.print_block(block),
+                Value::Constant(constant) => match constant {
                     Constant::Int(i) => write!(self.writer, "const {}", i),
                     Constant::Bool(b) => write!(self.writer, "const {}", b),
                     Constant::Unit => write!(self.writer, "const ()"),
                 },
-                Expression::Load(loc) => {
+                Value::Use(loc) => {
                     write!(self.writer, "copy {}", loc)
                 }
-                Expression::Loc(loc) => {
-                    write!(self.writer, "{}", loc)
-                }
-                Expression::AddressOf(loc) => {
+                Value::AddressOf(loc) => {
                     write!(self.writer, "&{}", loc)
                 }
-                Expression::Call { callable, args } => {
+                Value::Call { callable, args } => {
                     write!(self.writer, "call {}(", callable)?;
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
@@ -146,14 +138,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     }
                     write!(self.writer, ")")
                 }
-                Expression::Function(fn_id) => {
+                Value::Function(fn_id) => {
                     if let Some(func) = self.ctxt.function_registry.get_signature_by_id(fn_id) {
                         write!(self.writer, "fn {}", func.name)
                     } else {
                         write!(self.writer, "<fn id {}>", fn_id.0)
                     }
                 }
-                Expression::If(If {
+                Value::If(If {
                     condition,
                     then_block,
                     else_block,
@@ -163,11 +155,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, " else ")?;
                     self.print_block(else_block)
                 }
-                Expression::Loop { body } => {
+                Value::Loop { body } => {
                     write!(self.writer, "loop ")?;
                     self.print_block(body)
                 }
-                Expression::Struct {
+                Value::Struct {
                     type_id,
                     field_initializers,
                 } => {
@@ -184,7 +176,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "}}")
                 }
             },
-            None => write!(self.writer, "<expr id {}>", expr_id.0),
+            None => write!(self.writer, "<val id {}>", val_id.0),
         }
     }
 

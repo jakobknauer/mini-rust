@@ -9,20 +9,19 @@ use crate::{
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn infer_type(&mut self, expr: mlr::ExprId) -> mlr::build::Result<TypeId> {
-        use mlr::Expression::*;
+    pub fn infer_type(&mut self, val: mlr::ValId) -> mlr::build::Result<TypeId> {
+        use mlr::Value::*;
 
-        let expr = self
+        let val = self
             .output
-            .expressions
-            .get(&expr)
-            .expect("infer_type should only be called with a valid ExprId");
+            .vals
+            .get(&val)
+            .expect("infer_type should only be called with a valid ValId");
 
-        match expr {
+        match val {
             Block(block) => self.infer_type_of_block(block),
             Constant(constant) => self.infer_type_of_constant(constant),
-            Load(loc_id) => self.infer_type_of_location(loc_id),
-            Loc(loc_id) => self.infer_type_of_location(loc_id), // Change to reference of that type later
+            Use(loc_id) => self.infer_type_of_location(loc_id),
             AddressOf(..) => todo!(),
             Call { callable, args } => self.infer_type_of_call(*callable, args),
             Function(fn_id) => self.infer_type_of_function(*fn_id),
@@ -89,7 +88,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             return_type,
         } = callable_type
         else {
-            return TypeError::ExpressionNotCallable.into();
+            return TypeError::ValNotCallable.into();
         };
 
         let arg_types = args.iter().map(|arg_loc| {
@@ -195,7 +194,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .cloned()
             .collect();
         if !missing_fields.is_empty() {
-            return TypeError::StructExpressionMissingFields {
+            return TypeError::StructValMissingFields {
                 missing_fields: missing_fields.into_iter().map(|s| s.to_string()).collect(),
             }
             .into();
@@ -206,7 +205,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .cloned()
             .collect();
         if !extra_fields.is_empty() {
-            return TypeError::StructExpressionExtraFields {
+            return TypeError::StructValExtraFields {
                 extra_fields: extra_fields.into_iter().map(|s| s.to_string()).collect(),
             }
             .into();
@@ -230,7 +229,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .unwrap();
 
             if !self.ctxt.type_registry.types_equal(field_type_id, specified_type_id) {
-                return TypeError::StructExpressionTypeMismatch {
+                return TypeError::StructValTypeMismatch {
                     field_name: field_name.clone(),
                     expected: *field_type_id,
                     actual: *specified_type_id,

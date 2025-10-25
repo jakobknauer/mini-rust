@@ -3,11 +3,10 @@ macro_rules! assign_to_new_loc {
         let loc = $self.get_next_loc_id();
 
         let init = $init;
-        let init_type = *$self.output.expr_types.get(&init).unwrap();
+        let init_type = *$self.output.val_types.get(&init).unwrap();
 
         $self.output.loc_types.insert(loc, init_type);
-        let place = mlr::Expression::Loc(loc);
-        let place = $self.insert_expr(place)?;
+        let place = mlr::Place::Local(loc);
 
         let stmt = $self.insert_assign_stmt(place, init)?;
         (loc, stmt)

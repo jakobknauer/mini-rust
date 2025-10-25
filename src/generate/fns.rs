@@ -67,8 +67,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(iw_type)
     }
 
-    fn get_iw_type_of_expr(&mut self, expr_id: &mlr::ExprId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_type = self.mlr.expr_types.get(expr_id).ok_or(FnGeneratorError)?;
+    fn get_iw_type_of_val(&mut self, val_id: &mlr::ValId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
+        let mr_type = self.mlr.val_types.get(val_id).ok_or(FnGeneratorError)?;
         let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(FnGeneratorError)?;
         Ok(iw_type)
     }
@@ -183,10 +183,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_statement(&mut self, _stmt: &mlr::StmtId) -> FnGeneratorResult<()> {
         let stmt = self.mlr.statements.get(_stmt).unwrap();
         match stmt {
-            mlr::Statement::Assign { loc, value } => {
-                let address = self.build_expression(loc)?.try_into().map_err(|_| FnGeneratorError)?;
-                let value = self.build_expression(value)?;
-                self.builder.build_store(address, value)?;
+            mlr::Statement::Assign { place, value } => {
+                let place = self.build_place(place)?;
+                let value = self.build_val(value)?;
+                self.builder.build_store(place, value)?;
             }
             mlr::Statement::Return { value } => {
                 let ret_value = self.build_load_from_loc(value, "ret_value")?;
@@ -200,25 +200,36 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn build_expression(&mut self, expr: &mlr::ExprId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        match self.mlr.expressions.get(expr).ok_or(FnGeneratorError)? {
-            mlr::Expression::Block(block) => self.build_block(block),
-            mlr::Expression::Constant(constant) => self.build_constant(constant),
-            mlr::Expression::Load(loc_id) => self.build_var(loc_id),
-            mlr::Expression::Loc(loc_id) => self.build_loc_expr(loc_id),
-            mlr::Expression::Function(fn_id) => self.build_global_function(fn_id),
-            mlr::Expression::Call { callable, args } => self.build_call(callable, args),
-            mlr::Expression::If(if_) => self.build_if(if_, expr),
-            mlr::Expression::Loop { body } => self.build_loop(body),
-            mlr::Expression::Struct {
+    fn build_val(&mut self, val: &mlr::ValId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        match self.mlr.vals.get(val).ok_or(FnGeneratorError)? {
+            mlr::Value::Block(block) => self.build_block(block),
+            mlr::Value::Constant(constant) => self.build_constant(constant),
+            mlr::Value::Use(loc_id) => self.build_var(loc_id),
+            mlr::Value::Function(fn_id) => self.build_global_function(fn_id),
+            mlr::Value::Call { callable, args } => self.build_call(callable, args),
+            mlr::Value::If(if_) => self.build_if(if_, val),
+            mlr::Value::Loop { body } => self.build_loop(body),
+            mlr::Value::Struct {
                 type_id,
                 field_initializers,
-            } => self.build_struct_expr(type_id, field_initializers),
-            // mlr::Expression::AddressOf(loc_id) => todo!(),
+            } => self.build_struct_val(type_id, field_initializers),
+            // mlr::valession::AddressOf(loc_id) => todo!(),
             _ => {
                 // Simply return the integer constant 42 for now
                 let int_type = self.gtor.iw_ctxt.i32_type();
                 Ok(int_type.const_int(42, false).as_basic_value_enum())
+            }
+        }
+    }
+
+    fn build_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<PointerValue<'iw>> {
+        match place {
+            mlr::Place::Local(loc_id) => {
+                if !self.locs.contains_key(loc_id) {
+                    self.build_alloca_for_loc(loc_id)
+                } else {
+                    self.locs.get(loc_id).ok_or(FnGeneratorError).cloned()
+                }
             }
         }
     }
@@ -271,7 +282,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         call_site.try_as_basic_value().left().ok_or(FnGeneratorError)
     }
 
-    fn build_if(&mut self, if_: &mlr::If, expr_id: &mlr::ExprId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+    fn build_if(&mut self, if_: &mlr::If, val_id: &mlr::ValId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         // Build condition
         let cond_value = self
             .build_load_from_loc(&if_.condition, "if_condition")?
@@ -283,7 +294,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let merge_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "if_merge");
 
         // Allocate space for the result
-        let result_type = self.get_iw_type_of_expr(expr_id)?;
+        let result_type = self.get_iw_type_of_val(val_id)?;
         let result_address = self.build_alloca(result_type, "if_result")?;
 
         // Build conditional branch
@@ -325,7 +336,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.build_unit_value()
     }
 
-    fn build_struct_expr(
+    fn build_struct_val(
         &mut self,
         type_id: &mr_types::TypeId,
         field_initializers: &[(String, mlr::LocId)],
@@ -367,14 +378,5 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .build_load(iw_type, struct_value_ptr, "loaded_struct_value")?;
 
         Ok(struct_value)
-    }
-
-    fn build_loc_expr(&mut self, loc_id: &mlr::LocId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        if !self.locs.contains_key(loc_id) {
-            self.build_alloca_for_loc(loc_id).map(|addr| addr.as_basic_value_enum())
-        } else {
-            let address = *self.locs.get(loc_id).ok_or(FnGeneratorError)?;
-            Ok(address.as_basic_value_enum())
-        }
     }
 }

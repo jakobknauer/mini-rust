@@ -5,9 +5,9 @@ use crate::mlr;
 use crate::mlr::build::macros::assign_to_new_loc;
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn get_next_expr_id(&mut self) -> mlr::ExprId {
-        let id = self.next_expr_id;
-        self.next_expr_id.0 += 1;
+    pub fn get_next_val_id(&mut self) -> mlr::ValId {
+        let id = self.next_val_id;
+        self.next_val_id.0 += 1;
         id
     }
 
@@ -23,14 +23,14 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
-    pub fn insert_expr(&mut self, expr: mlr::Expression) -> mlr::build::Result<mlr::ExprId> {
-        let expr_id = self.get_next_expr_id();
-        self.output.expressions.insert(expr_id, expr);
+    pub fn insert_val(&mut self, val: mlr::Value) -> mlr::build::Result<mlr::ValId> {
+        let val_id = self.get_next_val_id();
+        self.output.vals.insert(val_id, val);
 
-        let type_id = self.infer_type(expr_id)?;
-        self.output.expr_types.insert(expr_id, type_id);
+        let type_id = self.infer_type(val_id)?;
+        self.output.val_types.insert(val_id, type_id);
 
-        Ok(expr_id)
+        Ok(val_id)
     }
 
     pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> mlr::build::Result<mlr::StmtId> {
@@ -41,14 +41,14 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&self, name: &str) -> mlr::build::Result<mlr::Expression> {
+    pub fn resolve_name(&self, name: &str) -> mlr::build::Result<mlr::Value> {
         // Try to resolve as variable
         let loc_id = self.resolve_name_to_location(name);
 
         if let Some(loc_id) = loc_id {
-            Ok(mlr::Expression::Load(loc_id))
+            Ok(mlr::Value::Use(loc_id))
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
-            Ok(mlr::Expression::Function(fn_id))
+            Ok(mlr::Value::Function(fn_id))
         } else {
             Err(super::MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }
@@ -63,9 +63,9 @@ impl<'a> mlr::MlrBuilder<'a> {
             .cloned()
     }
 
-    pub fn create_unit_value(&mut self) -> mlr::build::Result<mlr::ExprId> {
-        let expr = mlr::Expression::Constant(mlr::Constant::Unit);
-        self.insert_expr(expr)
+    pub fn create_unit_value(&mut self) -> mlr::build::Result<mlr::ValId> {
+        let val = mlr::Value::Constant(mlr::Constant::Unit);
+        self.insert_val(val)
     }
 
     pub fn create_unit_block(&mut self) -> mlr::build::Result<mlr::Block> {
@@ -76,29 +76,21 @@ impl<'a> mlr::MlrBuilder<'a> {
         })
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::ExprId, value: mlr::ExprId) -> mlr::build::Result<mlr::StmtId> {
+    pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::ValId) -> mlr::build::Result<mlr::StmtId> {
         let value_type = self
             .output
-            .expr_types
+            .val_types
             .get(&value)
             .expect("type of value should be known");
 
-        let place_expr = self
-            .output
-            .expressions
-            .get(&place)
-            .expect("expression should be registered");
+        let mlr::Place::Local(loc_id) = place;
 
-        let mlr::Expression::Loc(loc_id) = place_expr else {
-            return Err(super::mlr::MlrBuilderError::NotAPlace(place));
-        };
-
-        match self.output.loc_types.entry(*loc_id) {
+        match self.output.loc_types.entry(loc_id) {
             Entry::Occupied(occupied_entry) => {
                 let loc_type = occupied_entry.get();
                 if !self.ctxt.type_registry.types_equal(value_type, loc_type) {
                     return mlr::build::TypeError::ReassignTypeMismatch {
-                        loc: *loc_id,
+                        loc: loc_id,
                         expected: *loc_type,
                         actual: *value_type,
                     }
@@ -110,7 +102,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             }
         };
 
-        let stmt = mlr::Statement::Assign { loc: place, value };
+        let stmt = mlr::Statement::Assign { place, value };
         self.insert_stmt(stmt)
     }
 

@@ -6,7 +6,6 @@ pub enum MlrBuilderError {
     UnresolvableSymbol { name: String },
     UnknownPrimitiveType,
     TypeError(TypeError),
-    NotAPlace(mlr::ExprId),
 }
 
 #[derive(Debug)]
@@ -16,7 +15,7 @@ pub enum TypeError {
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,
     },
-    ExpressionNotCallable,
+    ValNotCallable,
     CallArgumentTypeMismatch {
         index: usize,
         expected: ctxt::types::TypeId,
@@ -47,13 +46,13 @@ pub enum TypeError {
     NotAStruct {
         type_id: ctxt::types::TypeId,
     },
-    StructExpressionMissingFields {
+    StructValMissingFields {
         missing_fields: Vec<String>,
     },
-    StructExpressionExtraFields {
+    StructValExtraFields {
         extra_fields: Vec<String>,
     },
-    StructExpressionTypeMismatch {
+    StructValTypeMismatch {
         field_name: String,
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,

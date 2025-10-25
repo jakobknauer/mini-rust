@@ -6,17 +6,17 @@ use crate::ctxt::{functions::FnId, types::TypeId};
 pub struct StmtId(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ExprId(pub usize);
+pub struct ValId(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LocId(pub usize);
 
 #[derive(Debug)]
 pub struct Mlr {
-    pub expressions: HashMap<ExprId, Expression>,
+    pub vals: HashMap<ValId, Value>,
     pub statements: HashMap<StmtId, Statement>,
     pub loc_types: HashMap<LocId, TypeId>,
-    pub expr_types: HashMap<ExprId, TypeId>,
+    pub val_types: HashMap<ValId, TypeId>,
     pub body: Block,
     pub param_locs: Vec<LocId>,
 }
@@ -24,10 +24,10 @@ pub struct Mlr {
 impl Mlr {
     pub fn new() -> Self {
         Self {
-            expressions: HashMap::new(),
+            vals: HashMap::new(),
             statements: HashMap::new(),
             loc_types: HashMap::new(),
-            expr_types: HashMap::new(),
+            val_types: HashMap::new(),
             body: Block {
                 statements: Vec::new(),
                 output: LocId(0),
@@ -39,17 +39,16 @@ impl Mlr {
 
 #[derive(Debug)]
 pub enum Statement {
-    Assign { loc: ExprId, value: ExprId },
+    Assign { place: Place, value: ValId },
     Return { value: LocId },
     Break,
 }
 
 #[derive(Debug)]
-pub enum Expression {
+pub enum Value {
     Block(Block),
     Constant(Constant),
-    Load(LocId),
-    Loc(LocId),
+    Use(LocId),
     AddressOf(LocId),
     Call {
         callable: LocId,
@@ -64,6 +63,11 @@ pub enum Expression {
         type_id: TypeId,
         field_initializers: Vec<(String, LocId)>,
     },
+}
+
+#[derive(Debug)]
+pub enum Place {
+    Local(LocId),
 }
 
 #[derive(Debug)]
