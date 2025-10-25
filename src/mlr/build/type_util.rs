@@ -21,8 +21,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         match val {
             Block(block) => self.infer_type_of_block(block),
             Constant(constant) => self.infer_type_of_constant(constant),
-            Use(loc_id) => self.infer_type_of_location(loc_id),
-            AddressOf(..) => todo!(),
+            Use(place) => self.infer_type_of_place(place),
             Call { callable, args } => self.infer_type_of_call(*callable, args),
             Function(fn_id) => self.infer_type_of_function(*fn_id),
             If(if_) => self.infer_type_of_if(if_),
@@ -59,12 +58,19 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
     }
 
-    fn infer_type_of_location(&self, loc_id: &mlr::LocId) -> mlr::build::Result<TypeId> {
-        Ok(*self
+    fn infer_type_of_place(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {
+        let place = self
+            .output
+            .places
+            .get(place_id)
+            .expect("infer_type_of_place should only be called with a valid PlaceId");
+        let mlr::Place::Local(loc_id) = place;
+        let type_id = *self
             .output
             .loc_types
             .get(loc_id)
-            .expect("type of loc_id should be registered"))
+            .expect("type of loc_id should be registered");
+        Ok(type_id)
     }
 
     fn infer_type_of_call(

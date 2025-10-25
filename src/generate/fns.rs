@@ -181,7 +181,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_statement(&mut self, _stmt: &mlr::StmtId) -> FnGeneratorResult<()> {
-        let stmt = self.mlr.statements.get(_stmt).unwrap();
+        let stmt = self.mlr.stmts.get(_stmt).unwrap();
         match stmt {
             mlr::Statement::Assign { place, value } => {
                 let place = self.build_place(place)?;
@@ -201,30 +201,28 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_val(&mut self, val: &mlr::ValId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        use mlr::Value::*;
+
         match self.mlr.vals.get(val).ok_or(FnGeneratorError)? {
-            mlr::Value::Block(block) => self.build_block(block),
-            mlr::Value::Constant(constant) => self.build_constant(constant),
-            mlr::Value::Use(loc_id) => self.build_var(loc_id),
-            mlr::Value::Function(fn_id) => self.build_global_function(fn_id),
-            mlr::Value::Call { callable, args } => self.build_call(callable, args),
-            mlr::Value::If(if_) => self.build_if(if_, val),
-            mlr::Value::Loop { body } => self.build_loop(body),
-            mlr::Value::Struct {
+            Block(block) => self.build_block(block),
+            Constant(constant) => self.build_constant(constant),
+            Use(place_id) => self.build_use(place_id),
+            Function(fn_id) => self.build_global_function(fn_id),
+            Call { callable, args } => self.build_call(callable, args),
+            If(if_) => self.build_if(if_, val),
+            Loop { body } => self.build_loop(body),
+            Struct {
                 type_id,
                 field_initializers,
             } => self.build_struct_val(type_id, field_initializers),
-            // mlr::valession::AddressOf(loc_id) => todo!(),
-            _ => {
-                // Simply return the integer constant 42 for now
-                let int_type = self.gtor.iw_ctxt.i32_type();
-                Ok(int_type.const_int(42, false).as_basic_value_enum())
-            }
         }
     }
 
-    fn build_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<PointerValue<'iw>> {
-        match place {
-            mlr::Place::Local(loc_id) => {
+    fn build_place(&mut self, place: &mlr::PlaceId) -> FnGeneratorResult<PointerValue<'iw>> {
+        use mlr::Place::*;
+
+        match self.mlr.places.get(place).ok_or(FnGeneratorError)? {
+            Local(loc_id) => {
                 if !self.locs.contains_key(loc_id) {
                     self.build_alloca_for_loc(loc_id)
                 } else {
@@ -255,7 +253,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_var(&mut self, loc_id: &mlr::LocId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+    fn build_use(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        let mlr::Place::Local(loc_id) = self.mlr.places.get(place_id).ok_or(FnGeneratorError)?;
         self.build_load_from_loc(loc_id, "loaded_var")
     }
 

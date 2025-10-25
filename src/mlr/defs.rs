@@ -9,12 +9,16 @@ pub struct StmtId(pub usize);
 pub struct ValId(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PlaceId(pub usize);
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LocId(pub usize);
 
 #[derive(Debug)]
 pub struct Mlr {
     pub vals: HashMap<ValId, Value>,
-    pub statements: HashMap<StmtId, Statement>,
+    pub stmts: HashMap<StmtId, Statement>,
+    pub places: HashMap<PlaceId, Place>,
     pub loc_types: HashMap<LocId, TypeId>,
     pub val_types: HashMap<ValId, TypeId>,
     pub body: Block,
@@ -25,7 +29,8 @@ impl Mlr {
     pub fn new() -> Self {
         Self {
             vals: HashMap::new(),
-            statements: HashMap::new(),
+            stmts: HashMap::new(),
+            places: HashMap::new(),
             loc_types: HashMap::new(),
             val_types: HashMap::new(),
             body: Block {
@@ -39,7 +44,7 @@ impl Mlr {
 
 #[derive(Debug)]
 pub enum Statement {
-    Assign { place: Place, value: ValId },
+    Assign { place: PlaceId, value: ValId },
     Return { value: LocId },
     Break,
 }
@@ -48,8 +53,7 @@ pub enum Statement {
 pub enum Value {
     Block(Block),
     Constant(Constant),
-    Use(LocId),
-    AddressOf(LocId),
+    Use(PlaceId),
     Call {
         callable: LocId,
         args: Vec<LocId>,

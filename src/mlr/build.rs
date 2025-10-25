@@ -27,6 +27,7 @@ pub struct MlrBuilder<'a> {
     output: mlr::Mlr,
     scopes: VecDeque<Scope>,
     next_val_id: mlr::ValId,
+    next_place_id: mlr::PlaceId,
     next_stmt_id: mlr::StmtId,
     next_loc_id: mlr::LocId,
 }
@@ -50,6 +51,7 @@ impl<'a> MlrBuilder<'a> {
             output: mlr::Mlr::new(),
             scopes: VecDeque::new(),
             next_val_id: mlr::ValId(0),
+            next_place_id: mlr::PlaceId(0),
             next_stmt_id: mlr::StmtId(0),
             next_loc_id: mlr::LocId(0),
         }
@@ -123,28 +125,32 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::ValId> {
+        use hlr::Expression::*;
+
         let val = match expr {
-            hlr::Expression::Literal(literal) => self.build_literal(literal)?,
-            hlr::Expression::Variable(name) => self.build_variable(name)?,
-            hlr::Expression::BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?,
-            hlr::Expression::Assignment { target, value } => self.build_assignment(target, value)?,
-            hlr::Expression::FunctionCall { function, arguments } => self.build_function_call(function, arguments)?,
-            hlr::Expression::StructExpr { struct_name, fields } => self.build_struct_val(struct_name, fields)?,
-            hlr::Expression::If {
+            Literal(literal) => self.build_literal(literal)?,
+            Variable(name) => self.build_variable(name)?,
+            BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?,
+            Assignment { target, value } => self.build_assignment(target, value)?,
+            FunctionCall { function, arguments } => self.build_function_call(function, arguments)?,
+            StructExpr { struct_name, fields } => self.build_struct_val(struct_name, fields)?,
+            If {
                 condition,
                 then_block,
                 else_block,
             } => self.build_if(condition, then_block, else_block.as_ref())?,
-            hlr::Expression::Loop { body } => self.build_loop(body)?,
-            hlr::Expression::Block(block) => mlr::Value::Block(self.build_block(block)?),
+            Loop { body } => self.build_loop(body)?,
+            Block(block) => mlr::Value::Block(self.build_block(block)?),
         };
 
         self.insert_val(val)
     }
 
     fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::Place> {
+        use hlr::Expression::*;
+
         let place = match expr {
-            hlr::Expression::Variable(name) => {
+            Variable(name) => {
                 let loc = self
                     .resolve_name_to_location(name)
                     .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;

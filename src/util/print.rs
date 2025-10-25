@@ -79,12 +79,18 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     }
 
     fn print_statement(&mut self, stmt_id: StmtId) -> std::result::Result<(), std::io::Error> {
-        let stmt = &self.mlr.expect("self.mlr should not be empty").statements.get(&stmt_id);
+        let stmt = &self.mlr.expect("self.mlr should not be empty").stmts.get(&stmt_id);
 
         match stmt {
             Some(stmt) => match stmt {
                 Statement::Assign { place, value } => {
                     self.indent()?;
+                    let place = self
+                        .mlr
+                        .expect("self.mlr should not be empty")
+                        .places
+                        .get(place)
+                        .expect("place should be a valid place id");
                     let Place::Local(loc_id) = place;
                     let loc_type = self
                         .mlr
@@ -122,11 +128,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     Constant::Bool(b) => write!(self.writer, "const {}", b),
                     Constant::Unit => write!(self.writer, "const ()"),
                 },
-                Value::Use(loc) => {
-                    write!(self.writer, "copy {}", loc)
-                }
-                Value::AddressOf(loc) => {
-                    write!(self.writer, "&{}", loc)
+                Value::Use(place) => {
+                    write!(self.writer, "copy ")?;
+                    self.print_place(*place)
                 }
                 Value::Call { callable, args } => {
                     write!(self.writer, "call {}(", callable)?;
@@ -177,6 +181,17 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
             },
             None => write!(self.writer, "<val id {}>", val_id.0),
+        }
+    }
+
+    fn print_place(&mut self, place_id: PlaceId) -> std::result::Result<(), std::io::Error> {
+        let place = &self.mlr.expect("self.mlr should not be empty").places.get(&place_id);
+
+        match place {
+            Some(place) => match place {
+                Place::Local(loc_id) => write!(self.writer, "{}", loc_id),
+            },
+            None => write!(self.writer, "<place id {}>", place_id.0),
         }
     }
 

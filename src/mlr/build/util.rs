@@ -23,6 +23,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
+    pub fn get_next_place_id(&mut self) -> mlr::PlaceId {
+        let id = self.next_place_id;
+        self.next_place_id.0 += 1;
+        id
+    }
+
     pub fn insert_val(&mut self, val: mlr::Value) -> mlr::build::Result<mlr::ValId> {
         let val_id = self.get_next_val_id();
         self.output.vals.insert(val_id, val);
@@ -33,20 +39,28 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(val_id)
     }
 
+    pub fn insert_place(&mut self, place: mlr::Place) -> mlr::build::Result<mlr::PlaceId> {
+        let place_id = self.get_next_place_id();
+        self.output.places.insert(place_id, place);
+        Ok(place_id)
+    }
+
     pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> mlr::build::Result<mlr::StmtId> {
         let stmt_id = self.get_next_stmt_id();
-        self.output.statements.insert(stmt_id, stmt);
+        self.output.stmts.insert(stmt_id, stmt);
         Ok(stmt_id)
     }
 
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&self, name: &str) -> mlr::build::Result<mlr::Value> {
+    pub fn resolve_name(&mut self, name: &str) -> mlr::build::Result<mlr::Value> {
         // Try to resolve as variable
         let loc_id = self.resolve_name_to_location(name);
 
         if let Some(loc_id) = loc_id {
-            Ok(mlr::Value::Use(loc_id))
+            let place = mlr::Place::Local(loc_id);
+            let place = self.insert_place(place)?;
+            Ok(mlr::Value::Use(place))
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
             Ok(mlr::Value::Function(fn_id))
         } else {
@@ -77,13 +91,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::ValId) -> mlr::build::Result<mlr::StmtId> {
+        let mlr::Place::Local(loc_id) = place;
+        let place = self.insert_place(place)?;
+
         let value_type = self
             .output
             .val_types
             .get(&value)
             .expect("type of value should be known");
-
-        let mlr::Place::Local(loc_id) = place;
 
         match self.output.loc_types.entry(loc_id) {
             Entry::Occupied(occupied_entry) => {
@@ -107,15 +122,12 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_return_stmt(&mut self, value: mlr::LocId) -> mlr::build::Result<mlr::StmtId> {
-        let stmt = mlr::Statement::Return { value };
-
-        // TODO check type
-        let signature = self
+        let return_type = self
             .ctxt
             .function_registry
             .get_signature_by_id(&self.fn_id)
-            .expect("return stmt only valid in function");
-        let return_type = signature.return_type;
+            .expect("return stmt only valid in function")
+            .return_type;
 
         let value_type = self
             .output
@@ -131,6 +143,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .into();
         }
 
+        let stmt = mlr::Statement::Return { value };
         self.insert_stmt(stmt)
     }
 }
