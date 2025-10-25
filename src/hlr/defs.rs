@@ -100,6 +100,10 @@ pub enum Expression {
         body: Block,
     },
     Block(Block),
+    FieldAccess {
+        base: Box<Expression>,
+        field_name: String,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]

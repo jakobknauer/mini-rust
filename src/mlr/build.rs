@@ -141,6 +141,10 @@ impl<'a> MlrBuilder<'a> {
             } => self.build_if(condition, then_block, else_block.as_ref())?,
             Loop { body } => self.build_loop(body)?,
             Block(block) => mlr::Value::Block(self.build_block(block)?),
+            FieldAccess { .. } => {
+                let place = self.lower_to_place(expr)?;
+                mlr::Value::Use(place)
+            }
         };
 
         self.insert_val(val)
@@ -156,6 +160,17 @@ impl<'a> MlrBuilder<'a> {
                     .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
 
                 mlr::Place::Local(loc)
+            }
+            FieldAccess { base, field_name } => {
+                // TODO allow general expressions as base (by lowering to val and then creating a
+                // temporary place). This however requires a better builder infrastructure, so we
+                // can here at this point create temporary variables/places in the current scope.
+                // let base_place = self.lower_to_place(base)?;
+                // mlr::Place::FieldAccess {
+                //     base: base_place,
+                //     field_name: field_name.clone(),
+                // }
+                todo!("Field access is not yet supported as place.")
             }
             _ => panic!("Only variables are supported as places."),
         };

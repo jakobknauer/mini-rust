@@ -331,29 +331,44 @@ impl<'a> HlrParser<'a> {
         Token::Minus => BinaryOperator::Subtract
     ]);
 
-    parse_left_associative!(parse_product_expression, parse_function_call, [
+    parse_left_associative!(parse_product_expression, parse_function_call_and_field_access, [
         Token::Asterisk => BinaryOperator::Multiply,
         Token::Slash => BinaryOperator::Divide,
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_function_call(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+    fn parse_function_call_and_field_access(
+        &mut self,
+        allow_top_level_struct_expr: bool,
+    ) -> Result<Expression, ParserError> {
         let mut acc = self.parse_primary_expression(allow_top_level_struct_expr)?;
 
-        while self.advance_if(Token::LParen) {
-            let mut arguments = Vec::new();
-            while self.current() != Some(&Token::RParen) {
-                let argument = self.parse_expression(true)?; // Allow top-level struct expression in argument
-                arguments.push(argument);
-                if !self.advance_if(Token::Comma) {
-                    break;
+        loop {
+            if self.advance_if(Token::LParen) {
+                // function call
+                let mut arguments = Vec::new();
+                while self.current() != Some(&Token::RParen) {
+                    let argument = self.parse_expression(true)?; // Allow top-level struct expression in argument
+                    arguments.push(argument);
+                    if !self.advance_if(Token::Comma) {
+                        break;
+                    }
                 }
+                self.expect_token(Token::RParen)?;
+                acc = Expression::FunctionCall {
+                    function: Box::new(acc),
+                    arguments,
+                };
+            } else if self.advance_if(Token::Dot) {
+                // field access
+                let field_name = self.expect_identifier()?;
+                acc = Expression::FieldAccess {
+                    base: Box::new(acc),
+                    field_name,
+                };
+            } else {
+                break;
             }
-            self.expect_token(Token::RParen)?;
-            acc = Expression::FunctionCall {
-                function: Box::new(acc),
-                arguments,
-            };
         }
 
         Ok(acc)
@@ -756,6 +771,25 @@ mod tests {
                 }),
             };
 
+            parse_and_compare(input, expected);
+        }
+
+        #[test]
+        fn test_parse_function_call_and_field_access() {
+            let input = "obj.method(arg1, arg2).field";
+            let expected = Expression::FieldAccess {
+                base: Box::new(Expression::FunctionCall {
+                    function: Box::new(Expression::FieldAccess {
+                        base: Box::new(Expression::Variable("obj".to_string())),
+                        field_name: "method".to_string(),
+                    }),
+                    arguments: vec![
+                        Expression::Variable("arg1".to_string()),
+                        Expression::Variable("arg2".to_string()),
+                    ],
+                }),
+                field_name: "field".to_string(),
+            };
             parse_and_compare(input, expected);
         }
     }
