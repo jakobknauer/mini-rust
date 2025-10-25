@@ -360,5 +360,4 @@ impl<'a> MlrBuilder<'a> {
             output: struct_val_loc,
         }))
     }
-
 }
