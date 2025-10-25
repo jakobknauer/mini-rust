@@ -1,5 +1,3 @@
-use std::collections::hash_map::Entry;
-
 use crate::mlr;
 
 use crate::mlr::build::macros::assign_to_new_loc;
@@ -33,7 +31,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let val_id = self.get_next_val_id();
         self.output.vals.insert(val_id, val);
 
-        let type_id = self.infer_type(val_id)?;
+        let type_id = self.infer_val_type(val_id)?;
         self.output.val_types.insert(val_id, type_id);
 
         Ok(val_id)
@@ -42,6 +40,10 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn insert_place(&mut self, place: mlr::Place) -> mlr::build::Result<mlr::PlaceId> {
         let place_id = self.get_next_place_id();
         self.output.places.insert(place_id, place);
+
+        let type_id = self.infer_place_type(&place_id)?;
+        self.output.place_types.insert(place_id, type_id);
+
         Ok(place_id)
     }
 
@@ -54,10 +56,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
     pub fn resolve_name(&mut self, name: &str) -> mlr::build::Result<mlr::Value> {
-        // Try to resolve as variable
-        let loc_id = self.resolve_name_to_location(name);
-
-        if let Some(loc_id) = loc_id {
+        if let Some(loc_id) = self.resolve_name_to_location(name) {
             let place = mlr::Place::Local(loc_id);
             let place = self.insert_place(place)?;
             Ok(mlr::Value::Use(place))
@@ -91,7 +90,11 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> mlr::build::Result<mlr::StmtId> {
-        let mlr::Place::Local(loc_id) = *self.output.places.get(&place).expect("place should be valid");
+        let place_type = self
+            .output
+            .place_types
+            .get(&place)
+            .expect("type of place should be known");
 
         let value_type = self
             .output
@@ -99,22 +102,14 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get(&value)
             .expect("type of value should be known");
 
-        match self.output.loc_types.entry(loc_id) {
-            Entry::Occupied(occupied_entry) => {
-                let loc_type = occupied_entry.get();
-                if !self.ctxt.type_registry.types_equal(value_type, loc_type) {
-                    return mlr::build::TypeError::ReassignTypeMismatch {
-                        loc: loc_id,
-                        expected: *loc_type,
-                        actual: *value_type,
-                    }
-                    .into();
-                }
+        if !self.ctxt.type_registry.types_equal(place_type, value_type) {
+            return mlr::build::TypeError::AssignStmtTypeMismatch {
+                place,
+                expected: *place_type,
+                actual: *value_type,
             }
-            Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(*value_type);
-            }
-        };
+            .into();
+        }
 
         let stmt = mlr::Statement::Assign { place, value };
         self.insert_stmt(stmt)

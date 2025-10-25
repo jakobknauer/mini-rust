@@ -254,8 +254,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_use(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        let mlr::Place::Local(loc_id) = self.mlr.places.get(place_id).ok_or(FnGeneratorError)?;
-        self.build_load_from_loc(loc_id, "loaded_var")
+        let address = self.build_place(place_id)?;
+        let place_type = self.mlr.place_types.get(place_id).ok_or(FnGeneratorError)?;
+        let type_ = self
+            .gtor
+            .get_type_as_basic_type_enum(place_type)
+            .ok_or(FnGeneratorError)?;
+        let value = self.builder.build_load(type_, address, "loaded_var")?;
+        Ok(value)
     }
 
     fn build_global_function(&mut self, fn_id: &mr_functions::FnId) -> FnGeneratorResult<BasicValueEnum<'iw>> {

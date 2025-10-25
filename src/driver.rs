@@ -148,9 +148,13 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
     use mlr::TypeError::*;
 
     let msg = match err {
-        ReassignTypeMismatch { loc, expected, actual } => format!(
+        AssignStmtTypeMismatch {
+            place,
+            expected,
+            actual,
+        } => format!(
             "Cannot reassign location {:?} of type '{}' with value of type '{}'",
-            loc,
+            place,
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
         ),

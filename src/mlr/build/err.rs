@@ -10,8 +10,8 @@ pub enum MlrBuilderError {
 
 #[derive(Debug)]
 pub enum TypeError {
-    ReassignTypeMismatch {
-        loc: mlr::LocId,
+    AssignStmtTypeMismatch {
+        place: mlr::PlaceId,
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,
     },

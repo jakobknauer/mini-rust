@@ -21,6 +21,7 @@ pub struct Mlr {
     pub places: HashMap<PlaceId, Place>,
     pub loc_types: HashMap<LocId, TypeId>,
     pub val_types: HashMap<ValId, TypeId>,
+    pub place_types: HashMap<PlaceId, TypeId>,
     pub body: Block,
     pub param_locs: Vec<LocId>,
 }
@@ -33,6 +34,7 @@ impl Mlr {
             places: HashMap::new(),
             loc_types: HashMap::new(),
             val_types: HashMap::new(),
+            place_types: HashMap::new(),
             body: Block {
                 statements: Vec::new(),
                 output: LocId(0),

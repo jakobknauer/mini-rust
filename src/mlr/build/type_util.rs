@@ -9,7 +9,7 @@ use crate::{
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn infer_type(&mut self, val: mlr::ValId) -> mlr::build::Result<TypeId> {
+    pub fn infer_val_type(&mut self, val: mlr::ValId) -> mlr::build::Result<TypeId> {
         use mlr::Value::*;
 
         let val = self
@@ -21,7 +21,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         match val {
             Block(block) => self.infer_type_of_block(block),
             Constant(constant) => self.infer_type_of_constant(constant),
-            Use(place) => self.infer_type_of_place(place),
+            Use(place) => self.infer_place_type(place),
             Call { callable, args } => self.infer_type_of_call(*callable, args),
             Function(fn_id) => self.infer_type_of_function(*fn_id),
             If(if_) => self.infer_type_of_if(if_),
@@ -56,21 +56,6 @@ impl<'a> mlr::MlrBuilder<'a> {
             .type_registry
             .get_primitive_type_id(type_)
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
-    }
-
-    fn infer_type_of_place(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {
-        let place = self
-            .output
-            .places
-            .get(place_id)
-            .expect("infer_type_of_place should only be called with a valid PlaceId");
-        let mlr::Place::Local(loc_id) = place;
-        let type_id = *self
-            .output
-            .loc_types
-            .get(loc_id)
-            .expect("type of loc_id should be registered");
-        Ok(type_id)
     }
 
     fn infer_type_of_call(
@@ -245,5 +230,34 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
 
         Ok(*type_id)
+    }
+
+    pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {
+        let place = self
+            .output
+            .places
+            .get(place_id)
+            .expect("infer_type_of_place should only be called with a valid PlaceId");
+
+        match place {
+            mlr::Place::Local(loc_id) => self.infer_type_of_local_place(loc_id),
+            // mlr::Place::FieldAccess { base, field_name } => self.infer_type_of_field_access_place(base, field_name),
+        }
+    }
+
+    fn infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> mlr::build::Result<TypeId> {
+        Ok(*self
+            .output
+            .loc_types
+            .get(loc_id)
+            .expect("infer_type_of_local_place: type of loc_id should be registered"))
+    }
+
+    fn infer_type_of_field_access_place(
+        &self,
+        base: &mlr::PlaceId,
+        field_name: &str,
+    ) -> std::result::Result<TypeId, MlrBuilderError> {
+        todo!()
     }
 }
