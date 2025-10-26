@@ -17,9 +17,9 @@
     - ~~equality operators~~
     - ~~logical operators~~
     - ~~more arithmetic operators~~
-    - Refine mlr struct handling
+    - ~~Refine mlr struct handling~~
         - ~~Use field indices instead of field names in field access expressions~~
-        - Replace struct expression by multiple assignments
+        - ~~Replace struct expression by multiple assignments~~
 
 ## Version 2
 - Higher-order functions / functions as first-class citizens
