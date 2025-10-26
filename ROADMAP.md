@@ -17,8 +17,8 @@
     - ~~equality operators~~
     - ~~logical operators~~
     - ~~more arithmetic operators~~
-    - Refine mlr struct expressions
-        - Use field indices instead of field names
+    - Refine mlr struct handling
+        - ~~Use field indices instead of field names in field access expressions~~
         - Replace struct expression by multiple assignments
 
 ## Version 2
