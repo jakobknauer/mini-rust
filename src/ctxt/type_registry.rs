@@ -119,6 +119,10 @@ impl TypeRegistry {
         }
     }
 
+    pub fn get_enum_definition(&self, enum_id: &EnumId) -> Option<&EnumDefinition> {
+        self.enums.get(enum_id)
+    }
+
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
         let type_ = self.get_type_by_name(name)?;
         if let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ {

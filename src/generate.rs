@@ -76,7 +76,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                     mr_types::PrimitiveType::Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
                 mr_types::NamedType::Struct(struct_id) => self.define_struct(name, type_id, struct_id),
-                mr_types::NamedType::Enum(..) => todo!(),
+                mr_types::NamedType::Enum(enum_id) => self.define_enum(enum_id),
             },
             mr_types::Type::Function { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
         };
@@ -116,6 +116,14 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
 
         iw_struct.set_body(&field_types, false);
         iw_struct.as_any_type_enum()
+    }
+
+    fn define_enum(&mut self, enum_id: &mr_types::EnumId) -> AnyTypeEnum<'iw> {
+        let enum_def = self.mr_ctxt.type_registry.get_enum_definition(enum_id).unwrap();
+        let variant_count = enum_def.variants.len();
+        let discrim_bits = (variant_count as f64).log2().ceil() as u32;
+        let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);
+        discrim_type.as_any_type_enum()
     }
 
     fn declare_functions(&mut self) {

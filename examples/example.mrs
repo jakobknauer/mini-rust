@@ -23,3 +23,11 @@ struct Point {
     x: i32,
     y: i32,
 }
+
+enum State {
+    on, off, unknown
+}
+
+fn id(s: State) -> State {
+    s
+}
