@@ -1,13 +1,5 @@
 fn main() -> i32 {
-    fac(5)
-}
-
-fn g(x: i32) -> i32 {
-    x * h(true, true) + h(false, true)
-}
-
-fn h(b1: bool, b2: bool) -> i32 {
-    if (b1 == b2 & true) | false { 3 } else { 5 }
+    scalar_product(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
 }
 
 fn fac(n: i32) -> i32 {
@@ -22,9 +14,9 @@ fn fac(n: i32) -> i32 {
     result
 }
 
-fn get_point() -> Point {
-    let p = Point { x: 1, y: 2 + 3};
-    p
+fn scalar_product(p: Point, q: Point) -> i32 {
+    q.x = 5;
+    p.x * q.x + p.y * q.y
 }
 
 struct Point {
