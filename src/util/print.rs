@@ -93,7 +93,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         .expect("type of place should be known");
                     let type_name = self.ctxt.type_registry.get_string_rep(place_type);
 
-                    write!(self.writer, "assign ")?;
                     self.print_place(*place)?;
                     write!(self.writer, ": {} = ", type_name)?;
                     self.print_val(*value)?;
