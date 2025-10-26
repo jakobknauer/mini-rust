@@ -157,9 +157,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "loop ")?;
                     self.print_block(body)
                 }
-                Value::Struct { struct_id } => {
-                    let struct_name = self.ctxt.type_registry.get_struct_string_rep(struct_id);
-                    write!(self.writer, "struct {}", struct_name)
+                Value::Empty { type_id } => {
+                    let type_name = self.ctxt.type_registry.get_string_rep(type_id);
+                    write!(self.writer, "empty {}", type_name)
                 }
             },
             None => write!(self.writer, "<val id {}>", val_id.0),

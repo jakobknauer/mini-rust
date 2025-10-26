@@ -63,7 +63,7 @@ pub enum Value {
     Function(FnId),
     If(If),
     Loop { body: Block },
-    Struct { struct_id: StructId },
+    Empty { type_id: TypeId },
 }
 
 #[derive(Debug)]

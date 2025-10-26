@@ -28,7 +28,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .type_registry
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
-            Struct { struct_id } => self.infer_type_of_struct_val(struct_id),
+            Empty { type_id } => Ok(*type_id),
         }
     }
 
@@ -157,16 +157,6 @@ impl<'a> mlr::MlrBuilder<'a> {
         } else {
             TypeError::IfBranchTypeMismatch { then_type, else_type }.into()
         }
-    }
-
-    fn infer_type_of_struct_val(&self, struct_id: &StructId) -> std::result::Result<TypeId, MlrBuilderError> {
-        let struct_type_id = self
-            .ctxt
-            .type_registry
-            .get_named_type_id(NamedType::Struct(*struct_id))
-            .expect("struct type should be registered");
-
-        Ok(struct_type_id)
     }
 
     pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {

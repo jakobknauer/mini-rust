@@ -217,7 +217,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Call { callable, args } => self.build_call(callable, args),
             If(if_) => self.build_if(if_, val),
             Loop { body } => self.build_loop(body),
-            Struct { struct_id } => self.build_struct_val(struct_id),
+            Empty { type_id } => self.build_empty_val(type_id),
         }
     }
 
@@ -361,22 +361,9 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.build_unit_value()
     }
 
-    fn build_struct_val(&mut self, struct_id: &mr_types::StructId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let mr_type = self
-            .gtor
-            .mr_ctxt
-            .type_registry
-            .get_named_type_id(mr_types::NamedType::Struct(*struct_id))
-            .ok_or(FnGeneratorError)?;
-
-        let iw_type: StructType<'iw> = self
-            .gtor
-            .get_type_as_basic_type_enum(&mr_type)
-            .ok_or(FnGeneratorError)?
-            .try_into()
-            .map_err(|_| FnGeneratorError)?;
-
-        let struct_value = iw_type.get_undef().as_basic_value_enum();
+    fn build_empty_val(&mut self, type_id: &mr_types::TypeId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
+        let struct_value = iw_type.const_zero(); // create a zero value because that's available for BasicValueEnum
         Ok(struct_value)
     }
 }

@@ -402,7 +402,7 @@ impl<'a> MlrBuilder<'a> {
 
         // Build empty struct val first
         let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
-            let struct_val = mlr::Value::Struct { struct_id };
+            let struct_val = mlr::Value::Empty { type_id };
             self.insert_val(struct_val)?
         });
 
