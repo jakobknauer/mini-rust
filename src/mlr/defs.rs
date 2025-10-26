@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::ctxt::{functions::FnId, types::TypeId};
+use crate::ctxt::{
+    functions::FnId,
+    types::{StructId, TypeId},
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StmtId(pub usize);
@@ -74,7 +77,11 @@ pub enum Value {
 #[derive(Debug)]
 pub enum Place {
     Local(LocId),
-    FieldAccess { base: PlaceId, field_name: String },
+    FieldAccess {
+        base: PlaceId,
+        struct_id: StructId,
+        field_index: usize,
+    },
 }
 
 #[derive(Debug)]

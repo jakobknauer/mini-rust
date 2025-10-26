@@ -155,6 +155,22 @@ impl TypeRegistry {
         }
     }
 
+    pub fn get_struct_string_rep(&self, struct_id: &StructId) -> String {
+        self.types
+            .right_values()
+            .filter_map(|type_| {
+                if let Type::NamedType(name, NamedType::Struct(sid)) = type_
+                    && sid == struct_id
+                {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap_or(format!("<struct id {}>", struct_id.0))
+    }
+
     pub fn types_equal(&self, t1: &TypeId, t2: &TypeId) -> bool {
         t1 == t2
     }

@@ -184,9 +184,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         match place {
             Some(place) => match place {
                 Place::Local(loc_id) => write!(self.writer, "{}", loc_id),
-                Place::FieldAccess { base, field_name } => {
+                Place::FieldAccess { base, field_index, .. } => {
                     self.print_place(*base)?;
-                    write!(self.writer, ".{}", field_name)
+                    write!(self.writer, ".{}", field_index)
                 }
             },
             None => write!(self.writer, "<place id {}>", place_id.0),

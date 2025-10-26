@@ -244,7 +244,11 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         match place {
             mlr::Place::Local(loc_id) => self.infer_type_of_local_place(loc_id),
-            mlr::Place::FieldAccess { base, field_name } => self.infer_type_of_field_access_place(base, field_name),
+            mlr::Place::FieldAccess {
+                base,
+                struct_id,
+                field_index,
+            } => self.infer_type_of_field_access_place(base, struct_id, field_index),
         }
     }
 
@@ -253,39 +257,51 @@ impl<'a> mlr::MlrBuilder<'a> {
             .output
             .loc_types
             .get(loc_id)
-            .expect("infer_type_of_local_place: type of loc_id should be registered"))
+            .expect("type of loc_id should be registered"))
     }
 
     fn infer_type_of_field_access_place(
         &self,
         base: &mlr::PlaceId,
-        field_name: &str,
+        struct_id: &StructId,
+        field_index: &usize,
     ) -> std::result::Result<TypeId, MlrBuilderError> {
-        // Get struct definition
         let base_type_id = self
             .output
             .place_types
             .get(base)
             .expect("type of base place should be registered");
+
+        let base_type = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(base_type_id)
+            .expect("type of base place should be registered");
+
+        let Type::NamedType(_, NamedType::Struct(base_struct_id)) = base_type else {
+            return TypeError::NotAStruct { type_id: *base_type_id }.into();
+        };
+
+        if base_struct_id != struct_id {
+            return TypeError::FieldAccessBaseTypeMismatch {
+                expected: *struct_id,
+                actual: *base_struct_id,
+            }
+            .into();
+        }
+
         let struct_def = self
             .ctxt
             .type_registry
-            .get_struct_definition_by_type_id(base_type_id)
-            .ok_or(MlrBuilderError::TypeError(TypeError::NotAStruct {
-                type_id: *base_type_id,
-            }))?;
+            .get_struct_definition(base_struct_id)
+            .expect("struct definition should be registered");
 
-        // Find field
-        let field =
-            struct_def
-                .fields
-                .iter()
-                .find(|field| field.name == field_name)
-                .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                    type_id: *base_type_id,
-                    field_name: field_name.to_string(),
-                }))?;
+        let field_type = struct_def
+            .fields
+            .get(*field_index)
+            .expect("field index should be valid")
+            .type_id;
 
-        Ok(field.type_id)
+        Ok(field_type)
     }
 }

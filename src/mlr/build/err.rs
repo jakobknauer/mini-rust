@@ -64,6 +64,10 @@ pub enum TypeError {
         type_id: ctxt::types::TypeId,
         field_name: String,
     },
+    FieldAccessBaseTypeMismatch {
+        expected: ctxt::types::StructId,
+        actual: ctxt::types::StructId,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;

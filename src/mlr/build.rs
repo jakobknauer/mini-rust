@@ -14,6 +14,7 @@ use crate::{
     ctxt::{
         self,
         functions::{FnId, FunctionParameter, FunctionSignature},
+        types,
     },
     hlr, mlr,
 };
@@ -165,13 +166,48 @@ impl<'a> MlrBuilder<'a> {
                 // TODO allow general expressions as base (by lowering to val and then creating a
                 // temporary place). This however requires a better builder infrastructure, so we
                 // can here at this point create temporary variables/places in the current scope.
-                let base_place = self.lower_to_place(base)?;
+                let base = self.lower_to_place(base)?;
+
+                let base_type_id = self
+                    .output
+                    .place_types
+                    .get(&base)
+                    .expect("type of base place should be registered");
+
+                let base_type = self
+                    .ctxt
+                    .type_registry
+                    .get_type_by_id(base_type_id)
+                    .expect("base type should be registered");
+
+                let types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = base_type else {
+                    return Err(MlrBuilderError::TypeError(TypeError::NotAStruct {
+                        type_id: *base_type_id,
+                    }));
+                };
+
+                let struct_def = self
+                    .ctxt
+                    .type_registry
+                    .get_struct_definition(struct_id)
+                    .expect("struct definition should be registered");
+
+                let field_index = struct_def
+                    .fields
+                    .iter()
+                    .position(|struct_field| &struct_field.name == field_name)
+                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
+                        type_id: *base_type_id,
+                        field_name: field_name.clone(),
+                    }))?;
+
                 mlr::Place::FieldAccess {
-                    base: base_place,
-                    field_name: field_name.clone(),
+                    base,
+                    struct_id: *struct_id,
+                    field_index,
                 }
             }
-            _ => panic!("Only variables are supported as places."),
+            _ => panic!("Only variables and field access expressions are supported as places."),
         };
 
         self.insert_place(place)

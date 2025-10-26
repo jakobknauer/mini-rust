@@ -236,6 +236,11 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             ctxt.type_registry.get_string_rep(&type_id),
             field_name
         ),
+        FieldAccessBaseTypeMismatch { expected, actual } => format!(
+            "Field access base type mismatch: expected '{}', got '{}'",
+            ctxt.type_registry.get_struct_string_rep(&expected),
+            ctxt.type_registry.get_struct_string_rep(&actual)
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

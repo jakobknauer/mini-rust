@@ -235,20 +235,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                     self.locs.get(loc_id).ok_or(FnGeneratorError).cloned()
                 }
             }
-            FieldAccess { base, field_name } => {
-                let mr_base_type = self.mlr.place_types.get(base).ok_or(FnGeneratorError)?;
-                let mr_base_type_struct_def = self
-                    .gtor
-                    .mr_ctxt
-                    .type_registry
-                    .get_struct_definition_by_type_id(mr_base_type)
-                    .ok_or(FnGeneratorError)?;
-                let field_index = mr_base_type_struct_def
-                    .fields
-                    .iter()
-                    .position(|mr_types::StructField { name, .. }| name == field_name)
-                    .ok_or(FnGeneratorError)?;
-
+            FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
                     .get_iw_type_of_place(base)?
                     .try_into()
@@ -259,7 +246,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 let field_ptr = self.builder.build_struct_gep(
                     iw_base_struct_type,
                     base_address,
-                    field_index as u32,
+                    *field_index as u32,
                     "field_ptr",
                 )?;
 
