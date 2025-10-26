@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::{
     ctxt::{functions::FnId, types::*},
     mlr::{
@@ -30,10 +28,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .type_registry
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
-            Struct {
-                type_id,
-                field_initializers,
-            } => self.infer_type_of_struct(type_id, field_initializers),
+            Struct { struct_id } => self.infer_type_of_struct_val(struct_id),
         }
     }
 
@@ -164,75 +159,14 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn infer_type_of_struct(
-        &self,
-        type_id: &TypeId,
-        field_initializers: &[(String, mlr::LocId)],
-    ) -> std::result::Result<TypeId, MlrBuilderError> {
-        // Get struct definition
-        let struct_def = self
+    fn infer_type_of_struct_val(&self, struct_id: &StructId) -> std::result::Result<TypeId, MlrBuilderError> {
+        let struct_type_id = self
             .ctxt
             .type_registry
-            .get_struct_definition_by_type_id(type_id)
-            .ok_or(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id }))?;
+            .get_named_type_id(NamedType::Struct(*struct_id))
+            .expect("struct type should be registered");
 
-        // Check for missing or extra fields
-        let specified_field_names: HashSet<_> = field_initializers.iter().map(|(name, _)| name.as_str()).collect();
-        let required_field_names: HashSet<_> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
-
-        let missing_fields: Vec<_> = required_field_names
-            .difference(&specified_field_names)
-            .cloned()
-            .collect();
-        if !missing_fields.is_empty() {
-            return TypeError::StructValMissingFields {
-                type_id: *type_id,
-                missing_fields: missing_fields.into_iter().map(|s| s.to_string()).collect(),
-            }
-            .into();
-        }
-
-        let extra_fields: Vec<_> = specified_field_names
-            .difference(&required_field_names)
-            .cloned()
-            .collect();
-        if !extra_fields.is_empty() {
-            return TypeError::StructValExtraFields {
-                type_id: *type_id,
-                extra_fields: extra_fields.into_iter().map(|s| s.to_string()).collect(),
-            }
-            .into();
-        }
-
-        // Check for type mismatches
-        for StructField {
-            name: field_name,
-            type_id: field_type_id,
-        } in &struct_def.fields
-        {
-            let specified_type_id = field_initializers
-                .iter()
-                .find(|(name, _)| name == field_name)
-                .map(|(_, loc_id)| {
-                    self.output
-                        .loc_types
-                        .get(loc_id)
-                        .expect("type of location should be registered")
-                })
-                .unwrap();
-
-            if !self.ctxt.type_registry.types_equal(field_type_id, specified_type_id) {
-                return TypeError::StructValTypeMismatch {
-                    type_id: *type_id,
-                    field_name: field_name.clone(),
-                    expected: *field_type_id,
-                    actual: *specified_type_id,
-                }
-                .into();
-            }
-        }
-
-        Ok(*type_id)
+        Ok(struct_type_id)
     }
 
     pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {

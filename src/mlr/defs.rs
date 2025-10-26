@@ -59,19 +59,11 @@ pub enum Value {
     Block(Block),
     Constant(Constant),
     Use(PlaceId),
-    Call {
-        callable: LocId,
-        args: Vec<LocId>,
-    },
+    Call { callable: LocId, args: Vec<LocId> },
     Function(FnId),
     If(If),
-    Loop {
-        body: Block,
-    },
-    Struct {
-        type_id: TypeId,
-        field_initializers: Vec<(String, LocId)>,
-    },
+    Loop { body: Block },
+    Struct { struct_id: StructId },
 }
 
 #[derive(Debug)]

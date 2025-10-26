@@ -186,4 +186,16 @@ impl TypeRegistry {
     pub fn get_all_types(&self) -> impl IntoIterator<Item = (&TypeId, &Type)> {
         &self.types
     }
+
+    pub fn get_named_type_id(&self, named_type: NamedType) -> Option<TypeId> {
+        self.types.iter().find_map(|(type_id, type_)| {
+            if let Type::NamedType(_, nt) = type_
+                && *nt == named_type
+            {
+                Some(*type_id)
+            } else {
+                None
+            }
+        })
+    }
 }

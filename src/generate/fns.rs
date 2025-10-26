@@ -217,10 +217,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Call { callable, args } => self.build_call(callable, args),
             If(if_) => self.build_if(if_, val),
             Loop { body } => self.build_loop(body),
-            Struct {
-                type_id,
-                field_initializers,
-            } => self.build_struct_val(type_id, field_initializers),
+            Struct { struct_id } => self.build_struct_val(struct_id),
         }
     }
 
@@ -364,47 +361,22 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.build_unit_value()
     }
 
-    fn build_struct_val(
-        &mut self,
-        type_id: &mr_types::TypeId,
-        field_initializers: &[(String, mlr::LocId)],
-    ) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let struct_def = self
+    fn build_struct_val(&mut self, struct_id: &mr_types::StructId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        let mr_type = self
             .gtor
             .mr_ctxt
             .type_registry
-            .get_struct_definition_by_type_id(type_id)
+            .get_named_type_id(mr_types::NamedType::Struct(*struct_id))
             .ok_or(FnGeneratorError)?;
 
-        let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
-        let iw_struct_type: StructType<'iw> = iw_type.try_into().map_err(|_| FnGeneratorError)?;
+        let iw_type: StructType<'iw> = self
+            .gtor
+            .get_type_as_basic_type_enum(&mr_type)
+            .ok_or(FnGeneratorError)?
+            .try_into()
+            .map_err(|_| FnGeneratorError)?;
 
-        let mut init_values = vec![None; struct_def.fields.len()];
-        for (field_name, init_loc) in field_initializers {
-            let init_value = self.build_load_from_loc(init_loc, "field_init")?;
-            let field_index = struct_def
-                .fields
-                .iter()
-                .position(|mr_types::StructField { name, .. }| name == field_name)
-                .ok_or(FnGeneratorError)?;
-            init_values[field_index] = Some(init_value);
-        }
-        let init_values: Vec<BasicValueEnum<'iw>> = init_values
-            .into_iter()
-            .map(|opt| opt.ok_or(FnGeneratorError))
-            .collect::<Result<_, _>>()?;
-
-        let struct_value_ptr = self.build_alloca(iw_type, "struct_value")?;
-        for (index, field_value) in init_values.iter().enumerate() {
-            let field_ptr =
-                self.builder
-                    .build_struct_gep(iw_struct_type, struct_value_ptr, index as u32, "field_ptr")?;
-            self.builder.build_store(field_ptr, *field_value)?;
-        }
-        let struct_value = self
-            .builder
-            .build_load(iw_type, struct_value_ptr, "loaded_struct_value")?;
-
+        let struct_value = iw_type.get_undef().as_basic_value_enum();
         Ok(struct_value)
     }
 }

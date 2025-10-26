@@ -390,26 +390,56 @@ impl<'a> MlrBuilder<'a> {
                 struct_name: struct_name.to_string(),
             }))?;
 
-        let (field_init_locs, field_init_stmts): (Vec<_>, Vec<_>) = fields
-            .iter()
-            .map(|(field_name, expr)| {
-                let (field_loc, field_stmt) = assign_to_new_loc!(self, self.lower_to_val(expr)?);
-                Ok(((field_name.clone(), field_loc), field_stmt))
-            })
-            .process_results(|it| it.unzip())?;
+        let type_ = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(&type_id)
+            .expect("type should be registered");
 
+        let types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = *type_ else {
+            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id }));
+        };
+
+        // Build empty struct val first
         let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
-            let struct_val = mlr::Value::Struct {
-                type_id,
-                field_initializers: field_init_locs,
-            };
+            let struct_val = mlr::Value::Struct { struct_id };
             self.insert_val(struct_val)?
         });
 
-        let statements: Vec<_> = field_init_stmts
-            .into_iter()
-            .chain(std::iter::once(struct_val_stmt))
-            .collect();
+        let field_init_stmts: Vec<_> = fields
+            .iter()
+            .map(|(field_name, expr)| -> Result<mlr::StmtId> {
+                let struct_def = self
+                    .ctxt
+                    .type_registry
+                    .get_struct_definition(&struct_id)
+                    .expect("struct definition should be registered");
+
+                let field_index = struct_def
+                    .fields
+                    .iter()
+                    .position(|struct_field| &struct_field.name == field_name)
+                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
+                        type_id,
+                        field_name: field_name.clone(),
+                    }))?;
+
+                let field_place = {
+                    let base_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
+                    self.insert_place(mlr::Place::FieldAccess {
+                        base: base_place,
+                        struct_id,
+                        field_index,
+                    })?
+                };
+
+                let field_value = self.lower_to_val(expr)?;
+                let field_stmt = self.insert_assign_stmt(field_place, field_value)?;
+                Ok(field_stmt)
+            })
+            .collect::<Result<_>>()?;
+
+        let statements = std::iter::once(struct_val_stmt).chain(field_init_stmts).collect();
 
         Ok(mlr::Value::Block(mlr::Block {
             statements,
