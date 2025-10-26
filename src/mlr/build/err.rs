@@ -47,15 +47,22 @@ pub enum TypeError {
         type_id: ctxt::types::TypeId,
     },
     StructValMissingFields {
+        type_id: ctxt::types::TypeId,
         missing_fields: Vec<String>,
     },
     StructValExtraFields {
+        type_id: ctxt::types::TypeId,
         extra_fields: Vec<String>,
     },
     StructValTypeMismatch {
+        type_id: ctxt::types::TypeId,
         field_name: String,
         expected: ctxt::types::TypeId,
         actual: ctxt::types::TypeId,
+    },
+    NotAStructField {
+        type_id: ctxt::types::TypeId,
+        field_name: String,
     },
 }
 

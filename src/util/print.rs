@@ -85,22 +85,17 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             Some(stmt) => match stmt {
                 Statement::Assign { place, value } => {
                     self.indent()?;
-                    let place = self
+                    let place_type = self
                         .mlr
                         .expect("self.mlr should not be empty")
-                        .places
+                        .place_types
                         .get(place)
-                        .expect("place should be a valid place id");
-                    let Place::Local(loc_id) = place;
-                    let loc_type = self
-                        .mlr
-                        .expect("self.mlr should not be empty")
-                        .loc_types
-                        .get(loc_id)
-                        .expect("local should have a type");
-                    let type_name = self.ctxt.type_registry.get_string_rep(loc_type);
+                        .expect("type of place should be known");
+                    let type_name = self.ctxt.type_registry.get_string_rep(place_type);
 
-                    write!(self.writer, "assign {}: {} = ", loc_id, type_name)?;
+                    write!(self.writer, "assign ")?;
+                    self.print_place(*place)?;
+                    write!(self.writer, ": {} = ", type_name)?;
                     self.print_val(*value)?;
                     writeln!(self.writer, ";")
                 }
@@ -190,6 +185,10 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         match place {
             Some(place) => match place {
                 Place::Local(loc_id) => write!(self.writer, "{}", loc_id),
+                Place::FieldAccess { base, field_name } => {
+                    self.print_place(*base)?;
+                    write!(self.writer, ".{}", field_name)
+                }
             },
             None => write!(self.writer, "<place id {}>", place_id.0),
         }

@@ -202,21 +202,39 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             "Type '{}' is not a struct type",
             ctxt.type_registry.get_string_rep(&type_id)
         ),
-        StructValMissingFields { missing_fields } => {
-            format!("Struct val is missing fields: {}", missing_fields.join(", "))
+        StructValMissingFields {
+            type_id,
+            missing_fields,
+        } => {
+            format!(
+                "Struct val of type '{}' is missing fields: {}",
+                ctxt.type_registry.get_string_rep(&type_id),
+                missing_fields.join(", ")
+            )
         }
-        StructValExtraFields { extra_fields } => {
-            format!("Struct val has extra fields: {}", extra_fields.join(", "))
+        StructValExtraFields { type_id, extra_fields } => {
+            format!(
+                "Struct val of type '{}' has extra fields: {}",
+                ctxt.type_registry.get_string_rep(&type_id),
+                extra_fields.join(", ")
+            )
         }
         StructValTypeMismatch {
+            type_id,
             field_name,
             expected,
             actual,
         } => format!(
-            "Struct field '{}' type mismatch: expected '{}', got '{}'",
+            "Type mismatch for field '{}' of type '{}': expected '{}', got '{}'",
             field_name,
+            ctxt.type_registry.get_string_rep(&type_id),
             ctxt.type_registry.get_string_rep(&expected),
             ctxt.type_registry.get_string_rep(&actual)
+        ),
+        NotAStructField { type_id, field_name } => format!(
+            "Type '{}' does not have a field named '{}'",
+            ctxt.type_registry.get_string_rep(&type_id),
+            field_name
         ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)

@@ -186,6 +186,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .collect();
         if !missing_fields.is_empty() {
             return TypeError::StructValMissingFields {
+                type_id: *type_id,
                 missing_fields: missing_fields.into_iter().map(|s| s.to_string()).collect(),
             }
             .into();
@@ -197,6 +198,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .collect();
         if !extra_fields.is_empty() {
             return TypeError::StructValExtraFields {
+                type_id: *type_id,
                 extra_fields: extra_fields.into_iter().map(|s| s.to_string()).collect(),
             }
             .into();
@@ -221,6 +223,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
             if !self.ctxt.type_registry.types_equal(field_type_id, specified_type_id) {
                 return TypeError::StructValTypeMismatch {
+                    type_id: *type_id,
                     field_name: field_name.clone(),
                     expected: *field_type_id,
                     actual: *specified_type_id,
@@ -241,7 +244,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         match place {
             mlr::Place::Local(loc_id) => self.infer_type_of_local_place(loc_id),
-            // mlr::Place::FieldAccess { base, field_name } => self.infer_type_of_field_access_place(base, field_name),
+            mlr::Place::FieldAccess { base, field_name } => self.infer_type_of_field_access_place(base, field_name),
         }
     }
 
@@ -258,6 +261,31 @@ impl<'a> mlr::MlrBuilder<'a> {
         base: &mlr::PlaceId,
         field_name: &str,
     ) -> std::result::Result<TypeId, MlrBuilderError> {
-        todo!()
+        // Get struct definition
+        let base_type_id = self
+            .output
+            .place_types
+            .get(base)
+            .expect("type of base place should be registered");
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition_by_type_id(base_type_id)
+            .ok_or(MlrBuilderError::TypeError(TypeError::NotAStruct {
+                type_id: *base_type_id,
+            }))?;
+
+        // Find field
+        let field =
+            struct_def
+                .fields
+                .iter()
+                .find(|field| field.name == field_name)
+                .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
+                    type_id: *base_type_id,
+                    field_name: field_name.to_string(),
+                }))?;
+
+        Ok(field.type_id)
     }
 }

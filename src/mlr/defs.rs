@@ -74,7 +74,7 @@ pub enum Value {
 #[derive(Debug)]
 pub enum Place {
     Local(LocId),
-    // FieldAccess { base: PlaceId, field_name: String },
+    FieldAccess { base: PlaceId, field_name: String },
 }
 
 #[derive(Debug)]

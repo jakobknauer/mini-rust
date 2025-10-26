@@ -229,6 +229,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                     self.locs.get(loc_id).ok_or(FnGeneratorError).cloned()
                 }
             }
+            FieldAccess { base, field_name } => todo!("FieldAccess not implemented"),
         }
     }
 
