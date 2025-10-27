@@ -202,4 +202,8 @@ impl TypeRegistry {
             }
         })
     }
+
+    pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&EnumId, &EnumDefinition)> {
+        self.enums.iter()
+    }
 }

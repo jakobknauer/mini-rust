@@ -1,5 +1,7 @@
 fn main() -> i32 {
-    scalar_product(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
+    let s = on;
+    id(s);
+    0
 }
 
 fn fac(n: i32) -> i32 {

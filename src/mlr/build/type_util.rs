@@ -20,7 +20,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             Block(block) => self.infer_type_of_block(block),
             Constant(constant) => self.infer_type_of_constant(constant),
             Use(place) => self.infer_place_type(place),
-            Call { callable, args } => self.infer_type_of_call(*callable, args),
+            Call { callable, args } => self.infer_type_of_call(callable, args),
             Function(fn_id) => self.infer_type_of_function(*fn_id),
             If(if_) => self.infer_type_of_if(if_),
             Loop { .. } => self
@@ -29,6 +29,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
             Empty { type_id } => Ok(*type_id),
+            EnumVariant { enum_id, variant_index } => self.infer_type_of_enum_variant(enum_id, variant_index),
         }
     }
 
@@ -55,13 +56,13 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     fn infer_type_of_call(
         &self,
-        callable: mlr::LocId,
+        callable: &mlr::LocId,
         args: &[mlr::LocId],
     ) -> std::result::Result<TypeId, MlrBuilderError> {
         let callable_type = self
             .output
             .loc_types
-            .get(&callable)
+            .get(callable)
             .expect("type of location should be registered");
         let callable_type = self
             .ctxt
@@ -227,5 +228,30 @@ impl<'a> mlr::MlrBuilder<'a> {
             .type_id;
 
         Ok(field_type)
+    }
+
+    fn infer_type_of_enum_variant(
+        &self,
+        enum_id: &EnumId,
+        variant_index: &usize,
+    ) -> std::result::Result<TypeId, MlrBuilderError> {
+        let enum_def = self
+            .ctxt
+            .type_registry
+            .get_enum_definition(enum_id)
+            .expect("enum definition should be registered");
+
+        assert!(
+            *variant_index < enum_def.variants.len(),
+            "variant index should be valid"
+        );
+
+        let type_id = self
+            .ctxt
+            .type_registry
+            .get_named_type_id(NamedType::Enum(*enum_id))
+            .expect("enum variant type should be registered");
+
+        Ok(type_id)
     }
 }

@@ -4,7 +4,7 @@ pub struct TypeId(pub usize);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct StructId(pub usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct EnumId(pub usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]

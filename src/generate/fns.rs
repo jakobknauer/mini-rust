@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
-    types::{BasicType, BasicTypeEnum, FunctionType, StructType},
+    types::{BasicType, BasicTypeEnum, FunctionType, IntType, StructType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
@@ -218,6 +218,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             If(if_) => self.build_if(if_, val),
             Loop { body } => self.build_loop(body),
             Empty { type_id } => self.build_empty_val(type_id),
+            EnumVariant { enum_id, variant_index } => self.build_enum_variant_val(enum_id, variant_index),
         }
     }
 
@@ -365,5 +366,25 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
         let struct_value = iw_type.const_zero(); // create a zero value because that's available for BasicValueEnum
         Ok(struct_value)
+    }
+
+    fn build_enum_variant_val(
+        &mut self,
+        enum_id: &mr_types::EnumId,
+        variant_index: &usize,
+    ) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        let mr_type = self
+            .gtor
+            .mr_ctxt
+            .type_registry
+            .get_named_type_id(mr_types::NamedType::Enum(*enum_id))
+            .ok_or(FnGeneratorError)?;
+        let iw_type = self
+            .gtor
+            .get_type_as_basic_type_enum(&mr_type)
+            .ok_or(FnGeneratorError)?;
+        let iw_type: IntType<'iw> = iw_type.try_into().map_err(|_| FnGeneratorError)?;
+        let variant = iw_type.const_int(*variant_index as u64, false).as_basic_value_enum();
+        Ok(variant)
     }
 }
