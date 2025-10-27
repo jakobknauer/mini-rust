@@ -12,7 +12,7 @@
 - ~~Generate LLVM IR from typed IR~~
 - Missing:
     - ~~breaking out of loops~~
-    - creating ~~struct and~~ enum values
+    - ~~creating struct and enum values~~
     - ~~accessing struct fields~~
     - ~~equality operators~~
     - ~~logical operators~~
@@ -20,6 +20,7 @@
     - ~~Refine mlr struct handling~~
         - ~~Use field indices instead of field names in field access expressions~~
         - ~~Replace struct expression by multiple assignments~~
+    - Equality comparison of enum values
 
 ## Version 2
 - Higher-order functions / functions as first-class citizens
