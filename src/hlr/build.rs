@@ -575,9 +575,9 @@ mod tests {
         fn test_parse_simple_enum() {
             let input = r#"
                 enum State {
-                    Off,
-                    On,
-                    Unknown,
+                    Off {},
+                    On {},
+                    Unknown {},
                 }"#;
 
             let expected = Program {
@@ -588,10 +588,15 @@ mod tests {
                     variants: vec![
                         EnumVariant {
                             name: "Off".to_string(),
+                            fields: vec![],
                         },
-                        EnumVariant { name: "On".to_string() },
+                        EnumVariant {
+                            name: "On".to_string(),
+                            fields: vec![],
+                        },
                         EnumVariant {
                             name: "Unknown".to_string(),
+                            fields: vec![],
                         },
                     ],
                 }],
