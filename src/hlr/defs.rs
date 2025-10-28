@@ -50,6 +50,7 @@ pub struct Enum {
 #[derive(Debug, PartialEq, Eq)]
 pub struct EnumVariant {
     pub name: String,
+    pub fields: Vec<StructField>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

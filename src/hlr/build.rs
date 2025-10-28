@@ -207,7 +207,10 @@ impl<'a> HlrParser<'a> {
 
     fn parse_enum_variant(&mut self) -> Result<EnumVariant, ParserError> {
         let name = self.expect_identifier()?;
-        Ok(EnumVariant { name })
+        self.expect_token(Token::LBrace)?;
+        let fields = self.parse_struct_fields()?;
+        self.expect_token(Token::RBrace)?;
+        Ok(EnumVariant { name, fields })
     }
 
     /// TODO allow loop/if/block expression statements without delimiting semicolon

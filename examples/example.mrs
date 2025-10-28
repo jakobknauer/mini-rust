@@ -27,7 +27,9 @@ struct Point {
 }
 
 enum State {
-    on, off, unknown
+    on { a: i32 }, 
+    off{ b: bool, c: i32 },
+    unknown {}
 }
 
 fn id(s: State) -> State {
