@@ -1,3 +1,4 @@
+mod err;
 mod stdlib;
 
 use crate::{
@@ -10,10 +11,11 @@ pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, String> 
     let mut ctxt = ctxt::Ctxt::new();
 
     print_fn("Building HLR from source");
-    let hlr = hlr::build_program(source).map_err(|parser_error| print_parser_error(&parser_error, source))?;
+    let hlr = hlr::build_program(source).map_err(|parser_error| err::print_parser_error(&parser_error, source))?;
 
     print_fn("Building MLR from HLR");
-    register_and_define_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error defining types")?;
+    register_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error registering types")?;
+    define_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)
         .map_err(|_| "Error registering functions")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
@@ -25,7 +27,7 @@ pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, String> 
     Ok(llvm_ir)
 }
 
-fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
+fn register_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
     type_registry.register_primitive_types()?;
 
     for struct_ in &program.structs {
@@ -34,8 +36,16 @@ fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::T
 
     for enum_ in &program.enums {
         type_registry.register_enum(&enum_.name)?;
+        for variant in &enum_.variants {
+            let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
+            type_registry.register_struct(&variant_struct_name)?;
+        }
     }
 
+    Ok(())
+}
+
+fn define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
     for struct_ in &program.structs {
         set_struct_fields(type_registry, &struct_.name, &struct_.fields)?
     }
@@ -46,12 +56,15 @@ fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::T
             .iter()
             .map(|variant| {
                 let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-                let type_id = type_registry.register_struct(&variant_struct_name)?;
+                let type_id = type_registry.get_type_id_by_name(&variant_struct_name).ok_or(())?;
+
                 set_struct_fields(type_registry, &variant_struct_name, &variant.fields)?;
+
                 let variant = types::EnumVariant {
                     name: variant.name.clone(),
-                    type_id
+                    type_id,
                 };
+
                 Ok(variant)
             })
             .collect::<Result<_, _>>()?;
@@ -127,136 +140,12 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
         let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
         let mlr = mlr_builder
             .build()
-            .map_err(|err| print_mlr_builder_error(&function.name, err, ctxt))?;
+            .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
     }
 
     Ok(())
-}
-
-fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
-    use hlr::ParserError::*;
-
-    match err {
-        LexerError(lexer_error) => format!("Lexer error at position {}", lexer_error.position),
-        UnexpectedToken(token) => format!("Parser error: Unexpected token {:?}", token),
-        UndelimitedStatement => "Parser error: Undelimited statement".to_string(),
-        InvalidLiteral => "Parser error: Invalid literal".to_string(),
-        UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
-    }
-}
-
-fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &ctxt::Ctxt) -> String {
-    use mlr::MlrBuilderError::*;
-
-    match err {
-        TypeError(err) => print_type_error(fn_name, err, ctxt),
-        MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
-        UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
-        UnknownPrimitiveType => "Unknown primitive type".to_string(),
-    }
-}
-
-fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> String {
-    use mlr::TypeError::*;
-
-    let msg = match err {
-        AssignStmtTypeMismatch {
-            place,
-            expected,
-            actual,
-        } => format!(
-            "Cannot reassign location {:?} of type '{}' with value of type '{}'",
-            place,
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
-        ),
-        ValNotCallable => "Val is not callable".to_string(),
-        CallArgumentTypeMismatch {
-            index,
-            expected,
-            actual,
-        } => format!(
-            "Argument {} type mismatch: expected '{}', got '{}'",
-            index,
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
-        ),
-        CallArgumentCountMismatch { expected, actual } => {
-            format!("Argument count mismatch: expected {}, got {}", expected, actual)
-        }
-        IfConditionNotBoolean { actual } => format!(
-            "If condition must be of type 'bool', got '{}'",
-            ctxt.type_registry.get_string_rep(&actual)
-        ),
-        IfBranchTypeMismatch { then_type, else_type } => format!(
-            "If branches must have the same type: then is '{}', else is '{}'",
-            ctxt.type_registry.get_string_rep(&then_type),
-            ctxt.type_registry.get_string_rep(&else_type)
-        ),
-        ReturnTypeMismatch { expected, actual } => format!(
-            "Return type mismatch: expected '{}', got '{}'",
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
-        ),
-        OperatorResolutionFailed {
-            operator,
-            operand_types: (left, right),
-        } => format!(
-            "Cannot resolve operator '{}' for operand types '{}' and '{}'",
-            operator,
-            ctxt.type_registry.get_string_rep(&left),
-            ctxt.type_registry.get_string_rep(&right)
-        ),
-        UnresolvableTypeName { struct_name } => {
-            format!("Cannot find struct type with name '{}'", struct_name)
-        }
-        NotAStruct { type_id } => format!(
-            "Type '{}' is not a struct type",
-            ctxt.type_registry.get_string_rep(&type_id)
-        ),
-        StructValMissingFields {
-            type_id,
-            missing_fields,
-        } => {
-            format!(
-                "Struct val of type '{}' is missing fields: {}",
-                ctxt.type_registry.get_string_rep(&type_id),
-                missing_fields.join(", ")
-            )
-        }
-        StructValExtraFields { type_id, extra_fields } => {
-            format!(
-                "Struct val of type '{}' has extra fields: {}",
-                ctxt.type_registry.get_string_rep(&type_id),
-                extra_fields.join(", ")
-            )
-        }
-        StructValTypeMismatch {
-            type_id,
-            field_name,
-            expected,
-            actual,
-        } => format!(
-            "Type mismatch for field '{}' of type '{}': expected '{}', got '{}'",
-            field_name,
-            ctxt.type_registry.get_string_rep(&type_id),
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
-        ),
-        NotAStructField { type_id, field_name } => format!(
-            "Type '{}' does not have a field named '{}'",
-            ctxt.type_registry.get_string_rep(&type_id),
-            field_name
-        ),
-        FieldAccessBaseTypeMismatch { expected, actual } => format!(
-            "Field access base type mismatch: expected '{}', got '{}'",
-            ctxt.type_registry.get_struct_string_rep(&expected),
-            ctxt.type_registry.get_struct_string_rep(&actual)
-        ),
-    };
-    format!("Type error in function '{}': {}", fn_name, msg)
 }
 
 fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
