@@ -37,35 +37,49 @@ fn register_and_define_types(program: &hlr::Program, type_registry: &mut ctxt::T
     }
 
     for struct_ in &program.structs {
-        let fields = struct_
-            .fields
-            .iter()
-            .map(|field| {
-                Ok(types::StructField {
-                    name: field.name.clone(),
-                    type_id: type_registry.get_type_id_by_name(&field.field_type).ok_or(())?,
-                })
-            })
-            .collect::<Result<_, _>>()?;
-
-        let struct_definition = type_registry
-            .get_mut_struct_definition_by_name(&struct_.name)
-            .ok_or(())?;
-        struct_definition.fields = fields;
+        set_struct_fields(type_registry, &struct_.name, &struct_.fields)?
     }
 
     for enum_ in &program.enums {
         let variants = enum_
             .variants
             .iter()
-            .map(|variant| types::EnumVariant {
-                name: variant.name.clone(),
+            .map(|variant| {
+                let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
+                let type_id = type_registry.register_struct(&variant_struct_name)?;
+                set_struct_fields(type_registry, &variant_struct_name, &variant.fields)?;
+                let variant = types::EnumVariant {
+                    name: variant.name.clone(),
+                    type_id
+                };
+                Ok(variant)
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         let enum_definition = type_registry.get_mut_enum_definition_by_name(&enum_.name).ok_or(())?;
         enum_definition.variants = variants;
     }
+
+    Ok(())
+}
+
+fn set_struct_fields<'a>(
+    type_registry: &mut ctxt::TypeRegistry,
+    struct_name: &str,
+    fields: impl IntoIterator<Item = &'a hlr::StructField>,
+) -> Result<(), ()> {
+    let fields = fields
+        .into_iter()
+        .map(|field| {
+            Ok(types::StructField {
+                name: field.name.clone(),
+                type_id: type_registry.get_type_id_by_name(&field.field_type).ok_or(())?,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
+    let struct_definition = type_registry.get_mut_struct_definition_by_name(struct_name).ok_or(())?;
+    struct_definition.fields = fields;
 
     Ok(())
 }

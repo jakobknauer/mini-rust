@@ -45,4 +45,5 @@ pub struct EnumDefinition {
 
 pub struct EnumVariant {
     pub name: String,
+    pub type_id: TypeId,
 }
