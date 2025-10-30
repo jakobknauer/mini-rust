@@ -1,7 +1,5 @@
 fn main() -> i32 {
-    let s = on;
-    id(s);
-    0
+    fac(5)
 }
 
 fn fac(n: i32) -> i32 {
@@ -27,8 +25,8 @@ struct Point {
 }
 
 enum State {
-    on { a: i32 },
-    off{ b: bool, c: i32 },
+    on { a: bool },
+    off { a: i32, b: i32, c: i32 },
     unknown {},
 }
 

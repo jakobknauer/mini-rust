@@ -6,7 +6,8 @@ use inkwell::{
     AddressSpace,
     context::Context as IwContext,
     module::Module,
-    types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
+    targets::TargetData,
+    types::{AnyType, AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, StructType},
     values::FunctionValue,
 };
 
@@ -76,7 +77,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                     mr_types::PrimitiveType::Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
                 mr_types::NamedType::Struct(struct_id) => self.define_struct(name, type_id, struct_id),
-                mr_types::NamedType::Enum(enum_id) => self.define_enum(enum_id),
+                mr_types::NamedType::Enum(enum_id) => self.define_enum(name, enum_id),
             },
             mr_types::Type::Function { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
         };
@@ -118,12 +119,36 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         iw_struct.as_any_type_enum()
     }
 
-    fn define_enum(&mut self, enum_id: &mr_types::EnumId) -> AnyTypeEnum<'iw> {
+    fn define_enum(&mut self, name: &str, enum_id: &mr_types::EnumId) -> AnyTypeEnum<'iw> {
         let enum_def = self.mr_ctxt.type_registry.get_enum_definition(enum_id).unwrap();
+
         let variant_count = enum_def.variants.len();
         let discrim_bits = (variant_count as f64).log2().ceil() as u32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);
-        discrim_type.as_any_type_enum()
+
+        let max_variant_size = enum_def
+            .variants
+            .iter()
+            .map(|variant| {
+                let variant_type: StructType = self
+                    .get_type_as_basic_type_enum(&variant.type_id)
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+
+                TargetData::create("").get_store_size(&variant_type)
+            })
+            .max()
+            .unwrap_or(0);
+
+        let data_array_type = self.iw_ctxt.i8_type().array_type(max_variant_size as u32);
+
+        let enum_struct = self.iw_ctxt.opaque_struct_type(name);
+        enum_struct.set_body(
+            &[discrim_type.as_basic_type_enum(), data_array_type.as_basic_type_enum()],
+            false,
+        );
+        enum_struct.as_any_type_enum()
     }
 
     fn declare_functions(&mut self) {
