@@ -68,6 +68,9 @@ pub enum TypeError {
         expected: ctxt::types::StructId,
         actual: ctxt::types::StructId,
     },
+    NotAnEnum {
+        type_id: ctxt::types::TypeId,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;

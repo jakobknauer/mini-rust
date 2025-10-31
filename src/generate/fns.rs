@@ -249,6 +249,20 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
                 Ok(field_ptr)
             }
+            EnumDiscriminant { base, .. } => {
+                let iw_base_struct_type: StructType<'iw> = self
+                    .get_iw_type_of_place(base)?
+                    .try_into()
+                    .map_err(|_| FnGeneratorError)?;
+
+                let base_address = self.build_place(base)?;
+
+                let discrim_ptr =
+                    self.builder
+                        .build_struct_gep(iw_base_struct_type, base_address, 0, "enum_discriminant_ptr")?;
+
+                Ok(discrim_ptr)
+            }
         }
     }
 

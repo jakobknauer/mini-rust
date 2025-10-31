@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::ctxt::{
     functions::FnId,
-    types::{StructId, TypeId},
+    types::{EnumId, StructId, TypeId},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -73,6 +73,10 @@ pub enum Place {
         base: PlaceId,
         struct_id: StructId,
         field_index: usize,
+    },
+    EnumDiscriminant {
+        base: PlaceId,
+        enum_id: EnumId,
     },
 }
 

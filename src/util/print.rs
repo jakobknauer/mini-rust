@@ -176,6 +176,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_place(*base)?;
                     write!(self.writer, ".{}", field_index)
                 }
+                Place::EnumDiscriminant { base, .. } => {
+                    write!(self.writer, "Disc(")?;
+                    self.print_place(*base)?;
+                    write!(self.writer, ")")
+                }
             },
             None => write!(self.writer, "<place id {}>", place_id.0),
         }

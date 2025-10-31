@@ -362,32 +362,35 @@ impl<'a> MlrBuilder<'a> {
             _ => return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id })),
         };
 
-        // Build empty struct val first
-        let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
-            let struct_val = mlr::Value::Empty { type_id: *type_id };
-            self.insert_val(struct_val)?
-        });
-
-        let base_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
-
-        let field_init_stmts: Vec<_> = fields
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition(&struct_id)
+            .expect("struct definition should be registered");
+        let field_indices: Vec<_> = fields
             .iter()
-            .map(|(field_name, expr)| -> Result<mlr::StmtId> {
-                let struct_def = self
-                    .ctxt
-                    .type_registry
-                    .get_struct_definition(&struct_id)
-                    .expect("struct definition should be registered");
-
-                let field_index = struct_def
+            .map(|(field_name, _)| {
+                struct_def
                     .fields
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
                     .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
                         type_id: *type_id,
                         field_name: field_name.clone(),
-                    }))?;
+                    }))
+            })
+            .collect::<Result<_>>()?;
 
+        let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
+            let struct_val = mlr::Value::Empty { type_id: *type_id };
+            self.insert_val(struct_val)?
+        });
+
+        let base_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
+        let field_init_stmts: Vec<_> = fields
+            .iter()
+            .zip(field_indices)
+            .map(|((_, expr), field_index)| {
                 let field_place = {
                     self.insert_place(mlr::Place::FieldAccess {
                         base: base_place,
@@ -411,14 +414,36 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_enum_val(
-        &self,
+        &mut self,
         type_id: &types::TypeId,
         #[allow(unused)] enum_id: &types::EnumId,
         #[allow(unused)] variant_index: usize,
         #[allow(unused)] fields: &[(String, hlr::Expression)],
     ) -> std::result::Result<mlr::Value, MlrBuilderError> {
-        // For the moment, simply build an empty value for the enum variant
-        Ok(mlr::Value::Empty { type_id: *type_id })
+        let (enum_val_loc, enum_val_stmt) = assign_to_new_loc!(self, {
+            let enum_val = mlr::Value::Empty { type_id: *type_id };
+            self.insert_val(enum_val)?
+        });
+
+        let discriminant_place = {
+            let base_place = self.insert_place(mlr::Place::Local(enum_val_loc))?;
+            self.insert_place(mlr::Place::EnumDiscriminant {
+                base: base_place,
+                enum_id: *enum_id,
+            })?
+        };
+        let discriminant_value = {
+            let val = mlr::Value::Constant(mlr::Constant::Int(variant_index as i64));
+            self.insert_val(val)?
+        };
+        let discriminant_stmt = self.insert_assign_stmt(discriminant_place, discriminant_value)?;
+
+        let statements = vec![enum_val_stmt, discriminant_stmt];
+
+        Ok(mlr::Value::Block(mlr::Block {
+            statements,
+            output: enum_val_loc,
+        }))
     }
 
     fn lower_var_to_place(&self, name: &str) -> Result<mlr::Place> {

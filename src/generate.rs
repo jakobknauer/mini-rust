@@ -122,8 +122,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn define_enum(&mut self, name: &str, enum_id: &mr_types::EnumId) -> AnyTypeEnum<'iw> {
         let enum_def = self.mr_ctxt.type_registry.get_enum_definition(enum_id).unwrap();
 
-        let variant_count = enum_def.variants.len();
-        let discrim_bits = (variant_count as f64).log2().ceil() as u32;
+        let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);
 
         let max_variant_size = enum_def

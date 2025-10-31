@@ -173,6 +173,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 struct_id,
                 field_index,
             } => self.infer_type_of_field_access_place(base, struct_id, field_index),
+            mlr::Place::EnumDiscriminant { base, enum_id } => self.infer_type_of_enum_discriminant(base, enum_id),
         }
     }
 
@@ -229,28 +230,39 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_type)
     }
 
-    fn infer_type_of_enum_variant(
+    fn infer_type_of_enum_discriminant(
         &self,
+        base: &mlr::PlaceId,
         enum_id: &EnumId,
-        variant_index: &usize,
     ) -> std::result::Result<TypeId, MlrBuilderError> {
-        let enum_def = self
+        let base_type_id = self
+            .output
+            .place_types
+            .get(base)
+            .expect("type of base place should be registered");
+
+        let base_type = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(base_type_id)
+            .expect("type of base place should be registered");
+
+        let Type::NamedType(_, NamedType::Enum(_)) = base_type else {
+            return TypeError::NotAnEnum { type_id: *base_type_id }.into();
+        };
+
+        let _enum_def = self
             .ctxt
             .type_registry
             .get_enum_definition(enum_id)
             .expect("enum definition should be registered");
 
-        assert!(
-            *variant_index < enum_def.variants.len(),
-            "variant index should be valid"
-        );
-
-        let type_id = self
+        // the discriminant is always an integer
+        let int_type_id = self
             .ctxt
             .type_registry
-            .get_named_type_id(NamedType::Enum(*enum_id))
-            .expect("enum variant type should be registered");
-
-        Ok(type_id)
+            .get_primitive_type_id(PrimitiveType::Integer32)
+            .expect("integer primitive type should be registered");
+        Ok(int_type_id)
     }
 }

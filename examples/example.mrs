@@ -1,5 +1,6 @@
 fn main() -> i32 {
-    fac(5)
+    id(off {});
+    7
 }
 
 fn fac(n: i32) -> i32 {

@@ -120,6 +120,10 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             ctxt.type_registry.get_struct_string_rep(&expected),
             ctxt.type_registry.get_struct_string_rep(&actual)
         ),
+        NotAnEnum { type_id } => format!(
+            "Type '{}' is not an enum type",
+            ctxt.type_registry.get_string_rep(&type_id)
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }
