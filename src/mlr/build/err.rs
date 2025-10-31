@@ -41,7 +41,7 @@ pub enum TypeError {
         operand_types: (ctxt::types::TypeId, ctxt::types::TypeId),
     },
     UnresolvableTypeName {
-        struct_name: String,
+        type_name: String,
     },
     NotAStruct {
         type_id: ctxt::types::TypeId,

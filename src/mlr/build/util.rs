@@ -1,3 +1,4 @@
+use crate::ctxt::types;
 use crate::mlr;
 
 use crate::mlr::build::macros::assign_to_new_loc;
@@ -74,6 +75,22 @@ impl<'a> mlr::MlrBuilder<'a> {
             .filter_map(|scope| scope.vars.get(name))
             .next()
             .cloned()
+    }
+
+    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(types::TypeId, types::EnumId, usize)> {
+        for (enum_id, enum_def) in self.ctxt.type_registry.get_all_enums() {
+            for (idx, variant) in enum_def.variants.iter().enumerate() {
+                if variant.name == variant_name {
+                    let type_id = self
+                        .ctxt
+                        .type_registry
+                        .get_named_type_id(types::NamedType::Enum(*enum_id))
+                        .expect("enum type id should be known");
+                    return Some((type_id, *enum_id, idx));
+                }
+            }
+        }
+        None
     }
 
     pub fn create_unit_value(&mut self) -> mlr::build::Result<mlr::ValId> {

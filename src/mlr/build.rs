@@ -332,29 +332,43 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_struct_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expression)]) -> Result<mlr::Value> {
-        let type_id = self
-            .ctxt
-            .type_registry
-            .get_type_id_by_name(struct_name)
-            .ok_or(MlrBuilderError::TypeError(TypeError::UnresolvableTypeName {
-                struct_name: struct_name.to_string(),
-            }))?;
+        let type_id = self.ctxt.type_registry.get_type_id_by_name(struct_name);
 
+        if let Some(type_id) = type_id {
+            self.build_actual_struct_val(&type_id, fields)
+        } else if let Some((type_id, enum_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
+            self.build_enum_val(&type_id, &enum_id, variant_index, fields)
+        } else {
+            TypeError::UnresolvableTypeName {
+                type_name: struct_name.to_string(),
+            }
+            .into()
+        }
+    }
+
+    fn build_actual_struct_val(
+        &mut self,
+        type_id: &types::TypeId,
+        fields: &[(String, hlr::Expression)],
+    ) -> Result<mlr::Value> {
         let type_ = self
             .ctxt
             .type_registry
-            .get_type_by_id(&type_id)
+            .get_type_by_id(type_id)
             .expect("type should be registered");
 
-        let types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = *type_ else {
-            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id }));
+        let struct_id = match *type_ {
+            types::Type::NamedType(_, types::NamedType::Struct(struct_id)) => struct_id,
+            _ => return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id })),
         };
 
         // Build empty struct val first
         let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
-            let struct_val = mlr::Value::Empty { type_id };
+            let struct_val = mlr::Value::Empty { type_id: *type_id };
             self.insert_val(struct_val)?
         });
+
+        let base_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
 
         let field_init_stmts: Vec<_> = fields
             .iter()
@@ -370,12 +384,11 @@ impl<'a> MlrBuilder<'a> {
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
                     .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                        type_id,
+                        type_id: *type_id,
                         field_name: field_name.clone(),
                     }))?;
 
                 let field_place = {
-                    let base_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
                     self.insert_place(mlr::Place::FieldAccess {
                         base: base_place,
                         struct_id,
@@ -395,6 +408,17 @@ impl<'a> MlrBuilder<'a> {
             statements,
             output: struct_val_loc,
         }))
+    }
+
+    fn build_enum_val(
+        &self,
+        type_id: &types::TypeId,
+        #[allow(unused)] enum_id: &types::EnumId,
+        #[allow(unused)] variant_index: usize,
+        #[allow(unused)] fields: &[(String, hlr::Expression)],
+    ) -> std::result::Result<mlr::Value, MlrBuilderError> {
+        // For the moment, simply build an empty value for the enum variant
+        Ok(mlr::Value::Empty { type_id: *type_id })
     }
 
     fn lower_var_to_place(&self, name: &str) -> Result<mlr::Place> {

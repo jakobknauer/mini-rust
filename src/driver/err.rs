@@ -74,8 +74,8 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             ctxt.type_registry.get_string_rep(&left),
             ctxt.type_registry.get_string_rep(&right)
         ),
-        UnresolvableTypeName { struct_name } => {
-            format!("Cannot find struct type with name '{}'", struct_name)
+        UnresolvableTypeName { type_name } => {
+            format!("Cannot find type with name '{}'", type_name)
         }
         NotAStruct { type_id } => format!(
             "Type '{}' is not a struct type",
