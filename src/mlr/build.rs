@@ -155,58 +155,8 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Expression::*;
 
         let place = match expr {
-            Variable(name) => {
-                let loc = self
-                    .resolve_name_to_location(name)
-                    .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
-
-                mlr::Place::Local(loc)
-            }
-            FieldAccess { base, field_name } => {
-                // TODO allow general expressions as base (by lowering to val and then creating a
-                // temporary place). This however requires a better builder infrastructure, so we
-                // can here at this point create temporary variables/places in the current scope.
-                let base = self.lower_to_place(base)?;
-
-                let base_type_id = self
-                    .output
-                    .place_types
-                    .get(&base)
-                    .expect("type of base place should be registered");
-
-                let base_type = self
-                    .ctxt
-                    .type_registry
-                    .get_type_by_id(base_type_id)
-                    .expect("base type should be registered");
-
-                let types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = base_type else {
-                    return Err(MlrBuilderError::TypeError(TypeError::NotAStruct {
-                        type_id: *base_type_id,
-                    }));
-                };
-
-                let struct_def = self
-                    .ctxt
-                    .type_registry
-                    .get_struct_definition(struct_id)
-                    .expect("struct definition should be registered");
-
-                let field_index = struct_def
-                    .fields
-                    .iter()
-                    .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                        type_id: *base_type_id,
-                        field_name: field_name.clone(),
-                    }))?;
-
-                mlr::Place::FieldAccess {
-                    base,
-                    struct_id: *struct_id,
-                    field_index,
-                }
-            }
+            Variable(name) => self.lower_var_to_place(name)?,
+            FieldAccess { base, field_name } => self.lower_field_access_to_place(base, field_name)?,
             _ => panic!("Only variables and field access expressions are supported as places."),
         };
 
@@ -445,5 +395,59 @@ impl<'a> MlrBuilder<'a> {
             statements,
             output: struct_val_loc,
         }))
+    }
+
+    fn lower_var_to_place(&self, name: &str) -> Result<mlr::Place> {
+        let loc = self
+            .resolve_name_to_location(name)
+            .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
+
+        Ok(mlr::Place::Local(loc))
+    }
+
+    fn lower_field_access_to_place(&mut self, base: &hlr::Expression, field_name: &str) -> Result<mlr::Place> {
+        // TODO allow general expressions as base (by lowering to val and then creating a
+        // temporary place). This however requires a better builder infrastructure, so we
+        // can here at this point create temporary variables/places in the current scope.
+        let base = self.lower_to_place(base)?;
+
+        let base_type_id = self
+            .output
+            .place_types
+            .get(&base)
+            .expect("type of base place should be registered");
+
+        let base_type = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(base_type_id)
+            .expect("base type should be registered");
+
+        let types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = base_type else {
+            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct {
+                type_id: *base_type_id,
+            }));
+        };
+
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition(struct_id)
+            .expect("struct definition should be registered");
+
+        let field_index = struct_def
+            .fields
+            .iter()
+            .position(|struct_field| struct_field.name == field_name)
+            .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
+                type_id: *base_type_id,
+                field_name: field_name.to_string(),
+            }))?;
+
+        Ok(mlr::Place::FieldAccess {
+            base,
+            struct_id: *struct_id,
+            field_index,
+        })
     }
 }
