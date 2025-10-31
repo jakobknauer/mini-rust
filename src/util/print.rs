@@ -4,7 +4,6 @@ use crate::{
     ctxt::{
         self,
         functions::{FnId, FunctionSignature},
-        types::NamedType,
     },
     mlr::*,
 };
@@ -161,15 +160,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 Value::Empty { type_id } => {
                     let type_name = self.ctxt.type_registry.get_string_rep(type_id);
                     write!(self.writer, "empty {}", type_name)
-                }
-                Value::EnumVariant { enum_id, variant_index } => {
-                    let type_id = self
-                        .ctxt
-                        .type_registry
-                        .get_named_type_id(NamedType::Enum(*enum_id))
-                        .expect("enum type id should exist");
-                    let type_name = self.ctxt.type_registry.get_string_rep(&type_id);
-                    write!(self.writer, "enum {}::{}", type_name, variant_index)
                 }
             },
             None => write!(self.writer, "<val id {}>", val_id.0),

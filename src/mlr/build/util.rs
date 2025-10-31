@@ -62,25 +62,9 @@ impl<'a> mlr::MlrBuilder<'a> {
             Ok(mlr::Value::Use(place))
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
             Ok(mlr::Value::Function(fn_id))
-        } else if let Some(val) = self.try_resolve_enum_variant(name) {
-            Ok(val)
         } else {
             Err(super::MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }
-    }
-
-    fn try_resolve_enum_variant(&mut self, name: &str) -> Option<mlr::Value> {
-        for (enum_id, enum_def) in self.ctxt.type_registry.get_all_enums() {
-            for (variant_index, variant) in enum_def.variants.iter().enumerate() {
-                if variant.name == name {
-                    return Some(mlr::Value::EnumVariant {
-                        enum_id: *enum_id,
-                        variant_index,
-                    });
-                }
-            }
-        }
-        None
     }
 
     pub fn resolve_name_to_location(&self, name: &str) -> Option<mlr::LocId> {

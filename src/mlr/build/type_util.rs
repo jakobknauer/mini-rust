@@ -29,7 +29,6 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
             Empty { type_id } => Ok(*type_id),
-            EnumVariant { enum_id, variant_index } => self.infer_type_of_enum_variant(enum_id, variant_index),
         }
     }
 

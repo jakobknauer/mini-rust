@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::ctxt::{
     functions::FnId,
-    types::{EnumId, StructId, TypeId},
+    types::{StructId, TypeId},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -64,7 +64,6 @@ pub enum Value {
     If(If),
     Loop { body: Block },
     Empty { type_id: TypeId },
-    EnumVariant { enum_id: EnumId, variant_index: usize },
 }
 
 #[derive(Debug)]

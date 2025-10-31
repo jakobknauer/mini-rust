@@ -218,7 +218,6 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             If(if_) => self.build_if(if_, val),
             Loop { body } => self.build_loop(body),
             Empty { type_id } => self.build_empty_val(type_id),
-            EnumVariant { enum_id, variant_index } => self.build_enum_variant_val(enum_id, variant_index),
         }
     }
 
