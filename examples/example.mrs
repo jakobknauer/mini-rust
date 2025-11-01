@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    id(off {});
+    let state = off { a: 1, b: 2, c: 3 };
     7
 }
 

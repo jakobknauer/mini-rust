@@ -332,9 +332,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_struct_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expression)]) -> Result<mlr::Value> {
-        let type_id = self.ctxt.type_registry.get_type_id_by_name(struct_name);
-
-        if let Some(type_id) = type_id {
+        if let Some(type_id) = self.ctxt.type_registry.get_type_id_by_name(struct_name) {
             self.build_actual_struct_val(&type_id, fields)
         } else if let Some((type_id, enum_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&type_id, &enum_id, variant_index, fields)
@@ -351,59 +349,13 @@ impl<'a> MlrBuilder<'a> {
         type_id: &types::TypeId,
         fields: &[(String, hlr::Expression)],
     ) -> Result<mlr::Value> {
-        let type_ = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(type_id)
-            .expect("type should be registered");
-
-        let struct_id = match *type_ {
-            types::Type::NamedType(_, types::NamedType::Struct(struct_id)) => struct_id,
-            _ => return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id })),
-        };
-
-        let struct_def = self
-            .ctxt
-            .type_registry
-            .get_struct_definition(&struct_id)
-            .expect("struct definition should be registered");
-        let field_indices: Vec<_> = fields
-            .iter()
-            .map(|(field_name, _)| {
-                struct_def
-                    .fields
-                    .iter()
-                    .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                        type_id: *type_id,
-                        field_name: field_name.clone(),
-                    }))
-            })
-            .collect::<Result<_>>()?;
-
         let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, {
             let struct_val = mlr::Value::Empty { type_id: *type_id };
             self.insert_val(struct_val)?
         });
+        let struct_val_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
 
-        let base_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
-        let field_init_stmts: Vec<_> = fields
-            .iter()
-            .zip(field_indices)
-            .map(|((_, expr), field_index)| {
-                let field_place = {
-                    self.insert_place(mlr::Place::FieldAccess {
-                        base: base_place,
-                        struct_id,
-                        field_index,
-                    })?
-                };
-
-                let field_value = self.lower_to_val(expr)?;
-                let field_stmt = self.insert_assign_stmt(field_place, field_value)?;
-                Ok(field_stmt)
-            })
-            .collect::<Result<_>>()?;
+        let field_init_stmts = self.fill_struct_fields(type_id, fields, &struct_val_place)?;
 
         let statements = std::iter::once(struct_val_stmt).chain(field_init_stmts).collect();
 
@@ -416,29 +368,51 @@ impl<'a> MlrBuilder<'a> {
     fn build_enum_val(
         &mut self,
         type_id: &types::TypeId,
-        #[allow(unused)] enum_id: &types::EnumId,
-        #[allow(unused)] variant_index: usize,
-        #[allow(unused)] fields: &[(String, hlr::Expression)],
+        enum_id: &types::EnumId,
+        variant_index: usize,
+        fields: &[(String, hlr::Expression)],
     ) -> std::result::Result<mlr::Value, MlrBuilderError> {
+        // Create empty enum value
         let (enum_val_loc, enum_val_stmt) = assign_to_new_loc!(self, {
             let enum_val = mlr::Value::Empty { type_id: *type_id };
             self.insert_val(enum_val)?
         });
+        let base_place = self.insert_place(mlr::Place::Local(enum_val_loc))?;
 
-        let discriminant_place = {
-            let base_place = self.insert_place(mlr::Place::Local(enum_val_loc))?;
-            self.insert_place(mlr::Place::EnumDiscriminant {
-                base: base_place,
-                enum_id: *enum_id,
-            })?
-        };
+        // Fill discriminant
+        let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant {
+            base: base_place,
+            enum_id: *enum_id,
+        })?;
         let discriminant_value = {
             let val = mlr::Value::Constant(mlr::Constant::Int(variant_index as i64));
             self.insert_val(val)?
         };
         let discriminant_stmt = self.insert_assign_stmt(discriminant_place, discriminant_value)?;
 
-        let statements = vec![enum_val_stmt, discriminant_stmt];
+        // Fill fields
+        let variant_place = self.insert_place(mlr::Place::ProjectToVariant {
+            base: base_place,
+            enum_id: *enum_id,
+            variant_index,
+        })?;
+        let enum_def = self
+            .ctxt
+            .type_registry
+            .get_enum_definition(enum_id)
+            .expect("enum definition should be registered");
+        let variant_type_id = enum_def
+            .variants
+            .get(variant_index)
+            .expect("variant index should be valid")
+            .type_id;
+        let field_init_stmts = self.fill_struct_fields(&variant_type_id, fields, &variant_place)?;
+
+        // Build final block
+        let statements = std::iter::once(enum_val_stmt)
+            .chain(std::iter::once(discriminant_stmt))
+            .chain(field_init_stmts)
+            .collect();
 
         Ok(mlr::Value::Block(mlr::Block {
             statements,

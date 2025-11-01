@@ -1,5 +1,8 @@
 use crate::ctxt::types;
-use crate::mlr;
+use crate::mlr::{
+    self,
+    build::{MlrBuilderError, Result, TypeError},
+};
 
 use crate::mlr::build::macros::assign_to_new_loc;
 
@@ -64,7 +67,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
             Ok(mlr::Value::Function(fn_id))
         } else {
-            Err(super::MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
+            Err(MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }
     }
 
@@ -156,5 +159,62 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let stmt = mlr::Statement::Return { value };
         self.insert_stmt(stmt)
+    }
+
+    pub fn fill_struct_fields(
+        &mut self,
+        type_id: &types::TypeId,
+        fields: &[(String, crate::hlr::Expression)],
+        base_place: &mlr::PlaceId,
+    ) -> Result<Vec<mlr::StmtId>> {
+        let type_ = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(type_id)
+            .expect("type should be registered");
+
+        let &types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = type_ else {
+            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id }));
+        };
+
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition(&struct_id)
+            .expect("struct definition should be registered");
+
+        let field_indices: Vec<_> = fields
+            .iter()
+            .map(|(field_name, _)| {
+                struct_def
+                    .fields
+                    .iter()
+                    .position(|struct_field| &struct_field.name == field_name)
+                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
+                        type_id: *type_id,
+                        field_name: field_name.clone(),
+                    }))
+            })
+            .collect::<Result<_>>()?;
+
+        let field_init_stmts: Vec<_> = fields
+            .iter()
+            .zip(field_indices)
+            .map(|((_, expr), field_index)| {
+                let field_place = {
+                    self.insert_place(mlr::Place::FieldAccess {
+                        base: *base_place,
+                        struct_id,
+                        field_index,
+                    })?
+                };
+
+                let field_value = self.lower_to_val(expr)?;
+                let field_stmt = self.insert_assign_stmt(field_place, field_value)?;
+                Ok(field_stmt)
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(field_init_stmts)
     }
 }
