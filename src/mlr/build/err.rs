@@ -71,6 +71,10 @@ pub enum TypeError {
     NotAnEnum {
         type_id: ctxt::types::TypeId,
     },
+    ProjectToVariantBaseTypeMismatch {
+        expected: ctxt::types::EnumId,
+        actual: ctxt::types::EnumId,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;

@@ -175,6 +175,22 @@ impl TypeRegistry {
             .unwrap_or(format!("<struct id {}>", struct_id.0))
     }
 
+    pub fn get_enum_string_rep(&self, enum_id: &EnumId) -> String {
+        self.types
+            .right_values()
+            .filter_map(|type_| {
+                if let Type::NamedType(name, NamedType::Enum(eid)) = type_
+                    && eid == enum_id
+                {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap_or(format!("<enum id {}>", enum_id.0))
+    }
+
     pub fn types_equal(&self, t1: &TypeId, t2: &TypeId) -> bool {
         t1 == t2
     }

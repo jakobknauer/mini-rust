@@ -174,6 +174,11 @@ impl<'a> mlr::MlrBuilder<'a> {
                 field_index,
             } => self.infer_type_of_field_access_place(base, struct_id, field_index),
             mlr::Place::EnumDiscriminant { base, enum_id } => self.infer_type_of_enum_discriminant(base, enum_id),
+            mlr::Place::ProjectToVariant {
+                base,
+                enum_id,
+                variant_index,
+            } => self.infer_type_of_project_to_variant_place(base, enum_id, variant_index),
         }
     }
 
@@ -264,5 +269,48 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get_primitive_type_id(PrimitiveType::Integer32)
             .expect("integer primitive type should be registered");
         Ok(int_type_id)
+    }
+
+    fn infer_type_of_project_to_variant_place(
+        &self,
+        base: &mlr::PlaceId,
+        enum_id: &EnumId,
+        variant_index: &usize,
+    ) -> std::result::Result<TypeId, MlrBuilderError> {
+        let base_type_id = self
+            .output
+            .place_types
+            .get(base)
+            .expect("type of base place should be registered");
+
+        let base_type = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(base_type_id)
+            .expect("type of base place should be registered");
+
+        let Type::NamedType(_, NamedType::Enum(base_enum_id)) = base_type else {
+            return TypeError::NotAnEnum { type_id: *base_type_id }.into();
+        };
+
+        if base_enum_id != enum_id {
+            return TypeError::ProjectToVariantBaseTypeMismatch {
+                expected: *enum_id,
+                actual: *base_enum_id,
+            }
+            .into();
+        }
+
+        let enum_def = self
+            .ctxt
+            .type_registry
+            .get_enum_definition(enum_id)
+            .expect("enum definition should be registered");
+        let variant = enum_def
+            .variants
+            .get(*variant_index)
+            .expect("variant index should be valid");
+
+        Ok(variant.type_id)
     }
 }

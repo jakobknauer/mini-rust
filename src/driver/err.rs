@@ -124,6 +124,11 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             "Type '{}' is not an enum type",
             ctxt.type_registry.get_string_rep(&type_id)
         ),
+        ProjectToVariantBaseTypeMismatch { expected, actual } => format!(
+            "Project to variant base type mismatch: expected '{}', got '{}'",
+            ctxt.type_registry.get_enum_string_rep(&expected),
+            ctxt.type_registry.get_enum_string_rep(&actual)
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

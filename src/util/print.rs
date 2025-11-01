@@ -4,6 +4,7 @@ use crate::{
     ctxt::{
         self,
         functions::{FnId, FunctionSignature},
+        types::NamedType,
     },
     mlr::*,
 };
@@ -180,6 +181,21 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "Disc(")?;
                     self.print_place(*base)?;
                     write!(self.writer, ")")
+                }
+                Place::ProjectToVariant {
+                    base,
+                    enum_id,
+                    variant_index,
+                } => {
+                    let type_id = self
+                        .ctxt
+                        .type_registry
+                        .get_named_type_id(NamedType::Enum(*enum_id))
+                        .unwrap();
+                    let enum_name = self.ctxt.type_registry.get_string_rep(&type_id);
+                    write!(self.writer, "(")?;
+                    self.print_place(*base)?;
+                    write!(self.writer, " as {}::{})", enum_name, variant_index)
                 }
             },
             None => write!(self.writer, "<place id {}>", place_id.0),

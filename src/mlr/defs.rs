@@ -78,6 +78,11 @@ pub enum Place {
         base: PlaceId,
         enum_id: EnumId,
     },
+    ProjectToVariant {
+        base: PlaceId,
+        enum_id: EnumId,
+        variant_index: usize,
+    },
 }
 
 #[derive(Debug)]
