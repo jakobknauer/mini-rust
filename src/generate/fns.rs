@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
-    types::{BasicType, BasicTypeEnum, FunctionType, IntType, StructType},
+    types::{BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
@@ -158,8 +158,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .get_primitive_type_id(mr_types::PrimitiveType::Unit)
             .ok_or(FnGeneratorError)?;
         let iw_type = self.gtor.get_or_define_type(&mr_unit_type).ok_or(FnGeneratorError)?;
-        let iw_type: StructType = iw_type.try_into().map_err(|_| FnGeneratorError)?;
-        Ok(iw_type.const_named_struct(&[]).as_basic_value_enum())
+        let iw_struct_type: StructType = iw_type.try_into().map_err(|_| FnGeneratorError)?;
+        Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())
     }
 
     fn build_entry_block(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
@@ -187,22 +187,26 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_statement(&mut self, _stmt: &mlr::StmtId) -> FnGeneratorResult<()> {
+        use mlr::Statement::*;
+
         let stmt = self.mlr.stmts.get(_stmt).unwrap();
+
         match stmt {
-            mlr::Statement::Assign { place, value } => {
+            Assign { place, value } => {
                 let place = self.build_place(place)?;
                 let value = self.build_val(value)?;
                 self.builder.build_store(place, value)?;
             }
-            mlr::Statement::Return { value } => {
+            Return { value } => {
                 let ret_value = self.build_load_from_loc(value, "ret_value")?;
                 self.builder.build_return(Some(&ret_value))?;
             }
-            mlr::Statement::Break => {
+            Break => {
                 let after_loop_block = self.after_loop_blocks.back().ok_or(FnGeneratorError)?;
                 self.builder.build_unconditional_branch(*after_loop_block)?;
             }
         }
+
         Ok(())
     }
 
@@ -288,27 +292,31 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_constant(&mut self, constant: &mlr::Constant) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        match constant {
-            mlr::Constant::Int(i) => {
+        use mlr::Constant::*;
+
+        let value = match constant {
+            Int(i) => {
                 let int_type = self.gtor.iw_ctxt.i32_type();
-                Ok(int_type.const_int(*i as u64, false).as_basic_value_enum())
+                int_type.const_int(*i as u64, false).as_basic_value_enum()
             }
-            mlr::Constant::Bool(b) => {
+            Bool(b) => {
                 let bool_type = self.gtor.iw_ctxt.bool_type();
-                Ok(bool_type.const_int(*b as u64, false).as_basic_value_enum())
+                bool_type.const_int(*b as u64, false).as_basic_value_enum()
             }
-            mlr::Constant::Unit => self.build_unit_value(),
-        }
+            Unit => self.build_unit_value()?,
+        };
+
+        Ok(value)
     }
 
     fn build_use(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         let address = self.build_place(place_id)?;
         let place_type = self.mlr.place_types.get(place_id).ok_or(FnGeneratorError)?;
-        let type_ = self
+        let iw_type = self
             .gtor
             .get_type_as_basic_type_enum(place_type)
             .ok_or(FnGeneratorError)?;
-        let value = self.builder.build_load(type_, address, "loaded_var")?;
+        let value = self.builder.build_load(iw_type, address, "loaded_var")?;
         Ok(value)
     }
 
@@ -393,25 +401,5 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
         let struct_value = iw_type.const_zero(); // create a zero value because that's available for BasicValueEnum
         Ok(struct_value)
-    }
-
-    fn build_enum_variant_val(
-        &mut self,
-        enum_id: &mr_types::EnumId,
-        variant_index: &usize,
-    ) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let mr_type = self
-            .gtor
-            .mr_ctxt
-            .type_registry
-            .get_named_type_id(mr_types::NamedType::Enum(*enum_id))
-            .ok_or(FnGeneratorError)?;
-        let iw_type = self
-            .gtor
-            .get_type_as_basic_type_enum(&mr_type)
-            .ok_or(FnGeneratorError)?;
-        let iw_type: IntType<'iw> = iw_type.try_into().map_err(|_| FnGeneratorError)?;
-        let variant = iw_type.const_int(*variant_index as u64, false).as_basic_value_enum();
-        Ok(variant)
     }
 }

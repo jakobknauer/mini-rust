@@ -87,7 +87,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                     let type_id = self
                         .ctxt
                         .type_registry
-                        .get_named_type_id(types::NamedType::Enum(*enum_id))
+                        .get_type_id_by_enum_id(enum_id)
                         .expect("enum type id should be known");
                     return Some((type_id, *enum_id, idx));
                 }
@@ -174,7 +174,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("type should be registered");
 
         let &types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = type_ else {
-            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct { type_id: *type_id }));
+            return TypeError::NotAStruct { type_id: *type_id }.into();
         };
 
         let struct_def = self

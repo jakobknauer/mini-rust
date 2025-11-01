@@ -123,6 +123,11 @@ impl TypeRegistry {
         self.enums.get(enum_id)
     }
 
+    pub fn get_enum_variant(&self, enum_id: &EnumId, variant_index: &usize) -> Option<&EnumVariant> {
+        self.get_enum_definition(enum_id)
+            .and_then(|enum_def| enum_def.variants.get(*variant_index))
+    }
+
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
         let type_ = self.get_type_by_name(name)?;
         if let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ {
@@ -217,6 +222,10 @@ impl TypeRegistry {
                 None
             }
         })
+    }
+
+    pub fn get_type_id_by_enum_id(&self, enum_id: &EnumId) -> Option<TypeId> {
+        self.get_named_type_id(NamedType::Enum(*enum_id))
     }
 
     pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&EnumId, &EnumDefinition)> {

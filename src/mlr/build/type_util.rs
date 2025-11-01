@@ -160,6 +160,8 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {
+        use mlr::Place::*;
+
         let place = self
             .output
             .places
@@ -167,14 +169,14 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type_of_place should only be called with a valid PlaceId");
 
         match place {
-            mlr::Place::Local(loc_id) => self.infer_type_of_local_place(loc_id),
-            mlr::Place::FieldAccess {
+            Local(loc_id) => self.infer_type_of_local_place(loc_id),
+            FieldAccess {
                 base,
                 struct_id,
                 field_index,
             } => self.infer_type_of_field_access_place(base, struct_id, field_index),
-            mlr::Place::EnumDiscriminant { base, enum_id } => self.infer_type_of_enum_discriminant(base, enum_id),
-            mlr::Place::ProjectToVariant {
+            EnumDiscriminant { base, enum_id } => self.infer_type_of_enum_discriminant(base, enum_id),
+            ProjectToVariant {
                 base,
                 enum_id,
                 variant_index,
@@ -301,16 +303,13 @@ impl<'a> mlr::MlrBuilder<'a> {
             .into();
         }
 
-        let enum_def = self
+        let variant_type = self
             .ctxt
             .type_registry
-            .get_enum_definition(enum_id)
-            .expect("enum definition should be registered");
-        let variant = enum_def
-            .variants
-            .get(*variant_index)
-            .expect("variant index should be valid");
+            .get_enum_variant(enum_id, variant_index)
+            .expect("enum variant should be registered")
+            .type_id;
 
-        Ok(variant.type_id)
+        Ok(variant_type)
     }
 }

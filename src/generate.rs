@@ -63,6 +63,8 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn get_or_define_type(&mut self, type_id: &mr_types::TypeId) -> Option<AnyTypeEnum<'iw>> {
+        use mr_types::{NamedType::*, PrimitiveType::*, Type::*};
+
         if self.types.contains_key(type_id) {
             return self.types.get(type_id).cloned();
         }
@@ -70,16 +72,16 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         let type_ = self.mr_ctxt.type_registry.get_type_by_id(type_id)?;
 
         let inkwell_type = match type_ {
-            mr_types::Type::NamedType(name, named_type) => match named_type {
-                mr_types::NamedType::Primitve(primitive_type) => match primitive_type {
-                    mr_types::PrimitiveType::Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
-                    mr_types::PrimitiveType::Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
-                    mr_types::PrimitiveType::Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
+            NamedType(name, named_type) => match named_type {
+                Primitve(primitive_type) => match primitive_type {
+                    Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
+                    Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
+                    Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
-                mr_types::NamedType::Struct(struct_id) => self.define_struct(name, type_id, struct_id),
-                mr_types::NamedType::Enum(enum_id) => self.define_enum(name, enum_id),
+                Struct(struct_id) => self.define_struct(name, type_id, struct_id),
+                Enum(enum_id) => self.define_enum(name, enum_id),
             },
-            mr_types::Type::Function { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Function { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
         };
 
         if !self.types.contains_key(type_id) {

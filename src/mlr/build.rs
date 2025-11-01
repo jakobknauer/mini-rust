@@ -134,7 +134,7 @@ impl<'a> MlrBuilder<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?,
             Assignment { target, value } => self.build_assignment(target, value)?,
             FunctionCall { function, arguments } => self.build_function_call(function, arguments)?,
-            StructExpr { struct_name, fields } => self.build_struct_val(struct_name, fields)?,
+            StructExpr { struct_name, fields } => self.build_struct_or_enum_val(struct_name, fields)?,
             If {
                 condition,
                 then_block,
@@ -164,10 +164,13 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Value> {
+        use hlr::Literal::*;
+
         let val = match literal {
-            hlr::Literal::Int(n) => mlr::Value::Constant(mlr::Constant::Int(*n)),
-            hlr::Literal::Bool(b) => mlr::Value::Constant(mlr::Constant::Bool(*b)),
+            Int(n) => mlr::Value::Constant(mlr::Constant::Int(*n)),
+            Bool(b) => mlr::Value::Constant(mlr::Constant::Bool(*b)),
         };
+
         Ok(val)
     }
 
@@ -289,12 +292,15 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_statement(&mut self, stmt: &hlr::Statement) -> Result<mlr::StmtId> {
+        use hlr::Statement::*;
+
         let stmt = match stmt {
-            hlr::Statement::Let { name, value, .. } => self.build_let_statement(name, value)?,
-            hlr::Statement::Expression(expression) => self.build_expression_statement(expression)?,
-            hlr::Statement::Return(expression) => self.build_return_statement(expression.as_ref())?,
-            hlr::Statement::Break => self.build_break_statement()?,
+            Let { name, value, .. } => self.build_let_statement(name, value)?,
+            Expression(expression) => self.build_expression_statement(expression)?,
+            Return(expression) => self.build_return_statement(expression.as_ref())?,
+            Break => self.build_break_statement()?,
         };
+
         Ok(stmt)
     }
 
@@ -331,11 +337,15 @@ impl<'a> MlrBuilder<'a> {
         self.insert_stmt(mlr::Statement::Break)
     }
 
-    fn build_struct_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expression)]) -> Result<mlr::Value> {
+    fn build_struct_or_enum_val(
+        &mut self,
+        struct_name: &str,
+        fields: &[(String, hlr::Expression)],
+    ) -> Result<mlr::Value> {
         if let Some(type_id) = self.ctxt.type_registry.get_type_id_by_name(struct_name) {
-            self.build_actual_struct_val(&type_id, fields)
+            self.build_struct_val(&type_id, fields)
         } else if let Some((type_id, enum_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
-            self.build_enum_val(&type_id, &enum_id, variant_index, fields)
+            self.build_enum_val(&type_id, &enum_id, &variant_index, fields)
         } else {
             TypeError::UnresolvableTypeName {
                 type_name: struct_name.to_string(),
@@ -344,7 +354,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_actual_struct_val(
+    fn build_struct_val(
         &mut self,
         type_id: &types::TypeId,
         fields: &[(String, hlr::Expression)],
@@ -369,7 +379,7 @@ impl<'a> MlrBuilder<'a> {
         &mut self,
         type_id: &types::TypeId,
         enum_id: &types::EnumId,
-        variant_index: usize,
+        variant_index: &usize,
         fields: &[(String, hlr::Expression)],
     ) -> std::result::Result<mlr::Value, MlrBuilderError> {
         // Create empty enum value
@@ -385,7 +395,7 @@ impl<'a> MlrBuilder<'a> {
             enum_id: *enum_id,
         })?;
         let discriminant_value = {
-            let val = mlr::Value::Constant(mlr::Constant::Int(variant_index as i64));
+            let val = mlr::Value::Constant(mlr::Constant::Int(*variant_index as i64));
             self.insert_val(val)?
         };
         let discriminant_stmt = self.insert_assign_stmt(discriminant_place, discriminant_value)?;
@@ -394,16 +404,12 @@ impl<'a> MlrBuilder<'a> {
         let variant_place = self.insert_place(mlr::Place::ProjectToVariant {
             base: base_place,
             enum_id: *enum_id,
-            variant_index,
+            variant_index: *variant_index,
         })?;
-        let enum_def = self
+        let variant_type_id = self
             .ctxt
             .type_registry
-            .get_enum_definition(enum_id)
-            .expect("enum definition should be registered");
-        let variant_type_id = enum_def
-            .variants
-            .get(variant_index)
+            .get_enum_variant(enum_id, variant_index)
             .expect("variant index should be valid")
             .type_id;
         let field_init_stmts = self.fill_struct_fields(&variant_type_id, fields, &variant_place)?;
