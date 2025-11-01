@@ -20,7 +20,7 @@
     - ~~Refine mlr struct handling~~
         - ~~Use field indices instead of field names in field access expressions~~
         - ~~Replace struct expression by multiple assignments~~
-    - Equality comparison of enum values
+    - Decomposition of enum values - `match` or `if let`
 
 ## Version 2
 - Higher-order functions / functions as first-class citizens
