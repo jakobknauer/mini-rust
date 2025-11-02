@@ -146,6 +146,7 @@ impl<'a> MlrBuilder<'a> {
                 let place = self.lower_to_place(expr)?;
                 mlr::Value::Use(place)
             }
+            Match { .. } => todo!("Match expressions are not yet supported in MLR builder."),
         };
 
         self.insert_val(val)

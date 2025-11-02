@@ -41,6 +41,7 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
     ('&', '&', Token::AmpersandAmpersand),
     ('|', '|', Token::PipePipe),
     ('-', '>', Token::Arrow),
+    ('=', '>', Token::BoldArrow),
     ('<', '=', Token::SmallerEqual),
     ('>', '=', Token::GreaterEqual),
 ];
@@ -166,6 +167,7 @@ fn try_into_keyword_token(keyword: &str) -> Option<Token> {
         "else" => Some(Token::Keyword(Keyword::Else)),
         "loop" => Some(Token::Keyword(Keyword::Loop)),
         "enum" => Some(Token::Keyword(Keyword::Enum)),
+        "match" => Some(Token::Keyword(Keyword::Match)),
         _ => None,
     }
 }

@@ -400,7 +400,7 @@ impl<'a> HlrParser<'a> {
                     let mut fields = Vec::new();
                     while let Some(Token::Identifier(field_name)) = self.current() {
                         let field_name = field_name.clone();
-                        self.position += 1; // consume LBrace
+                        self.position += 1; // consume field name
                         self.expect_token(Token::Colon)?;
                         let field_value = self.parse_expression(true)?;
                         fields.push((field_name, field_value));
@@ -429,6 +429,7 @@ impl<'a> HlrParser<'a> {
             }
             Token::Keyword(Keyword::If) => self.parse_if_expr(),
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
+            Token::Keyword(Keyword::Match) => self.parse_match(),
 
             token => Err(ParserError::UnexpectedToken(token.clone())),
         }
@@ -454,6 +455,63 @@ impl<'a> HlrParser<'a> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
         Ok(Expression::Loop { body })
+    }
+
+    fn parse_match(&mut self) -> Result<Expression, ParserError> {
+        self.expect_keyword(Keyword::Match)?;
+        let scrutinee = self.parse_expression(false)?; // Don't allow top-level struct in match scrutinee
+
+        let mut arms = Vec::new();
+        self.expect_token(Token::LBrace)?;
+
+        while Some(&Token::RBrace) != self.current() {
+            let pattern = self.parse_struct_pattern()?;
+            self.expect_token(Token::BoldArrow)?;
+            let value = self.parse_expression(true)?; // Allow top-level struct expr in match arm body
+
+            arms.push(MatchArm {
+                pattern,
+                value: Box::new(value),
+            });
+
+            if !self.advance_if(Token::Comma) {
+                break;
+            }
+        }
+
+        self.expect_token(Token::RBrace)?;
+
+        Ok(Expression::Match {
+            scrutinee: Box::new(scrutinee),
+            arms,
+        })
+    }
+
+    fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserError> {
+        let variant = self.expect_identifier()?;
+
+        self.expect_token(Token::LBrace)?;
+
+        let mut fields = Vec::new();
+        while let Some(Token::Identifier(field_name)) = self.current() {
+            let field_name = field_name.clone();
+            self.position += 1; // consume field name
+            self.expect_token(Token::Colon)?;
+            let binding_name = self.expect_identifier()?;
+
+            fields.push(StructPatternField {
+                field_name,
+                binding_name,
+            });
+
+            if !self.advance_if(Token::Comma) {
+                break;
+            }
+        }
+
+        self.expect_token(Token::RBrace)?;
+
+        Ok(StructPattern { variant, fields })
     }
 }
 
@@ -798,6 +856,39 @@ mod tests {
                 }),
                 field_name: "field".to_string(),
             };
+            parse_and_compare(input, expected);
+        }
+
+        #[test]
+        fn test_parse_match_expression() {
+            let input = r#"match value {
+                Some { inner: a } => a,
+                None {} => 0,
+            }"#;
+
+            let expected = Expression::Match {
+                scrutinee: Box::new(Expression::Variable("value".to_string())),
+                arms: vec![
+                    MatchArm {
+                        pattern: StructPattern {
+                            variant: "Some".to_string(),
+                            fields: vec![StructPatternField {
+                                field_name: "inner".to_string(),
+                                binding_name: "a".to_string(),
+                            }],
+                        },
+                        value: Box::new(Expression::Variable("a".to_string())),
+                    },
+                    MatchArm {
+                        pattern: StructPattern {
+                            variant: "None".to_string(),
+                            fields: vec![],
+                        },
+                        value: Box::new(Expression::Literal(Literal::Int(0))),
+                    },
+                ],
+            };
+
             parse_and_compare(input, expected);
         }
     }

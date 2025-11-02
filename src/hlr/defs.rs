@@ -105,6 +105,10 @@ pub enum Expression {
         base: Box<Expression>,
         field_name: String,
     },
+    Match {
+        scrutinee: Box<Expression>,
+        arms: Vec<MatchArm>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -128,4 +132,24 @@ pub enum BinaryOperator {
     Remainder,
     BitOr,
     BitAnd,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub value: Box<Expression>,
+}
+
+type Pattern = StructPattern;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct StructPattern {
+    pub variant: String,
+    pub fields: Vec<StructPatternField>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct StructPatternField {
+    pub field_name: String,
+    pub binding_name: String,
 }

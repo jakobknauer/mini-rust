@@ -21,6 +21,7 @@ pub enum Token {
     Pipe,               // |
     PipePipe,           // ||
     Arrow,              // ->
+    BoldArrow,          // =>
     Plus,               // +
     Minus,              // -
     Asterisk,           // *
@@ -41,6 +42,7 @@ pub enum Keyword {
     If,
     Let,
     Loop,
+    Match,
     Return,
     Struct,
 }
