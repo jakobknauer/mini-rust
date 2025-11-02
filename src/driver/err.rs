@@ -98,18 +98,6 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
                 extra_fields.join(", ")
             )
         }
-        StructValTypeMismatch {
-            type_id,
-            field_name,
-            expected,
-            actual,
-        } => format!(
-            "Type mismatch for field '{}' of type '{}': expected '{}', got '{}'",
-            field_name,
-            ctxt.type_registry.get_string_rep(&type_id),
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
-        ),
         NotAStructField { type_id, field_name } => format!(
             "Type '{}' does not have a field named '{}'",
             ctxt.type_registry.get_string_rep(&type_id),
