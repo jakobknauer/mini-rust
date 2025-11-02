@@ -46,11 +46,11 @@ pub enum TypeError {
     NotAStruct {
         type_id: ctxt::types::TypeId,
     },
-    StructValMissingFields {
+    InitializerMissingFields {
         type_id: ctxt::types::TypeId,
         missing_fields: Vec<String>,
     },
-    StructValExtraFields {
+    InitializerExtraFields {
         type_id: ctxt::types::TypeId,
         extra_fields: Vec<String>,
     },

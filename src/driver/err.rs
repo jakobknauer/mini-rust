@@ -81,7 +81,7 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             "Type '{}' is not a struct type",
             ctxt.type_registry.get_string_rep(&type_id)
         ),
-        StructValMissingFields {
+        InitializerMissingFields {
             type_id,
             missing_fields,
         } => {
@@ -91,7 +91,7 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
                 missing_fields.join(", ")
             )
         }
-        StructValExtraFields { type_id, extra_fields } => {
+        InitializerExtraFields { type_id, extra_fields } => {
             format!(
                 "Struct val of type '{}' has extra fields: {}",
                 ctxt.type_registry.get_string_rep(&type_id),

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::ctxt::types;
 use crate::mlr::{
     self,
@@ -161,7 +163,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(stmt)
     }
 
-    pub fn fill_struct_fields(
+    pub fn build_struct_field_init_stmts(
         &mut self,
         type_id: &types::TypeId,
         fields: &[(String, crate::hlr::Expression)],
@@ -177,37 +179,18 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::NotAStruct { type_id: *type_id }.into();
         };
 
-        let struct_def = self
-            .ctxt
-            .type_registry
-            .get_struct_definition(&struct_id)
-            .expect("struct definition should be registered");
-
-        let field_indices: Vec<_> = fields
-            .iter()
-            .map(|(field_name, _)| {
-                struct_def
-                    .fields
-                    .iter()
-                    .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                        type_id: *type_id,
-                        field_name: field_name.clone(),
-                    }))
-            })
-            .collect::<Result<_>>()?;
+        let field_indices =
+            self.compute_field_indices(type_id, &struct_id, fields.iter().map(|(name, _)| name.as_str()))?;
 
         let field_init_stmts: Vec<_> = fields
             .iter()
             .zip(field_indices)
             .map(|((_, expr), field_index)| {
-                let field_place = {
-                    self.insert_place(mlr::Place::FieldAccess {
-                        base: *base_place,
-                        struct_id,
-                        field_index,
-                    })?
-                };
+                let field_place = self.insert_place(mlr::Place::FieldAccess {
+                    base: *base_place,
+                    struct_id,
+                    field_index,
+                })?;
 
                 let field_value = self.lower_to_val(expr)?;
                 let field_stmt = self.insert_assign_stmt(field_place, field_value)?;
@@ -216,5 +199,57 @@ impl<'a> mlr::MlrBuilder<'a> {
             .collect::<Result<_>>()?;
 
         Ok(field_init_stmts)
+    }
+
+    pub fn compute_field_indices<'b>(
+        &self,
+        type_id: &types::TypeId,
+        struct_id: &types::StructId,
+        field_names: impl IntoIterator<Item = &'b str>,
+    ) -> Result<Vec<usize>> {
+        let field_names: Vec<&str> = field_names.into_iter().collect();
+
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition(struct_id)
+            .expect("struct definition should be registered");
+
+        let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
+        let actual: HashSet<&str> = field_names.iter().cloned().collect();
+
+        let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
+        if !missing_fields.is_empty() {
+            return TypeError::InitializerMissingFields {
+                type_id: *type_id,
+                missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
+        if !extra_fields.is_empty() {
+            return TypeError::InitializerExtraFields {
+                type_id: *type_id,
+                extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let field_indices = field_names
+            .iter()
+            .map(|field_name| {
+                struct_def
+                    .fields
+                    .iter()
+                    .position(|struct_field| &struct_field.name == field_name)
+                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
+                        type_id: *type_id,
+                        field_name: field_name.to_string(),
+                    }))
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(field_indices)
     }
 }

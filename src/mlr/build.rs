@@ -365,7 +365,7 @@ impl<'a> MlrBuilder<'a> {
         });
         let struct_val_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
 
-        let field_init_stmts = self.fill_struct_fields(type_id, fields, &struct_val_place)?;
+        let field_init_stmts = self.build_struct_field_init_stmts(type_id, fields, &struct_val_place)?;
 
         let statements = std::iter::once(struct_val_stmt).chain(field_init_stmts).collect();
 
@@ -412,7 +412,7 @@ impl<'a> MlrBuilder<'a> {
             .get_enum_variant(enum_id, variant_index)
             .expect("variant index should be valid")
             .type_id;
-        let field_init_stmts = self.fill_struct_fields(&variant_type_id, fields, &variant_place)?;
+        let field_init_stmts = self.build_struct_field_init_stmts(&variant_type_id, fields, &variant_place)?;
 
         // Build final block
         let statements = std::iter::once(enum_val_stmt)
