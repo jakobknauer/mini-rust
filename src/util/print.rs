@@ -81,7 +81,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_statement(&mut self, stmt_id: &mlr::StmtId) -> Result<(), std::io::Error> {
         use mlr::Statement::*;
 
-        let stmt = &self.mlr.expect("self.mlr should not be empty").stmts.get(&stmt_id);
+        let stmt = &self.mlr.expect("self.mlr should not be empty").stmts.get(stmt_id);
 
         match stmt {
             Some(stmt) => match stmt {
@@ -116,7 +116,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_val(&mut self, val_id: &mlr::ValId) -> Result<(), std::io::Error> {
         use mlr::{Constant::*, Value::*};
 
-        let val = &self.mlr.expect("self.mlr should not be empty").vals.get(&val_id);
+        let val = &self.mlr.expect("self.mlr should not be empty").vals.get(val_id);
 
         match val {
             Some(val) => match val {
@@ -173,7 +173,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_place(&mut self, place_id: &mlr::PlaceId) -> Result<(), std::io::Error> {
         use mlr::Place::*;
 
-        let place = &self.mlr.expect("self.mlr should not be empty").places.get(&place_id);
+        let place = &self.mlr.expect("self.mlr should not be empty").places.get(place_id);
 
         match place {
             Some(place) => match place {
