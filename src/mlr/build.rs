@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 mod err;
 mod ops;
+mod pattern_util;
 mod type_util;
 mod util;
 
@@ -146,7 +147,7 @@ impl<'a> MlrBuilder<'a> {
                 let place = self.lower_to_place(expr)?;
                 mlr::Value::Use(place)
             }
-            Match { .. } => todo!("Match expressions are not yet supported in MLR builder."),
+            Match { scrutinee, arms } => self.build_match_expression(scrutinee, arms)?,
         };
 
         self.insert_val(val)
@@ -479,5 +480,108 @@ impl<'a> MlrBuilder<'a> {
             struct_id: *struct_id,
             field_index,
         })
+    }
+
+    fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::Value> {
+        let mut statements: Vec<mlr::StmtId> = Vec::new();
+
+        let (scrutinee_loc, scrutinee_stmt) = assign_to_new_loc!(self, self.lower_to_val(scrutinee)?);
+        statements.push(scrutinee_stmt);
+        let scrutinee_place = self.insert_place(mlr::Place::Local(scrutinee_loc))?;
+
+        // get scrutinee type
+        let scrutinee_type_id = self
+            .output
+            .loc_types
+            .get(&scrutinee_loc)
+            .expect("type of scrutinee_loc should be registered");
+        let scrutinee_type = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(scrutinee_type_id)
+            .expect("scrutinee type should be registered");
+        let &types::Type::NamedType(_, types::NamedType::Enum(enum_id)) = scrutinee_type else {
+            return Err(MlrBuilderError::TypeError(TypeError::NotAnEnum {
+                type_id: *scrutinee_type_id,
+            }));
+        };
+        let enum_def = self
+            .ctxt
+            .type_registry
+            .get_enum_definition(&enum_id)
+            .expect("enum definition should be registered");
+
+        // map arms to indices
+        let arm_indices = self.get_arm_indices(arms, enum_def, scrutinee_type_id)?;
+
+        // Build condition for each arm
+        let (discriminant_loc, discriminant_stmt) = assign_to_new_loc!(self, {
+            let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant {
+                base: scrutinee_place,
+                enum_id,
+            })?;
+            let val = mlr::Value::Use(discriminant_place);
+            self.insert_val(val)?
+        });
+        statements.push(discriminant_stmt);
+
+        let (eq_fn_loc, eq_fn_statement) = assign_to_new_loc!(self, {
+            let i32 = self
+                .ctxt
+                .type_registry
+                .get_primitive_type_id(types::PrimitiveType::Integer32)
+                .unwrap();
+            let eq_fn_id = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
+            let val = mlr::Value::Function(eq_fn_id);
+            self.insert_val(val)?
+        });
+        statements.push(eq_fn_statement);
+
+        let mut arm_conditions = self.build_arm_conditions(&arm_indices, &eq_fn_loc, &discriminant_loc)?;
+        arm_conditions.pop();
+
+        let (arm_condition_locs, arm_condition_stmts): (Vec<_>, Vec<_>) = arm_conditions
+            .into_iter()
+            .map(|val_id| {
+                let (loc, stmt) = assign_to_new_loc!(self, val_id);
+                Ok((loc, stmt))
+            })
+            .process_results(|it| it.unzip())?;
+        statements.extend(arm_condition_stmts);
+
+        // Build match arms
+        let mut arm_blocks: Vec<mlr::Block> = arms
+            .iter()
+            .zip(arm_indices.iter())
+            .map(|(arm, variant_index)| self.build_arm_block(arm, &enum_id, variant_index, &scrutinee_place))
+            .collect::<Result<_>>()?;
+
+        // Now build nested mlr::Ifs from arm conditions and arm blocks
+        let mut current_else_block: Option<mlr::Block> = arm_blocks.pop();
+        for (arm_block, arm_condition_loc) in arm_blocks.into_iter().zip(arm_condition_locs.into_iter()).rev() {
+            let if_value = mlr::Value::If(mlr::If {
+                condition: arm_condition_loc,
+                then_block: arm_block,
+                else_block: current_else_block.unwrap(),
+            });
+            let if_loc = self.insert_val(if_value)?;
+            let (new_block_loc, new_block_stmt) = assign_to_new_loc!(self, if_loc);
+            current_else_block = Some(mlr::Block {
+                statements: vec![new_block_stmt],
+                output: new_block_loc,
+            });
+        }
+
+        let final_block = current_else_block.expect("there should be at least one arm");
+        let (final_block_loc, final_block_stmt) = assign_to_new_loc!(self, {
+            let val = mlr::Value::Block(final_block);
+            self.insert_val(val)?
+        });
+        statements.push(final_block_stmt);
+
+        Ok(mlr::Value::Block(mlr::Block {
+            statements,
+            output: final_block_loc,
+        }))
     }
 }

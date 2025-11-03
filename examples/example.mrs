@@ -1,6 +1,5 @@
 fn main() -> i32 {
-    let state = off { a: 1, b: 2, c: 3 };
-    7
+    eval(Mul { left: 2, right: 3 }) + eval(Constant { c: 7 })
 }
 
 fn fac(n: i32) -> i32 {
@@ -25,12 +24,16 @@ struct Point {
     y: i32,
 }
 
-enum State {
-    on { a: bool },
-    off { a: i32, b: i32, c: i32 },
-    unknown {},
+enum Expr {
+    Constant { c: i32 },
+    Add { left: i32, right: i32 },
+    Mul { left: i32, right: i32 },
 }
 
-fn id(s: State) -> State {
-    s
+fn eval(expr: Expr) -> i32 {
+    match expr {
+        Constant { c: c } => c,
+        Add { left: left, right: right } => left + right,
+        Mul { left: left, right: right } => left * right,
+    }
 }

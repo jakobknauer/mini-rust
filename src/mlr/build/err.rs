@@ -69,6 +69,10 @@ pub enum TypeError {
         expected: ctxt::types::EnumId,
         actual: ctxt::types::EnumId,
     },
+    InvalidVariantName {
+        type_id: ctxt::types::TypeId,
+        variant_name: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;
