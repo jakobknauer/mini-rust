@@ -101,7 +101,7 @@ impl TypeRegistry {
         self.named_types.get(name).cloned()
     }
 
-    pub fn get_type_by_name(&self, name: &str) -> Option<&Type> {
+    fn get_type_by_name(&self, name: &str) -> Option<&Type> {
         let type_id = self.get_type_id_by_name(name)?;
         self.types.get_by_left(&type_id)
     }
@@ -110,22 +110,8 @@ impl TypeRegistry {
         self.structs.get(struct_id)
     }
 
-    pub fn get_struct_definition_by_type_id(&self, type_id: &TypeId) -> Option<&StructDefinition> {
-        let type_ = self.get_type_by_id(type_id)?;
-        if let Type::NamedType(_, NamedType::Struct(struct_id)) = type_ {
-            self.structs.get(struct_id)
-        } else {
-            None
-        }
-    }
-
     pub fn get_enum_definition(&self, enum_id: &EnumId) -> Option<&EnumDefinition> {
         self.enums.get(enum_id)
-    }
-
-    pub fn get_enum_variant(&self, enum_id: &EnumId, variant_index: &usize) -> Option<&EnumVariant> {
-        self.get_enum_definition(enum_id)
-            .and_then(|enum_def| enum_def.variants.get(*variant_index))
     }
 
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
@@ -162,38 +148,6 @@ impl TypeRegistry {
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
         }
-    }
-
-    pub fn get_struct_string_rep(&self, struct_id: &StructId) -> String {
-        self.types
-            .right_values()
-            .filter_map(|type_| {
-                if let Type::NamedType(name, NamedType::Struct(sid)) = type_
-                    && sid == struct_id
-                {
-                    Some(name.clone())
-                } else {
-                    None
-                }
-            })
-            .next()
-            .unwrap_or(format!("<struct id {}>", struct_id.0))
-    }
-
-    pub fn get_enum_string_rep(&self, enum_id: &EnumId) -> String {
-        self.types
-            .right_values()
-            .filter_map(|type_| {
-                if let Type::NamedType(name, NamedType::Enum(eid)) = type_
-                    && eid == enum_id
-                {
-                    Some(name.clone())
-                } else {
-                    None
-                }
-            })
-            .next()
-            .unwrap_or(format!("<enum id {}>", enum_id.0))
     }
 
     pub fn types_equal(&self, t1: &TypeId, t2: &TypeId) -> bool {
