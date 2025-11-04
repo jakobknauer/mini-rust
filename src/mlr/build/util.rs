@@ -33,7 +33,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
-    pub fn insert_val(&mut self, val: mlr::Value) -> mlr::build::Result<mlr::ValId> {
+    pub fn insert_val(&mut self, val: mlr::Value) -> Result<mlr::ValId> {
         let val_id = self.get_next_val_id();
         self.output.vals.insert(val_id, val);
 
@@ -43,7 +43,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(val_id)
     }
 
-    pub fn insert_place(&mut self, place: mlr::Place) -> mlr::build::Result<mlr::PlaceId> {
+    pub fn insert_place(&mut self, place: mlr::Place) -> Result<mlr::PlaceId> {
         let place_id = self.get_next_place_id();
         self.output.places.insert(place_id, place);
 
@@ -53,7 +53,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(place_id)
     }
 
-    pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> mlr::build::Result<mlr::StmtId> {
+    pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> Result<mlr::StmtId> {
         let stmt_id = self.get_next_stmt_id();
         self.output.stmts.insert(stmt_id, stmt);
         Ok(stmt_id)
@@ -61,7 +61,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&mut self, name: &str) -> mlr::build::Result<mlr::Value> {
+    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::Value> {
         if let Some(loc_id) = self.resolve_name_to_location(name) {
             let place = mlr::Place::Local(loc_id);
             let place = self.insert_place(place)?;
@@ -98,12 +98,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         None
     }
 
-    pub fn create_unit_value(&mut self) -> mlr::build::Result<mlr::ValId> {
+    pub fn create_unit_value(&mut self) -> Result<mlr::ValId> {
         let val = mlr::Value::Constant(mlr::Constant::Unit);
         self.insert_val(val)
     }
 
-    pub fn create_unit_block(&mut self) -> mlr::build::Result<mlr::Block> {
+    pub fn create_unit_block(&mut self) -> Result<mlr::Block> {
         let (loc, stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
         Ok(mlr::Block {
             statements: vec![stmt],
@@ -111,7 +111,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         })
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> mlr::build::Result<mlr::StmtId> {
+    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
         let place_type = self
             .output
             .place_types
@@ -137,7 +137,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_return_stmt(&mut self, value: mlr::LocId) -> mlr::build::Result<mlr::StmtId> {
+    pub fn insert_return_stmt(&mut self, value: mlr::LocId) -> Result<mlr::StmtId> {
         let return_type = self
             .ctxt
             .function_registry

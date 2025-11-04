@@ -1,7 +1,10 @@
 use crate::{
     ctxt::{functions::FnId, types::*},
     hlr,
-    mlr::{self, MlrBuilderError, TypeError},
+    mlr::{
+        self,
+        build::{MlrBuilderError, Result, TypeError},
+    },
 };
 
 macro_rules! op_match {
@@ -27,11 +30,7 @@ macro_rules! op_match {
 }
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn resolve_operator(
-        &self,
-        operator: &hlr::BinaryOperator,
-        (left, right): (TypeId, TypeId),
-    ) -> Result<FnId, mlr::build::MlrBuilderError> {
+    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (TypeId, TypeId)) -> Result<FnId> {
         use MlrBuilderError::UnknownPrimitiveType;
         use PrimitiveType::*;
         use hlr::BinaryOperator::*;

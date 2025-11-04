@@ -2,12 +2,12 @@ use crate::{
     ctxt::{functions::FnId, types::*},
     mlr::{
         self,
-        build::{MlrBuilderError, TypeError},
+        build::{MlrBuilderError, Result, TypeError},
     },
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn infer_val_type(&mut self, val: mlr::ValId) -> mlr::build::Result<TypeId> {
+    pub fn infer_val_type(&mut self, val: mlr::ValId) -> Result<TypeId> {
         use mlr::Value::*;
 
         let val = self
@@ -32,7 +32,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn infer_type_of_block(&self, block: &mlr::Block) -> mlr::build::Result<TypeId> {
+    fn infer_type_of_block(&self, block: &mlr::Block) -> Result<TypeId> {
         Ok(*self
             .output
             .loc_types
@@ -40,7 +40,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("type of block.output should have been inferred before"))
     }
 
-    fn infer_type_of_constant(&self, constant: &mlr::Constant) -> mlr::build::Result<TypeId> {
+    fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
         let type_ = match constant {
             mlr::Constant::Int(_) => PrimitiveType::Integer32,
             mlr::Constant::Bool(_) => PrimitiveType::Boolean,
@@ -53,11 +53,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
     }
 
-    fn infer_type_of_call(
-        &self,
-        callable: &mlr::LocId,
-        args: &[mlr::LocId],
-    ) -> std::result::Result<TypeId, MlrBuilderError> {
+    fn infer_type_of_call(&self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<TypeId> {
         let callable_type = self
             .output
             .loc_types
@@ -106,7 +102,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(*return_type)
     }
 
-    fn infer_type_of_function(&mut self, fn_id: FnId) -> mlr::build::Result<TypeId> {
+    fn infer_type_of_function(&mut self, fn_id: FnId) -> Result<TypeId> {
         let signature = self
             .ctxt
             .function_registry
@@ -120,7 +116,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(function_type_id)
     }
 
-    fn infer_type_of_if(&self, if_: &mlr::If) -> mlr::build::Result<TypeId> {
+    fn infer_type_of_if(&self, if_: &mlr::If) -> Result<TypeId> {
         let condition_type = self
             .output
             .loc_types
@@ -159,7 +155,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> mlr::build::Result<TypeId> {
+    pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<TypeId> {
         use mlr::Place::*;
 
         let place = self
@@ -178,7 +174,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> mlr::build::Result<TypeId> {
+    fn infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> Result<TypeId> {
         Ok(*self
             .output
             .loc_types
@@ -186,11 +182,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("type of loc_id should be registered"))
     }
 
-    fn infer_type_of_field_access_place(
-        &self,
-        base: &mlr::PlaceId,
-        field_index: &usize,
-    ) -> std::result::Result<TypeId, MlrBuilderError> {
+    fn infer_type_of_field_access_place(&self, base: &mlr::PlaceId, field_index: &usize) -> Result<TypeId> {
         let base_type_id = self
             .output
             .place_types
@@ -208,7 +200,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_type)
     }
 
-    fn infer_type_of_enum_discriminant(&self, base: &mlr::PlaceId) -> std::result::Result<TypeId, MlrBuilderError> {
+    fn infer_type_of_enum_discriminant(&self, base: &mlr::PlaceId) -> Result<TypeId> {
         let base_type_id = self
             .output
             .place_types
@@ -226,11 +218,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(int_type_id)
     }
 
-    fn infer_type_of_project_to_variant_place(
-        &self,
-        base: &mlr::PlaceId,
-        variant_index: &usize,
-    ) -> std::result::Result<TypeId, MlrBuilderError> {
+    fn infer_type_of_project_to_variant_place(&self, base: &mlr::PlaceId, variant_index: &usize) -> Result<TypeId> {
         let base_type_id = self
             .output
             .place_types
