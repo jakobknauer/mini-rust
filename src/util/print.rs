@@ -187,13 +187,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_place(base)?;
                     write!(self.writer, ")")
                 }
-                ProjectToVariant {
-                    base,
-                    enum_id,
-                    variant_index,
-                } => {
-                    let type_id = self.ctxt.type_registry.get_type_id_by_enum_id(enum_id).unwrap();
-                    let enum_name = self.ctxt.type_registry.get_string_rep(&type_id);
+                ProjectToVariant { base, variant_index } => {
+                    let type_id = self
+                        .mlr
+                        .expect("self.mlr should not be empty")
+                        .place_types
+                        .get(base)
+                        .expect("type of base place should be known");
+                    let enum_name = self.ctxt.type_registry.get_string_rep(type_id);
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
                     write!(self.writer, " as {}::{})", enum_name, variant_index)

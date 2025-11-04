@@ -58,18 +58,10 @@ pub enum TypeError {
         type_id: ctxt::types::TypeId,
         field_name: String,
     },
-    FieldAccessBaseTypeMismatch {
-        expected: ctxt::types::StructId,
-        actual: ctxt::types::StructId,
-    },
     NotAnEnum {
         type_id: ctxt::types::TypeId,
     },
-    ProjectToVariantBaseTypeMismatch {
-        expected: ctxt::types::EnumId,
-        actual: ctxt::types::EnumId,
-    },
-    InvalidVariantName {
+    NotAnEnumVariant {
         type_id: ctxt::types::TypeId,
         variant_name: String,
     },

@@ -82,7 +82,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .cloned()
     }
 
-    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(types::TypeId, types::EnumId, usize)> {
+    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(types::TypeId, usize)> {
         for (enum_id, enum_def) in self.ctxt.type_registry.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
@@ -91,7 +91,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                         .type_registry
                         .get_type_id_by_enum_id(enum_id)
                         .expect("enum type id should be known");
-                    return Some((type_id, *enum_id, idx));
+                    return Some((type_id, idx));
                 }
             }
         }
@@ -169,18 +169,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         fields: &[(String, crate::hlr::Expression)],
         base_place: &mlr::PlaceId,
     ) -> Result<Vec<mlr::StmtId>> {
-        let type_ = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(type_id)
-            .expect("type should be registered");
-
-        let &types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = type_ else {
-            return TypeError::NotAStruct { type_id: *type_id }.into();
-        };
-
-        let field_indices =
-            self.compute_field_indices(type_id, &struct_id, fields.iter().map(|(name, _)| name.as_str()))?;
+        let field_indices = self.compute_field_indices(type_id, fields.iter().map(|(name, _)| name.as_str()))?;
 
         let field_init_stmts: Vec<_> = fields
             .iter()
@@ -188,7 +177,6 @@ impl<'a> mlr::MlrBuilder<'a> {
             .map(|((_, expr), field_index)| {
                 let field_place = self.insert_place(mlr::Place::FieldAccess {
                     base: *base_place,
-                    struct_id,
                     field_index,
                 })?;
 
@@ -204,16 +192,11 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn compute_field_indices<'b>(
         &self,
         type_id: &types::TypeId,
-        struct_id: &types::StructId,
         field_names: impl IntoIterator<Item = &'b str>,
     ) -> Result<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
 
-        let struct_def = self
-            .ctxt
-            .type_registry
-            .get_struct_definition(struct_id)
-            .expect("struct definition should be registered");
+        let struct_def = self.get_struct_def(type_id)?;
 
         let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
@@ -251,5 +234,45 @@ impl<'a> mlr::MlrBuilder<'a> {
             .collect::<Result<_>>()?;
 
         Ok(field_indices)
+    }
+
+    pub fn get_struct_def(&self, type_id: &types::TypeId) -> Result<&types::StructDefinition> {
+        let type_ = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(type_id)
+            .expect("type should be registered");
+
+        let &types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = type_ else {
+            return TypeError::NotAStruct { type_id: *type_id }.into();
+        };
+
+        let struct_def = self
+            .ctxt
+            .type_registry
+            .get_struct_definition(&struct_id)
+            .expect("struct definition should be registered");
+
+        Ok(struct_def)
+    }
+
+    pub fn get_enum_def(&self, type_id: &types::TypeId) -> Result<&types::EnumDefinition> {
+        let type_ = self
+            .ctxt
+            .type_registry
+            .get_type_by_id(type_id)
+            .expect("type should be registered");
+
+        let &types::Type::NamedType(_, types::NamedType::Enum(enum_id)) = type_ else {
+            return TypeError::NotAnEnum { type_id: *type_id }.into();
+        };
+
+        let enum_def = self
+            .ctxt
+            .type_registry
+            .get_enum_definition(&enum_id)
+            .expect("enum definition should be registered");
+
+        Ok(enum_def)
     }
 }

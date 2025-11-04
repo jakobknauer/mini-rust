@@ -346,8 +346,8 @@ impl<'a> MlrBuilder<'a> {
     ) -> Result<mlr::Value> {
         if let Some(type_id) = self.ctxt.type_registry.get_type_id_by_name(struct_name) {
             self.build_struct_val(&type_id, fields)
-        } else if let Some((type_id, enum_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
-            self.build_enum_val(&type_id, &enum_id, &variant_index, fields)
+        } else if let Some((type_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
+            self.build_enum_val(&type_id, &variant_index, fields)
         } else {
             TypeError::UnresolvableTypeName {
                 type_name: struct_name.to_string(),
@@ -380,7 +380,6 @@ impl<'a> MlrBuilder<'a> {
     fn build_enum_val(
         &mut self,
         type_id: &types::TypeId,
-        enum_id: &types::EnumId,
         variant_index: &usize,
         fields: &[(String, hlr::Expression)],
     ) -> std::result::Result<mlr::Value, MlrBuilderError> {
@@ -392,10 +391,7 @@ impl<'a> MlrBuilder<'a> {
         let base_place = self.insert_place(mlr::Place::Local(enum_val_loc))?;
 
         // Fill discriminant
-        let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant {
-            base: base_place,
-            enum_id: *enum_id,
-        })?;
+        let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant { base: base_place })?;
         let discriminant_value = {
             let val = mlr::Value::Constant(mlr::Constant::Int(*variant_index as i64));
             self.insert_val(val)?
@@ -405,13 +401,12 @@ impl<'a> MlrBuilder<'a> {
         // Fill fields
         let variant_place = self.insert_place(mlr::Place::ProjectToVariant {
             base: base_place,
-            enum_id: *enum_id,
             variant_index: *variant_index,
         })?;
-        let variant_type_id = self
-            .ctxt
-            .type_registry
-            .get_enum_variant(enum_id, variant_index)
+        let enum_def = self.get_enum_def(type_id)?;
+        let variant_type_id = enum_def
+            .variants
+            .get(*variant_index)
             .expect("variant index should be valid")
             .type_id;
         let field_init_stmts = self.build_struct_field_init_stmts(&variant_type_id, fields, &variant_place)?;
@@ -448,23 +443,7 @@ impl<'a> MlrBuilder<'a> {
             .get(&base)
             .expect("type of base place should be registered");
 
-        let base_type = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(base_type_id)
-            .expect("base type should be registered");
-
-        let types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = base_type else {
-            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct {
-                type_id: *base_type_id,
-            }));
-        };
-
-        let struct_def = self
-            .ctxt
-            .type_registry
-            .get_struct_definition(struct_id)
-            .expect("struct definition should be registered");
+        let struct_def = self.get_struct_def(base_type_id)?;
 
         let field_index = struct_def
             .fields
@@ -475,11 +454,7 @@ impl<'a> MlrBuilder<'a> {
                 field_name: field_name.to_string(),
             }))?;
 
-        Ok(mlr::Place::FieldAccess {
-            base,
-            struct_id: *struct_id,
-            field_index,
-        })
+        Ok(mlr::Place::FieldAccess { base, field_index })
     }
 
     fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::Value> {
@@ -488,36 +463,19 @@ impl<'a> MlrBuilder<'a> {
         let scrutinee_place = self.insert_place(mlr::Place::Local(scrutinee_loc))?;
 
         // get scrutinee type
-        let scrutinee_type_id = self
+        let scrutinee_type_id = *self
             .output
             .loc_types
             .get(&scrutinee_loc)
             .expect("type of scrutinee_loc should be registered");
-        let scrutinee_type = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(scrutinee_type_id)
-            .expect("scrutinee type should be registered");
-        let &types::Type::NamedType(_, types::NamedType::Enum(enum_id)) = scrutinee_type else {
-            return Err(MlrBuilderError::TypeError(TypeError::NotAnEnum {
-                type_id: *scrutinee_type_id,
-            }));
-        };
-        let enum_def = self
-            .ctxt
-            .type_registry
-            .get_enum_definition(&enum_id)
-            .expect("enum definition should be registered");
+        let enum_def = self.get_enum_def(&scrutinee_type_id)?;
 
         // map match arms to enum variant indices
-        let arm_indices = self.get_arm_indices(arms, enum_def, scrutinee_type_id)?;
+        let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_type_id)?;
 
         // store discriminant value in a temporary location
         let (discriminant_loc, discriminant_stmt) = assign_to_new_loc!(self, {
-            let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant {
-                base: scrutinee_place,
-                enum_id,
-            })?;
+            let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant { base: scrutinee_place })?;
             let val = mlr::Value::Use(discriminant_place);
             self.insert_val(val)?
         });
@@ -542,7 +500,7 @@ impl<'a> MlrBuilder<'a> {
         // we ignore that case for now)
         let mut else_block = self.build_arm_block(
             arms.last().unwrap(),
-            &enum_id,
+            &scrutinee_type_id,
             arm_indices.last().unwrap(),
             &scrutinee_place,
         )?;
@@ -555,7 +513,8 @@ impl<'a> MlrBuilder<'a> {
             );
 
             let (new_block_loc, new_block_stmt) = assign_to_new_loc!(self, {
-                let then_block = self.build_arm_block(&arms[arm_index], &enum_id, &arm_index, &scrutinee_place)?;
+                let then_block =
+                    self.build_arm_block(&arms[arm_index], &scrutinee_type_id, &arm_index, &scrutinee_place)?;
                 let if_value = mlr::Value::If(mlr::If {
                     condition: arm_condition_loc,
                     then_block,

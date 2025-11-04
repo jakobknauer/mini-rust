@@ -11,7 +11,7 @@ macro_rules! assign_to_new_loc {
         let place = mlr::Place::Local(loc);
         let place: mlr::PlaceId = $self.insert_place(place)?;
 
-        let stmt = $self.insert_assign_stmt(place, init)?;
+        let stmt: mlr::StmtId = $self.insert_assign_stmt(place, init)?;
         (loc, stmt)
     }};
 }

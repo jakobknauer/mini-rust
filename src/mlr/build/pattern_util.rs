@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::types::{EnumDefinition, EnumId, NamedType, Type, TypeId},
+    ctxt::types::{EnumDefinition, TypeId},
     hlr,
     mlr::{
         self,
@@ -20,7 +20,7 @@ impl<'a> super::MlrBuilder<'a> {
                     .variants
                     .iter()
                     .position(|variant| variant.name == arm.pattern.variant)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::InvalidVariantName {
+                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAnEnumVariant {
                         type_id: *type_id,
                         variant_name: arm.pattern.variant.clone(),
                     }))
@@ -58,37 +58,22 @@ impl<'a> super::MlrBuilder<'a> {
     pub fn build_arm_block(
         &mut self,
         arm: &hlr::MatchArm,
-        enum_id: &EnumId,
+        enum_type_id: &TypeId,
         variant_index: &usize,
         base_place: &mlr::PlaceId,
     ) -> Result<mlr::Block> {
         let variant_place = mlr::Place::ProjectToVariant {
             base: *base_place,
-            enum_id: *enum_id,
             variant_index: *variant_index,
         };
         let variant_place = self.insert_place(variant_place)?;
 
-        let enum_def = self
-            .ctxt
-            .type_registry
-            .get_enum_definition(enum_id)
-            .expect("enum definition should be registered");
+        let enum_def = self.get_enum_def(enum_type_id)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
             .expect("variant index should be valid");
-        let enum_variant_type = self.ctxt.type_registry.get_type_by_id(&enum_variant.type_id).unwrap();
-        let &Type::NamedType(_, NamedType::Struct(enum_variant_struct_id)) = enum_variant_type else {
-            return Err(MlrBuilderError::TypeError(TypeError::NotAStruct {
-                type_id: enum_variant.type_id,
-            }));
-        };
-        let enum_variant_struct_def = self
-            .ctxt
-            .type_registry
-            .get_struct_definition(&enum_variant_struct_id)
-            .unwrap();
+        let enum_variant_struct_def = self.get_struct_def(&enum_variant.type_id)?;
 
         let field_indices: Vec<usize> = arm
             .pattern
@@ -109,34 +94,35 @@ impl<'a> super::MlrBuilder<'a> {
         // create a new scope for the arm
         self.scopes.push_back(super::Scope::new());
 
-        let mut statements: Vec<mlr::StmtId> = vec![];
-
         // bind pattern variables
-        for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
-        {
-            let field_place = mlr::Place::FieldAccess {
-                base: variant_place,
-                struct_id: enum_variant_struct_id,
-                field_index,
-            };
-            let field_place = self.insert_place(field_place)?;
+        let bind_statements: Vec<mlr::StmtId> = arm
+            .pattern
+            .fields
+            .iter()
+            .zip(field_indices)
+            .map(|(hlr::StructPatternField { binding_name, .. }, field_index)| {
+                let field_place = mlr::Place::FieldAccess {
+                    base: variant_place,
+                    field_index,
+                };
+                let field_place = self.insert_place(field_place)?;
 
-            let (assign_loc, assign_stmt) = assign_to_new_loc!(self, {
-                let val = mlr::Value::Use(field_place);
-                self.insert_val(val)?
-            });
+                let (assign_loc, assign_stmt) = assign_to_new_loc!(self, {
+                    let val = mlr::Value::Use(field_place);
+                    self.insert_val(val)?
+                });
 
-            self.current_scope().vars.insert(binding_name.clone(), assign_loc);
-
-            statements.push(assign_stmt);
-        }
+                self.current_scope().vars.insert(binding_name.clone(), assign_loc);
+                Ok(assign_stmt)
+            })
+            .collect::<Result<_>>()?;
 
         // build arm value
         let (value_loc, value_stmt) = assign_to_new_loc!(self, self.lower_to_val(&arm.value)?);
-        statements.push(value_stmt);
-
         // pop arm scope
         self.scopes.pop_back();
+
+        let statements = bind_statements.into_iter().chain(std::iter::once(value_stmt)).collect();
 
         let block = mlr::Block {
             statements,

@@ -170,17 +170,11 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         match place {
             Local(loc_id) => self.infer_type_of_local_place(loc_id),
-            FieldAccess {
-                base,
-                struct_id,
-                field_index,
-            } => self.infer_type_of_field_access_place(base, struct_id, field_index),
-            EnumDiscriminant { base, enum_id } => self.infer_type_of_enum_discriminant(base, enum_id),
-            ProjectToVariant {
-                base,
-                enum_id,
-                variant_index,
-            } => self.infer_type_of_project_to_variant_place(base, enum_id, variant_index),
+            FieldAccess { base, field_index } => self.infer_type_of_field_access_place(base, field_index),
+            EnumDiscriminant { base } => self.infer_type_of_enum_discriminant(base),
+            ProjectToVariant { base, variant_index } => {
+                self.infer_type_of_project_to_variant_place(base, variant_index)
+            }
         }
     }
 
@@ -195,7 +189,6 @@ impl<'a> mlr::MlrBuilder<'a> {
     fn infer_type_of_field_access_place(
         &self,
         base: &mlr::PlaceId,
-        struct_id: &StructId,
         field_index: &usize,
     ) -> std::result::Result<TypeId, MlrBuilderError> {
         let base_type_id = self
@@ -204,29 +197,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get(base)
             .expect("type of base place should be registered");
 
-        let base_type = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(base_type_id)
-            .expect("type of base place should be registered");
-
-        let Type::NamedType(_, NamedType::Struct(base_struct_id)) = base_type else {
-            return TypeError::NotAStruct { type_id: *base_type_id }.into();
-        };
-
-        if base_struct_id != struct_id {
-            return TypeError::FieldAccessBaseTypeMismatch {
-                expected: *struct_id,
-                actual: *base_struct_id,
-            }
-            .into();
-        }
-
-        let struct_def = self
-            .ctxt
-            .type_registry
-            .get_struct_definition(base_struct_id)
-            .expect("struct definition should be registered");
+        let struct_def = self.get_struct_def(base_type_id)?;
 
         let field_type = struct_def
             .fields
@@ -237,32 +208,14 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_type)
     }
 
-    fn infer_type_of_enum_discriminant(
-        &self,
-        base: &mlr::PlaceId,
-        enum_id: &EnumId,
-    ) -> std::result::Result<TypeId, MlrBuilderError> {
+    fn infer_type_of_enum_discriminant(&self, base: &mlr::PlaceId) -> std::result::Result<TypeId, MlrBuilderError> {
         let base_type_id = self
             .output
             .place_types
             .get(base)
             .expect("type of base place should be registered");
 
-        let base_type = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(base_type_id)
-            .expect("type of base place should be registered");
-
-        let Type::NamedType(_, NamedType::Enum(_)) = base_type else {
-            return TypeError::NotAnEnum { type_id: *base_type_id }.into();
-        };
-
-        let _enum_def = self
-            .ctxt
-            .type_registry
-            .get_enum_definition(enum_id)
-            .expect("enum definition should be registered");
+        let _enum_def = self.get_enum_def(base_type_id)?;
 
         // the discriminant is always an integer
         let int_type_id = self
@@ -276,7 +229,6 @@ impl<'a> mlr::MlrBuilder<'a> {
     fn infer_type_of_project_to_variant_place(
         &self,
         base: &mlr::PlaceId,
-        enum_id: &EnumId,
         variant_index: &usize,
     ) -> std::result::Result<TypeId, MlrBuilderError> {
         let base_type_id = self
@@ -285,29 +237,14 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get(base)
             .expect("type of base place should be registered");
 
-        let base_type = self
-            .ctxt
-            .type_registry
-            .get_type_by_id(base_type_id)
-            .expect("type of base place should be registered");
-
-        let Type::NamedType(_, NamedType::Enum(base_enum_id)) = base_type else {
-            return TypeError::NotAnEnum { type_id: *base_type_id }.into();
-        };
-
-        if base_enum_id != enum_id {
-            return TypeError::ProjectToVariantBaseTypeMismatch {
-                expected: *enum_id,
-                actual: *base_enum_id,
-            }
-            .into();
-        }
-
-        let variant_type = self
-            .ctxt
-            .type_registry
-            .get_enum_variant(enum_id, variant_index)
-            .expect("enum variant should be registered")
+        let enum_def = self.get_enum_def(base_type_id)?;
+        let variant_type = enum_def
+            .variants
+            .get(*variant_index)
+            .ok_or(MlrBuilderError::TypeError(TypeError::NotAnEnumVariant {
+                type_id: *base_type_id,
+                variant_name: variant_index.to_string(),
+            }))?
             .type_id;
 
         Ok(variant_type)
