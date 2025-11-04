@@ -1,13 +1,13 @@
 use crate::{
     ctxt::types::{EnumDefinition, EnumId, NamedType, Type, TypeId},
-    hlr::{self, StructPatternField},
+    hlr,
     mlr::{
-        self, LocId, MlrBuilder, MlrBuilderError, PlaceId, StmtId, TypeError,
-        build::{Result, Scope, macros::assign_to_new_loc},
+        self,
+        build::{MlrBuilderError, Result, TypeError, macros::assign_to_new_loc},
     },
 };
 
-impl<'a> MlrBuilder<'a> {
+impl<'a> super::MlrBuilder<'a> {
     pub fn get_arm_indices(
         &self,
         arms: &[hlr::MatchArm],
@@ -28,36 +28,31 @@ impl<'a> MlrBuilder<'a> {
             .collect::<Result<_>>()
     }
 
-    pub fn build_arm_conditions(
+    pub fn build_arm_condition(
         &mut self,
-        arm_indices: &[usize],
-        eq_fn_loc: &LocId,
-        discriminant_loc: &LocId,
-    ) -> Result<Vec<mlr::ValId>> {
-        arm_indices
-            .iter()
-            .map(|variant_index| {
-                let (variant_discriminant_loc, variant_discriminant_stmt) = assign_to_new_loc!(self, {
-                    let val = mlr::Value::Constant(mlr::Constant::Int(*variant_index as i64));
-                    self.insert_val(val)?
-                });
+        variant_index: &usize,
+        eq_fn_loc: &mlr::LocId,
+        discriminant_loc: &mlr::LocId,
+    ) -> Result<mlr::ValId> {
+        let (variant_discriminant_loc, variant_discriminant_stmt) = assign_to_new_loc!(self, {
+            let val = mlr::Value::Constant(mlr::Constant::Int(*variant_index as i64));
+            self.insert_val(val)?
+        });
 
-                let (cond_loc, cond_stmt) = assign_to_new_loc!(self, {
-                    let init = mlr::Value::Call {
-                        callable: *eq_fn_loc,
-                        args: vec![*discriminant_loc, variant_discriminant_loc],
-                    };
-                    self.insert_val(init)?
-                });
+        let (cond_loc, cond_stmt) = assign_to_new_loc!(self, {
+            let init = mlr::Value::Call {
+                callable: *eq_fn_loc,
+                args: vec![*discriminant_loc, variant_discriminant_loc],
+            };
+            self.insert_val(init)?
+        });
 
-                let statements: Vec<mlr::StmtId> = vec![variant_discriminant_stmt, cond_stmt];
-                let block = mlr::Value::Block(mlr::Block {
-                    statements,
-                    output: cond_loc,
-                });
-                self.insert_val(block)
-            })
-            .collect::<Result<_>>()
+        let statements: Vec<mlr::StmtId> = vec![variant_discriminant_stmt, cond_stmt];
+        let block = mlr::Value::Block(mlr::Block {
+            statements,
+            output: cond_loc,
+        });
+        self.insert_val(block)
     }
 
     pub fn build_arm_block(
@@ -65,14 +60,13 @@ impl<'a> MlrBuilder<'a> {
         arm: &hlr::MatchArm,
         enum_id: &EnumId,
         variant_index: &usize,
-        base_place: &PlaceId,
+        base_place: &mlr::PlaceId,
     ) -> Result<mlr::Block> {
         let variant_place = mlr::Place::ProjectToVariant {
             base: *base_place,
             enum_id: *enum_id,
             variant_index: *variant_index,
         };
-
         let variant_place = self.insert_place(variant_place)?;
 
         let enum_def = self
@@ -95,11 +89,12 @@ impl<'a> MlrBuilder<'a> {
             .type_registry
             .get_struct_definition(&enum_variant_struct_id)
             .unwrap();
+
         let field_indices: Vec<usize> = arm
             .pattern
             .fields
             .iter()
-            .map(|StructPatternField { field_name, .. }| {
+            .map(|hlr::StructPatternField { field_name, .. }| {
                 enum_variant_struct_def
                     .fields
                     .iter()
@@ -112,12 +107,13 @@ impl<'a> MlrBuilder<'a> {
             .collect::<Result<_>>()?;
 
         // create a new scope for the arm
-        self.scopes.push_back(Scope::new());
+        self.scopes.push_back(super::Scope::new());
 
-        let mut statements: Vec<StmtId> = vec![];
+        let mut statements: Vec<mlr::StmtId> = vec![];
 
         // bind pattern variables
-        for (StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices) {
+        for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
+        {
             let field_place = mlr::Place::FieldAccess {
                 base: variant_place,
                 struct_id: enum_variant_struct_id,
@@ -136,7 +132,7 @@ impl<'a> MlrBuilder<'a> {
         }
 
         // build arm value
-        let (value_loc, value_stmt) = assign_to_new_loc!(self, { self.lower_to_val(&arm.value)? });
+        let (value_loc, value_stmt) = assign_to_new_loc!(self, self.lower_to_val(&arm.value)?);
         statements.push(value_stmt);
 
         // pop arm scope

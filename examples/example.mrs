@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    eval(Mul { left: 2, right: 3 }) + eval(Constant { c: 7 })
+    eval(Mul { left: 2, right: 3 }) + eval(Constant { c: 1 }) + eval(Add { left: 3, right: 5})
 }
 
 fn fac(n: i32) -> i32 {
@@ -34,6 +34,6 @@ fn eval(expr: Expr) -> i32 {
     match expr {
         Constant { c: c } => c,
         Add { left: left, right: right } => left + right,
-        Mul { left: left, right: right } => left * right,
+        Mul { left: a, right: b } => a * b,
     }
 }

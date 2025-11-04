@@ -483,10 +483,8 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::Value> {
-        let mut statements: Vec<mlr::StmtId> = Vec::new();
-
+        // build scrutinee value
         let (scrutinee_loc, scrutinee_stmt) = assign_to_new_loc!(self, self.lower_to_val(scrutinee)?);
-        statements.push(scrutinee_stmt);
         let scrutinee_place = self.insert_place(mlr::Place::Local(scrutinee_loc))?;
 
         // get scrutinee type
@@ -511,10 +509,10 @@ impl<'a> MlrBuilder<'a> {
             .get_enum_definition(&enum_id)
             .expect("enum definition should be registered");
 
-        // map arms to indices
+        // map match arms to enum variant indices
         let arm_indices = self.get_arm_indices(arms, enum_def, scrutinee_type_id)?;
 
-        // Build condition for each arm
+        // store discriminant value in a temporary location
         let (discriminant_loc, discriminant_stmt) = assign_to_new_loc!(self, {
             let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant {
                 base: scrutinee_place,
@@ -523,8 +521,8 @@ impl<'a> MlrBuilder<'a> {
             let val = mlr::Value::Use(discriminant_place);
             self.insert_val(val)?
         });
-        statements.push(discriminant_stmt);
 
+        // resolve equality function for discriminant comparisons once
         let (eq_fn_loc, eq_fn_statement) = assign_to_new_loc!(self, {
             let i32 = self
                 .ctxt
@@ -535,50 +533,50 @@ impl<'a> MlrBuilder<'a> {
             let val = mlr::Value::Function(eq_fn_id);
             self.insert_val(val)?
         });
-        statements.push(eq_fn_statement);
-
-        let mut arm_conditions = self.build_arm_conditions(&arm_indices, &eq_fn_loc, &discriminant_loc)?;
-        arm_conditions.pop();
-
-        let (arm_condition_locs, arm_condition_stmts): (Vec<_>, Vec<_>) = arm_conditions
-            .into_iter()
-            .map(|val_id| {
-                let (loc, stmt) = assign_to_new_loc!(self, val_id);
-                Ok((loc, stmt))
-            })
-            .process_results(|it| it.unzip())?;
-        statements.extend(arm_condition_stmts);
-
-        // Build match arms
-        let mut arm_blocks: Vec<mlr::Block> = arms
-            .iter()
-            .zip(arm_indices.iter())
-            .map(|(arm, variant_index)| self.build_arm_block(arm, &enum_id, variant_index, &scrutinee_place))
-            .collect::<Result<_>>()?;
 
         // Now build nested mlr::Ifs from arm conditions and arm blocks
-        let mut current_else_block: Option<mlr::Block> = arm_blocks.pop();
-        for (arm_block, arm_condition_loc) in arm_blocks.into_iter().zip(arm_condition_locs.into_iter()).rev() {
-            let if_value = mlr::Value::If(mlr::If {
-                condition: arm_condition_loc,
-                then_block: arm_block,
-                else_block: current_else_block.unwrap(),
+        // The iterative approach is used to avoid deep recursion for match expressions with many
+        // arms at the cost of LocIds being unsorted in the resulting MLR
+
+        // Start with the else block being the last arm's block (this fails if no arms are given;
+        // we ignore that case for now)
+        let mut else_block = self.build_arm_block(
+            arms.last().unwrap(),
+            &enum_id,
+            arm_indices.last().unwrap(),
+            &scrutinee_place,
+        )?;
+
+        // Iterate over the remaining arms in reverse order, nesting Ifs
+        for arm_index in arm_indices.into_iter().rev().skip(1) {
+            let (arm_condition_loc, arm_condition_stmt) = assign_to_new_loc!(
+                self,
+                self.build_arm_condition(&arm_index, &eq_fn_loc, &discriminant_loc)?
+            );
+
+            let (new_block_loc, new_block_stmt) = assign_to_new_loc!(self, {
+                let then_block = self.build_arm_block(&arms[arm_index], &enum_id, &arm_index, &scrutinee_place)?;
+                let if_value = mlr::Value::If(mlr::If {
+                    condition: arm_condition_loc,
+                    then_block,
+                    else_block,
+                });
+                self.insert_val(if_value)?
             });
-            let if_loc = self.insert_val(if_value)?;
-            let (new_block_loc, new_block_stmt) = assign_to_new_loc!(self, if_loc);
-            current_else_block = Some(mlr::Block {
-                statements: vec![new_block_stmt],
+
+            else_block = mlr::Block {
+                statements: vec![arm_condition_stmt, new_block_stmt],
                 output: new_block_loc,
-            });
+            };
         }
 
-        let final_block = current_else_block.expect("there should be at least one arm");
+        // Turn the final else_block into a value
         let (final_block_loc, final_block_stmt) = assign_to_new_loc!(self, {
-            let val = mlr::Value::Block(final_block);
+            let val = mlr::Value::Block(else_block);
             self.insert_val(val)?
         });
-        statements.push(final_block_stmt);
 
+        let statements = vec![scrutinee_stmt, discriminant_stmt, eq_fn_statement, final_block_stmt];
         Ok(mlr::Value::Block(mlr::Block {
             statements,
             output: final_block_loc,

@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 
-use crate::ctxt::types;
-use crate::mlr::{
-    self,
-    build::{MlrBuilderError, Result, TypeError},
+use crate::{
+    ctxt::types,
+    mlr::{
+        self,
+        build::{MlrBuilderError, Result, TypeError, macros::assign_to_new_loc},
+    },
 };
-
-use crate::mlr::build::macros::assign_to_new_loc;
 
 impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_next_val_id(&mut self) -> mlr::ValId {
