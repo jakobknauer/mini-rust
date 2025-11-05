@@ -227,18 +227,24 @@ impl<'a> HlrParser<'a> {
                 break;
             }
 
-            let statement = self.parse_statement()?;
+            let (statement, statement_delimited) = self.parse_statement()?;
 
-            if self.advance_if(Token::Semicolon) {
-                statements.push(statement);
-            } else {
-                match statement {
-                    Statement::Expression(expr) => {
-                        return_expression = Some(Box::new(expr));
-                        break;
-                    }
-                    _ => return Err(ParserError::UndelimitedStatement),
+            if !statement_delimited {
+                // expect that we are at the end of the block
+                if self.current() != Some(&Token::RBrace) {
+                    return Err(ParserError::UndelimitedStatement);
                 }
+            }
+
+            if self.current() == Some(&Token::RBrace) {
+                if let Statement::Expression(expr) = statement {
+                    return_expression = Some(Box::new(expr));
+                } else {
+                    statements.push(statement);
+                }
+                break;
+            } else {
+                statements.push(statement);
             }
         }
 
@@ -250,12 +256,45 @@ impl<'a> HlrParser<'a> {
         })
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, ParserError> {
+    fn parse_statement(&mut self) -> Result<(Statement, bool), ParserError> {
         match self.current() {
-            Some(Token::Keyword(Keyword::Let)) => self.parse_let_statement(),
-            Some(Token::Keyword(Keyword::Return)) => self.parse_return_statement(),
-            Some(Token::Keyword(Keyword::Break)) => self.parse_break_statement(),
-            _ => self.parse_expression_statement(),
+            Some(Token::Keyword(Keyword::Let)) => {
+                let stmt = self.parse_let_statement()?;
+                self.expect_token(Token::Semicolon)?;
+                Ok((stmt, true))
+            }
+            Some(Token::Keyword(Keyword::Return)) => {
+                let stmt = self.parse_return_statement()?;
+                let semicolon = self.advance_if(Token::Semicolon);
+                Ok((stmt, semicolon))
+            }
+            Some(Token::Keyword(Keyword::Break)) => {
+                let stmt = self.parse_break_statement()?;
+                let semicolon = self.advance_if(Token::Semicolon);
+                Ok((stmt, semicolon))
+            }
+            Some(Token::LBrace) => {
+                let expr = self.parse_block()?;
+                let stmt = Statement::Expression(Expression::Block(expr));
+                Ok((stmt, true))
+            }
+            Some(Token::Keyword(Keyword::If)) => {
+                let expr = self.parse_if_expr()?;
+                Ok((Statement::Expression(expr), true))
+            }
+            Some(Token::Keyword(Keyword::Loop)) => {
+                let expr = self.parse_loop()?;
+                Ok((Statement::Expression(expr), true))
+            }
+            Some(Token::Keyword(Keyword::Match)) => {
+                let expr = self.parse_match()?;
+                Ok((Statement::Expression(expr), true))
+            }
+            _ => {
+                let stmt = self.parse_expression_statement()?;
+                let semicolon = self.advance_if(Token::Semicolon);
+                Ok((stmt, semicolon))
+            }
         }
     }
 
