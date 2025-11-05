@@ -37,6 +37,20 @@ struct HlrParser<'a> {
     position: usize,
 }
 
+#[derive(PartialEq, Eq)]
+enum StatementKind {
+    /// A statement that is an expression but is delimited by a closing brace, e.g. if, loop,
+    /// match, or a block. This is allowed as the last statement in a block, but is also allowed
+    /// to be followed by other statements without requireing a semicolon in between.
+    BlockExpression,
+    /// A statement that is an expression but is not delimited by a semicolon, e.g. `1 + a`.
+    /// This is only allowed as the final statement in a block, representing the return value.
+    UndelimitedExpression,
+    /// A statement that is explicitly delimited by a semicolon. If the last statement in a block
+    /// is of this kind, it does not represent the return value of the block.
+    ExplicitelyDelimited,
+}
+
 impl<'a> HlrParser<'a> {
     fn new(input: &'a [Token]) -> Self {
         HlrParser { input, position: 0 }
@@ -227,9 +241,9 @@ impl<'a> HlrParser<'a> {
                 break;
             }
 
-            let (statement, statement_delimited) = self.parse_statement()?;
+            let (statement, statement_kind) = self.parse_statement()?;
 
-            if !statement_delimited {
+            if statement_kind == StatementKind::UndelimitedExpression {
                 // expect that we are at the end of the block
                 if self.current() != Some(&Token::RBrace) {
                     return Err(ParserError::UndelimitedStatement);
@@ -237,7 +251,12 @@ impl<'a> HlrParser<'a> {
             }
 
             if self.current() == Some(&Token::RBrace) {
-                if let Statement::Expression(expr) = statement {
+                if statement_kind == StatementKind::UndelimitedExpression
+                    || statement_kind == StatementKind::BlockExpression
+                {
+                    let Statement::Expression(expr) = statement else {
+                        unreachable!();
+                    };
                     return_expression = Some(Box::new(expr));
                 } else {
                     statements.push(statement);
@@ -256,44 +275,49 @@ impl<'a> HlrParser<'a> {
         })
     }
 
-    fn parse_statement(&mut self) -> Result<(Statement, bool), ParserError> {
+    fn parse_statement(&mut self) -> Result<(Statement, StatementKind), ParserError> {
         match self.current() {
             Some(Token::Keyword(Keyword::Let)) => {
                 let stmt = self.parse_let_statement()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, true))
+                Ok((stmt, StatementKind::ExplicitelyDelimited))
             }
             Some(Token::Keyword(Keyword::Return)) => {
                 let stmt = self.parse_return_statement()?;
-                let semicolon = self.advance_if(Token::Semicolon);
-                Ok((stmt, semicolon))
+                self.expect_token(Token::Semicolon)?;
+                Ok((stmt, StatementKind::ExplicitelyDelimited))
             }
             Some(Token::Keyword(Keyword::Break)) => {
                 let stmt = self.parse_break_statement()?;
-                let semicolon = self.advance_if(Token::Semicolon);
-                Ok((stmt, semicolon))
+                self.expect_token(Token::Semicolon)?;
+                Ok((stmt, StatementKind::ExplicitelyDelimited))
             }
             Some(Token::LBrace) => {
                 let expr = self.parse_block()?;
                 let stmt = Statement::Expression(Expression::Block(expr));
-                Ok((stmt, true))
+                Ok((stmt, StatementKind::BlockExpression))
             }
             Some(Token::Keyword(Keyword::If)) => {
                 let expr = self.parse_if_expr()?;
-                Ok((Statement::Expression(expr), true))
+                Ok((Statement::Expression(expr), StatementKind::BlockExpression))
             }
             Some(Token::Keyword(Keyword::Loop)) => {
                 let expr = self.parse_loop()?;
-                Ok((Statement::Expression(expr), true))
+                Ok((Statement::Expression(expr), StatementKind::BlockExpression))
             }
             Some(Token::Keyword(Keyword::Match)) => {
                 let expr = self.parse_match()?;
-                Ok((Statement::Expression(expr), true))
+                Ok((Statement::Expression(expr), StatementKind::BlockExpression))
             }
             _ => {
                 let stmt = self.parse_expression_statement()?;
                 let semicolon = self.advance_if(Token::Semicolon);
-                Ok((stmt, semicolon))
+                let statement_kind = if semicolon {
+                    StatementKind::ExplicitelyDelimited
+                } else {
+                    StatementKind::UndelimitedExpression
+                };
+                Ok((stmt, statement_kind))
             }
         }
     }
