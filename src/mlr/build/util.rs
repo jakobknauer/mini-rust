@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    ctxt::types,
+    ctxt::{functions, types},
     mlr::{
         self,
         build::{MlrBuilderError, Result, TypeError, macros::assign_to_new_loc},
@@ -33,6 +33,10 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
+    pub fn get_loc_type(&self, loc_id: &mlr::LocId) -> types::TypeId {
+        *self.output.loc_types.get(loc_id).expect("type of loc should be known")
+    }
+
     pub fn insert_val(&mut self, val: mlr::Value) -> Result<mlr::ValId> {
         let val_id = self.get_next_val_id();
         self.output.vals.insert(val_id, val);
@@ -41,6 +45,61 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.output.val_types.insert(val_id, type_id);
 
         Ok(val_id)
+    }
+
+    pub fn insert_function_val(&mut self, fn_id: functions::FnId) -> Result<mlr::ValId> {
+        let val = mlr::Value::Function(fn_id);
+        self.insert_val(val)
+    }
+
+    pub fn insert_call_val(&mut self, callable: mlr::LocId, args: Vec<mlr::LocId>) -> Result<mlr::ValId> {
+        let val = mlr::Value::Call { callable, args };
+        self.insert_val(val)
+    }
+
+    pub fn insert_if_val(
+        &mut self,
+        condition: mlr::LocId,
+        then_block: mlr::Block,
+        else_block: mlr::Block,
+    ) -> Result<mlr::ValId> {
+        let val = mlr::Value::If(mlr::If {
+            condition,
+            then_block,
+            else_block,
+        });
+        self.insert_val(val)
+    }
+
+    pub fn insert_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::LocId) -> Result<mlr::ValId> {
+        let block = mlr::Block { statements, output };
+        let val = mlr::Value::Block(block);
+        self.insert_val(val)
+    }
+
+    pub fn insert_break_stmt(&mut self) -> Result<mlr::StmtId> {
+        let stmt = mlr::Statement::Break;
+        self.insert_stmt(stmt)
+    }
+
+    pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
+        let val = mlr::Value::Empty { type_id };
+        self.insert_val(val)
+    }
+
+    pub fn insert_int_val(&mut self, int: i64) -> Result<mlr::ValId> {
+        let val = mlr::Value::Constant(mlr::Constant::Int(int));
+        self.insert_val(val)
+    }
+
+    pub fn insert_use_val(&mut self, place: mlr::PlaceId) -> Result<mlr::ValId> {
+        let val = mlr::Value::Use(place);
+        self.insert_val(val)
+    }
+    
+    pub fn insert_loop_val(&mut self, body: mlr::Block) -> Result<mlr::ValId> {
+        let val = mlr::Value::Loop { body };
+        self.insert_val(val)
     }
 
     pub fn insert_place(&mut self, place: mlr::Place) -> Result<mlr::PlaceId> {
