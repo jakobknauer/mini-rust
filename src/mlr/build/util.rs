@@ -96,7 +96,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let val = mlr::Value::Use(place);
         self.insert_val(val)
     }
-    
+
     pub fn insert_loop_val(&mut self, body: mlr::Block) -> Result<mlr::ValId> {
         let val = mlr::Value::Loop { body };
         self.insert_val(val)
