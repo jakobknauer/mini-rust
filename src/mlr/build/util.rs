@@ -73,8 +73,8 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn insert_if_val(
         &mut self,
         condition: mlr::LocId,
-        then_block: mlr::Block,
-        else_block: mlr::Block,
+        then_block: mlr::ValId,
+        else_block: mlr::ValId,
     ) -> Result<mlr::ValId> {
         let val = mlr::Value::If(mlr::If {
             condition,
@@ -84,14 +84,9 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_block_val(&mut self, block: mlr::Block) -> Result<mlr::ValId> {
-        let val = mlr::Value::Block(block);
-        self.insert_val(val)
-    }
-
     pub fn insert_new_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::ValId) -> Result<mlr::ValId> {
-        let block = mlr::Block { statements, output };
-        self.insert_block_val(block)
+        let block = mlr::Value::Block { statements, output };
+        self.insert_val(block)
     }
 
     pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
@@ -119,7 +114,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_loop_val(&mut self, body: mlr::Block) -> Result<mlr::ValId> {
+    pub fn insert_loop_val(&mut self, body: mlr::ValId) -> Result<mlr::ValId> {
         let val = mlr::Value::Loop { body };
         self.insert_val(val)
     }
@@ -244,13 +239,6 @@ impl<'a> mlr::MlrBuilder<'a> {
             }
         }
         None
-    }
-
-    pub fn create_unit_block(&mut self) -> Result<mlr::Block> {
-        Ok(mlr::Block {
-            statements: vec![],
-            output: self.insert_unit_val()?,
-        })
     }
 
     pub fn build_struct_field_init_stmts(

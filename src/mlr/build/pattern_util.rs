@@ -46,7 +46,7 @@ impl<'a> super::MlrBuilder<'a> {
         enum_type_id: &TypeId,
         variant_index: &usize,
         base_place: &mlr::PlaceId,
-    ) -> Result<mlr::Block> {
+    ) -> Result<mlr::ValId> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
         let enum_def = self.get_enum_def(enum_type_id)?;
@@ -92,10 +92,6 @@ impl<'a> super::MlrBuilder<'a> {
 
         self.pop_scope();
 
-        let block = mlr::Block {
-            statements: bind_statements,
-            output,
-        };
-        Ok(block)
+        self.insert_new_block_val(bind_statements, output)
     }
 }

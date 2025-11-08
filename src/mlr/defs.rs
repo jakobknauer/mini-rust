@@ -22,7 +22,7 @@ pub struct Mlr {
     pub loc_types: HashMap<LocId, TypeId>,
     pub val_types: HashMap<ValId, TypeId>,
     pub place_types: HashMap<PlaceId, TypeId>,
-    pub body: Block,
+    pub body: ValId,
     pub param_locs: Vec<LocId>,
 }
 
@@ -35,10 +35,7 @@ impl Mlr {
             loc_types: HashMap::new(),
             val_types: HashMap::new(),
             place_types: HashMap::new(),
-            body: Block {
-                statements: Vec::new(),
-                output: ValId(0),
-            },
+            body: ValId(0),
             param_locs: Vec::new(),
         }
     }
@@ -53,13 +50,13 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Value {
-    Block(Block),
+    Block { statements: Vec<StmtId>, output: ValId },
     Constant(Constant),
     Use(PlaceId),
     Call { callable: LocId, args: Vec<LocId> },
     Function(FnId),
     If(If),
-    Loop { body: Block },
+    Loop { body: ValId },
     Empty { type_id: TypeId },
 }
 
@@ -72,12 +69,6 @@ pub enum Place {
 }
 
 #[derive(Debug)]
-pub struct Block {
-    pub statements: Vec<StmtId>,
-    pub output: ValId,
-}
-
-#[derive(Debug)]
 pub enum Constant {
     Int(i64),
     Bool(bool),
@@ -87,8 +78,8 @@ pub enum Constant {
 #[derive(Debug)]
 pub struct If {
     pub condition: LocId,
-    pub then_block: Block,
-    pub else_block: Block,
+    pub then_block: ValId,
+    pub else_block: ValId,
 }
 
 impl Display for LocId {

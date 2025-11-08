@@ -179,7 +179,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_function_body(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
         let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.builder.position_at_end(body_block);
-        let output = self.build_block(&self.mlr.body)?;
+        let output = self.build_val(&self.mlr.body)?;
 
         self.builder.build_return(Some(&output))?;
 
@@ -214,7 +214,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         use mlr::Value::*;
 
         match self.mlr.vals.get(val).ok_or(FnGeneratorError)? {
-            Block(block) => self.build_block(block),
+            Block { statements, output } => self.build_block(statements, output),
             Constant(constant) => self.build_constant(constant),
             Use(place_id) => self.build_use(place_id),
             Function(fn_id) => self.build_global_function(fn_id),
@@ -284,11 +284,15 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_block(&mut self, body: &mlr::Block) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        for stmt in &body.statements {
+    fn build_block(
+        &mut self,
+        statements: &[mlr::StmtId],
+        output: &mlr::ValId,
+    ) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        for stmt in statements {
             self.build_statement(stmt)?;
         }
-        self.build_val(&body.output)
+        self.build_val(output)
     }
 
     fn build_constant(&mut self, constant: &mlr::Constant) -> FnGeneratorResult<BasicValueEnum<'iw>> {
@@ -364,13 +368,13 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         // Build then block
         self.builder.position_at_end(then_block);
-        let then_value = self.build_block(&if_.then_block)?;
+        let then_value = self.build_val(&if_.then_block)?;
         self.builder.build_store(result_address, then_value)?;
         self.builder.build_unconditional_branch(merge_block)?;
 
         // Build else block
         self.builder.position_at_end(else_block);
-        let else_value = self.build_block(&if_.else_block)?;
+        let else_value = self.build_val(&if_.else_block)?;
         self.builder.build_store(result_address, else_value)?;
         self.builder.build_unconditional_branch(merge_block)?;
 
@@ -382,14 +386,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(result_value)
     }
 
-    fn build_loop(&mut self, body: &mlr::Block) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+    fn build_loop(&mut self, body: &mlr::ValId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
         let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "loop");
         let after_loop = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "loop_after");
 
         self.builder.build_unconditional_branch(body_block)?;
         self.after_loop_blocks.push_back(after_loop);
         self.builder.position_at_end(body_block);
-        self.build_block(body)?;
+        self.build_val(body)?;
         self.builder.build_unconditional_branch(body_block)?;
         self.after_loop_blocks.pop_back();
 

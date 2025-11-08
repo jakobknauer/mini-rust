@@ -17,7 +17,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type should only be called with a valid ValId");
 
         match val {
-            Block(block) => self.infer_type_of_block(block),
+            Block { output, .. } => self.infer_type_of_block(output),
             Constant(constant) => self.infer_type_of_constant(constant),
             Use(place) => self.infer_place_type(place),
             Call { callable, args } => self.infer_type_of_call(callable, args),
@@ -32,8 +32,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn infer_type_of_block(&self, block: &mlr::Block) -> Result<TypeId> {
-        Ok(self.get_val_type(&block.output))
+    fn infer_type_of_block(&self, output: &mlr::ValId) -> Result<TypeId> {
+        Ok(self.get_val_type(output))
     }
 
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
@@ -116,8 +116,8 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::IfConditionNotBoolean { actual: condition_type }.into();
         }
 
-        let then_type = self.get_val_type(&if_.then_block.output);
-        let else_type = self.get_val_type(&if_.else_block.output);
+        let then_type = self.get_val_type(&if_.then_block);
+        let else_type = self.get_val_type(&if_.else_block);
 
         if self.ctxt.type_registry.types_equal(&then_type, &else_type) {
             Ok(then_type)

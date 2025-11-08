@@ -37,7 +37,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         if let Some(mlr) = self.mlr {
             write!(self.writer, " ")?;
-            self.print_block(&mlr.body)
+            self.print_val(&mlr.body)
         } else {
             write!(self.writer, ";")
         }
@@ -62,16 +62,16 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "{}", return_type)
     }
 
-    fn print_block(&mut self, block: &mlr::Block) -> Result<(), std::io::Error> {
+    fn print_block(&mut self, statements: &[mlr::StmtId], output: &mlr::ValId) -> Result<(), std::io::Error> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
-        for stmt_id in &block.statements {
+        for stmt_id in statements {
             self.print_statement(stmt_id)?;
         }
 
         self.indent()?;
-        self.print_val(&block.output)?;
+        self.print_val(output)?;
         writeln!(self.writer)?;
 
         self.indent_level -= 1;
@@ -121,7 +121,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match val {
             Some(val) => match val {
-                Block(block) => self.print_block(block),
+                Block { statements, output } => self.print_block(statements, output),
                 Constant(constant) => match constant {
                     Int(i) => write!(self.writer, "const {}", i),
                     Bool(b) => write!(self.writer, "const {}", b),
@@ -154,13 +154,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     else_block,
                 }) => {
                     write!(self.writer, "if {} ", condition)?;
-                    self.print_block(then_block)?;
+                    self.print_val(then_block)?;
                     write!(self.writer, " else ")?;
-                    self.print_block(else_block)
+                    self.print_val(else_block)
                 }
                 Loop { body } => {
                     write!(self.writer, "loop ")?;
-                    self.print_block(body)
+                    self.print_val(body)
                 }
                 Empty { type_id } => {
                     let type_name = self.ctxt.type_registry.get_string_rep(type_id);

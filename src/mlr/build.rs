@@ -97,7 +97,7 @@ impl<'a> MlrBuilder<'a> {
 
         let body = self.build_block(&self.function.body)?;
 
-        let output_type = self.get_val_type(&body.output);
+        let output_type = self.get_val_type(&body);
         if !self.ctxt.type_registry.types_equal(&return_type, &output_type) {
             return TypeError::ReturnTypeMismatch {
                 expected: return_type,
@@ -110,7 +110,7 @@ impl<'a> MlrBuilder<'a> {
         Ok(self.output)
     }
 
-    pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::Block> {
+    pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::ValId> {
         self.push_scope();
 
         let statements: Vec<_> = block
@@ -126,7 +126,7 @@ impl<'a> MlrBuilder<'a> {
 
         self.pop_scope();
 
-        Ok(mlr::Block { statements, output })
+        self.insert_new_block_val(statements, output)
     }
 
     fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::ValId> {
@@ -145,10 +145,7 @@ impl<'a> MlrBuilder<'a> {
                 else_block,
             } => self.build_if(condition, then_block, else_block.as_ref()),
             Loop { body } => self.build_loop(body),
-            Block(block) => {
-                let block = self.build_block(block)?;
-                self.insert_block_val(block)
-            }
+            Block(block) => self.build_block(block),
             FieldAccess { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_use_val(place)
@@ -237,7 +234,7 @@ impl<'a> MlrBuilder<'a> {
         let then_block = self.build_block(then_block)?;
         let else_block = match else_block {
             Some(block) => self.build_block(block),
-            None => self.create_unit_block(),
+            None => self.insert_unit_val(),
         }?;
         let if_val = self.insert_if_val(cond_loc, then_block, else_block)?;
 
@@ -367,13 +364,10 @@ impl<'a> MlrBuilder<'a> {
                 self.build_arm_block(&arms[arm_index], &scrutinee_type_id, &arm_index, &scrutinee_place)?;
             let output = self.insert_if_val(arm_condition_loc, then_block, else_block)?;
 
-            else_block = mlr::Block {
-                statements: vec![arm_condition_stmt],
-                output,
-            };
+            else_block = self.insert_new_block_val(vec![arm_condition_stmt], output)?;
         }
 
-        let output = self.insert_block_val(else_block)?;
+        let output = else_block;
         let statements = vec![scrutinee_stmt, discriminant_stmt, eq_fn_statement];
         self.insert_new_block_val(statements, output)
     }
