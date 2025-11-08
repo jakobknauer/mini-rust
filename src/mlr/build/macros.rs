@@ -3,10 +3,8 @@ macro_rules! assign_to_new_loc {
         let loc: mlr::LocId = $self.get_next_loc_id();
 
         let init: mlr::ValId = $init;
-        $self
-            .output
-            .loc_types
-            .insert(loc, *$self.output.val_types.get(&init).unwrap());
+        let init_type: crate::ctxt::types::TypeId = $self.get_val_type(&init);
+        $self.output.loc_types.insert(loc, init_type);
 
         let place = mlr::Place::Local(loc);
         let place: mlr::PlaceId = $self.insert_place(place)?;

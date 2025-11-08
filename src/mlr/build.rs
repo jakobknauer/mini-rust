@@ -97,11 +97,11 @@ impl<'a> MlrBuilder<'a> {
 
         let body = self.build_block(&self.function.body)?;
 
-        let output_type = self.output.loc_types.get(&body.output).unwrap();
-        if !self.ctxt.type_registry.types_equal(&return_type, output_type) {
+        let output_type = self.get_loc_type(&body.output);
+        if !self.ctxt.type_registry.types_equal(&return_type, &output_type) {
             return TypeError::ReturnTypeMismatch {
                 expected: return_type,
-                actual: *output_type,
+                actual: output_type,
             }
             .into();
         };
@@ -123,7 +123,7 @@ impl<'a> MlrBuilder<'a> {
             self,
             match &block.return_expression {
                 Some(expr) => self.lower_to_val(expr)?,
-                None => self.create_unit_value()?,
+                None => self.create_unit_val()?,
             }
         );
 
@@ -154,8 +154,8 @@ impl<'a> MlrBuilder<'a> {
             } => self.build_if(condition, then_block, else_block.as_ref()),
             Loop { body } => self.build_loop(body),
             Block(block) => {
-                let block = mlr::Value::Block(self.build_block(block)?);
-                self.insert_val(block)
+                let block = self.build_block(block)?;
+                self.insert_block_val(block)
             }
             FieldAccess { .. } => {
                 let place = self.lower_to_place(expr)?;
@@ -168,28 +168,24 @@ impl<'a> MlrBuilder<'a> {
     fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::PlaceId> {
         use hlr::Expression::*;
 
-        let place = match expr {
-            Variable(name) => self.lower_var_to_place(name)?,
-            FieldAccess { base, field_name } => self.lower_field_access_to_place(base, field_name)?,
+        match expr {
+            Variable(name) => self.lower_var_to_place(name),
+            FieldAccess { base, field_name } => self.lower_field_access_to_place(base, field_name),
             _ => panic!("Only variables and field access expressions are supported as places."),
-        };
-
-        self.insert_place(place)
+        }
     }
 
     fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::ValId> {
         use hlr::Literal::*;
 
-        let val = match literal {
-            Int(n) => mlr::Value::Constant(mlr::Constant::Int(*n)),
-            Bool(b) => mlr::Value::Constant(mlr::Constant::Bool(*b)),
-        };
-
-        self.insert_val(val)
+        match literal {
+            Int(n) => self.insert_int_val(*n),
+            Bool(b) => self.insert_bool_val(*b),
+        }
     }
 
     fn build_variable(&mut self, name: &str) -> Result<mlr::ValId> {
-        self.resolve_name(name).and_then(|val| self.insert_val(val))
+        self.resolve_name(name)
     }
 
     fn build_binary_op(
@@ -211,7 +207,7 @@ impl<'a> MlrBuilder<'a> {
 
         let (call_loc, call_stmt) = assign_to_new_loc!(self, self.insert_call_val(op_loc, vec![left_loc, right_loc])?);
 
-        self.insert_block_val(vec![left_stmt, right_stmt, op_stmt, call_stmt], call_loc)
+        self.insert_new_block_val(vec![left_stmt, right_stmt, op_stmt, call_stmt], call_loc)
     }
 
     fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::ValId> {
@@ -221,9 +217,9 @@ impl<'a> MlrBuilder<'a> {
             self.insert_assign_stmt(loc, value)?
         };
 
-        let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
+        let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_val()?);
 
-        self.insert_block_val(vec![assign_stmt, unit_stmt], unit_loc)
+        self.insert_new_block_val(vec![assign_stmt, unit_stmt], unit_loc)
     }
 
     fn build_function_call(&mut self, function: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::ValId> {
@@ -241,7 +237,7 @@ impl<'a> MlrBuilder<'a> {
             .chain(std::iter::once(call_stmt))
             .collect();
 
-        self.insert_block_val(statements, call_loc)
+        self.insert_new_block_val(statements, call_loc)
     }
 
     fn build_if(
@@ -261,7 +257,7 @@ impl<'a> MlrBuilder<'a> {
             self.insert_if_val(cond_loc, then_block, else_block)?
         });
 
-        self.insert_block_val(vec![cond_stmt, if_stmt], if_loc)
+        self.insert_new_block_val(vec![cond_stmt, if_stmt], if_loc)
     }
 
     fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::ValId> {
@@ -292,13 +288,13 @@ impl<'a> MlrBuilder<'a> {
         fields: &[(String, hlr::Expression)],
     ) -> Result<mlr::ValId> {
         let (struct_val_loc, struct_val_stmt) = assign_to_new_loc!(self, self.insert_empty_val(*type_id)?);
-        let struct_val_place = self.insert_place(mlr::Place::Local(struct_val_loc))?;
+        let struct_val_place = self.insert_loc_place(struct_val_loc)?;
 
         let field_init_stmts = self.build_struct_field_init_stmts(type_id, fields, &struct_val_place)?;
 
         let statements = std::iter::once(struct_val_stmt).chain(field_init_stmts).collect();
 
-        self.insert_block_val(statements, struct_val_loc)
+        self.insert_new_block_val(statements, struct_val_loc)
     }
 
     fn build_enum_val(
@@ -309,18 +305,15 @@ impl<'a> MlrBuilder<'a> {
     ) -> Result<mlr::ValId> {
         // Create empty enum value
         let (enum_val_loc, enum_val_stmt) = assign_to_new_loc!(self, self.insert_empty_val(*type_id)?);
-        let base_place = self.insert_place(mlr::Place::Local(enum_val_loc))?;
+        let base_place = self.insert_loc_place(enum_val_loc)?;
 
         // Fill discriminant
-        let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant { base: base_place })?;
+        let discriminant_place = self.insert_enum_discriminant_place(base_place)?;
         let discriminant_value = self.insert_int_val(*variant_index as i64)?;
         let discriminant_stmt = self.insert_assign_stmt(discriminant_place, discriminant_value)?;
 
         // Fill fields
-        let variant_place = self.insert_place(mlr::Place::ProjectToVariant {
-            base: base_place,
-            variant_index: *variant_index,
-        })?;
+        let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
         let enum_def = self.get_enum_def(type_id)?;
         let variant_type_id = enum_def
             .variants
@@ -335,24 +328,17 @@ impl<'a> MlrBuilder<'a> {
             .chain(field_init_stmts)
             .collect();
 
-        self.insert_block_val(statements, enum_val_loc)
+        self.insert_new_block_val(statements, enum_val_loc)
     }
 
     fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::ValId> {
-        // build scrutinee value
+        // build scrutinee
         let (scrutinee_loc, scrutinee_stmt) = assign_to_new_loc!(self, self.lower_to_val(scrutinee)?);
-        let scrutinee_place = self.insert_place(mlr::Place::Local(scrutinee_loc))?;
-
-        // get scrutinee type
-        let scrutinee_type_id = self.get_loc_type(&scrutinee_loc);
-        let enum_def = self.get_enum_def(&scrutinee_type_id)?;
-
-        // map match arms to enum variant indices
-        let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_type_id)?;
+        let scrutinee_place = self.insert_loc_place(scrutinee_loc)?;
 
         // store discriminant value in a temporary location
         let (discriminant_loc, discriminant_stmt) = assign_to_new_loc!(self, {
-            let discriminant_place = self.insert_place(mlr::Place::EnumDiscriminant { base: scrutinee_place })?;
+            let discriminant_place = self.insert_enum_discriminant_place(scrutinee_place)?;
             self.insert_use_val(discriminant_place)?
         });
 
@@ -366,6 +352,10 @@ impl<'a> MlrBuilder<'a> {
             let eq_fn_id = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
             self.insert_function_val(eq_fn_id)?
         });
+
+        let scrutinee_type_id = self.get_loc_type(&scrutinee_loc);
+        let enum_def = self.get_enum_def(&scrutinee_type_id)?;
+        let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_type_id)?;
 
         // Now build nested mlr::Ifs from arm conditions and arm blocks
         // The iterative approach is used to avoid deep recursion for match expressions with many
@@ -399,14 +389,10 @@ impl<'a> MlrBuilder<'a> {
             };
         }
 
-        // Turn the final else_block into a value
-        let (final_block_loc, final_block_stmt) = assign_to_new_loc!(self, {
-            let val = mlr::Value::Block(else_block);
-            self.insert_val(val)?
-        });
+        let (final_block_loc, final_block_stmt) = assign_to_new_loc!(self, self.insert_block_val(else_block)?);
 
         let statements = vec![scrutinee_stmt, discriminant_stmt, eq_fn_statement, final_block_stmt];
-        self.insert_block_val(statements, final_block_loc)
+        self.insert_new_block_val(statements, final_block_loc)
     }
 
     fn build_statement(&mut self, stmt: &hlr::Statement) -> Result<mlr::StmtId> {
@@ -436,11 +422,11 @@ impl<'a> MlrBuilder<'a> {
     fn build_return_statement(&mut self, expression: Option<&hlr::Expression>) -> Result<mlr::StmtId> {
         let (return_val_loc, return_val_stmt) = match expression {
             Some(expression) => assign_to_new_loc!(self, self.lower_to_val(expression)?),
-            None => assign_to_new_loc!(self, self.create_unit_value()?),
+            None => assign_to_new_loc!(self, self.create_unit_val()?),
         };
 
         let return_stmt = self.insert_return_stmt(return_val_loc)?;
-        let block = self.insert_block_val(vec![return_val_stmt, return_stmt], return_val_loc)?;
+        let block = self.insert_new_block_val(vec![return_val_stmt, return_stmt], return_val_loc)?;
         let (_, block_stmt) = assign_to_new_loc!(self, block);
 
         Ok(block_stmt)
@@ -450,37 +436,32 @@ impl<'a> MlrBuilder<'a> {
         self.insert_break_stmt()
     }
 
-    fn lower_var_to_place(&self, name: &str) -> Result<mlr::Place> {
+    fn lower_var_to_place(&mut self, name: &str) -> Result<mlr::PlaceId> {
         let loc = self
             .resolve_name_to_location(name)
             .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
 
-        Ok(mlr::Place::Local(loc))
+        self.insert_loc_place(loc)
     }
 
-    fn lower_field_access_to_place(&mut self, base: &hlr::Expression, field_name: &str) -> Result<mlr::Place> {
+    fn lower_field_access_to_place(&mut self, base: &hlr::Expression, field_name: &str) -> Result<mlr::PlaceId> {
         // TODO allow general expressions as base (by lowering to val and then creating a
         // temporary place). This however requires a better builder infrastructure, so we
         // can here at this point create temporary variables/places in the current scope.
         let base = self.lower_to_place(base)?;
 
-        let base_type_id = self
-            .output
-            .place_types
-            .get(&base)
-            .expect("type of base place should be registered");
-
-        let struct_def = self.get_struct_def(base_type_id)?;
+        let base_type_id = self.get_place_type(&base);
+        let struct_def = self.get_struct_def(&base_type_id)?;
 
         let field_index = struct_def
             .fields
             .iter()
             .position(|struct_field| struct_field.name == field_name)
             .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                type_id: *base_type_id,
+                type_id: base_type_id,
                 field_name: field_name.to_string(),
             }))?;
 
-        Ok(mlr::Place::FieldAccess { base, field_index })
+        self.insert_field_access_place(base, field_index)
     }
 }

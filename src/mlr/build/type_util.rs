@@ -33,11 +33,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_block(&self, block: &mlr::Block) -> Result<TypeId> {
-        Ok(*self
-            .output
-            .loc_types
-            .get(&block.output)
-            .expect("type of block.output should have been inferred before"))
+        Ok(self.get_loc_type(&block.output))
     }
 
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
@@ -54,15 +50,11 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_call(&self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<TypeId> {
-        let callable_type = self
-            .output
-            .loc_types
-            .get(callable)
-            .expect("type of location should be registered");
+        let callable_type = self.get_loc_type(callable);
         let callable_type = self
             .ctxt
             .type_registry
-            .get_type_by_id(callable_type)
+            .get_type_by_id(&callable_type)
             .expect("type of callable should be registered");
 
         let Type::Function {
@@ -73,12 +65,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::ValNotCallable.into();
         };
 
-        let arg_types = args.iter().map(|arg_loc| {
-            self.output
-                .loc_types
-                .get(arg_loc)
-                .expect("type of location should be registered")
-        });
+        let arg_types = args.iter().map(|arg_loc| self.get_loc_type(arg_loc));
 
         if param_types.len() != arg_types.len() {
             return TypeError::CallArgumentCountMismatch {
@@ -89,11 +76,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
 
         for (i, (param_type, arg_type)) in param_types.iter().zip(arg_types).enumerate() {
-            if !self.ctxt.type_registry.types_equal(param_type, arg_type) {
+            if !self.ctxt.type_registry.types_equal(param_type, &arg_type) {
                 return TypeError::CallArgumentTypeMismatch {
                     index: i,
                     expected: *param_type,
-                    actual: *arg_type,
+                    actual: arg_type,
                 }
                 .into();
             }
@@ -117,11 +104,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_if(&self, if_: &mlr::If) -> Result<TypeId> {
-        let condition_type = self
-            .output
-            .loc_types
-            .get(&if_.condition)
-            .expect("type of condition should be registered");
+        let condition_type = self.get_loc_type(&if_.condition);
 
         let bool_type_id = self
             .ctxt
@@ -129,24 +112,12 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get_primitive_type_id(PrimitiveType::Boolean)
             .expect("boolean primitive type should be registered");
 
-        if !self.ctxt.type_registry.types_equal(condition_type, &bool_type_id) {
-            return TypeError::IfConditionNotBoolean {
-                actual: *condition_type,
-            }
-            .into();
+        if !self.ctxt.type_registry.types_equal(&condition_type, &bool_type_id) {
+            return TypeError::IfConditionNotBoolean { actual: condition_type }.into();
         }
 
-        let then_type = *self
-            .output
-            .loc_types
-            .get(&if_.then_block.output)
-            .expect("type of then_block.output should be registered");
-
-        let else_type = *self
-            .output
-            .loc_types
-            .get(&if_.else_block.output)
-            .expect("type of else_block.output should be registered");
+        let then_type = self.get_loc_type(&if_.then_block.output);
+        let else_type = self.get_loc_type(&if_.else_block.output);
 
         if self.ctxt.type_registry.types_equal(&then_type, &else_type) {
             Ok(then_type)
@@ -175,21 +146,12 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> Result<TypeId> {
-        Ok(*self
-            .output
-            .loc_types
-            .get(loc_id)
-            .expect("type of loc_id should be registered"))
+        Ok(self.get_loc_type(loc_id))
     }
 
     fn infer_type_of_field_access_place(&self, base: &mlr::PlaceId, field_index: &usize) -> Result<TypeId> {
-        let base_type_id = self
-            .output
-            .place_types
-            .get(base)
-            .expect("type of base place should be registered");
-
-        let struct_def = self.get_struct_def(base_type_id)?;
+        let base_type_id = self.get_place_type(base);
+        let struct_def = self.get_struct_def(&base_type_id)?;
 
         let field_type = struct_def
             .fields
@@ -201,13 +163,8 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_enum_discriminant(&self, base: &mlr::PlaceId) -> Result<TypeId> {
-        let base_type_id = self
-            .output
-            .place_types
-            .get(base)
-            .expect("type of base place should be registered");
-
-        let _enum_def = self.get_enum_def(base_type_id)?;
+        let base_type_id = self.get_place_type(base);
+        let _enum_def = self.get_enum_def(&base_type_id)?;
 
         // the discriminant is always an integer
         let int_type_id = self
@@ -219,22 +176,17 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_project_to_variant_place(&self, base: &mlr::PlaceId, variant_index: &usize) -> Result<TypeId> {
-        let base_type_id = self
-            .output
-            .place_types
-            .get(base)
-            .expect("type of base place should be registered");
+        let base_type_id = self.get_place_type(base);
+        let enum_def = self.get_enum_def(&base_type_id)?;
+        let variant =
+            enum_def
+                .variants
+                .get(*variant_index)
+                .ok_or(MlrBuilderError::TypeError(TypeError::NotAnEnumVariant {
+                    type_id: base_type_id,
+                    variant_name: variant_index.to_string(),
+                }))?;
 
-        let enum_def = self.get_enum_def(base_type_id)?;
-        let variant_type = enum_def
-            .variants
-            .get(*variant_index)
-            .ok_or(MlrBuilderError::TypeError(TypeError::NotAnEnumVariant {
-                type_id: *base_type_id,
-                variant_name: variant_index.to_string(),
-            }))?
-            .type_id;
-
-        Ok(variant_type)
+        Ok(variant.type_id)
     }
 }

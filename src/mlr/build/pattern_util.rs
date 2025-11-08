@@ -34,25 +34,16 @@ impl<'a> super::MlrBuilder<'a> {
         eq_fn_loc: &mlr::LocId,
         discriminant_loc: &mlr::LocId,
     ) -> Result<mlr::ValId> {
-        let (variant_discriminant_loc, variant_discriminant_stmt) = assign_to_new_loc!(self, {
-            let val = mlr::Value::Constant(mlr::Constant::Int(*variant_index as i64));
-            self.insert_val(val)?
-        });
+        let (variant_discriminant_loc, variant_discriminant_stmt) =
+            assign_to_new_loc!(self, self.insert_int_val(*variant_index as i64)?);
 
-        let (cond_loc, cond_stmt) = assign_to_new_loc!(self, {
-            let init = mlr::Value::Call {
-                callable: *eq_fn_loc,
-                args: vec![*discriminant_loc, variant_discriminant_loc],
-            };
-            self.insert_val(init)?
-        });
+        let (cond_loc, cond_stmt) = assign_to_new_loc!(
+            self,
+            self.insert_call_val(*eq_fn_loc, vec![*discriminant_loc, variant_discriminant_loc])?
+        );
 
         let statements: Vec<mlr::StmtId> = vec![variant_discriminant_stmt, cond_stmt];
-        let block = mlr::Value::Block(mlr::Block {
-            statements,
-            output: cond_loc,
-        });
-        self.insert_val(block)
+        self.insert_new_block_val(statements, cond_loc)
     }
 
     pub fn build_arm_block(
@@ -62,11 +53,7 @@ impl<'a> super::MlrBuilder<'a> {
         variant_index: &usize,
         base_place: &mlr::PlaceId,
     ) -> Result<mlr::Block> {
-        let variant_place = mlr::Place::ProjectToVariant {
-            base: *base_place,
-            variant_index: *variant_index,
-        };
-        let variant_place = self.insert_place(variant_place)?;
+        let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
         let enum_def = self.get_enum_def(enum_type_id)?;
         let enum_variant = enum_def
@@ -91,8 +78,7 @@ impl<'a> super::MlrBuilder<'a> {
             })
             .collect::<Result<_>>()?;
 
-        // create a new scope for the arm
-        self.scopes.push_back(super::Scope::new());
+        self.push_scope();
 
         // bind pattern variables
         let bind_statements: Vec<mlr::StmtId> = arm
@@ -101,29 +87,18 @@ impl<'a> super::MlrBuilder<'a> {
             .iter()
             .zip(field_indices)
             .map(|(hlr::StructPatternField { binding_name, .. }, field_index)| {
-                let field_place = mlr::Place::FieldAccess {
-                    base: variant_place,
-                    field_index,
-                };
-                let field_place = self.insert_place(field_place)?;
-
-                let (assign_loc, assign_stmt) = assign_to_new_loc!(self, {
-                    let val = mlr::Value::Use(field_place);
-                    self.insert_val(val)?
-                });
-
-                self.current_scope().vars.insert(binding_name.clone(), assign_loc);
+                let field_place = self.insert_field_access_place(variant_place, field_index)?;
+                let (assign_loc, assign_stmt) = assign_to_new_loc!(self, self.insert_use_val(field_place)?);
+                self.add_to_scope(binding_name, assign_loc);
                 Ok(assign_stmt)
             })
             .collect::<Result<_>>()?;
 
-        // build arm value
         let (value_loc, value_stmt) = assign_to_new_loc!(self, self.lower_to_val(&arm.value)?);
-        // pop arm scope
-        self.scopes.pop_back();
+
+        self.pop_scope();
 
         let statements = bind_statements.into_iter().chain(std::iter::once(value_stmt)).collect();
-
         let block = mlr::Block {
             statements,
             output: value_loc,

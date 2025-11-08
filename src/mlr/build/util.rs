@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     ctxt::{functions, types},
+    hlr,
     mlr::{
         self,
         build::{MlrBuilderError, Result, TypeError, macros::assign_to_new_loc},
@@ -35,6 +36,18 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     pub fn get_loc_type(&self, loc_id: &mlr::LocId) -> types::TypeId {
         *self.output.loc_types.get(loc_id).expect("type of loc should be known")
+    }
+
+    pub fn get_place_type(&self, place_id: &mlr::PlaceId) -> types::TypeId {
+        *self
+            .output
+            .place_types
+            .get(place_id)
+            .expect("type of place should be known")
+    }
+
+    pub fn get_val_type(&self, val_id: &mlr::ValId) -> types::TypeId {
+        *self.output.val_types.get(val_id).expect("type of val should be known")
     }
 
     pub fn insert_val(&mut self, val: mlr::Value) -> Result<mlr::ValId> {
@@ -71,15 +84,14 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::LocId) -> Result<mlr::ValId> {
-        let block = mlr::Block { statements, output };
+    pub fn insert_block_val(&mut self, block: mlr::Block) -> Result<mlr::ValId> {
         let val = mlr::Value::Block(block);
         self.insert_val(val)
     }
 
-    pub fn insert_break_stmt(&mut self) -> Result<mlr::StmtId> {
-        let stmt = mlr::Statement::Break;
-        self.insert_stmt(stmt)
+    pub fn insert_new_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::LocId) -> Result<mlr::ValId> {
+        let block = mlr::Block { statements, output };
+        self.insert_block_val(block)
     }
 
     pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
@@ -89,6 +101,16 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     pub fn insert_int_val(&mut self, int: i64) -> Result<mlr::ValId> {
         let val = mlr::Value::Constant(mlr::Constant::Int(int));
+        self.insert_val(val)
+    }
+
+    pub fn insert_bool_val(&mut self, boolean: bool) -> Result<mlr::ValId> {
+        let val = mlr::Value::Constant(mlr::Constant::Bool(boolean));
+        self.insert_val(val)
+    }
+
+    pub fn create_unit_val(&mut self) -> Result<mlr::ValId> {
+        let val = mlr::Value::Constant(mlr::Constant::Unit);
         self.insert_val(val)
     }
 
@@ -102,6 +124,56 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
+    pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> Result<mlr::StmtId> {
+        let stmt_id = self.get_next_stmt_id();
+        self.output.stmts.insert(stmt_id, stmt);
+        Ok(stmt_id)
+    }
+
+    pub fn insert_break_stmt(&mut self) -> Result<mlr::StmtId> {
+        let stmt = mlr::Statement::Break;
+        self.insert_stmt(stmt)
+    }
+
+    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
+        let place_type = self.get_place_type(&place);
+        let value_type = self.get_val_type(&value);
+
+        if !self.ctxt.type_registry.types_equal(&place_type, &value_type) {
+            return mlr::build::TypeError::AssignStmtTypeMismatch {
+                place,
+                expected: place_type,
+                actual: value_type,
+            }
+            .into();
+        }
+
+        let stmt = mlr::Statement::Assign { place, value };
+        self.insert_stmt(stmt)
+    }
+
+    pub fn insert_return_stmt(&mut self, value: mlr::LocId) -> Result<mlr::StmtId> {
+        let return_type = self
+            .ctxt
+            .function_registry
+            .get_signature_by_id(&self.fn_id)
+            .expect("return stmt only valid in function")
+            .return_type;
+
+        let value_type = self.get_loc_type(&value);
+
+        if !self.ctxt.type_registry.types_equal(&return_type, &value_type) {
+            return mlr::build::TypeError::ReturnTypeMismatch {
+                expected: return_type,
+                actual: value_type,
+            }
+            .into();
+        }
+
+        let stmt = mlr::Statement::Return { value };
+        self.insert_stmt(stmt)
+    }
+
     pub fn insert_place(&mut self, place: mlr::Place) -> Result<mlr::PlaceId> {
         let place_id = self.get_next_place_id();
         self.output.places.insert(place_id, place);
@@ -112,21 +184,38 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(place_id)
     }
 
-    pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> Result<mlr::StmtId> {
-        let stmt_id = self.get_next_stmt_id();
-        self.output.stmts.insert(stmt_id, stmt);
-        Ok(stmt_id)
+    pub fn insert_loc_place(&mut self, loc_id: mlr::LocId) -> Result<mlr::PlaceId> {
+        let place = mlr::Place::Local(loc_id);
+        self.insert_place(place)
+    }
+
+    pub fn insert_enum_discriminant_place(&mut self, base: mlr::PlaceId) -> Result<mlr::PlaceId> {
+        let place = mlr::Place::EnumDiscriminant { base };
+        self.insert_place(place)
+    }
+
+    pub fn insert_project_to_variant_place(
+        &mut self,
+        base: mlr::PlaceId,
+        variant_index: usize,
+    ) -> Result<mlr::PlaceId> {
+        let place = mlr::Place::ProjectToVariant { base, variant_index };
+        self.insert_place(place)
+    }
+
+    pub fn insert_field_access_place(&mut self, base: mlr::PlaceId, field_index: usize) -> Result<mlr::PlaceId> {
+        let place = mlr::Place::FieldAccess { base, field_index };
+        self.insert_place(place)
     }
 
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::Value> {
+    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::ValId> {
         if let Some(loc_id) = self.resolve_name_to_location(name) {
-            let place = mlr::Place::Local(loc_id);
-            let place = self.insert_place(place)?;
-            Ok(mlr::Value::Use(place))
+            let place = self.insert_loc_place(loc_id)?;
+            self.insert_use_val(place)
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
-            Ok(mlr::Value::Function(fn_id))
+            self.insert_function_val(fn_id)
         } else {
             Err(MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }
@@ -157,75 +246,18 @@ impl<'a> mlr::MlrBuilder<'a> {
         None
     }
 
-    pub fn create_unit_value(&mut self) -> Result<mlr::ValId> {
-        let val = mlr::Value::Constant(mlr::Constant::Unit);
-        self.insert_val(val)
-    }
-
     pub fn create_unit_block(&mut self) -> Result<mlr::Block> {
-        let (loc, stmt) = assign_to_new_loc!(self, self.create_unit_value()?);
+        let (loc, stmt) = assign_to_new_loc!(self, self.create_unit_val()?);
         Ok(mlr::Block {
             statements: vec![stmt],
             output: loc,
         })
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
-        let place_type = self
-            .output
-            .place_types
-            .get(&place)
-            .expect("type of place should be known");
-
-        let value_type = self
-            .output
-            .val_types
-            .get(&value)
-            .expect("type of value should be known");
-
-        if !self.ctxt.type_registry.types_equal(place_type, value_type) {
-            return mlr::build::TypeError::AssignStmtTypeMismatch {
-                place,
-                expected: *place_type,
-                actual: *value_type,
-            }
-            .into();
-        }
-
-        let stmt = mlr::Statement::Assign { place, value };
-        self.insert_stmt(stmt)
-    }
-
-    pub fn insert_return_stmt(&mut self, value: mlr::LocId) -> Result<mlr::StmtId> {
-        let return_type = self
-            .ctxt
-            .function_registry
-            .get_signature_by_id(&self.fn_id)
-            .expect("return stmt only valid in function")
-            .return_type;
-
-        let value_type = self
-            .output
-            .loc_types
-            .get(&value)
-            .expect("type of return value should be known");
-
-        if !self.ctxt.type_registry.types_equal(&return_type, value_type) {
-            return mlr::build::TypeError::ReturnTypeMismatch {
-                expected: return_type,
-                actual: *value_type,
-            }
-            .into();
-        }
-
-        let stmt = mlr::Statement::Return { value };
-        self.insert_stmt(stmt)
-    }
-
     pub fn build_struct_field_init_stmts(
         &mut self,
         type_id: &types::TypeId,
-        fields: &[(String, crate::hlr::Expression)],
+        fields: &[(String, hlr::Expression)],
         base_place: &mlr::PlaceId,
     ) -> Result<Vec<mlr::StmtId>> {
         let field_indices = self.compute_field_indices(type_id, fields.iter().map(|(name, _)| name.as_str()))?;
@@ -234,11 +266,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .iter()
             .zip(field_indices)
             .map(|((_, expr), field_index)| {
-                let field_place = self.insert_place(mlr::Place::FieldAccess {
-                    base: *base_place,
-                    field_index,
-                })?;
-
+                let field_place = self.insert_field_access_place(*base_place, field_index)?;
                 let field_value = self.lower_to_val(expr)?;
                 let field_stmt = self.insert_assign_stmt(field_place, field_value)?;
                 Ok(field_stmt)
