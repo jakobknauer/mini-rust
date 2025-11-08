@@ -62,6 +62,10 @@ impl FunctionRegistry {
         self.defs.get(fn_id)
     }
 
+    pub fn get_mut_function_mlr(&mut self, fn_id: FnId) -> Option<&mut Mlr> {
+        self.defs.get_mut(&fn_id)
+    }
+
     pub fn get_all_functions(&self) -> impl Iterator<Item = &FnId> {
         self.function_names.values()
     }

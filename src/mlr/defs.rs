@@ -41,14 +41,14 @@ impl Mlr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Assign { place: PlaceId, value: ValId },
     Return { value: LocId },
     Break,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Block { statements: Vec<StmtId>, output: ValId },
     Constant(Constant),
@@ -60,7 +60,7 @@ pub enum Value {
     Empty { type_id: TypeId },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Place {
     Local(LocId),
     FieldAccess { base: PlaceId, field_index: usize },
@@ -68,14 +68,14 @@ pub enum Place {
     ProjectToVariant { base: PlaceId, variant_index: usize },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Constant {
     Int(i64),
     Bool(bool),
     Unit,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct If {
     pub condition: LocId,
     pub then_block: ValId,

@@ -138,9 +138,11 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name).unwrap();
 
         let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
-        let mlr = mlr_builder
+        let mut mlr = mlr_builder
             .build()
             .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;
+
+        mlr::opt::simplify(&mut mlr);
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
     }
