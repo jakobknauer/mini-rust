@@ -33,7 +33,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_block(&self, block: &mlr::Block) -> Result<TypeId> {
-        Ok(self.get_loc_type(&block.output))
+        Ok(self.get_val_type(&block.output))
     }
 
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
@@ -116,8 +116,8 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::IfConditionNotBoolean { actual: condition_type }.into();
         }
 
-        let then_type = self.get_loc_type(&if_.then_block.output);
-        let else_type = self.get_loc_type(&if_.else_block.output);
+        let then_type = self.get_val_type(&if_.then_block.output);
+        let else_type = self.get_val_type(&if_.else_block.output);
 
         if self.ctxt.type_registry.types_equal(&then_type, &else_type) {
             Ok(then_type)

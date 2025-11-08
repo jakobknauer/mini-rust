@@ -5,7 +5,7 @@ use crate::{
     hlr,
     mlr::{
         self,
-        build::{MlrBuilderError, Result, TypeError, macros::assign_to_new_loc},
+        build::{MlrBuilderError, Result, TypeError},
     },
 };
 
@@ -89,7 +89,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_new_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::LocId) -> Result<mlr::ValId> {
+    pub fn insert_new_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::ValId) -> Result<mlr::ValId> {
         let block = mlr::Block { statements, output };
         self.insert_block_val(block)
     }
@@ -109,7 +109,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn create_unit_val(&mut self) -> Result<mlr::ValId> {
+    pub fn insert_unit_val(&mut self) -> Result<mlr::ValId> {
         let val = mlr::Value::Constant(mlr::Constant::Unit);
         self.insert_val(val)
     }
@@ -247,10 +247,9 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn create_unit_block(&mut self) -> Result<mlr::Block> {
-        let (loc, stmt) = assign_to_new_loc!(self, self.create_unit_val()?);
         Ok(mlr::Block {
-            statements: vec![stmt],
-            output: loc,
+            statements: vec![],
+            output: self.insert_unit_val()?,
         })
     }
 

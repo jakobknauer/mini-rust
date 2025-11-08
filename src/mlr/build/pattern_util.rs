@@ -36,14 +36,8 @@ impl<'a> super::MlrBuilder<'a> {
     ) -> Result<mlr::ValId> {
         let (variant_discriminant_loc, variant_discriminant_stmt) =
             assign_to_new_loc!(self, self.insert_int_val(*variant_index as i64)?);
-
-        let (cond_loc, cond_stmt) = assign_to_new_loc!(
-            self,
-            self.insert_call_val(*eq_fn_loc, vec![*discriminant_loc, variant_discriminant_loc])?
-        );
-
-        let statements: Vec<mlr::StmtId> = vec![variant_discriminant_stmt, cond_stmt];
-        self.insert_new_block_val(statements, cond_loc)
+        let cond = self.insert_call_val(*eq_fn_loc, vec![*discriminant_loc, variant_discriminant_loc])?;
+        self.insert_new_block_val(vec![variant_discriminant_stmt], cond)
     }
 
     pub fn build_arm_block(
@@ -94,14 +88,13 @@ impl<'a> super::MlrBuilder<'a> {
             })
             .collect::<Result<_>>()?;
 
-        let (value_loc, value_stmt) = assign_to_new_loc!(self, self.lower_to_val(&arm.value)?);
+        let output = self.lower_to_val(&arm.value)?;
 
         self.pop_scope();
 
-        let statements = bind_statements.into_iter().chain(std::iter::once(value_stmt)).collect();
         let block = mlr::Block {
-            statements,
-            output: value_loc,
+            statements: bind_statements,
+            output,
         };
         Ok(block)
     }

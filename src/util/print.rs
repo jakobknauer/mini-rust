@@ -71,7 +71,8 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
 
         self.indent()?;
-        writeln!(self.writer, "{}", block.output)?;
+        self.print_val(&block.output)?;
+        writeln!(self.writer)?;
 
         self.indent_level -= 1;
         self.indent()?;

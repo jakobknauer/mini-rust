@@ -37,7 +37,7 @@ impl Mlr {
             place_types: HashMap::new(),
             body: Block {
                 statements: Vec::new(),
-                output: LocId(0),
+                output: ValId(0),
             },
             param_locs: Vec::new(),
         }
@@ -74,7 +74,7 @@ pub enum Place {
 #[derive(Debug)]
 pub struct Block {
     pub statements: Vec<StmtId>,
-    pub output: LocId,
+    pub output: ValId,
 }
 
 #[derive(Debug)]

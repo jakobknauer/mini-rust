@@ -97,7 +97,7 @@ impl<'a> MlrBuilder<'a> {
 
         let body = self.build_block(&self.function.body)?;
 
-        let output_type = self.get_loc_type(&body.output);
+        let output_type = self.get_val_type(&body.output);
         if !self.ctxt.type_registry.types_equal(&return_type, &output_type) {
             return TypeError::ReturnTypeMismatch {
                 expected: return_type,
@@ -113,28 +113,20 @@ impl<'a> MlrBuilder<'a> {
     pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::Block> {
         self.push_scope();
 
-        let mut statements: Vec<_> = block
+        let statements: Vec<_> = block
             .statements
             .iter()
             .map(|stmt| self.build_statement(stmt))
             .collect::<Result<_>>()?;
 
-        let (output_loc, output_stmt) = assign_to_new_loc!(
-            self,
-            match &block.return_expression {
-                Some(expr) => self.lower_to_val(expr)?,
-                None => self.create_unit_val()?,
-            }
-        );
-
-        statements.push(output_stmt);
+        let output = match &block.return_expression {
+            Some(expr) => self.lower_to_val(expr)?,
+            None => self.insert_unit_val()?,
+        };
 
         self.pop_scope();
 
-        Ok(mlr::Block {
-            statements,
-            output: output_loc,
-        })
+        Ok(mlr::Block { statements, output })
     }
 
     fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::ValId> {
@@ -195,7 +187,6 @@ impl<'a> MlrBuilder<'a> {
         right: &hlr::Expression,
     ) -> Result<mlr::ValId> {
         let (left_loc, left_stmt) = assign_to_new_loc!(self, self.lower_to_val(left)?);
-
         let (right_loc, right_stmt) = assign_to_new_loc!(self, self.lower_to_val(right)?);
 
         let (op_loc, op_stmt) = assign_to_new_loc!(self, {
@@ -205,9 +196,8 @@ impl<'a> MlrBuilder<'a> {
             self.insert_function_val(fn_id)?
         });
 
-        let (call_loc, call_stmt) = assign_to_new_loc!(self, self.insert_call_val(op_loc, vec![left_loc, right_loc])?);
-
-        self.insert_new_block_val(vec![left_stmt, right_stmt, op_stmt, call_stmt], call_loc)
+        let call = self.insert_call_val(op_loc, vec![left_loc, right_loc])?;
+        self.insert_new_block_val(vec![left_stmt, right_stmt, op_stmt], call)
     }
 
     fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::ValId> {
@@ -217,9 +207,8 @@ impl<'a> MlrBuilder<'a> {
             self.insert_assign_stmt(loc, value)?
         };
 
-        let (unit_loc, unit_stmt) = assign_to_new_loc!(self, self.create_unit_val()?);
-
-        self.insert_new_block_val(vec![assign_stmt, unit_stmt], unit_loc)
+        let output = self.insert_unit_val()?;
+        self.insert_new_block_val(vec![assign_stmt], output)
     }
 
     fn build_function_call(&mut self, function: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::ValId> {
@@ -230,14 +219,11 @@ impl<'a> MlrBuilder<'a> {
             .map(|arg| Ok(assign_to_new_loc!(self, self.lower_to_val(arg)?)))
             .process_results(|it| it.unzip())?;
 
-        let (call_loc, call_stmt) = assign_to_new_loc!(self, self.insert_call_val(function_loc, arg_locs)?);
+        let call = self.insert_call_val(function_loc, arg_locs)?;
 
-        let statements: Vec<_> = std::iter::once(function_stmt)
-            .chain(arg_stmts)
-            .chain(std::iter::once(call_stmt))
-            .collect();
+        let statements: Vec<_> = std::iter::once(function_stmt).chain(arg_stmts).collect();
 
-        self.insert_new_block_val(statements, call_loc)
+        self.insert_new_block_val(statements, call)
     }
 
     fn build_if(
@@ -248,16 +234,14 @@ impl<'a> MlrBuilder<'a> {
     ) -> Result<mlr::ValId> {
         let (cond_loc, cond_stmt) = assign_to_new_loc!(self, self.lower_to_val(condition)?);
 
-        let (if_loc, if_stmt) = assign_to_new_loc!(self, {
-            let then_block = self.build_block(then_block)?;
-            let else_block = match else_block {
-                Some(block) => self.build_block(block),
-                None => self.create_unit_block(),
-            }?;
-            self.insert_if_val(cond_loc, then_block, else_block)?
-        });
+        let then_block = self.build_block(then_block)?;
+        let else_block = match else_block {
+            Some(block) => self.build_block(block),
+            None => self.create_unit_block(),
+        }?;
+        let if_val = self.insert_if_val(cond_loc, then_block, else_block)?;
 
-        self.insert_new_block_val(vec![cond_stmt, if_stmt], if_loc)
+        self.insert_new_block_val(vec![cond_stmt], if_val)
     }
 
     fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::ValId> {
@@ -292,9 +276,10 @@ impl<'a> MlrBuilder<'a> {
 
         let field_init_stmts = self.build_struct_field_init_stmts(type_id, fields, &struct_val_place)?;
 
-        let statements = std::iter::once(struct_val_stmt).chain(field_init_stmts).collect();
+        let struct_val = self.insert_use_val(struct_val_place)?;
 
-        self.insert_new_block_val(statements, struct_val_loc)
+        let statements = std::iter::once(struct_val_stmt).chain(field_init_stmts).collect();
+        self.insert_new_block_val(statements, struct_val)
     }
 
     fn build_enum_val(
@@ -322,13 +307,14 @@ impl<'a> MlrBuilder<'a> {
             .type_id;
         let field_init_stmts = self.build_struct_field_init_stmts(&variant_type_id, fields, &variant_place)?;
 
+        let enum_val = self.insert_use_val(base_place)?;
+
         // Build final block
         let statements = std::iter::once(enum_val_stmt)
             .chain(std::iter::once(discriminant_stmt))
             .chain(field_init_stmts)
             .collect();
-
-        self.insert_new_block_val(statements, enum_val_loc)
+        self.insert_new_block_val(statements, enum_val)
     }
 
     fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::ValId> {
@@ -377,22 +363,19 @@ impl<'a> MlrBuilder<'a> {
                 self.build_arm_condition(&arm_index, &eq_fn_loc, &discriminant_loc)?
             );
 
-            let (new_block_loc, new_block_stmt) = assign_to_new_loc!(self, {
-                let then_block =
-                    self.build_arm_block(&arms[arm_index], &scrutinee_type_id, &arm_index, &scrutinee_place)?;
-                self.insert_if_val(arm_condition_loc, then_block, else_block)?
-            });
+            let then_block =
+                self.build_arm_block(&arms[arm_index], &scrutinee_type_id, &arm_index, &scrutinee_place)?;
+            let output = self.insert_if_val(arm_condition_loc, then_block, else_block)?;
 
             else_block = mlr::Block {
-                statements: vec![arm_condition_stmt, new_block_stmt],
-                output: new_block_loc,
+                statements: vec![arm_condition_stmt],
+                output,
             };
         }
 
-        let (final_block_loc, final_block_stmt) = assign_to_new_loc!(self, self.insert_block_val(else_block)?);
-
-        let statements = vec![scrutinee_stmt, discriminant_stmt, eq_fn_statement, final_block_stmt];
-        self.insert_new_block_val(statements, final_block_loc)
+        let output = self.insert_block_val(else_block)?;
+        let statements = vec![scrutinee_stmt, discriminant_stmt, eq_fn_statement];
+        self.insert_new_block_val(statements, output)
     }
 
     fn build_statement(&mut self, stmt: &hlr::Statement) -> Result<mlr::StmtId> {
@@ -422,11 +405,13 @@ impl<'a> MlrBuilder<'a> {
     fn build_return_statement(&mut self, expression: Option<&hlr::Expression>) -> Result<mlr::StmtId> {
         let (return_val_loc, return_val_stmt) = match expression {
             Some(expression) => assign_to_new_loc!(self, self.lower_to_val(expression)?),
-            None => assign_to_new_loc!(self, self.create_unit_val()?),
+            None => assign_to_new_loc!(self, self.insert_unit_val()?),
         };
 
         let return_stmt = self.insert_return_stmt(return_val_loc)?;
-        let block = self.insert_new_block_val(vec![return_val_stmt, return_stmt], return_val_loc)?;
+        let output = self.insert_unit_val()?;
+        let block = self.insert_new_block_val(vec![return_val_stmt, return_stmt], output)?;
+
         let (_, block_stmt) = assign_to_new_loc!(self, block);
 
         Ok(block_stmt)

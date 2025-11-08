@@ -288,7 +288,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         for stmt in &body.statements {
             self.build_statement(stmt)?;
         }
-        self.build_load_from_loc(&body.output, "block_output")
+        self.build_val(&body.output)
     }
 
     fn build_constant(&mut self, constant: &mlr::Constant) -> FnGeneratorResult<BasicValueEnum<'iw>> {
