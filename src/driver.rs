@@ -21,6 +21,11 @@ pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, String> 
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
     print_functions(&ctxt).map_err(|_| "Error printing MLR")?;
 
+    print_fn("Simplifying MLR");
+    for (_, mlr) in ctxt.function_registry.iter_defined_functions() {
+        mlr::opt::simplify(mlr);
+    }
+
     print_fn("Building LLVM IR from MLR");
     let llvm_ir = generate::generate_llvm_ir(&ctxt);
 
@@ -138,11 +143,9 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
         let fn_id = ctxt.function_registry.get_function_by_name(&function.name).unwrap();
 
         let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
-        let mut mlr = mlr_builder
+        let mlr = mlr_builder
             .build()
             .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;
-
-        mlr::opt::simplify(&mut mlr);
 
         ctxt.function_registry.add_function_def(&function.name, mlr);
     }
