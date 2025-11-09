@@ -14,10 +14,10 @@ impl<'a> Simplify<'a> {
         self.simplify_val(self.mlr.body);
     }
 
-    fn simplify_val(&mut self, val: ValId) {
-        let val = unsafe { &mut *(self.mlr.vals.get_mut(&val).unwrap() as *mut Value) };
+    fn simplify_val(&mut self, val_id: ValId) {
+        let mut val = self.mlr.vals.remove(&val_id).unwrap();
 
-        match val {
+        match &mut val {
             Value::Block { statements, output } => {
                 for stmt_id in statements.iter() {
                     self.simplify_stmt(*stmt_id);
@@ -34,10 +34,10 @@ impl<'a> Simplify<'a> {
                     *output = *inner_output;
                 }
 
+                // If there are no statements, we can replace the block with its output
                 if statements.is_empty() {
-                    // If there are no statements, we can replace the block with its output
-                    let output_val = self.mlr.vals.get(output).unwrap().clone();
-                    *val = output_val;
+                    // The following assumes that the output ValId is not used elsewhere in the MLR
+                    val = self.mlr.vals.remove(output).unwrap();
                 }
             }
             Value::If(if_) => {
@@ -48,12 +48,12 @@ impl<'a> Simplify<'a> {
 
             Value::Constant(..) | Value::Use(..) | Value::Call { .. } | Value::Function(..) | Value::Empty { .. } => (),
         }
+
+        self.mlr.vals.insert(val_id, val);
     }
 
     fn simplify_stmt(&mut self, stmt_id: StmtId) {
-        let stmt = unsafe { &mut *(self.mlr.stmts.get_mut(&stmt_id).unwrap() as *mut Statement) };
-
-        match stmt {
+        match self.mlr.stmts.get(&stmt_id).unwrap() {
             Statement::Assign { value, .. } => self.simplify_val(*value),
             Statement::Return { .. } | Statement::Break => (),
         }
