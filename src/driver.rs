@@ -1,35 +1,76 @@
 mod err;
 mod stdlib;
 
+use std::{io::Write, path::Path};
+
 use crate::{
     ctxt::{self, functions, types},
     generate, hlr, mlr,
     util::print,
 };
 
-pub fn compile(source: &str, print_fn: impl Fn(&str)) -> Result<String, String> {
+#[derive(Default)]
+pub struct OutputPaths<T1, T2, T3>
+where
+    T1: AsRef<Path>,
+    T2: AsRef<Path>,
+    T3: AsRef<Path>,
+{
+    pub mlr: Option<T1>,
+    pub optimized_mlr: Option<T2>,
+    pub llvm_ir: Option<T3>,
+}
+
+pub fn compile<T1, T2, T3>(
+    source: &str,
+    print_pretty: impl Fn(&str),
+    print_detail: impl Fn(&str),
+    output_paths: OutputPaths<T1, T2, T3>,
+) -> Result<(), String>
+where
+    T1: AsRef<Path>,
+    T2: AsRef<Path>,
+    T3: AsRef<Path>,
+{
     let mut ctxt = ctxt::Ctxt::new();
 
-    print_fn("Building HLR from source");
+    print_pretty("Building HLR from source");
     let hlr = hlr::build_program(source).map_err(|parser_error| err::print_parser_error(&parser_error, source))?;
 
-    print_fn("Building MLR from HLR");
+    print_pretty("Building MLR from HLR");
     register_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error registering types")?;
     define_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)
         .map_err(|_| "Error registering functions")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
-    print_functions(&ctxt).map_err(|_| "Error printing MLR")?;
 
-    print_fn("Simplifying MLR");
+    if let Some(mlr_path) = output_paths.mlr {
+        print_detail(&format!("Saving MLR to {}", mlr_path.as_ref().display()));
+        print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
+    }
+
+    print_pretty("Simplifying MLR");
     for (_, mlr) in ctxt.function_registry.iter_defined_functions() {
         mlr::opt::simplify(mlr);
     }
 
-    print_fn("Building LLVM IR from MLR");
+    if let Some(optimized_mlr_path) = output_paths.optimized_mlr {
+        print_detail(&format!(
+            "Saving optimized MLR to {}",
+            optimized_mlr_path.as_ref().display()
+        ));
+        print_functions(&ctxt, optimized_mlr_path).map_err(|_| "Error printing optimized MLR")?;
+    }
+
+    print_pretty("Building LLVM IR from MLR");
     let llvm_ir = generate::generate_llvm_ir(&ctxt);
 
-    Ok(llvm_ir)
+    if let Some(llvm_ir_path) = output_paths.llvm_ir {
+        print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.as_ref().display()));
+        std::fs::write(&llvm_ir_path, &llvm_ir).map_err(|_| "Could not write LLVM IR file")?;
+    }
+
+    Ok(())
 }
 
 fn register_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
@@ -153,12 +194,18 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     Ok(())
 }
 
-fn print_functions(ctxt: &ctxt::Ctxt) -> Result<(), ()> {
+fn print_functions<T>(ctxt: &ctxt::Ctxt, path: T) -> Result<(), ()>
+where
+    T: AsRef<Path>,
+{
+    let mut file = std::fs::File::create(path).map_err(|_| ())?;
+
     for fn_id in ctxt.function_registry.get_all_functions() {
         if ctxt.function_registry.is_function_defined(fn_id) {
-            print::print_mlr(fn_id, ctxt, &mut std::io::stdout()).map_err(|_| ())?;
-            println!();
+            print::print_mlr(fn_id, ctxt, &mut file).map_err(|_| ())?;
+            writeln!(file).map_err(|_| ())?;
         }
     }
+
     Ok(())
 }

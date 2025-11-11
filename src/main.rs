@@ -14,7 +14,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    print_pretty(&format!("Loading source from {}", input_path));
+    println!("Loading source from {}", input_path);
     let input_path = PathBuf::from(input_path);
 
     let Ok(source) = std::fs::read_to_string(&input_path) else {
@@ -22,19 +22,14 @@ fn main() {
         std::process::exit(1);
     };
 
-    let ir = match mini_rust::driver::compile(&source, print_pretty) {
-        Ok(ir) => ir,
-        Err(err) => {
-            print_error(&format!("Compilation failed: {}", err));
-            std::process::exit(1);
-        }
+    let output_paths = mini_rust::driver::OutputPaths {
+        mlr: input_path.with_extension("mlr").into(),
+        optimized_mlr: input_path.with_extension("mlr.opt").into(),
+        llvm_ir: input_path.with_extension("ll").into(),
     };
 
-    let ir_path = input_path.with_extension("ll");
-    print_pretty(&format!("Saving IR to {}", ir_path.display()));
-
-    let Ok(_) = std::fs::write(&ir_path, ir) else {
-        print_error("Could not write IR file");
+    if let Err(err) = mini_rust::driver::compile(&source, print_pretty, print_detail, output_paths) {
+        print_error(&format!("Compilation failed: {}", err));
         std::process::exit(1);
     };
 
@@ -43,6 +38,10 @@ fn main() {
 
 fn print_pretty(msg: &str) {
     println!("{} {}", "::".blue().bold(), msg.bold());
+}
+
+fn print_detail(msg: &str) {
+    println!("{}", msg);
 }
 
 fn print_error(msg: &str) {
