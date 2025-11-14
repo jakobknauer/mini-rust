@@ -37,7 +37,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         if let Some(mlr) = self.mlr {
             write!(self.writer, " ")?;
-            self.print_val(&mlr.body)
+            self.print_statement(&mlr.body)
         } else {
             write!(self.writer, ";")
         }
@@ -62,7 +62,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "{}", return_type)
     }
 
-    fn print_block(&mut self, statements: &[mlr::StmtId], output: &mlr::ValId) -> Result<(), std::io::Error> {
+    fn print_block(&mut self, statements: &[mlr::StmtId]) -> Result<(), std::io::Error> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
@@ -71,7 +71,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
 
         self.indent()?;
-        self.print_val(output)?;
         writeln!(self.writer)?;
 
         self.indent_level -= 1;
@@ -80,7 +79,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     }
 
     fn print_statement(&mut self, stmt_id: &mlr::StmtId) -> Result<(), std::io::Error> {
-        use mlr::Statement::*;
+        use mlr::Stmt::*;
 
         let stmt = &self.mlr.expect("self.mlr should not be empty").stmts.get(stmt_id);
 
@@ -111,6 +110,22 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.indent()?;
                     writeln!(self.writer, "break;")
                 }
+                Block(stmt_ids) => self.print_block(stmt_ids),
+                If(if_) => {
+                    self.indent()?;
+                    write!(self.writer, "if ")?;
+                    self.print_op(&if_.condition)?;
+                    writeln!(self.writer, " ")?;
+                    self.print_statement(&if_.then_block)?;
+                    self.indent()?;
+                    writeln!(self.writer, "else ")?;
+                    self.print_statement(&if_.else_block)
+                }
+                Loop { body } => {
+                    self.indent()?;
+                    writeln!(self.writer, "loop ")?;
+                    self.print_statement(body)
+                }
             },
             None => writeln!(self.writer, "<stmt id {}>", stmt_id.0),
         }
@@ -123,7 +138,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match val {
             Some(val) => match val {
-                Block { statements, output } => self.print_block(statements, output),
                 Use(op) => {
                     write!(self.writer, "use ")?;
                     self.print_op(op)
@@ -139,22 +153,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         self.print_op(arg)?;
                     }
                     write!(self.writer, ")")
-                }
-                If(mlr::If {
-                    condition,
-                    then_block,
-                    else_block,
-                }) => {
-                    write!(self.writer, "if ")?;
-                    self.print_op(condition)?;
-                    write!(self.writer, " ")?;
-                    self.print_val(then_block)?;
-                    write!(self.writer, " else ")?;
-                    self.print_val(else_block)
-                }
-                Loop { body } => {
-                    write!(self.writer, "loop ")?;
-                    self.print_val(body)
                 }
                 Empty { type_id } => {
                     let type_name = self.ctxt.type_registry.get_string_rep(type_id);
@@ -200,8 +198,8 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     }
 
     fn print_op(&mut self, op_id: &mlr::OpId) -> Result<(), std::io::Error> {
-        use mlr::Operand::*;
         use mlr::Constant::*;
+        use mlr::Operand::*;
 
         let operand = &self.mlr.expect("self.mlr should not be empty").ops.get(op_id);
 

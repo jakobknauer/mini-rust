@@ -35,11 +35,9 @@ impl<'a> super::MlrBuilder<'a> {
         discriminant: &mlr::OpId,
     ) -> Result<mlr::ValId> {
         let variant_index = self.insert_int_op(*variant_index as i64)?;
-        let (variant_discriminant_loc, variant_discriminant_stmt) =
-            assign_to_new_loc!(self, self.insert_use_val(variant_index)?);
+        let variant_discriminant_loc = assign_to_new_loc!(self, self.insert_use_val(variant_index)?);
         let variant_discriminant = self.insert_copy_loc_op(variant_discriminant_loc)?;
-        let cond = self.insert_call_val(*eq_fn, vec![*discriminant, variant_discriminant])?;
-        self.insert_new_block_val(vec![variant_discriminant_stmt], cond)
+        self.insert_call_val(*eq_fn, vec![*discriminant, variant_discriminant])
     }
 
     pub fn build_arm_block(
@@ -77,23 +75,17 @@ impl<'a> super::MlrBuilder<'a> {
         self.push_scope();
 
         // bind pattern variables
-        let bind_statements: Vec<mlr::StmtId> = arm
-            .pattern
-            .fields
-            .iter()
-            .zip(field_indices)
-            .map(|(hlr::StructPatternField { binding_name, .. }, field_index)| {
-                let field_place: mlr::PlaceId = self.insert_field_access_place(variant_place, field_index)?;
-                let (assign_loc, assign_stmt) = assign_to_new_loc!(self, self.insert_use_place_val(field_place)?);
-                self.add_to_scope(binding_name, assign_loc);
-                Ok(assign_stmt)
-            })
-            .collect::<Result<_>>()?;
+        for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
+        {
+            let field_place = self.insert_field_access_place(variant_place, field_index)?;
+            let assign_loc = assign_to_new_loc!(self, self.insert_use_place_val(field_place)?);
+            self.add_to_scope(binding_name, assign_loc);
+        }
 
         let output = self.lower_to_val(&arm.value)?;
 
         self.pop_scope();
 
-        self.insert_new_block_val(bind_statements, output)
+        Ok(output)
     }
 }

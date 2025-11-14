@@ -75,23 +75,23 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_if_val(
+    pub fn insert_if_stmt(
         &mut self,
         condition: mlr::OpId,
-        then_block: mlr::ValId,
-        else_block: mlr::ValId,
-    ) -> Result<mlr::ValId> {
-        let val = mlr::Val::If(mlr::If {
+        then_block: mlr::StmtId,
+        else_block: mlr::StmtId,
+    ) -> Result<()> {
+        let val = mlr::Stmt::If(mlr::If {
             condition,
             then_block,
             else_block,
         });
-        self.insert_val(val)
+        self.insert_stmt(val)
     }
 
-    pub fn insert_new_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::ValId) -> Result<mlr::ValId> {
-        let block = mlr::Val::Block { statements, output };
-        self.insert_val(block)
+    pub fn insert_new_block_stmt(&mut self, statements: Vec<mlr::StmtId>) -> Result<()> {
+        let block = mlr::Stmt::Block(statements);
+        self.insert_stmt(block)
     }
 
     pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
@@ -99,9 +99,9 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_loop_val(&mut self, body: mlr::ValId) -> Result<mlr::ValId> {
-        let val = mlr::Val::Loop { body };
-        self.insert_val(val)
+    pub fn insert_loop_stmt(&mut self, body: mlr::StmtId) -> Result<()> {
+        let val = mlr::Stmt::Loop { body };
+        self.insert_stmt(val)
     }
 
     pub fn insert_use_val(&mut self, op: mlr::OpId) -> Result<mlr::ValId> {
@@ -114,18 +114,25 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_use_val(op)
     }
 
-    pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> Result<mlr::StmtId> {
+    pub fn insert_stmt(&mut self, stmt: mlr::Stmt) -> Result<()> {
         let stmt_id = self.get_next_stmt_id();
         self.output.stmts.insert(stmt_id, stmt);
-        Ok(stmt_id)
+        self.blocks.back_mut().unwrap().push(stmt_id);
+        Ok(())
     }
 
-    pub fn insert_break_stmt(&mut self) -> Result<mlr::StmtId> {
-        let stmt = mlr::Statement::Break;
+    pub fn insert_break_stmt(&mut self) -> Result<()> {
+        let stmt = mlr::Stmt::Break;
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
+    pub fn insert_assign_to_loc_stmt(&mut self, loc_id: mlr::LocId, value: mlr::ValId) -> Result<()> {
+        let place = mlr::Place::Local(loc_id);
+        let place_id = self.insert_place(place)?;
+        self.insert_assign_stmt(place_id, value)
+    }
+
+    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<()> {
         let place_type = self.get_place_type(&place);
         let value_type = self.get_val_type(&value);
 
@@ -138,11 +145,11 @@ impl<'a> mlr::MlrBuilder<'a> {
             .into();
         }
 
-        let stmt = mlr::Statement::Assign { place, value };
+        let stmt = mlr::Stmt::Assign { place, value };
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<mlr::StmtId> {
+    pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<()> {
         let return_type = self
             .ctxt
             .function_registry
@@ -160,7 +167,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .into();
         }
 
-        let stmt = mlr::Statement::Return { value };
+        let stmt = mlr::Stmt::Return { value };
         self.insert_stmt(stmt)
     }
 
@@ -281,21 +288,18 @@ impl<'a> mlr::MlrBuilder<'a> {
         type_id: &types::TypeId,
         fields: &[(String, hlr::Expression)],
         base_place: &mlr::PlaceId,
-    ) -> Result<Vec<mlr::StmtId>> {
+    ) -> Result<()> {
         let field_indices = self.compute_field_indices(type_id, fields.iter().map(|(name, _)| name.as_str()))?;
 
-        let field_init_stmts: Vec<_> = fields
+        fields
             .iter()
             .zip(field_indices)
-            .map(|((_, expr), field_index)| {
+            .try_for_each(|((_, expr), field_index)| {
                 let field_place = self.insert_field_access_place(*base_place, field_index)?;
                 let field_value = self.lower_to_val(expr)?;
-                let field_stmt = self.insert_assign_stmt(field_place, field_value)?;
-                Ok(field_stmt)
+                self.insert_assign_stmt(field_place, field_value)?;
+                Ok(())
             })
-            .collect::<Result<_>>()?;
-
-        Ok(field_init_stmts)
     }
 
     pub fn compute_field_indices<'b>(

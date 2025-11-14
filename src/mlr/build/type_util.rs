@@ -17,17 +17,10 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type should only be called with a valid ValId");
 
         match val {
-            Block { output, .. } => self.infer_type_of_block(output),
             // Constant(constant) => self.infer_type_of_constant(constant),
             // Use(place) => self.infer_place_type(place),
             Call { callable, args } => self.infer_type_of_call(callable, args),
             // Function(fn_id) => self.infer_type_of_function(*fn_id),
-            If(if_) => self.infer_type_of_if(if_),
-            Loop { .. } => self
-                .ctxt
-                .type_registry
-                .get_primitive_type_id(PrimitiveType::Unit)
-                .ok_or(MlrBuilderError::UnknownPrimitiveType),
             Empty { type_id } => Ok(*type_id),
             Use(op_id) => Ok(self.get_op_type(op_id)),
         }
@@ -102,29 +95,6 @@ impl<'a> mlr::MlrBuilder<'a> {
         let function_type_id = self.ctxt.type_registry.register_function_type(param_types, return_type);
 
         Ok(function_type_id)
-    }
-
-    fn infer_type_of_if(&self, if_: &mlr::If) -> Result<TypeId> {
-        let condition_type = self.get_op_type(&if_.condition);
-
-        let bool_type_id = self
-            .ctxt
-            .type_registry
-            .get_primitive_type_id(PrimitiveType::Boolean)
-            .expect("boolean primitive type should be registered");
-
-        if !self.ctxt.type_registry.types_equal(&condition_type, &bool_type_id) {
-            return TypeError::IfConditionNotBoolean { actual: condition_type }.into();
-        }
-
-        let then_type = self.get_val_type(&if_.then_block);
-        let else_type = self.get_val_type(&if_.else_block);
-
-        if self.ctxt.type_registry.types_equal(&then_type, &else_type) {
-            Ok(then_type)
-        } else {
-            TypeError::IfBranchTypeMismatch { then_type, else_type }.into()
-        }
     }
 
     pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<TypeId> {
