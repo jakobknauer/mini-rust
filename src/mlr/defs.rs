@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use crate::ctxt::{functions::FnId, types::TypeId};
 
@@ -14,15 +17,22 @@ pub struct PlaceId(pub usize);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LocId(pub usize);
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct OpId(pub usize);
+
 #[derive(Debug)]
 pub struct Mlr {
-    pub vals: HashMap<ValId, Value>,
-    pub stmts: HashMap<StmtId, Statement>,
+    pub vals: HashMap<ValId, Val>,
+    pub stmts: HashMap<StmtId, Stmt>,
     pub places: HashMap<PlaceId, Place>,
+    pub ops: HashMap<OpId, Operand>,
+    pub allocated_locs: HashSet<LocId>,
+
     pub loc_types: HashMap<LocId, TypeId>,
     pub val_types: HashMap<ValId, TypeId>,
     pub place_types: HashMap<PlaceId, TypeId>,
-    pub body: ValId,
+    pub op_types: HashMap<OpId, TypeId>,
+    pub body: StmtId,
     pub param_locs: Vec<LocId>,
 }
 
@@ -32,32 +42,42 @@ impl Mlr {
             vals: HashMap::new(),
             stmts: HashMap::new(),
             places: HashMap::new(),
+            ops: HashMap::new(),
+            allocated_locs: HashSet::new(),
+
             loc_types: HashMap::new(),
             val_types: HashMap::new(),
             place_types: HashMap::new(),
-            body: ValId(0),
+            op_types: HashMap::new(),
+            body: StmtId(0),
             param_locs: Vec::new(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Statement {
+pub enum Stmt {
+    Alloc { loc: LocId },
     Assign { place: PlaceId, value: ValId },
-    Return { value: LocId },
+    Return { value: ValId },
+    Block(Vec<StmtId>),
+    If(If),
+    Loop { body: StmtId },
     Break,
 }
 
 #[derive(Debug, Clone)]
-pub enum Value {
-    Block { statements: Vec<StmtId>, output: ValId },
-    Constant(Constant),
-    Use(PlaceId),
-    Call { callable: LocId, args: Vec<LocId> },
-    Function(FnId),
-    If(If),
-    Loop { body: ValId },
+pub enum Val {
+    Call { callable: OpId, args: Vec<OpId> },
     Empty { type_id: TypeId },
+    Use(OpId),
+}
+
+#[derive(Debug, Clone)]
+pub enum Operand {
+    Function(FnId),
+    Constant(Constant),
+    Copy(PlaceId),
 }
 
 #[derive(Debug, Clone)]
@@ -77,9 +97,9 @@ pub enum Constant {
 
 #[derive(Debug, Clone)]
 pub struct If {
-    pub condition: LocId,
-    pub then_block: ValId,
-    pub else_block: ValId,
+    pub condition: OpId,
+    pub then_block: StmtId,
+    pub else_block: StmtId,
 }
 
 impl Display for LocId {

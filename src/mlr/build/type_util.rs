@@ -8,7 +8,7 @@ use crate::{
 
 impl<'a> mlr::MlrBuilder<'a> {
     pub fn infer_val_type(&mut self, val: mlr::ValId) -> Result<TypeId> {
-        use mlr::Value::*;
+        use mlr::Val::*;
 
         let val = self
             .output
@@ -17,18 +17,9 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type should only be called with a valid ValId");
 
         match val {
-            Block { output, .. } => self.infer_type_of_block(output),
-            Constant(constant) => self.infer_type_of_constant(constant),
-            Use(place) => self.infer_place_type(place),
             Call { callable, args } => self.infer_type_of_call(callable, args),
-            Function(fn_id) => self.infer_type_of_function(*fn_id),
-            If(if_) => self.infer_type_of_if(if_),
-            Loop { .. } => self
-                .ctxt
-                .type_registry
-                .get_primitive_type_id(PrimitiveType::Unit)
-                .ok_or(MlrBuilderError::UnknownPrimitiveType),
             Empty { type_id } => Ok(*type_id),
+            Use(op_id) => Ok(self.get_op_type(op_id)),
         }
     }
 
@@ -37,10 +28,12 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
+        use mlr::Constant::*;
+
         let type_ = match constant {
-            mlr::Constant::Int(_) => PrimitiveType::Integer32,
-            mlr::Constant::Bool(_) => PrimitiveType::Boolean,
-            mlr::Constant::Unit => PrimitiveType::Unit,
+            Int(_) => PrimitiveType::Integer32,
+            Bool(_) => PrimitiveType::Boolean,
+            Unit => PrimitiveType::Unit,
         };
 
         self.ctxt
@@ -49,8 +42,8 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
     }
 
-    fn infer_type_of_call(&self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<TypeId> {
-        let callable_type = self.get_loc_type(callable);
+    fn infer_type_of_call(&self, callable: &mlr::OpId, args: &[mlr::OpId]) -> Result<TypeId> {
+        let callable_type = self.get_op_type(callable);
         let callable_type = self
             .ctxt
             .type_registry
@@ -65,7 +58,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::ValNotCallable.into();
         };
 
-        let arg_types = args.iter().map(|arg_loc| self.get_loc_type(arg_loc));
+        let arg_types = args.iter().map(|arg_loc| self.get_op_type(arg_loc));
 
         if param_types.len() != arg_types.len() {
             return TypeError::CallArgumentCountMismatch {
@@ -103,30 +96,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(function_type_id)
     }
 
-    fn infer_type_of_if(&self, if_: &mlr::If) -> Result<TypeId> {
-        let condition_type = self.get_loc_type(&if_.condition);
-
-        let bool_type_id = self
-            .ctxt
-            .type_registry
-            .get_primitive_type_id(PrimitiveType::Boolean)
-            .expect("boolean primitive type should be registered");
-
-        if !self.ctxt.type_registry.types_equal(&condition_type, &bool_type_id) {
-            return TypeError::IfConditionNotBoolean { actual: condition_type }.into();
-        }
-
-        let then_type = self.get_val_type(&if_.then_block);
-        let else_type = self.get_val_type(&if_.else_block);
-
-        if self.ctxt.type_registry.types_equal(&then_type, &else_type) {
-            Ok(then_type)
-        } else {
-            TypeError::IfBranchTypeMismatch { then_type, else_type }.into()
-        }
-    }
-
-    pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<TypeId> {
+    pub fn try_infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<Option<TypeId>> {
         use mlr::Place::*;
 
         let place = self
@@ -136,17 +106,17 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type_of_place should only be called with a valid PlaceId");
 
         match place {
-            Local(loc_id) => self.infer_type_of_local_place(loc_id),
-            FieldAccess { base, field_index } => self.infer_type_of_field_access_place(base, field_index),
-            EnumDiscriminant { base } => self.infer_type_of_enum_discriminant(base),
-            ProjectToVariant { base, variant_index } => {
-                self.infer_type_of_project_to_variant_place(base, variant_index)
-            }
+            Local(loc_id) => self.try_infer_type_of_local_place(loc_id),
+            FieldAccess { base, field_index } => self.infer_type_of_field_access_place(base, field_index).map(Some),
+            EnumDiscriminant { base } => self.infer_type_of_enum_discriminant(base).map(Some),
+            ProjectToVariant { base, variant_index } => self
+                .infer_type_of_project_to_variant_place(base, variant_index)
+                .map(Some),
         }
     }
 
-    fn infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> Result<TypeId> {
-        Ok(self.get_loc_type(loc_id))
+    fn try_infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> Result<Option<TypeId>> {
+        Ok(self.try_get_loc_type(loc_id))
     }
 
     fn infer_type_of_field_access_place(&self, base: &mlr::PlaceId, field_index: &usize) -> Result<TypeId> {
@@ -188,5 +158,21 @@ impl<'a> mlr::MlrBuilder<'a> {
                 }))?;
 
         Ok(variant.type_id)
+    }
+
+    pub fn infer_op_type(&mut self, op_id: mlr::OpId) -> Result<TypeId> {
+        use mlr::Operand::*;
+
+        let op = self
+            .output
+            .ops
+            .get(&op_id)
+            .expect("infer_type_of_operand should only be called with a valid OpId");
+
+        match op {
+            Function(fn_id) => self.infer_type_of_function(*fn_id),
+            Constant(constant) => self.infer_type_of_constant(constant),
+            Copy(place_id) => self.try_infer_place_type(place_id).map(|opt| opt.unwrap()),
+        }
     }
 }

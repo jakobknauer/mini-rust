@@ -1,6 +1,7 @@
 macro_rules! assign_to_new_loc {
     ($self:ident, $init:expr) => {{
         let loc: mlr::LocId = $self.get_next_loc_id();
+        $self.insert_alloc_stmt(loc)?;
 
         let init: mlr::ValId = $init;
         let init_type: crate::ctxt::types::TypeId = $self.get_val_type(&init);
@@ -9,8 +10,8 @@ macro_rules! assign_to_new_loc {
         let place = mlr::Place::Local(loc);
         let place: mlr::PlaceId = $self.insert_place(place)?;
 
-        let stmt: mlr::StmtId = $self.insert_assign_stmt(place, init)?;
-        (loc, stmt)
+        $self.insert_assign_stmt(place, init)?;
+        loc
     }};
 }
 

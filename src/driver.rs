@@ -1,7 +1,7 @@
 mod err;
 mod stdlib;
 
-use std::{io::Write, path::Path};
+use std::path::Path;
 
 use crate::{
     ctxt::{self, functions, types},
@@ -203,7 +203,6 @@ where
     for fn_id in ctxt.function_registry.get_all_functions() {
         if ctxt.function_registry.is_function_defined(fn_id) {
             print::print_mlr(fn_id, ctxt, &mut file).map_err(|_| ())?;
-            writeln!(file).map_err(|_| ())?;
         }
     }
 
