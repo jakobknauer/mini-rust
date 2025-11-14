@@ -18,14 +18,14 @@ impl<'a> Simplify<'a> {
         let mut val = self.mlr.vals.remove(&val_id).unwrap();
 
         match &mut val {
-            Value::Block { statements, output } => {
+            Val::Block { statements, output } => {
                 for stmt_id in statements.iter() {
                     self.simplify_stmt(*stmt_id);
                 }
                 self.simplify_val(*output);
 
                 // If the output is itself a block, we can inline its statements
-                if let Value::Block {
+                if let Val::Block {
                     statements: inner_statements,
                     output: inner_output,
                 } = self.mlr.vals.get(output).unwrap()
@@ -40,13 +40,13 @@ impl<'a> Simplify<'a> {
                     val = self.mlr.vals.remove(output).unwrap();
                 }
             }
-            Value::If(if_) => {
+            Val::If(if_) => {
                 self.simplify_val(if_.then_block);
                 self.simplify_val(if_.else_block);
             }
-            Value::Loop { body } => self.simplify_val(*body),
+            Val::Loop { body } => self.simplify_val(*body),
 
-            Value::Constant(..) | Value::Use(..) | Value::Call { .. } | Value::Function(..) | Value::Empty { .. } => (),
+            Val::Use(..) | Val::Call { .. } | Val::Empty { .. } => (),
         }
 
         self.mlr.vals.insert(val_id, val);

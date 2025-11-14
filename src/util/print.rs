@@ -103,7 +103,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
                 Return { value } => {
                     self.indent()?;
-                    writeln!(self.writer, "return {};", value)
+                    writeln!(self.writer, "return ")?;
+                    self.print_val(value)?;
+                    writeln!(self.writer, ";")
                 }
                 Break => {
                     self.indent()?;
@@ -115,45 +117,37 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     }
 
     fn print_val(&mut self, val_id: &mlr::ValId) -> Result<(), std::io::Error> {
-        use mlr::{Constant::*, Value::*};
+        use mlr::Val::*;
 
         let val = &self.mlr.expect("self.mlr should not be empty").vals.get(val_id);
 
         match val {
             Some(val) => match val {
                 Block { statements, output } => self.print_block(statements, output),
-                Constant(constant) => match constant {
-                    Int(i) => write!(self.writer, "const {}", i),
-                    Bool(b) => write!(self.writer, "const {}", b),
-                    Unit => write!(self.writer, "const ()"),
-                },
-                Use(place) => {
-                    write!(self.writer, "copy ")?;
-                    self.print_place(place)
+                Use(op) => {
+                    write!(self.writer, "use ")?;
+                    self.print_op(op)
                 }
                 Call { callable, args } => {
-                    write!(self.writer, "call {}(", callable)?;
+                    write!(self.writer, "call ")?;
+                    self.print_op(callable)?;
+                    write!(self.writer, "(")?;
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
                             write!(self.writer, ", ")?;
                         }
-                        write!(self.writer, "{}", arg)?;
+                        self.print_op(arg)?;
                     }
                     write!(self.writer, ")")
-                }
-                Function(fn_id) => {
-                    if let Some(func) = self.ctxt.function_registry.get_signature_by_id(fn_id) {
-                        write!(self.writer, "fn {}", func.name)
-                    } else {
-                        write!(self.writer, "<fn id {}>", fn_id.0)
-                    }
                 }
                 If(mlr::If {
                     condition,
                     then_block,
                     else_block,
                 }) => {
-                    write!(self.writer, "if {} ", condition)?;
+                    write!(self.writer, "if ")?;
+                    self.print_op(condition)?;
+                    write!(self.writer, " ")?;
                     self.print_val(then_block)?;
                     write!(self.writer, " else ")?;
                     self.print_val(else_block)
@@ -202,6 +196,35 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
             },
             None => write!(self.writer, "<place id {}>", place_id.0),
+        }
+    }
+
+    fn print_op(&mut self, op_id: &mlr::OpId) -> Result<(), std::io::Error> {
+        use mlr::Operand::*;
+        use mlr::Constant::*;
+
+        let operand = &self.mlr.expect("self.mlr should not be empty").ops.get(op_id);
+
+        match operand {
+            Some(operand) => match operand {
+                Function(fn_id) => {
+                    if let Some(func) = self.ctxt.function_registry.get_signature_by_id(fn_id) {
+                        write!(self.writer, "fn {}", func.name)
+                    } else {
+                        write!(self.writer, "<fn id {}>", fn_id.0)
+                    }
+                }
+                Constant(constant) => match constant {
+                    Int(i) => write!(self.writer, "const {}", i),
+                    Bool(b) => write!(self.writer, "const {}", b),
+                    Unit => write!(self.writer, "const ()"),
+                },
+                Copy(place) => {
+                    write!(self.writer, "copy ")?;
+                    self.print_place(place)
+                }
+            },
+            None => write!(self.writer, "<op id {}>", op_id.0),
         }
     }
 

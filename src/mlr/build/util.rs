@@ -34,6 +34,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
+    pub fn get_next_op_id(&mut self) -> mlr::OpId {
+        let id = self.next_op_id;
+        self.next_op_id.0 += 1;
+        id
+    }
+
     pub fn get_loc_type(&self, loc_id: &mlr::LocId) -> types::TypeId {
         *self.output.loc_types.get(loc_id).expect("type of loc should be known")
     }
@@ -50,7 +56,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         *self.output.val_types.get(val_id).expect("type of val should be known")
     }
 
-    pub fn insert_val(&mut self, val: mlr::Value) -> Result<mlr::ValId> {
+    pub fn get_op_type(&self, op_id: &mlr::OpId) -> types::TypeId {
+        *self.output.op_types.get(op_id).expect("type of op should be known")
+    }
+
+    pub fn insert_val(&mut self, val: mlr::Val) -> Result<mlr::ValId> {
         let val_id = self.get_next_val_id();
         self.output.vals.insert(val_id, val);
 
@@ -60,23 +70,18 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(val_id)
     }
 
-    pub fn insert_function_val(&mut self, fn_id: functions::FnId) -> Result<mlr::ValId> {
-        let val = mlr::Value::Function(fn_id);
-        self.insert_val(val)
-    }
-
-    pub fn insert_call_val(&mut self, callable: mlr::LocId, args: Vec<mlr::LocId>) -> Result<mlr::ValId> {
-        let val = mlr::Value::Call { callable, args };
+    pub fn insert_call_val(&mut self, callable: mlr::OpId, args: Vec<mlr::OpId>) -> Result<mlr::ValId> {
+        let val = mlr::Val::Call { callable, args };
         self.insert_val(val)
     }
 
     pub fn insert_if_val(
         &mut self,
-        condition: mlr::LocId,
+        condition: mlr::OpId,
         then_block: mlr::ValId,
         else_block: mlr::ValId,
     ) -> Result<mlr::ValId> {
-        let val = mlr::Value::If(mlr::If {
+        let val = mlr::Val::If(mlr::If {
             condition,
             then_block,
             else_block,
@@ -85,38 +90,28 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_new_block_val(&mut self, statements: Vec<mlr::StmtId>, output: mlr::ValId) -> Result<mlr::ValId> {
-        let block = mlr::Value::Block { statements, output };
+        let block = mlr::Val::Block { statements, output };
         self.insert_val(block)
     }
 
     pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
-        let val = mlr::Value::Empty { type_id };
-        self.insert_val(val)
-    }
-
-    pub fn insert_int_val(&mut self, int: i64) -> Result<mlr::ValId> {
-        let val = mlr::Value::Constant(mlr::Constant::Int(int));
-        self.insert_val(val)
-    }
-
-    pub fn insert_bool_val(&mut self, boolean: bool) -> Result<mlr::ValId> {
-        let val = mlr::Value::Constant(mlr::Constant::Bool(boolean));
-        self.insert_val(val)
-    }
-
-    pub fn insert_unit_val(&mut self) -> Result<mlr::ValId> {
-        let val = mlr::Value::Constant(mlr::Constant::Unit);
-        self.insert_val(val)
-    }
-
-    pub fn insert_use_val(&mut self, place: mlr::PlaceId) -> Result<mlr::ValId> {
-        let val = mlr::Value::Use(place);
+        let val = mlr::Val::Empty { type_id };
         self.insert_val(val)
     }
 
     pub fn insert_loop_val(&mut self, body: mlr::ValId) -> Result<mlr::ValId> {
-        let val = mlr::Value::Loop { body };
+        let val = mlr::Val::Loop { body };
         self.insert_val(val)
+    }
+
+    pub fn insert_use_val(&mut self, op: mlr::OpId) -> Result<mlr::ValId> {
+        let val = mlr::Val::Use(op);
+        self.insert_val(val)
+    }
+
+    pub fn insert_use_place_val(&mut self, place: mlr::PlaceId) -> Result<mlr::ValId> {
+        let op = self.insert_copy_op(place)?;
+        self.insert_use_val(op)
     }
 
     pub fn insert_stmt(&mut self, stmt: mlr::Statement) -> Result<mlr::StmtId> {
@@ -147,7 +142,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_return_stmt(&mut self, value: mlr::LocId) -> Result<mlr::StmtId> {
+    pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<mlr::StmtId> {
         let return_type = self
             .ctxt
             .function_registry
@@ -155,7 +150,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("return stmt only valid in function")
             .return_type;
 
-        let value_type = self.get_loc_type(&value);
+        let value_type = self.get_val_type(&value);
 
         if !self.ctxt.type_registry.types_equal(&return_type, &value_type) {
             return mlr::build::TypeError::ReturnTypeMismatch {
@@ -203,14 +198,54 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_place(place)
     }
 
+    pub fn insert_op(&mut self, operand: mlr::Operand) -> Result<mlr::OpId> {
+        let op_id = self.get_next_op_id();
+        self.output.ops.insert(op_id, operand);
+
+        let type_id = self.infer_op_type(op_id)?;
+        self.output.op_types.insert(op_id, type_id);
+
+        Ok(op_id)
+    }
+
+    pub fn insert_function_op(&mut self, fn_id: functions::FnId) -> Result<mlr::OpId> {
+        let op = mlr::Operand::Function(fn_id);
+        self.insert_op(op)
+    }
+
+    pub fn insert_int_op(&mut self, int: i64) -> Result<mlr::OpId> {
+        let val = mlr::Operand::Constant(mlr::Constant::Int(int));
+        self.insert_op(val)
+    }
+
+    pub fn insert_bool_op(&mut self, boolean: bool) -> Result<mlr::OpId> {
+        let op = mlr::Operand::Constant(mlr::Constant::Bool(boolean));
+        self.insert_op(op)
+    }
+
+    pub fn insert_unit_op(&mut self) -> Result<mlr::OpId> {
+        let op = mlr::Operand::Constant(mlr::Constant::Unit);
+        self.insert_op(op)
+    }
+
+    pub fn insert_copy_op(&mut self, place: mlr::PlaceId) -> Result<mlr::OpId> {
+        let op = mlr::Operand::Copy(place);
+        self.insert_op(op)
+    }
+
+    pub fn insert_copy_loc_op(&mut self, loc_id: mlr::LocId) -> Result<mlr::OpId> {
+        let place = self.insert_loc_place(loc_id)?;
+        self.insert_copy_op(place)
+    }
+
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::ValId> {
+    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::OpId> {
         if let Some(loc_id) = self.resolve_name_to_location(name) {
             let place = self.insert_loc_place(loc_id)?;
-            self.insert_use_val(place)
+            self.insert_copy_op(place)
         } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
-            self.insert_function_val(fn_id)
+            self.insert_function_op(fn_id)
         } else {
             Err(MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }

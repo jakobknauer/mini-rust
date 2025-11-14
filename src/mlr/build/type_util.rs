@@ -8,7 +8,7 @@ use crate::{
 
 impl<'a> mlr::MlrBuilder<'a> {
     pub fn infer_val_type(&mut self, val: mlr::ValId) -> Result<TypeId> {
-        use mlr::Value::*;
+        use mlr::Val::*;
 
         let val = self
             .output
@@ -18,10 +18,10 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         match val {
             Block { output, .. } => self.infer_type_of_block(output),
-            Constant(constant) => self.infer_type_of_constant(constant),
-            Use(place) => self.infer_place_type(place),
+            // Constant(constant) => self.infer_type_of_constant(constant),
+            // Use(place) => self.infer_place_type(place),
             Call { callable, args } => self.infer_type_of_call(callable, args),
-            Function(fn_id) => self.infer_type_of_function(*fn_id),
+            // Function(fn_id) => self.infer_type_of_function(*fn_id),
             If(if_) => self.infer_type_of_if(if_),
             Loop { .. } => self
                 .ctxt
@@ -29,6 +29,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                 .get_primitive_type_id(PrimitiveType::Unit)
                 .ok_or(MlrBuilderError::UnknownPrimitiveType),
             Empty { type_id } => Ok(*type_id),
+            Use(op_id) => Ok(self.get_op_type(op_id)),
         }
     }
 
@@ -49,8 +50,8 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
     }
 
-    fn infer_type_of_call(&self, callable: &mlr::LocId, args: &[mlr::LocId]) -> Result<TypeId> {
-        let callable_type = self.get_loc_type(callable);
+    fn infer_type_of_call(&self, callable: &mlr::OpId, args: &[mlr::OpId]) -> Result<TypeId> {
+        let callable_type = self.get_op_type(callable);
         let callable_type = self
             .ctxt
             .type_registry
@@ -65,7 +66,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             return TypeError::ValNotCallable.into();
         };
 
-        let arg_types = args.iter().map(|arg_loc| self.get_loc_type(arg_loc));
+        let arg_types = args.iter().map(|arg_loc| self.get_op_type(arg_loc));
 
         if param_types.len() != arg_types.len() {
             return TypeError::CallArgumentCountMismatch {
@@ -104,7 +105,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_if(&self, if_: &mlr::If) -> Result<TypeId> {
-        let condition_type = self.get_loc_type(&if_.condition);
+        let condition_type = self.get_op_type(&if_.condition);
 
         let bool_type_id = self
             .ctxt
@@ -188,5 +189,9 @@ impl<'a> mlr::MlrBuilder<'a> {
                 }))?;
 
         Ok(variant.type_id)
+    }
+
+    pub fn infer_op_type(&self, _op_id: mlr::OpId) -> Result<TypeId> {
+        todo!()
     }
 }

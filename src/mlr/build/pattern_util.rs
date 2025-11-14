@@ -31,12 +31,14 @@ impl<'a> super::MlrBuilder<'a> {
     pub fn build_arm_condition(
         &mut self,
         variant_index: &usize,
-        eq_fn_loc: &mlr::LocId,
-        discriminant_loc: &mlr::LocId,
+        eq_fn: &mlr::OpId,
+        discriminant: &mlr::OpId,
     ) -> Result<mlr::ValId> {
+        let variant_index = self.insert_int_op(*variant_index as i64)?;
         let (variant_discriminant_loc, variant_discriminant_stmt) =
-            assign_to_new_loc!(self, self.insert_int_val(*variant_index as i64)?);
-        let cond = self.insert_call_val(*eq_fn_loc, vec![*discriminant_loc, variant_discriminant_loc])?;
+            assign_to_new_loc!(self, self.insert_use_val(variant_index)?);
+        let variant_discriminant = self.insert_copy_loc_op(variant_discriminant_loc)?;
+        let cond = self.insert_call_val(*eq_fn, vec![*discriminant, variant_discriminant])?;
         self.insert_new_block_val(vec![variant_discriminant_stmt], cond)
     }
 
@@ -81,8 +83,8 @@ impl<'a> super::MlrBuilder<'a> {
             .iter()
             .zip(field_indices)
             .map(|(hlr::StructPatternField { binding_name, .. }, field_index)| {
-                let field_place = self.insert_field_access_place(variant_place, field_index)?;
-                let (assign_loc, assign_stmt) = assign_to_new_loc!(self, self.insert_use_val(field_place)?);
+                let field_place: mlr::PlaceId = self.insert_field_access_place(variant_place, field_index)?;
+                let (assign_loc, assign_stmt) = assign_to_new_loc!(self, self.insert_use_place_val(field_place)?);
                 self.add_to_scope(binding_name, assign_loc);
                 Ok(assign_stmt)
             })
