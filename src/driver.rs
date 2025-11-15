@@ -10,27 +10,24 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct OutputPaths<T1, T2, T3>
+pub struct OutputPaths<T1, T2>
 where
     T1: AsRef<Path>,
     T2: AsRef<Path>,
-    T3: AsRef<Path>,
 {
     pub mlr: Option<T1>,
-    pub optimized_mlr: Option<T2>,
-    pub llvm_ir: Option<T3>,
+    pub llvm_ir: Option<T2>,
 }
 
-pub fn compile<T1, T2, T3>(
+pub fn compile<T1, T2>(
     source: &str,
     print_pretty: impl Fn(&str),
     print_detail: impl Fn(&str),
-    output_paths: OutputPaths<T1, T2, T3>,
+    output_paths: OutputPaths<T1, T2>,
 ) -> Result<(), String>
 where
     T1: AsRef<Path>,
     T2: AsRef<Path>,
-    T3: AsRef<Path>,
 {
     let mut ctxt = ctxt::Ctxt::new();
 
@@ -47,19 +44,6 @@ where
     if let Some(mlr_path) = output_paths.mlr {
         print_detail(&format!("Saving MLR to {}", mlr_path.as_ref().display()));
         print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
-    }
-
-    print_pretty("Simplifying MLR");
-    for (_, mlr) in ctxt.function_registry.iter_defined_functions() {
-        mlr::opt::simplify(mlr);
-    }
-
-    if let Some(optimized_mlr_path) = output_paths.optimized_mlr {
-        print_detail(&format!(
-            "Saving optimized MLR to {}",
-            optimized_mlr_path.as_ref().display()
-        ));
-        print_functions(&ctxt, optimized_mlr_path).map_err(|_| "Error printing optimized MLR")?;
     }
 
     print_pretty("Building LLVM IR from MLR");

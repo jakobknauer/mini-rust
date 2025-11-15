@@ -65,8 +65,4 @@ impl FunctionRegistry {
     pub fn get_all_functions(&self) -> impl IntoIterator<Item = &FnId> {
         self.function_names.values()
     }
-
-    pub fn iter_defined_functions(&mut self) -> impl IntoIterator<Item = (&FnId, &mut Mlr)> {
-        self.defs.iter_mut()
-    }
 }

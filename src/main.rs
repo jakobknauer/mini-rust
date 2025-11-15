@@ -24,7 +24,6 @@ fn main() {
 
     let output_paths = mini_rust::driver::OutputPaths {
         mlr: input_path.with_extension("mlr").into(),
-        optimized_mlr: input_path.with_extension("mlr.opt").into(),
         llvm_ir: input_path.with_extension("ll").into(),
     };
 
