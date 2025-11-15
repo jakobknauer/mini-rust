@@ -17,10 +17,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type should only be called with a valid ValId");
 
         match val {
-            // Constant(constant) => self.infer_type_of_constant(constant),
-            // Use(place) => self.infer_place_type(place),
             Call { callable, args } => self.infer_type_of_call(callable, args),
-            // Function(fn_id) => self.infer_type_of_function(*fn_id),
             Empty { type_id } => Ok(*type_id),
             Use(op_id) => Ok(self.get_op_type(op_id)),
         }
@@ -31,10 +28,12 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
+        use mlr::Constant::*;
+
         let type_ = match constant {
-            mlr::Constant::Int(_) => PrimitiveType::Integer32,
-            mlr::Constant::Bool(_) => PrimitiveType::Boolean,
-            mlr::Constant::Unit => PrimitiveType::Unit,
+            Int(_) => PrimitiveType::Integer32,
+            Bool(_) => PrimitiveType::Boolean,
+            Unit => PrimitiveType::Unit,
         };
 
         self.ctxt
@@ -97,7 +96,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(function_type_id)
     }
 
-    pub fn infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<TypeId> {
+    pub fn try_infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<Option<TypeId>> {
         use mlr::Place::*;
 
         let place = self
@@ -107,17 +106,17 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type_of_place should only be called with a valid PlaceId");
 
         match place {
-            Local(loc_id) => self.infer_type_of_local_place(loc_id),
-            FieldAccess { base, field_index } => self.infer_type_of_field_access_place(base, field_index),
-            EnumDiscriminant { base } => self.infer_type_of_enum_discriminant(base),
-            ProjectToVariant { base, variant_index } => {
-                self.infer_type_of_project_to_variant_place(base, variant_index)
-            }
+            Local(loc_id) => self.try_infer_type_of_local_place(loc_id),
+            FieldAccess { base, field_index } => self.infer_type_of_field_access_place(base, field_index).map(Some),
+            EnumDiscriminant { base } => self.infer_type_of_enum_discriminant(base).map(Some),
+            ProjectToVariant { base, variant_index } => self
+                .infer_type_of_project_to_variant_place(base, variant_index)
+                .map(Some),
         }
     }
 
-    fn infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> Result<TypeId> {
-        Ok(self.get_loc_type(loc_id))
+    fn try_infer_type_of_local_place(&self, loc_id: &mlr::LocId) -> Result<Option<TypeId>> {
+        Ok(self.try_get_loc_type(loc_id))
     }
 
     fn infer_type_of_field_access_place(&self, base: &mlr::PlaceId, field_index: &usize) -> Result<TypeId> {
@@ -161,7 +160,19 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(variant.type_id)
     }
 
-    pub fn infer_op_type(&self, _op_id: mlr::OpId) -> Result<TypeId> {
-        todo!()
+    pub fn infer_op_type(&mut self, op_id: mlr::OpId) -> Result<TypeId> {
+        use mlr::Operand::*;
+
+        let op = self
+            .output
+            .ops
+            .get(&op_id)
+            .expect("infer_type_of_operand should only be called with a valid OpId");
+
+        match op {
+            Function(fn_id) => self.infer_type_of_function(*fn_id),
+            Constant(constant) => self.infer_type_of_constant(constant),
+            Copy(place_id) => self.try_infer_place_type(place_id).map(|opt| opt.unwrap()),
+        }
     }
 }

@@ -44,12 +44,20 @@ impl<'a> mlr::MlrBuilder<'a> {
         *self.output.loc_types.get(loc_id).expect("type of loc should be known")
     }
 
+    pub fn try_get_loc_type(&self, loc_id: &mlr::LocId) -> Option<types::TypeId> {
+        self.output.loc_types.get(loc_id).cloned()
+    }
+
     pub fn get_place_type(&self, place_id: &mlr::PlaceId) -> types::TypeId {
         *self
             .output
             .place_types
             .get(place_id)
             .expect("type of place should be known")
+    }
+
+    pub fn try_get_place_type(&self, place_id: &mlr::PlaceId) -> Option<types::TypeId> {
+        self.output.place_types.get(place_id).cloned()
     }
 
     pub fn get_val_type(&self, val_id: &mlr::ValId) -> types::TypeId {
@@ -133,16 +141,23 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<()> {
-        let place_type = self.get_place_type(&place);
+        let place_type = self.try_get_place_type(&place);
         let value_type = self.get_val_type(&value);
 
-        if !self.ctxt.type_registry.types_equal(&place_type, &value_type) {
-            return mlr::build::TypeError::AssignStmtTypeMismatch {
-                place,
-                expected: place_type,
-                actual: value_type,
+        if let Some(place_type) = place_type {
+            if !self.ctxt.type_registry.types_equal(&place_type, &value_type) {
+                return mlr::build::TypeError::AssignStmtTypeMismatch {
+                    place,
+                    expected: place_type,
+                    actual: value_type,
+                }
+                .into();
             }
-            .into();
+        } else {
+            self.output.place_types.insert(place, value_type);
+            if let mlr::Place::Local(loc_id) = self.output.places.get(&place).expect("place should be known") {
+                self.output.loc_types.insert(*loc_id, value_type);
+            }
         }
 
         let stmt = mlr::Stmt::Assign { place, value };
@@ -175,8 +190,10 @@ impl<'a> mlr::MlrBuilder<'a> {
         let place_id = self.get_next_place_id();
         self.output.places.insert(place_id, place);
 
-        let type_id = self.infer_place_type(&place_id)?;
-        self.output.place_types.insert(place_id, type_id);
+        let type_id = self.try_infer_place_type(&place_id)?;
+        if let Some(type_id) = type_id {
+            self.output.place_types.insert(place_id, type_id);
+        };
 
         Ok(place_id)
     }
