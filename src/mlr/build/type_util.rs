@@ -23,10 +23,6 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn infer_type_of_block(&self, output: &mlr::ValId) -> Result<TypeId> {
-        Ok(self.get_val_type(output))
-    }
-
     fn infer_type_of_constant(&self, constant: &mlr::Constant) -> Result<TypeId> {
         use mlr::Constant::*;
 

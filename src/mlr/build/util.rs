@@ -97,11 +97,6 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(val)
     }
 
-    pub fn insert_new_block_stmt(&mut self, statements: Vec<mlr::StmtId>) -> Result<()> {
-        let block = mlr::Stmt::Block(statements);
-        self.insert_stmt(block)
-    }
-
     pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
         let val = mlr::Val::Empty { type_id };
         self.insert_val(val)

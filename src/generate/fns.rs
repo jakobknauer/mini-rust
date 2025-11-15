@@ -65,12 +65,6 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(iw_type)
     }
 
-    fn get_iw_type_of_val(&mut self, val_id: &mlr::ValId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_type = self.mlr.val_types.get(val_id).ok_or(FnGeneratorError)?;
-        let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(FnGeneratorError)?;
-        Ok(iw_type)
-    }
-
     fn get_iw_type_of_place(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
         let mr_type = self.mlr.place_types.get(place_id).ok_or(FnGeneratorError)?;
         let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(FnGeneratorError)?;

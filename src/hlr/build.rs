@@ -11,12 +11,14 @@ pub fn build_program(input: &str) -> Result<Program, ParserError> {
     parser.parse_program()
 }
 
+#[cfg(test)]
 fn build_expr(input: &str) -> Result<Expression, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_expression(true)
 }
 
+#[cfg(test)]
 fn build_block(input: &str) -> Result<Block, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
@@ -578,6 +580,7 @@ impl<'a> HlrParser<'a> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
