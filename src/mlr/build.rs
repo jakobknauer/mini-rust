@@ -87,11 +87,20 @@ impl<'a> MlrBuilder<'a> {
         self.blocks.push_back(Vec::new());
     }
 
-    fn end_current_block(&mut self) -> mlr::StmtId {
+    fn release_current_block(&mut self) -> mlr::StmtId {
         let stmts = self.blocks.pop_back().expect("self.blocks should never be empty");
+        let block = mlr::Stmt::Block(stmts);
         let stmt_id = self.get_next_stmt_id();
-        self.output.stmts.insert(stmt_id, mlr::Stmt::Block(stmts));
+        self.output.stmts.insert(stmt_id, block);
         stmt_id
+    }
+
+    fn end_and_insert_current_block(&mut self) {
+        let block_stmt_id = self.release_current_block();
+        self.blocks
+            .back_mut()
+            .expect("self.blocks should never be empty")
+            .push(block_stmt_id);
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
@@ -117,7 +126,7 @@ impl<'a> MlrBuilder<'a> {
         let return_val = self.build_block(&self.function.body)?;
         self.insert_return_stmt(return_val)?;
 
-        self.output.body = self.end_current_block();
+        self.output.body = self.release_current_block();
 
         Ok(self.output)
     }
@@ -125,6 +134,8 @@ impl<'a> MlrBuilder<'a> {
     /// Build an HLR block by inserting the statements into the current MLR block
     /// and returning the value of the block's return expression,
     /// all while in a new scope.
+    ///
+    /// This method does not start or end a new MLR block; but it does push and pop a new scope.
     pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::ValId> {
         self.push_scope();
 
@@ -255,13 +266,12 @@ impl<'a> MlrBuilder<'a> {
     ) -> Result<mlr::ValId> {
         let cond = self.lower_to_op(condition)?;
 
-        let result_loc = self.get_next_loc_id();
-        self.insert_alloc_stmt(result_loc)?;
+        let result_loc = self.insert_fresh_alloc()?;
 
         self.start_new_block();
         let then_result = self.build_block(then_block)?;
         self.insert_assign_to_loc_stmt(result_loc, then_result)?;
-        let then_block = self.end_current_block();
+        let then_block = self.release_current_block();
 
         self.start_new_block();
         let else_result = match else_block {
@@ -272,7 +282,7 @@ impl<'a> MlrBuilder<'a> {
             }
         }?;
         self.insert_assign_to_loc_stmt(result_loc, else_result)?;
-        let else_block = self.end_current_block();
+        let else_block = self.release_current_block();
 
         self.insert_if_stmt(cond, then_block, else_block)?;
         let result_op = self.insert_copy_loc_op(result_loc)?;
@@ -282,7 +292,7 @@ impl<'a> MlrBuilder<'a> {
     fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::ValId> {
         self.start_new_block();
         self.build_block(body)?;
-        let body = self.end_current_block();
+        let body = self.release_current_block();
         self.insert_loop_stmt(body)?;
 
         let unit = self.insert_unit_op()?;
@@ -370,8 +380,7 @@ impl<'a> MlrBuilder<'a> {
         let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_type_id)?;
 
         // now build the match statement
-        let result_loc = self.get_next_loc_id();
-        self.insert_alloc_stmt(result_loc)?;
+        let result_loc = self.insert_fresh_alloc()?;
         self.build_match_arms(arms, &arm_indices, eq_fn, discriminant, scrutinee_place, result_loc)?;
 
         let result_op = self.insert_copy_loc_op(result_loc)?;
@@ -390,16 +399,14 @@ impl<'a> MlrBuilder<'a> {
     }
 
     fn build_let_statement(&mut self, name: &str, value: &hlr::Expression) -> Result<()> {
-        let loc = self.get_next_loc_id();
-        self.insert_alloc_stmt(loc)?;
+        let loc = self.insert_fresh_alloc()?;
 
         self.start_new_block();
 
         let val = self.lower_to_val(value)?;
         self.insert_assign_to_loc_stmt(loc, val)?;
 
-        let block = self.end_current_block();
-        self.blocks.back_mut().unwrap().push(block);
+        self.end_and_insert_current_block();
 
         self.add_to_scope(name, loc);
         Ok(())
@@ -408,8 +415,7 @@ impl<'a> MlrBuilder<'a> {
     fn build_expression_statement(&mut self, expression: &hlr::Expression) -> Result<()> {
         self.start_new_block();
         let _ = assign_to_new_loc!(self, self.lower_to_val(expression)?);
-        let block = self.end_current_block();
-        self.blocks.back_mut().unwrap().push(block);
+        self.end_and_insert_current_block();
         Ok(())
     }
 
@@ -425,13 +431,12 @@ impl<'a> MlrBuilder<'a> {
         };
         self.insert_return_stmt(return_val)?;
 
-        let block = self.end_current_block();
-        self.blocks.back_mut().unwrap().push(block);
+        self.end_and_insert_current_block();
         Ok(())
     }
 
     fn build_break_statement(&mut self) -> Result<()> {
-        self.insert_break_stmt()
+        self.insert_break_stmt().map(|_| ())
     }
 
     fn lower_var_to_place(&mut self, name: &str) -> Result<mlr::PlaceId> {
@@ -501,7 +506,7 @@ impl<'a> MlrBuilder<'a> {
                 &scrutinee_place,
             )?;
             self.insert_assign_to_loc_stmt(result_loc, first_arm_result)?;
-            let then_block = self.end_current_block();
+            let then_block = self.release_current_block();
 
             self.start_new_block();
             self.build_match_arms(
@@ -512,7 +517,7 @@ impl<'a> MlrBuilder<'a> {
                 scrutinee_place,
                 result_loc,
             )?;
-            let else_block = self.end_current_block();
+            let else_block = self.release_current_block();
 
             self.insert_if_stmt(condition, then_block, else_block)?;
         }

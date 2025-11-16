@@ -83,28 +83,9 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_if_stmt(
-        &mut self,
-        condition: mlr::OpId,
-        then_block: mlr::StmtId,
-        else_block: mlr::StmtId,
-    ) -> Result<()> {
-        let val = mlr::Stmt::If(mlr::If {
-            condition,
-            then_block,
-            else_block,
-        });
-        self.insert_stmt(val)
-    }
-
     pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
         let val = mlr::Val::Empty { type_id };
         self.insert_val(val)
-    }
-
-    pub fn insert_loop_stmt(&mut self, body: mlr::StmtId) -> Result<()> {
-        let val = mlr::Stmt::Loop { body };
-        self.insert_stmt(val)
     }
 
     pub fn insert_use_val(&mut self, op: mlr::OpId) -> Result<mlr::ValId> {
@@ -117,14 +98,31 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_use_val(op)
     }
 
-    pub fn insert_stmt(&mut self, stmt: mlr::Stmt) -> Result<()> {
-        let stmt_id = self.get_next_stmt_id();
-        self.output.stmts.insert(stmt_id, stmt);
-        self.blocks.back_mut().unwrap().push(stmt_id);
-        Ok(())
+    pub fn insert_if_stmt(&mut self, cond: mlr::OpId, then_: mlr::StmtId, else_: mlr::StmtId) -> Result<mlr::StmtId> {
+        let if_ = mlr::Stmt::If(mlr::If {
+            condition: cond,
+            then_block: then_,
+            else_block: else_,
+        });
+        self.insert_stmt(if_)
     }
 
-    pub fn insert_alloc_stmt(&mut self, loc_id: mlr::LocId) -> Result<()> {
+    pub fn insert_loop_stmt(&mut self, body: mlr::StmtId) -> Result<mlr::StmtId> {
+        let val = mlr::Stmt::Loop { body };
+        self.insert_stmt(val)
+    }
+
+    pub fn insert_stmt(&mut self, stmt: mlr::Stmt) -> Result<mlr::StmtId> {
+        let stmt_id = self.get_next_stmt_id();
+        self.output.stmts.insert(stmt_id, stmt);
+        self.blocks
+            .back_mut()
+            .expect("self.blocks should not be empty")
+            .push(stmt_id);
+        Ok(stmt_id)
+    }
+
+    pub fn insert_alloc_stmt(&mut self, loc_id: mlr::LocId) -> Result<mlr::StmtId> {
         assert!(
             !self.output.allocated_locs.contains(&loc_id),
             "location already allocated"
@@ -134,18 +132,18 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_break_stmt(&mut self) -> Result<()> {
+    pub fn insert_fresh_alloc(&mut self) -> Result<mlr::LocId> {
+        let loc_id = self.get_next_loc_id();
+        self.insert_alloc_stmt(loc_id)?;
+        Ok(loc_id)
+    }
+
+    pub fn insert_break_stmt(&mut self) -> Result<mlr::StmtId> {
         let stmt = mlr::Stmt::Break;
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_assign_to_loc_stmt(&mut self, loc_id: mlr::LocId, value: mlr::ValId) -> Result<()> {
-        let place = mlr::Place::Local(loc_id);
-        let place_id = self.insert_place(place)?;
-        self.insert_assign_stmt(place_id, value)
-    }
-
-    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<()> {
+    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
         self.assert_place_valid(&place);
 
         let place_type = self.try_get_place_type(&place);
@@ -171,7 +169,13 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<()> {
+    pub fn insert_assign_to_loc_stmt(&mut self, loc_id: mlr::LocId, value: mlr::ValId) -> Result<mlr::StmtId> {
+        let place = mlr::Place::Local(loc_id);
+        let place_id = self.insert_place(place)?;
+        self.insert_assign_stmt(place_id, value)
+    }
+
+    pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<mlr::StmtId> {
         let return_type = self
             .ctxt
             .function_registry
@@ -215,12 +219,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_place(place)
     }
 
-    pub fn insert_project_to_variant_place(
-        &mut self,
-        base: mlr::PlaceId,
-        variant_index: usize,
-    ) -> Result<mlr::PlaceId> {
-        let place = mlr::Place::ProjectToVariant { base, variant_index };
+    pub fn insert_project_to_variant_place(&mut self, base: mlr::PlaceId, variant_idx: usize) -> Result<mlr::PlaceId> {
+        let place = mlr::Place::ProjectToVariant {
+            base,
+            variant_index: variant_idx,
+        };
         self.insert_place(place)
     }
 
