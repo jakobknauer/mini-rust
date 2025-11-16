@@ -17,10 +17,7 @@ macro_rules! register_fn {
     };
 }
 
-pub fn register_fns(
-    type_registry: &ctxt::TypeRegistry,
-    fns: &mut ctxt::FnReg,
-) -> Result<(), ()> {
+pub fn register_fns(type_registry: &ctxt::TypeRegistry, fns: &mut ctxt::FnReg) -> Result<(), ()> {
     use PrimitiveType::*;
 
     let i32 = type_registry.get_primitive_type_id(Integer32).ok_or(())?;

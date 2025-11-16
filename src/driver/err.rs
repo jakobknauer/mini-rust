@@ -77,10 +77,7 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
         UnresolvableTypeName { type_name } => {
             format!("Cannot find type with name '{}'", type_name)
         }
-        NotAStruct { type_id } => format!(
-            "Type '{}' is not a struct type",
-            ctxt.types.get_string_rep(&type_id)
-        ),
+        NotAStruct { type_id } => format!("Type '{}' is not a struct type", ctxt.types.get_string_rep(&type_id)),
         InitializerMissingFields {
             type_id,
             missing_fields,
@@ -103,10 +100,7 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
             ctxt.types.get_string_rep(&type_id),
             field_name
         ),
-        NotAnEnum { type_id } => format!(
-            "Type '{}' is not an enum type",
-            ctxt.types.get_string_rep(&type_id)
-        ),
+        NotAnEnum { type_id } => format!("Type '{}' is not an enum type", ctxt.types.get_string_rep(&type_id)),
         NotAnEnumVariant { type_id, variant_name } => format!(
             "Enum type '{}' does not have a variant named '{}'",
             ctxt.types.get_string_rep(&type_id),
