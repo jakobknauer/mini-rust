@@ -1,21 +1,21 @@
-mod function_registry;
-pub mod functions;
+mod fn_reg;
+pub mod fns;
 mod type_registry;
 pub mod types;
 
-pub use function_registry::FunctionRegistry;
+pub use fn_reg::FnReg;
 pub use type_registry::TypeRegistry;
 
 pub struct Ctxt {
-    pub type_registry: TypeRegistry,
-    pub function_registry: FunctionRegistry,
+    pub types: TypeRegistry,
+    pub fns: FnReg,
 }
 
 impl Ctxt {
     pub fn new() -> Self {
         Self {
-            type_registry: TypeRegistry::new(),
-            function_registry: FunctionRegistry::new(),
+            types: TypeRegistry::new(),
+            fns: FnReg::new(),
         }
     }
 }

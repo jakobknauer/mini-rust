@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::{functions::FnId, types::*},
+    ctxt::{fns::Fn, types::*},
     mlr::{
         self,
         build::{MlrBuilderError, Result, TypeError},
@@ -33,7 +33,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         };
 
         self.ctxt
-            .type_registry
+            .types
             .get_primitive_type_id(type_)
             .ok_or(MlrBuilderError::UnknownPrimitiveType)
     }
@@ -42,11 +42,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         let callable_type = self.get_op_type(callable);
         let callable_type = self
             .ctxt
-            .type_registry
+            .types
             .get_type_by_id(&callable_type)
             .expect("type of callable should be registered");
 
-        let Type::Function {
+        let Type::Fn {
             param_types,
             return_type,
         } = callable_type
@@ -65,7 +65,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
 
         for (i, (param_type, arg_type)) in param_types.iter().zip(arg_types).enumerate() {
-            if !self.ctxt.type_registry.types_equal(param_type, &arg_type) {
+            if !self.ctxt.types.types_equal(param_type, &arg_type) {
                 return TypeError::CallArgumentTypeMismatch {
                     index: i,
                     expected: *param_type,
@@ -78,18 +78,18 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(*return_type)
     }
 
-    fn infer_type_of_function(&mut self, fn_id: FnId) -> Result<TypeId> {
+    fn infer_type_of_fn(&mut self, fn_: Fn) -> Result<TypeId> {
         let signature = self
             .ctxt
-            .function_registry
-            .get_signature_by_id(&fn_id)
+            .fns
+            .get_signature_by_id(&fn_)
             .expect("function signature should be registered");
 
         let param_types: Vec<_> = signature.parameters.iter().map(|param| param.type_).collect();
         let return_type = signature.return_type;
-        let function_type_id = self.ctxt.type_registry.register_function_type(param_types, return_type);
+        let fn_type = self.ctxt.types.register_fn_type(param_types, return_type);
 
-        Ok(function_type_id)
+        Ok(fn_type)
     }
 
     pub fn try_infer_place_type(&self, place_id: &mlr::PlaceId) -> Result<Option<TypeId>> {
@@ -135,7 +135,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         // the discriminant is always an integer
         let int_type_id = self
             .ctxt
-            .type_registry
+            .types
             .get_primitive_type_id(PrimitiveType::Integer32)
             .expect("integer primitive type should be registered");
         Ok(int_type_id)
@@ -166,7 +166,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("infer_type_of_operand should only be called with a valid OpId");
 
         match op {
-            Function(fn_id) => self.infer_type_of_function(*fn_id),
+            Fn(fn_) => self.infer_type_of_fn(*fn_),
             Constant(constant) => self.infer_type_of_constant(constant),
             Copy(place_id) => self.try_infer_place_type(place_id).map(|opt| opt.unwrap()),
         }

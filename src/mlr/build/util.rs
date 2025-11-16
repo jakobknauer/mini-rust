@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    ctxt::{functions, types},
+    ctxt::{fns, types},
     hlr,
     mlr::{
         self,
@@ -150,7 +150,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let value_type = self.get_val_type(&value);
 
         if let Some(place_type) = place_type {
-            if !self.ctxt.type_registry.types_equal(&place_type, &value_type) {
+            if !self.ctxt.types.types_equal(&place_type, &value_type) {
                 return mlr::build::TypeError::AssignStmtTypeMismatch {
                     place,
                     expected: place_type,
@@ -178,14 +178,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<mlr::StmtId> {
         let return_type = self
             .ctxt
-            .function_registry
-            .get_signature_by_id(&self.fn_id)
+            .fns
+            .get_signature_by_id(&self.mlr_fn)
             .expect("return stmt only valid in function")
             .return_type;
 
         let value_type = self.get_val_type(&value);
 
-        if !self.ctxt.type_registry.types_equal(&return_type, &value_type) {
+        if !self.ctxt.types.types_equal(&return_type, &value_type) {
             return mlr::build::TypeError::ReturnTypeMismatch {
                 expected: return_type,
                 actual: value_type,
@@ -242,8 +242,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(op_id)
     }
 
-    pub fn insert_function_op(&mut self, fn_id: functions::FnId) -> Result<mlr::OpId> {
-        let op = mlr::Operand::Function(fn_id);
+    pub fn insert_fn_op(&mut self, fn_: fns::Fn) -> Result<mlr::OpId> {
+        let op = mlr::Operand::Fn(fn_);
         self.insert_op(op)
     }
 
@@ -278,8 +278,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         if let Some(loc_id) = self.resolve_name_to_location(name) {
             let place = self.insert_loc_place(loc_id)?;
             self.insert_copy_op(place)
-        } else if let Some(fn_id) = self.ctxt.function_registry.get_function_by_name(name) {
-            self.insert_function_op(fn_id)
+        } else if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
+            self.insert_fn_op(fn_)
         } else {
             Err(MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
         }
@@ -295,12 +295,12 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(types::TypeId, usize)> {
-        for (enum_id, enum_def) in self.ctxt.type_registry.get_all_enums() {
+        for (enum_id, enum_def) in self.ctxt.types.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
                     let type_id = self
                         .ctxt
-                        .type_registry
+                        .types
                         .get_type_id_by_enum_id(enum_id)
                         .expect("enum type id should be known");
                     return Some((type_id, idx));
@@ -379,7 +379,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_struct_def(&self, type_id: &types::TypeId) -> Result<&types::StructDefinition> {
         let type_ = self
             .ctxt
-            .type_registry
+            .types
             .get_type_by_id(type_id)
             .expect("type should be registered");
 
@@ -389,7 +389,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let struct_def = self
             .ctxt
-            .type_registry
+            .types
             .get_struct_definition(&struct_id)
             .expect("struct definition should be registered");
 
@@ -399,7 +399,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_enum_def(&self, type_id: &types::TypeId) -> Result<&types::EnumDefinition> {
         let type_ = self
             .ctxt
-            .type_registry
+            .types
             .get_type_by_id(type_id)
             .expect("type should be registered");
 
@@ -409,7 +409,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let enum_def = self
             .ctxt
-            .type_registry
+            .types
             .get_enum_definition(&enum_id)
             .expect("enum definition should be registered");
 

@@ -34,8 +34,8 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
         } => format!(
             "Cannot reassign location {:?} of type '{}' with value of type '{}'",
             place,
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
+            ctxt.types.get_string_rep(&expected),
+            ctxt.types.get_string_rep(&actual)
         ),
         ValNotCallable => "Val is not callable".to_string(),
         CallArgumentTypeMismatch {
@@ -45,25 +45,25 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
         } => format!(
             "Argument {} type mismatch: expected '{}', got '{}'",
             index,
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
+            ctxt.types.get_string_rep(&expected),
+            ctxt.types.get_string_rep(&actual)
         ),
         CallArgumentCountMismatch { expected, actual } => {
             format!("Argument count mismatch: expected {}, got {}", expected, actual)
         }
         IfConditionNotBoolean { actual } => format!(
             "If condition must be of type 'bool', got '{}'",
-            ctxt.type_registry.get_string_rep(&actual)
+            ctxt.types.get_string_rep(&actual)
         ),
         IfBranchTypeMismatch { then_type, else_type } => format!(
             "If branches must have the same type: then is '{}', else is '{}'",
-            ctxt.type_registry.get_string_rep(&then_type),
-            ctxt.type_registry.get_string_rep(&else_type)
+            ctxt.types.get_string_rep(&then_type),
+            ctxt.types.get_string_rep(&else_type)
         ),
         ReturnTypeMismatch { expected, actual } => format!(
             "Return type mismatch: expected '{}', got '{}'",
-            ctxt.type_registry.get_string_rep(&expected),
-            ctxt.type_registry.get_string_rep(&actual)
+            ctxt.types.get_string_rep(&expected),
+            ctxt.types.get_string_rep(&actual)
         ),
         OperatorResolutionFailed {
             operator,
@@ -71,15 +71,15 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
         } => format!(
             "Cannot resolve operator '{}' for operand types '{}' and '{}'",
             operator,
-            ctxt.type_registry.get_string_rep(&left),
-            ctxt.type_registry.get_string_rep(&right)
+            ctxt.types.get_string_rep(&left),
+            ctxt.types.get_string_rep(&right)
         ),
         UnresolvableTypeName { type_name } => {
             format!("Cannot find type with name '{}'", type_name)
         }
         NotAStruct { type_id } => format!(
             "Type '{}' is not a struct type",
-            ctxt.type_registry.get_string_rep(&type_id)
+            ctxt.types.get_string_rep(&type_id)
         ),
         InitializerMissingFields {
             type_id,
@@ -87,29 +87,29 @@ fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> St
         } => {
             format!(
                 "Struct val of type '{}' is missing fields: {}",
-                ctxt.type_registry.get_string_rep(&type_id),
+                ctxt.types.get_string_rep(&type_id),
                 missing_fields.join(", ")
             )
         }
         InitializerExtraFields { type_id, extra_fields } => {
             format!(
                 "Struct val of type '{}' has extra fields: {}",
-                ctxt.type_registry.get_string_rep(&type_id),
+                ctxt.types.get_string_rep(&type_id),
                 extra_fields.join(", ")
             )
         }
         NotAStructField { type_id, field_name } => format!(
             "Type '{}' does not have a field named '{}'",
-            ctxt.type_registry.get_string_rep(&type_id),
+            ctxt.types.get_string_rep(&type_id),
             field_name
         ),
         NotAnEnum { type_id } => format!(
             "Type '{}' is not an enum type",
-            ctxt.type_registry.get_string_rep(&type_id)
+            ctxt.types.get_string_rep(&type_id)
         ),
         NotAnEnumVariant { type_id, variant_name } => format!(
             "Enum type '{}' does not have a variant named '{}'",
-            ctxt.type_registry.get_string_rep(&type_id),
+            ctxt.types.get_string_rep(&type_id),
             variant_name
         ),
     };

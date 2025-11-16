@@ -85,12 +85,12 @@ impl TypeRegistry {
         Ok(type_id)
     }
 
-    pub fn register_function_type(&mut self, param_types: impl Into<Vec<TypeId>>, return_type: TypeId) -> TypeId {
-        let function_type = Type::Function {
+    pub fn register_fn_type(&mut self, param_types: impl Into<Vec<TypeId>>, return_type: TypeId) -> TypeId {
+        let fn_type = Type::Fn {
             param_types: param_types.into(),
             return_type,
         };
-        self.register_type(function_type)
+        self.register_type(fn_type)
     }
 
     pub fn get_type_by_id(&self, id: &TypeId) -> Option<&Type> {
@@ -139,7 +139,7 @@ impl TypeRegistry {
 
         match type_ {
             Type::NamedType(name, _) => name.clone(),
-            Type::Function {
+            Type::Fn {
                 param_types,
                 return_type,
             } => {

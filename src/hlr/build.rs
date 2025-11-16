@@ -111,7 +111,7 @@ impl<'a> HlrParser<'a> {
 
         while let Some(token) = self.current() {
             match token {
-                Token::Keyword(Keyword::Fn) => program.functions.push(self.parse_function()?),
+                Token::Keyword(Keyword::Fn) => program.fns.push(self.parse_function()?),
                 Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
                 Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
                 token => return Err(ParserError::UnexpectedToken(token.clone())),
@@ -121,7 +121,7 @@ impl<'a> HlrParser<'a> {
         Ok(program)
     }
 
-    fn parse_function(&mut self) -> Result<Function, ParserError> {
+    fn parse_function(&mut self) -> Result<Fn, ParserError> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 
@@ -132,7 +132,7 @@ impl<'a> HlrParser<'a> {
         let return_type = self.parse_function_return_type()?;
         let body = self.parse_block()?;
 
-        Ok(Function {
+        Ok(Fn {
             name,
             return_type,
             parameters,
@@ -423,8 +423,8 @@ impl<'a> HlrParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                acc = Expression::FunctionCall {
-                    function: Box::new(acc),
+                acc = Expression::Call {
+                    callee: Box::new(acc),
                     arguments,
                 };
             } else if self.advance_if(Token::Dot) {
@@ -606,7 +606,7 @@ mod tests {
                 "#;
 
             let expected = Program {
-                functions: vec![Function {
+                fns: vec![Fn {
                     name: "empty".to_string(),
                     return_type: None,
                     parameters: vec![],
@@ -637,7 +637,7 @@ mod tests {
                 "#;
 
             let expected = Program {
-                functions: vec![Function {
+                fns: vec![Fn {
                     name: "add".to_string(),
                     return_type: Some("int".to_string()),
                     parameters: vec![
@@ -675,7 +675,7 @@ mod tests {
                 }"#;
 
             let expected = Program {
-                functions: vec![],
+                fns: vec![],
                 structs: vec![Struct {
                     name: "Point".to_string(),
                     fields: vec![
@@ -705,7 +705,7 @@ mod tests {
                 }"#;
 
             let expected = Program {
-                functions: vec![],
+                fns: vec![],
                 structs: vec![],
                 enums: vec![Enum {
                     name: "State".to_string(),
@@ -837,8 +837,8 @@ mod tests {
                     }),
                 }),
                 operator: BinaryOperator::Subtract,
-                right: Box::new(Expression::FunctionCall {
-                    function: Box::new(Expression::Variable("arctan2".to_string())),
+                right: Box::new(Expression::Call {
+                    callee: Box::new(Expression::Variable("arctan2".to_string())),
                     arguments: vec![
                         Expression::Variable("x".to_string()),
                         Expression::Variable("y".to_string()),
@@ -910,8 +910,8 @@ mod tests {
         fn test_parse_function_call_and_field_access() {
             let input = "obj.method(arg1, arg2).field";
             let expected = Expression::FieldAccess {
-                base: Box::new(Expression::FunctionCall {
-                    function: Box::new(Expression::FieldAccess {
+                base: Box::new(Expression::Call {
+                    callee: Box::new(Expression::FieldAccess {
                         base: Box::new(Expression::Variable("obj".to_string())),
                         field_name: "method".to_string(),
                     }),

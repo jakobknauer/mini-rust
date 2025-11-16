@@ -12,7 +12,7 @@ mod macros;
 use crate::{
     ctxt::{
         self,
-        functions::{FnId, FunctionParameter, FunctionSignature},
+        fns::{Fn, FnParam, FnSig},
         types,
     },
     hlr, mlr,
@@ -21,8 +21,9 @@ use crate::{
 pub use err::{MlrBuilderError, Result, TypeError};
 
 pub struct MlrBuilder<'a> {
-    function: &'a hlr::Function,
-    fn_id: FnId,
+    input: &'a hlr::Fn,
+
+    mlr_fn: Fn,
     ctxt: &'a mut ctxt::Ctxt,
 
     output: mlr::Mlr,
@@ -48,10 +49,10 @@ impl Scope {
 }
 
 impl<'a> MlrBuilder<'a> {
-    pub fn new(function: &'a hlr::Function, fn_id: FnId, ctxt: &'a mut ctxt::Ctxt) -> Self {
+    pub fn new(input: &'a hlr::Fn, fn_: Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
-            function,
-            fn_id,
+            input,
+            mlr_fn: fn_,
             ctxt,
 
             output: mlr::Mlr::new(),
@@ -104,16 +105,11 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
-        let FunctionSignature { parameters, .. } = self
-            .ctxt
-            .function_registry
-            .get_signature_by_id(&self.fn_id)
-            .cloned()
-            .unwrap();
+        let FnSig { parameters, .. } = self.ctxt.fns.get_signature_by_id(&self.mlr_fn).cloned().unwrap();
 
         self.push_scope();
 
-        for FunctionParameter { name, type_ } in parameters {
+        for FnParam { name, type_ } in parameters {
             let loc = self.get_next_loc_id();
             self.output.allocated_locs.insert(loc);
             self.add_to_scope(&name, loc);
@@ -123,7 +119,7 @@ impl<'a> MlrBuilder<'a> {
 
         self.start_new_block();
 
-        let return_val = self.build_block(&self.function.body)?;
+        let return_val = self.build_block(&self.input.body)?;
         self.insert_return_stmt(return_val)?;
 
         self.output.body = self.release_current_block();
@@ -166,7 +162,7 @@ impl<'a> MlrBuilder<'a> {
             }
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assignment { target, value } => self.build_assignment(target, value),
-            FunctionCall { function, arguments } => self.build_function_call(function, arguments),
+            Call { callee, arguments } => self.build_call(callee, arguments),
             StructExpr { struct_name, fields } => self.build_struct_or_enum_val(struct_name, fields),
             If {
                 condition,
@@ -231,8 +227,8 @@ impl<'a> MlrBuilder<'a> {
         let op = {
             let left_type = self.get_op_type(&left_op);
             let right_type = self.get_op_type(&right_op);
-            let fn_id = self.resolve_operator(operator, (left_type, right_type))?;
-            self.insert_function_op(fn_id)?
+            let fn_ = self.resolve_operator(operator, (left_type, right_type))?;
+            self.insert_fn_op(fn_)?
         };
 
         self.insert_call_val(op, vec![left_op, right_op])
@@ -247,15 +243,15 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(output)
     }
 
-    fn build_function_call(&mut self, function: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::ValId> {
-        let function = self.lower_to_op(function)?;
+    fn build_call(&mut self, callee: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::ValId> {
+        let callee = self.lower_to_op(callee)?;
 
         let args = arguments
             .iter()
             .map(|arg| self.lower_to_op(arg))
             .collect::<Result<Vec<_>>>()?;
 
-        self.insert_call_val(function, args)
+        self.insert_call_val(callee, args)
     }
 
     fn build_if(
@@ -304,7 +300,7 @@ impl<'a> MlrBuilder<'a> {
         struct_name: &str,
         fields: &[(String, hlr::Expression)],
     ) -> Result<mlr::ValId> {
-        if let Some(type_id) = self.ctxt.type_registry.get_type_id_by_name(struct_name) {
+        if let Some(type_id) = self.ctxt.types.get_type_id_by_name(struct_name) {
             self.build_struct_val(&type_id, fields)
         } else if let Some((type_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&type_id, &variant_index, fields)
@@ -368,11 +364,11 @@ impl<'a> MlrBuilder<'a> {
         let eq_fn = {
             let i32 = self
                 .ctxt
-                .type_registry
+                .types
                 .get_primitive_type_id(types::PrimitiveType::Integer32)
                 .unwrap();
-            let eq_fn_id = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
-            self.insert_function_op(eq_fn_id)?
+            let eq_fn = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
+            self.insert_fn_op(eq_fn)?
         };
 
         let scrutinee_type_id = self.get_loc_type(&scrutinee_loc);

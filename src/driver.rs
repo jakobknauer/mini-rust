@@ -4,7 +4,7 @@ mod stdlib;
 use std::path::Path;
 
 use crate::{
-    ctxt::{self, functions, types},
+    ctxt::{self, fns, types},
     generate, hlr, mlr,
     util::print,
 };
@@ -35,10 +35,9 @@ where
     let hlr = hlr::build_program(source).map_err(|parser_error| err::print_parser_error(&parser_error, source))?;
 
     print_pretty("Building MLR from HLR");
-    register_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error registering types")?;
-    define_types(&hlr, &mut ctxt.type_registry).map_err(|_| "Error defining types")?;
-    register_functions(&hlr, &ctxt.type_registry, &mut ctxt.function_registry)
-        .map_err(|_| "Error registering functions")?;
+    register_types(&hlr, &mut ctxt.types).map_err(|_| "Error registering types")?;
+    define_types(&hlr, &mut ctxt.types).map_err(|_| "Error defining types")?;
+    register_functions(&hlr, &ctxt.types, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
 
     if let Some(mlr_path) = output_paths.mlr {
@@ -127,14 +126,10 @@ fn set_struct_fields<'a>(
     Ok(())
 }
 
-fn register_functions(
-    hlr: &hlr::Program,
-    type_registry: &ctxt::TypeRegistry,
-    function_registry: &mut ctxt::FunctionRegistry,
-) -> Result<(), ()> {
-    stdlib::register_functions(type_registry, function_registry)?;
+fn register_functions(hlr: &hlr::Program, type_registry: &ctxt::TypeRegistry, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+    stdlib::register_fns(type_registry, fns)?;
 
-    for function in &hlr.functions {
+    for function in &hlr.fns {
         let return_type = match function.return_type.as_ref() {
             Some(type_id) => type_registry.get_type_id_by_name(type_id).ok_or(())?,
             None => type_registry.get_type_id_by_name("()").ok_or(())?,
@@ -144,35 +139,35 @@ fn register_functions(
             .parameters
             .iter()
             .map(|parameter| {
-                Ok(functions::FunctionParameter {
+                Ok(fns::FnParam {
                     name: parameter.name.clone(),
                     type_: type_registry.get_type_id_by_name(&parameter.param_type).ok_or(())?,
                 })
             })
             .collect::<Result<_, _>>()?;
 
-        let signature = functions::FunctionSignature {
+        let signature = fns::FnSig {
             name: function.name.clone(),
             return_type,
             parameters,
         };
 
-        function_registry.register_function(signature)?;
+        fns.register_fn(signature)?;
     }
 
     Ok(())
 }
 
 fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
-    for function in &hlr.functions {
-        let fn_id = ctxt.function_registry.get_function_by_name(&function.name).unwrap();
+    for function in &hlr.fns {
+        let fn_ = ctxt.fns.get_fn_by_name(&function.name).unwrap();
 
-        let mlr_builder = mlr::MlrBuilder::new(function, fn_id, ctxt);
+        let mlr_builder = mlr::MlrBuilder::new(function, fn_, ctxt);
         let mlr = mlr_builder
             .build()
             .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;
 
-        ctxt.function_registry.add_function_def(&function.name, mlr);
+        ctxt.fns.add_fn_def(&function.name, mlr);
     }
 
     Ok(())
@@ -184,9 +179,9 @@ where
 {
     let mut file = std::fs::File::create(path).map_err(|_| ())?;
 
-    for fn_id in ctxt.function_registry.get_all_functions() {
-        if ctxt.function_registry.is_function_defined(fn_id) {
-            print::print_mlr(fn_id, ctxt, &mut file).map_err(|_| ())?;
+    for fn_ in ctxt.fns.get_all_fns() {
+        if ctxt.fns.is_fn_defined(fn_) {
+            print::print_mlr(fn_, ctxt, &mut file).map_err(|_| ())?;
         }
     }
 

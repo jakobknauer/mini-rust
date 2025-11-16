@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::{functions::FnId, types::*},
+    ctxt::{fns::Fn, types::*},
     hlr,
     mlr::{
         self,
@@ -30,12 +30,12 @@ macro_rules! op_match {
 }
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (TypeId, TypeId)) -> Result<FnId> {
+    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (TypeId, TypeId)) -> Result<Fn> {
         use MlrBuilderError::UnknownPrimitiveType;
         use PrimitiveType::*;
         use hlr::BinaryOperator::*;
 
-        let tr = &self.ctxt.type_registry;
+        let tr = &self.ctxt.types;
         let i32 = tr.get_primitive_type_id(Integer32).ok_or(UnknownPrimitiveType)?;
         let bool = tr.get_primitive_type_id(Boolean).ok_or(UnknownPrimitiveType)?;
         let unit = tr.get_primitive_type_id(Unit).ok_or(UnknownPrimitiveType)?;
@@ -64,8 +64,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         );
 
         self.ctxt
-            .function_registry
-            .get_function_by_name(fn_name)
+            .fns
+            .get_fn_by_name(fn_name)
             .ok_or(MlrBuilderError::MissingOperatorImpl {
                 name: fn_name.to_string(),
             })

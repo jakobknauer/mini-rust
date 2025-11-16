@@ -1,6 +1,6 @@
 #[derive(Debug, PartialEq, Eq)]
 pub struct Program {
-    pub functions: Vec<Function>,
+    pub fns: Vec<Fn>,
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
 }
@@ -8,7 +8,7 @@ pub struct Program {
 impl Program {
     pub fn new() -> Self {
         Self {
-            functions: Vec::new(),
+            fns: Vec::new(),
             structs: Vec::new(),
             enums: Vec::new(),
         }
@@ -16,7 +16,7 @@ impl Program {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Function {
+pub struct Fn {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub return_type: Option<String>,
@@ -84,8 +84,8 @@ pub enum Expression {
         target: Box<Expression>,
         value: Box<Expression>,
     },
-    FunctionCall {
-        function: Box<Expression>,
+    Call {
+        callee: Box<Expression>,
         arguments: Vec<Expression>,
     },
     StructExpr {

@@ -3,16 +3,16 @@ use std::io::Write;
 use crate::{
     ctxt::{
         self,
-        functions::{FnId, FunctionSignature},
+        fns::{Fn, FnSig},
     },
     mlr,
 };
 
-pub fn print_mlr<W: Write>(fn_id: &FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
+pub fn print_mlr<W: Write>(fn_: &Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
-        fn_id: *fn_id,
-        mlr: ctxt.function_registry.get_function_mlr(fn_id),
-        signature: ctxt.function_registry.get_signature_by_id(fn_id),
+        fn_: *fn_,
+        mlr: ctxt.fns.get_fn_def(fn_),
+        signature: ctxt.fns.get_signature_by_id(fn_),
         ctxt,
         indent_level: 0,
         writer,
@@ -21,9 +21,9 @@ pub fn print_mlr<W: Write>(fn_id: &FnId, ctxt: &ctxt::Ctxt, writer: &mut W) -> R
 }
 
 struct MlrPrinter<'a, W: Write> {
-    fn_id: FnId,
+    fn_: Fn,
     mlr: Option<&'a mlr::Mlr>,
-    signature: Option<&'a FunctionSignature>,
+    signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
     indent_level: usize,
     writer: &'a mut W,
@@ -45,7 +45,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
     fn print_signature(&mut self) -> Result<(), std::io::Error> {
         let Some(signature) = self.signature else {
-            return write!(self.writer, "<signature for fn id {}>", self.fn_id.0);
+            return write!(self.writer, "<signature for fn id {}>", self.fn_.0);
         };
 
         write!(self.writer, "fn {}(", signature.name)?;
@@ -53,12 +53,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let param_type = self.ctxt.type_registry.get_string_rep(&param.type_);
+            let param_type = self.ctxt.types.get_string_rep(&param.type_);
             write!(self.writer, "{}: {}", param.name, param_type)?;
         }
         write!(self.writer, ") -> ")?;
 
-        let return_type = self.ctxt.type_registry.get_string_rep(&signature.return_type);
+        let return_type = self.ctxt.types.get_string_rep(&signature.return_type);
         write!(self.writer, "{}", return_type)
     }
 
@@ -89,7 +89,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         .loc_types
                         .get(loc)
                         .expect("type of place should be known");
-                    let type_name = self.ctxt.type_registry.get_string_rep(loc_type);
+                    let type_name = self.ctxt.types.get_string_rep(loc_type);
                     self.indent()?;
                     writeln!(self.writer, "alloc {}: {};", loc, type_name)
                 }
@@ -162,7 +162,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, ")")
                 }
                 Empty { type_id } => {
-                    let type_name = self.ctxt.type_registry.get_string_rep(type_id);
+                    let type_name = self.ctxt.types.get_string_rep(type_id);
                     write!(self.writer, "empty {}", type_name)
                 }
             },
@@ -194,7 +194,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         .place_types
                         .get(base)
                         .expect("type of base place should be known");
-                    let enum_name = self.ctxt.type_registry.get_string_rep(type_id);
+                    let enum_name = self.ctxt.types.get_string_rep(type_id);
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
                     write!(self.writer, " as {}::{})", enum_name, variant_index)
@@ -212,11 +212,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match operand {
             Some(operand) => match operand {
-                Function(fn_id) => {
-                    if let Some(func) = self.ctxt.function_registry.get_signature_by_id(fn_id) {
+                Fn(fn_) => {
+                    if let Some(func) = self.ctxt.fns.get_signature_by_id(fn_) {
                         write!(self.writer, "fn {}", func.name)
                     } else {
-                        write!(self.writer, "<fn id {}>", fn_id.0)
+                        write!(self.writer, "<fn id {}>", fn_.0)
                     }
                 }
                 Constant(constant) => match constant {

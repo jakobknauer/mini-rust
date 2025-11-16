@@ -7,7 +7,7 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::{ctxt::functions as mr_functions, ctxt::types as mr_types, mlr};
+use crate::{ctxt::fns as mr_fns, ctxt::types as mr_types, mlr};
 
 pub struct FnGenerator<'a, 'iw, 'mr> {
     gtor: &'a mut super::Generator<'iw, 'mr>,
@@ -31,11 +31,11 @@ impl From<BuilderError> for FnGeneratorError {
 pub type FnGeneratorResult<T> = Result<T, FnGeneratorError>;
 
 impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
-    pub fn new(gtor: &'a mut super::Generator<'iw, 'mr>, fn_id: mr_functions::FnId) -> Option<Self> {
+    pub fn new(gtor: &'a mut super::Generator<'iw, 'mr>, fn_: mr_fns::Fn) -> Option<Self> {
         let builder = gtor.iw_ctxt.create_builder();
-        let mlr = gtor.mr_ctxt.function_registry.get_function_mlr(&fn_id)?;
+        let mlr = gtor.mr_ctxt.fns.get_fn_def(&fn_)?;
         let locs = HashMap::new();
-        let iw_fn = *gtor.functions.get(&fn_id)?;
+        let iw_fn = *gtor.functions.get(&fn_)?;
         let after_loop_blocks = VecDeque::new();
 
         Some(Self {
@@ -76,11 +76,11 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let mr_type = self
             .gtor
             .mr_ctxt
-            .type_registry
+            .types
             .get_type_by_id(mr_type)
             .ok_or(FnGeneratorError)?;
 
-        let mr_types::Type::Function {
+        let mr_types::Type::Fn {
             return_type,
             param_types,
         } = mr_type
@@ -131,7 +131,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let mr_unit_type = self
             .gtor
             .mr_ctxt
-            .type_registry
+            .types
             .get_primitive_type_id(mr_types::PrimitiveType::Unit)
             .ok_or(FnGeneratorError)?;
         let iw_type = self.gtor.get_or_define_type(&mr_unit_type).ok_or(FnGeneratorError)?;
@@ -285,7 +285,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let operand = self.mlr.ops.get(place_id).ok_or(FnGeneratorError)?;
 
         match operand {
-            Function(fn_id) => self.build_global_function(fn_id),
+            Fn(fn_) => self.build_global_function(fn_),
             Constant(constant) => self.build_constant(constant),
             Copy(place_id) => {
                 let place_ptr = self.build_place(place_id)?;
@@ -296,8 +296,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_global_function(&mut self, fn_id: &mr_functions::FnId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        let iw_fn = *self.gtor.functions.get(fn_id).ok_or(FnGeneratorError)?;
+    fn build_global_function(&mut self, fn_: &mr_fns::Fn) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        let iw_fn = *self.gtor.functions.get(fn_).ok_or(FnGeneratorError)?;
         Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
     }
 

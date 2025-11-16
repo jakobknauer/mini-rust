@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
 };
 
-use crate::ctxt::{functions::FnId, types::TypeId};
+use crate::ctxt::{fns::Fn, types::TypeId};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StmtId(pub usize);
@@ -75,7 +75,7 @@ pub enum Val {
 
 #[derive(Debug, Clone)]
 pub enum Operand {
-    Function(FnId),
+    Fn(Fn),
     Constant(Constant),
     Copy(PlaceId),
 }

@@ -1,13 +1,13 @@
-use crate::ctxt::{self, functions, types::PrimitiveType};
+use crate::ctxt::{self, fns, types::PrimitiveType};
 
-macro_rules! register_function {
-    ($function_registry:expr, $name:expr, ( $( $param_name:ident : $param_type:ident ),* ) -> $return_type:expr ) => {
-        $function_registry.register_function(functions::FunctionSignature {
+macro_rules! register_fn {
+    ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_type:ident ),* ) -> $return_type:expr ) => {
+        $fn_reg.register_fn(fns::FnSig {
             name: $name.to_string(),
             return_type: $return_type,
             parameters: vec![
                 $(
-                    functions::FunctionParameter {
+                    fns::FnParam {
                         name: stringify!($param_name).to_string(),
                         type_: $param_type,
                     },
@@ -17,9 +17,9 @@ macro_rules! register_function {
     };
 }
 
-pub fn register_functions(
+pub fn register_fns(
     type_registry: &ctxt::TypeRegistry,
-    function_registry: &mut ctxt::FunctionRegistry,
+    fns: &mut ctxt::FnReg,
 ) -> Result<(), ()> {
     use PrimitiveType::*;
 
@@ -27,26 +27,26 @@ pub fn register_functions(
     let bool = type_registry.get_primitive_type_id(Boolean).ok_or(())?;
     let unit = type_registry.get_primitive_type_id(Unit).ok_or(())?;
 
-    register_function!(function_registry, "add::<i32>", (a: i32, b: i32) -> i32);
-    register_function!(function_registry, "sub::<i32>", (a: i32, b: i32) -> i32);
-    register_function!(function_registry, "mul::<i32>", (a: i32, b: i32) -> i32);
-    register_function!(function_registry, "div::<i32>", (a: i32, b: i32) -> i32);
-    register_function!(function_registry, "rem::<i32>", (a: i32, b: i32) -> i32);
+    register_fn!(fns, "add::<i32>", (a: i32, b: i32) -> i32);
+    register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);
+    register_fn!(fns, "mul::<i32>", (a: i32, b: i32) -> i32);
+    register_fn!(fns, "div::<i32>", (a: i32, b: i32) -> i32);
+    register_fn!(fns, "rem::<i32>", (a: i32, b: i32) -> i32);
 
-    register_function!(function_registry, "eq::<i32>", (a: i32, b: i32) -> bool);
-    register_function!(function_registry, "ne::<i32>", (a: i32, b: i32) -> bool);
-    register_function!(function_registry, "eq::<bool>", (a: bool, b: bool) -> bool);
-    register_function!(function_registry, "ne::<bool>", (a: bool, b: bool) -> bool);
-    register_function!(function_registry, "eq::<()>", (a: unit, b: unit) -> bool);
-    register_function!(function_registry, "ne::<()>", (a: unit, b: unit) -> bool);
+    register_fn!(fns, "eq::<i32>", (a: i32, b: i32) -> bool);
+    register_fn!(fns, "ne::<i32>", (a: i32, b: i32) -> bool);
+    register_fn!(fns, "eq::<bool>", (a: bool, b: bool) -> bool);
+    register_fn!(fns, "ne::<bool>", (a: bool, b: bool) -> bool);
+    register_fn!(fns, "eq::<()>", (a: unit, b: unit) -> bool);
+    register_fn!(fns, "ne::<()>", (a: unit, b: unit) -> bool);
 
-    register_function!(function_registry, "bitor::<bool>", (a: bool, b: bool) -> bool);
-    register_function!(function_registry, "bitand::<bool>", (a: bool, b: bool) -> bool);
+    register_fn!(fns, "bitor::<bool>", (a: bool, b: bool) -> bool);
+    register_fn!(fns, "bitand::<bool>", (a: bool, b: bool) -> bool);
 
-    register_function!(function_registry, "lt::<i32>", (a: i32, b: i32) -> bool);
-    register_function!(function_registry, "gt::<i32>", (a: i32, b: i32) -> bool);
-    register_function!(function_registry, "le::<i32>", (a: i32, b: i32) -> bool);
-    register_function!(function_registry, "ge::<i32>", (a: i32, b: i32) -> bool);
+    register_fn!(fns, "lt::<i32>", (a: i32, b: i32) -> bool);
+    register_fn!(fns, "gt::<i32>", (a: i32, b: i32) -> bool);
+    register_fn!(fns, "le::<i32>", (a: i32, b: i32) -> bool);
+    register_fn!(fns, "ge::<i32>", (a: i32, b: i32) -> bool);
 
     Ok(())
 }
