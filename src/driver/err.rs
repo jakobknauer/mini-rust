@@ -16,94 +16,91 @@ pub fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &
     use mlr::MlrBuilderError::*;
 
     match err {
-        TypeError(err) => print_type_error(fn_name, err, ctxt),
+        TyError(err) => print_ty_error(fn_name, err, ctxt),
         MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
         UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
-        UnknownPrimitiveType => "Unknown primitive type".to_string(),
+        UnknownPrimitiveTy => "Unknown primitive type".to_string(),
     }
 }
 
-fn print_type_error(fn_name: &str, err: mlr::TypeError, ctxt: &ctxt::Ctxt) -> String {
-    use mlr::TypeError::*;
+fn print_ty_error(fn_name: &str, err: mlr::TyError, ctxt: &ctxt::Ctxt) -> String {
+    use mlr::TyError::*;
 
     let msg = match err {
-        AssignStmtTypeMismatch {
+        AssignStmtTyMismatch {
             place,
             expected,
             actual,
         } => format!(
             "Cannot reassign location {:?} of type '{}' with value of type '{}'",
             place,
-            ctxt.types.get_string_rep(&expected),
-            ctxt.types.get_string_rep(&actual)
+            ctxt.tys.get_string_rep(&expected),
+            ctxt.tys.get_string_rep(&actual)
         ),
         ValNotCallable => "Val is not callable".to_string(),
-        CallArgumentTypeMismatch {
+        CallArgumentTyMismatch {
             index,
             expected,
             actual,
         } => format!(
             "Argument {} type mismatch: expected '{}', got '{}'",
             index,
-            ctxt.types.get_string_rep(&expected),
-            ctxt.types.get_string_rep(&actual)
+            ctxt.tys.get_string_rep(&expected),
+            ctxt.tys.get_string_rep(&actual)
         ),
         CallArgumentCountMismatch { expected, actual } => {
             format!("Argument count mismatch: expected {}, got {}", expected, actual)
         }
         IfConditionNotBoolean { actual } => format!(
             "If condition must be of type 'bool', got '{}'",
-            ctxt.types.get_string_rep(&actual)
+            ctxt.tys.get_string_rep(&actual)
         ),
-        IfBranchTypeMismatch { then_type, else_type } => format!(
+        IfBranchTyMismatch { then_ty, else_ty } => format!(
             "If branches must have the same type: then is '{}', else is '{}'",
-            ctxt.types.get_string_rep(&then_type),
-            ctxt.types.get_string_rep(&else_type)
+            ctxt.tys.get_string_rep(&then_ty),
+            ctxt.tys.get_string_rep(&else_ty)
         ),
-        ReturnTypeMismatch { expected, actual } => format!(
+        ReturnTyMismatch { expected, actual } => format!(
             "Return type mismatch: expected '{}', got '{}'",
-            ctxt.types.get_string_rep(&expected),
-            ctxt.types.get_string_rep(&actual)
+            ctxt.tys.get_string_rep(&expected),
+            ctxt.tys.get_string_rep(&actual)
         ),
         OperatorResolutionFailed {
             operator,
-            operand_types: (left, right),
+            operand_tys: (left, right),
         } => format!(
             "Cannot resolve operator '{}' for operand types '{}' and '{}'",
             operator,
-            ctxt.types.get_string_rep(&left),
-            ctxt.types.get_string_rep(&right)
+            ctxt.tys.get_string_rep(&left),
+            ctxt.tys.get_string_rep(&right)
         ),
-        UnresolvableTypeName { type_name } => {
-            format!("Cannot find type with name '{}'", type_name)
+        UnresolvableTyName { ty_name } => {
+            format!("Cannot find type with name '{}'", ty_name)
         }
-        NotAStruct { type_id } => format!("Type '{}' is not a struct type", ctxt.types.get_string_rep(&type_id)),
-        InitializerMissingFields {
-            type_id,
-            missing_fields,
-        } => {
+        NotAStruct { ty } => format!("Type '{}' is not a struct type", ctxt.tys.get_string_rep(&ty)),
+        InitializerMissingFields { ty, missing_fields } => {
             format!(
                 "Struct val of type '{}' is missing fields: {}",
-                ctxt.types.get_string_rep(&type_id),
+                ctxt.tys.get_string_rep(&ty),
                 missing_fields.join(", ")
             )
         }
-        InitializerExtraFields { type_id, extra_fields } => {
+        InitializerExtraFields { ty, extra_fields } => {
             format!(
                 "Struct val of type '{}' has extra fields: {}",
-                ctxt.types.get_string_rep(&type_id),
+                ctxt.tys.get_string_rep(&ty),
                 extra_fields.join(", ")
             )
         }
-        NotAStructField { type_id, field_name } => format!(
+        NotAStructField { ty, field_name } => format!(
             "Type '{}' does not have a field named '{}'",
-            ctxt.types.get_string_rep(&type_id),
+            ctxt.tys.get_string_rep(&ty),
             field_name
         ),
-        NotAnEnum { type_id } => format!("Type '{}' is not an enum type", ctxt.types.get_string_rep(&type_id)),
-        NotAnEnumVariant { type_id, variant_name } => format!(
+        NotAnEnum { ty } => format!("Type '{}' is not an enum type", ctxt.tys.get_string_rep(&ty)),
+        NotAnEnumVariant { ty, variant_name } => format!(
             "Enum type '{}' does not have a variant named '{}'",
-            ctxt.types.get_string_rep(&type_id),
+            ctxt.tys.get_string_rep(&ty),
             variant_name
         ),
     };

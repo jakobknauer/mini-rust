@@ -134,7 +134,7 @@ impl<'a> HlrParser<'a> {
 
         Ok(Fn {
             name,
-            return_type,
+            return_ty: return_type,
             parameters,
             body,
         })
@@ -156,7 +156,7 @@ impl<'a> HlrParser<'a> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let param_type = self.expect_identifier()?;
-        Ok(Parameter { name, param_type })
+        Ok(Parameter { name, ty: param_type })
     }
 
     fn parse_function_return_type(&mut self) -> Result<Option<String>, ParserError> {
@@ -195,7 +195,7 @@ impl<'a> HlrParser<'a> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let field_type = self.expect_identifier()?;
-        Ok(StructField { name, field_type })
+        Ok(StructField { name, ty: field_type })
     }
 
     fn parse_enum(&mut self) -> Result<Enum, ParserError> {
@@ -327,14 +327,14 @@ impl<'a> HlrParser<'a> {
     fn parse_let_statement(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::Let)?;
         let name = self.expect_identifier()?;
-        let var_type = if self.advance_if(Token::Colon) {
+        let ty_annot = if self.advance_if(Token::Colon) {
             Some(self.expect_identifier()?)
         } else {
             None
         };
         self.expect_token(Token::Equal)?;
         let value = self.parse_expression(true)?;
-        Ok(Statement::Let { name, var_type, value })
+        Ok(Statement::Let { name, ty_annot, value })
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, ParserError> {
@@ -608,7 +608,7 @@ mod tests {
             let expected = Program {
                 fns: vec![Fn {
                     name: "empty".to_string(),
-                    return_type: None,
+                    return_ty: None,
                     parameters: vec![],
                     body: Block {
                         statements: vec![],
@@ -639,15 +639,15 @@ mod tests {
             let expected = Program {
                 fns: vec![Fn {
                     name: "add".to_string(),
-                    return_type: Some("int".to_string()),
+                    return_ty: Some("int".to_string()),
                     parameters: vec![
                         Parameter {
                             name: "a".to_string(),
-                            param_type: "int".to_string(),
+                            ty: "int".to_string(),
                         },
                         Parameter {
                             name: "b".to_string(),
-                            param_type: "int".to_string(),
+                            ty: "int".to_string(),
                         },
                     ],
                     body: Block {
@@ -681,11 +681,11 @@ mod tests {
                     fields: vec![
                         StructField {
                             name: "x".to_string(),
-                            field_type: "int".to_string(),
+                            ty: "int".to_string(),
                         },
                         StructField {
                             name: "y".to_string(),
-                            field_type: "int".to_string(),
+                            ty: "int".to_string(),
                         },
                     ],
                 }],
@@ -768,7 +768,7 @@ mod tests {
                 statements: vec![
                     Statement::Let {
                         name: "result".to_string(),
-                        var_type: None,
+                        ty_annot: None,
                         value: Expression::Literal(Literal::Int(1)),
                     },
                     Statement::Expression(Expression::Loop {

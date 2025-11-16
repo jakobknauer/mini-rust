@@ -19,14 +19,14 @@ impl Program {
 pub struct Fn {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: Option<String>,
+    pub return_ty: Option<String>,
     pub body: Block,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
-    pub param_type: String,
+    pub ty: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -38,7 +38,7 @@ pub struct Struct {
 #[derive(Debug, PartialEq, Eq)]
 pub struct StructField {
     pub name: String,
-    pub field_type: String,
+    pub ty: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub struct Block {
 pub enum Statement {
     Let {
         name: String,
-        var_type: Option<String>,
+        ty_annot: Option<String>,
         value: Expression,
     },
     Expression(Expression),

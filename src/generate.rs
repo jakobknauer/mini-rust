@@ -12,7 +12,7 @@ use inkwell::{
 };
 
 use crate::{
-    ctxt::{self as mr_ctxt, fns as mr_fns, types as mr_types},
+    ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_tys},
     generate::fns::FnGenerator,
 };
 
@@ -35,7 +35,7 @@ struct Generator<'iw, 'mr> {
 
     mr_ctxt: &'mr mr_ctxt::Ctxt,
 
-    types: HashMap<mr_types::TypeId, AnyTypeEnum<'iw>>,
+    types: HashMap<mr_tys::Ty, AnyTypeEnum<'iw>>,
     functions: HashMap<mr_fns::Fn, FunctionValue<'iw>>,
 }
 
@@ -57,72 +57,64 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn define_types(&mut self) {
-        for (type_id, _) in self.mr_ctxt.types.get_all_types() {
-            self.get_or_define_type(type_id);
+        for (ty, _) in self.mr_ctxt.tys.get_all_tys() {
+            self.get_or_define_ty(ty);
         }
     }
 
-    fn get_or_define_type(&mut self, type_id: &mr_types::TypeId) -> Option<AnyTypeEnum<'iw>> {
-        use mr_types::{NamedType::*, PrimitiveType::*, Type::*};
+    fn get_or_define_ty(&mut self, ty: &mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
+        use mr_tys::{Named::*, Primitive::*, TyDef::*};
 
-        if self.types.contains_key(type_id) {
-            return self.types.get(type_id).cloned();
+        if self.types.contains_key(ty) {
+            return self.types.get(ty).cloned();
         }
 
-        let type_ = self.mr_ctxt.types.get_type_by_id(type_id)?;
+        let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
 
         let inkwell_type = match type_ {
-            NamedType(name, named_type) => match named_type {
+            Named(name, named_type) => match named_type {
                 Primitve(primitive_type) => match primitive_type {
                     Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                     Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                     Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
-                Struct(struct_id) => self.define_struct(name, type_id, struct_id),
+                Struct(struct_id) => self.define_struct(name, ty, struct_id),
                 Enum(enum_id) => self.define_enum(name, enum_id),
             },
             Fn { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
         };
 
-        if !self.types.contains_key(type_id) {
-            self.types.insert(*type_id, inkwell_type);
+        if !self.types.contains_key(ty) {
+            self.types.insert(*ty, inkwell_type);
         }
-        self.types.get(type_id).cloned()
+        self.types.get(ty).cloned()
     }
 
-    fn get_type_as_basic_type_enum(&mut self, type_id: &mr_types::TypeId) -> Option<BasicTypeEnum<'iw>> {
-        self.get_or_define_type(type_id)?.try_into().ok()
+    fn get_ty_as_basic_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicTypeEnum<'iw>> {
+        self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn get_type_as_basic_metadata_type_enum(
-        &mut self,
-        type_id: &mr_types::TypeId,
-    ) -> Option<BasicMetadataTypeEnum<'iw>> {
-        self.get_or_define_type(type_id)?.try_into().ok()
+    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
+        self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn define_struct(
-        &mut self,
-        name: &str,
-        type_id: &mr_types::TypeId,
-        struct_id: &mr_types::StructId,
-    ) -> AnyTypeEnum<'iw> {
+    fn define_struct(&mut self, name: &str, ty: &mr_tys::Ty, struct_id: &mr_tys::StructId) -> AnyTypeEnum<'iw> {
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(name);
-        self.types.insert(*type_id, iw_struct.as_any_type_enum());
+        self.types.insert(*ty, iw_struct.as_any_type_enum());
 
-        let struct_def = self.mr_ctxt.types.get_struct_definition(struct_id).unwrap();
+        let struct_def = self.mr_ctxt.tys.get_struct_definition(struct_id).unwrap();
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
-            .map(|field| self.get_type_as_basic_type_enum(&field.type_id).unwrap())
+            .map(|field| self.get_ty_as_basic_type_enum(&field.ty).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);
         iw_struct.as_any_type_enum()
     }
 
-    fn define_enum(&mut self, name: &str, enum_id: &mr_types::EnumId) -> AnyTypeEnum<'iw> {
-        let enum_def = self.mr_ctxt.types.get_enum_definition(enum_id).unwrap();
+    fn define_enum(&mut self, name: &str, enum_id: &mr_tys::EnumId) -> AnyTypeEnum<'iw> {
+        let enum_def = self.mr_ctxt.tys.get_enum_definition(enum_id).unwrap();
 
         let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);
@@ -131,11 +123,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             .variants
             .iter()
             .map(|variant| {
-                let variant_type: StructType = self
-                    .get_type_as_basic_type_enum(&variant.type_id)
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
+                let variant_type: StructType = self.get_ty_as_basic_type_enum(&variant.ty).unwrap().try_into().unwrap();
 
                 TargetData::create("").get_store_size(&variant_type)
             })
@@ -155,11 +143,11 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn declare_functions(&mut self) {
         for fn_ in self.mr_ctxt.fns.get_all_fns() {
             let signature = self.mr_ctxt.fns.get_signature_by_id(fn_).unwrap();
-            let return_type: BasicTypeEnum = self.get_type_as_basic_type_enum(&signature.return_type).unwrap();
+            let return_type: BasicTypeEnum = self.get_ty_as_basic_type_enum(&signature.return_ty).unwrap();
             let param_types: Vec<_> = signature
                 .parameters
                 .iter()
-                .map(|param| self.get_type_as_basic_metadata_type_enum(&param.type_).unwrap())
+                .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty).unwrap())
                 .collect();
             let fn_type = return_type.fn_type(&param_types, false);
             let fn_value = self.iw_module.add_function(&signature.name, fn_type, None);
@@ -172,7 +160,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             let Some(mut fn_gen) = FnGenerator::new(self, *fn_) else {
                 continue;
             };
-            if fn_gen.define_function().is_err() {
+            if fn_gen.define_fn().is_err() {
                 let fn_name = self.mr_ctxt.fns.get_fn_name(fn_).unwrap();
                 eprintln!("Failed to define function {fn_name}");
             }

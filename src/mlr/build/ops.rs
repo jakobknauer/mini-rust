@@ -1,9 +1,9 @@
 use crate::{
-    ctxt::{fns::Fn, types::*},
+    ctxt::{fns::Fn, ty::*},
     hlr,
     mlr::{
         self,
-        build::{MlrBuilderError, Result, TypeError},
+        build::{MlrBuilderError, Result, TyError},
     },
 };
 
@@ -19,9 +19,9 @@ macro_rules! op_match {
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
             _ => {
-                return TypeError::OperatorResolutionFailed {
+                return TyError::OperatorResolutionFailed {
                     operator: format!("{{$operator:?}}"),
-                    operand_types: ($left, $right),
+                    operand_tys: ($left, $right),
                 }
                 .into();
             }
@@ -30,15 +30,15 @@ macro_rules! op_match {
 }
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (TypeId, TypeId)) -> Result<Fn> {
-        use MlrBuilderError::UnknownPrimitiveType;
-        use PrimitiveType::*;
+    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (Ty, Ty)) -> Result<Fn> {
+        use MlrBuilderError::UnknownPrimitiveTy;
+        use Primitive::*;
         use hlr::BinaryOperator::*;
 
-        let tr = &self.ctxt.types;
-        let i32 = tr.get_primitive_type_id(Integer32).ok_or(UnknownPrimitiveType)?;
-        let bool = tr.get_primitive_type_id(Boolean).ok_or(UnknownPrimitiveType)?;
-        let unit = tr.get_primitive_type_id(Unit).ok_or(UnknownPrimitiveType)?;
+        let tys = &self.ctxt.tys;
+        let i32 = tys.get_primitive_ty(Integer32).ok_or(UnknownPrimitiveTy)?;
+        let bool = tys.get_primitive_ty(Boolean).ok_or(UnknownPrimitiveTy)?;
+        let unit = tys.get_primitive_ty(Unit).ok_or(UnknownPrimitiveTy)?;
 
         let fn_name = op_match!(operator, left, right,
             (Add,       i32, i32) => "add::<i32>",

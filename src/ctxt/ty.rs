@@ -1,5 +1,5 @@
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct TypeId(pub usize);
+pub struct Ty(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct StructId(pub usize);
@@ -8,23 +8,20 @@ pub struct StructId(pub usize);
 pub struct EnumId(pub usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Type {
-    NamedType(String, NamedType),
-    Fn {
-        param_types: Vec<TypeId>,
-        return_type: TypeId,
-    },
+pub enum TyDef {
+    Named(String, Named),
+    Fn { param_tys: Vec<Ty>, return_ty: Ty },
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub enum NamedType {
-    Primitve(PrimitiveType),
+pub enum Named {
+    Primitve(Primitive),
     Struct(StructId),
     Enum(EnumId),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub enum PrimitiveType {
+pub enum Primitive {
     Integer32,
     Boolean,
     Unit,
@@ -36,7 +33,7 @@ pub struct StructDefinition {
 
 pub struct StructField {
     pub name: String,
-    pub type_id: TypeId,
+    pub ty: Ty,
 }
 
 pub struct EnumDefinition {
@@ -45,5 +42,5 @@ pub struct EnumDefinition {
 
 pub struct EnumVariant {
     pub name: String,
-    pub type_id: TypeId,
+    pub ty: Ty,
 }

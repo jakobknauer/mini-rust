@@ -1,68 +1,68 @@
-use crate::{ctxt, mlr};
+use crate::{ctxt::ty::Ty, mlr};
 
 #[derive(Debug)]
 pub enum MlrBuilderError {
     MissingOperatorImpl { name: String },
     UnresolvableSymbol { name: String },
-    UnknownPrimitiveType,
-    TypeError(TypeError),
+    UnknownPrimitiveTy,
+    TyError(TyError),
 }
 
 #[derive(Debug)]
-pub enum TypeError {
-    AssignStmtTypeMismatch {
+pub enum TyError {
+    AssignStmtTyMismatch {
         place: mlr::PlaceId,
-        expected: ctxt::types::TypeId,
-        actual: ctxt::types::TypeId,
+        expected: Ty,
+        actual: Ty,
     },
     ValNotCallable,
-    CallArgumentTypeMismatch {
+    CallArgumentTyMismatch {
         index: usize,
-        expected: ctxt::types::TypeId,
-        actual: ctxt::types::TypeId,
+        expected: Ty,
+        actual: Ty,
     },
     CallArgumentCountMismatch {
         expected: usize,
         actual: usize,
     },
     IfConditionNotBoolean {
-        actual: ctxt::types::TypeId,
+        actual: Ty,
     },
-    IfBranchTypeMismatch {
-        then_type: ctxt::types::TypeId,
-        else_type: ctxt::types::TypeId,
+    IfBranchTyMismatch {
+        then_ty: Ty,
+        else_ty: Ty,
     },
-    ReturnTypeMismatch {
-        expected: ctxt::types::TypeId,
-        actual: ctxt::types::TypeId,
+    ReturnTyMismatch {
+        expected: Ty,
+        actual: Ty,
     },
     OperatorResolutionFailed {
         operator: String,
-        operand_types: (ctxt::types::TypeId, ctxt::types::TypeId),
+        operand_tys: (Ty, Ty),
     },
-    UnresolvableTypeName {
-        type_name: String,
+    UnresolvableTyName {
+        ty_name: String,
     },
     NotAStruct {
-        type_id: ctxt::types::TypeId,
+        ty: Ty,
     },
     InitializerMissingFields {
-        type_id: ctxt::types::TypeId,
+        ty: Ty,
         missing_fields: Vec<String>,
     },
     InitializerExtraFields {
-        type_id: ctxt::types::TypeId,
+        ty: Ty,
         extra_fields: Vec<String>,
     },
     NotAStructField {
-        type_id: ctxt::types::TypeId,
+        ty: Ty,
         field_name: String,
     },
     NotAnEnum {
-        type_id: ctxt::types::TypeId,
+        ty: Ty,
     },
     NotAnEnumVariant {
-        type_id: ctxt::types::TypeId,
+        ty: Ty,
         variant_name: String,
     },
 }
@@ -75,8 +75,8 @@ impl<T> From<MlrBuilderError> for Result<T> {
     }
 }
 
-impl<T> From<TypeError> for Result<T> {
-    fn from(val: TypeError) -> Self {
-        MlrBuilderError::TypeError(val).into()
+impl<T> From<TyError> for Result<T> {
+    fn from(val: TyError) -> Self {
+        MlrBuilderError::TyError(val).into()
     }
 }

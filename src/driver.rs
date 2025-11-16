@@ -4,7 +4,7 @@ mod stdlib;
 use std::path::Path;
 
 use crate::{
-    ctxt::{self, fns, types},
+    ctxt::{self, fns, ty},
     generate, hlr, mlr,
     util::print,
 };
@@ -35,9 +35,9 @@ where
     let hlr = hlr::build_program(source).map_err(|parser_error| err::print_parser_error(&parser_error, source))?;
 
     print_pretty("Building MLR from HLR");
-    register_types(&hlr, &mut ctxt.types).map_err(|_| "Error registering types")?;
-    define_types(&hlr, &mut ctxt.types).map_err(|_| "Error defining types")?;
-    register_functions(&hlr, &ctxt.types, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
+    register_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error registering types")?;
+    define_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error defining types")?;
+    register_functions(&hlr, &ctxt.tys, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
 
     if let Some(mlr_path) = output_paths.mlr {
@@ -56,27 +56,27 @@ where
     Ok(())
 }
 
-fn register_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
-    type_registry.register_primitive_types()?;
+fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
+    tys.register_primitive_tys()?;
 
     for struct_ in &program.structs {
-        type_registry.register_struct(&struct_.name)?;
+        tys.register_struct(&struct_.name)?;
     }
 
     for enum_ in &program.enums {
-        type_registry.register_enum(&enum_.name)?;
+        tys.register_enum(&enum_.name)?;
         for variant in &enum_.variants {
             let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-            type_registry.register_struct(&variant_struct_name)?;
+            tys.register_struct(&variant_struct_name)?;
         }
     }
 
     Ok(())
 }
 
-fn define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) -> Result<(), ()> {
+fn define_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
     for struct_ in &program.structs {
-        set_struct_fields(type_registry, &struct_.name, &struct_.fields)?
+        set_struct_fields(tys, &struct_.name, &struct_.fields)?
     }
 
     for enum_ in &program.enums {
@@ -85,20 +85,20 @@ fn define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) 
             .iter()
             .map(|variant| {
                 let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-                let type_id = type_registry.get_type_id_by_name(&variant_struct_name).ok_or(())?;
+                let ty = tys.get_ty_by_name(&variant_struct_name).ok_or(())?;
 
-                set_struct_fields(type_registry, &variant_struct_name, &variant.fields)?;
+                set_struct_fields(tys, &variant_struct_name, &variant.fields)?;
 
-                let variant = types::EnumVariant {
+                let variant = ty::EnumVariant {
                     name: variant.name.clone(),
-                    type_id,
+                    ty,
                 };
 
                 Ok(variant)
             })
             .collect::<Result<_, _>>()?;
 
-        let enum_definition = type_registry.get_mut_enum_definition_by_name(&enum_.name).ok_or(())?;
+        let enum_definition = tys.get_mut_enum_definition_by_name(&enum_.name).ok_or(())?;
         enum_definition.variants = variants;
     }
 
@@ -106,33 +106,33 @@ fn define_types(program: &hlr::Program, type_registry: &mut ctxt::TypeRegistry) 
 }
 
 fn set_struct_fields<'a>(
-    type_registry: &mut ctxt::TypeRegistry,
+    tys: &mut ctxt::TyReg,
     struct_name: &str,
     fields: impl IntoIterator<Item = &'a hlr::StructField>,
 ) -> Result<(), ()> {
     let fields = fields
         .into_iter()
         .map(|field| {
-            Ok(types::StructField {
+            Ok(ty::StructField {
                 name: field.name.clone(),
-                type_id: type_registry.get_type_id_by_name(&field.field_type).ok_or(())?,
+                ty: tys.get_ty_by_name(&field.ty).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
 
-    let struct_definition = type_registry.get_mut_struct_definition_by_name(struct_name).ok_or(())?;
+    let struct_definition = tys.get_mut_struct_definition_by_name(struct_name).ok_or(())?;
     struct_definition.fields = fields;
 
     Ok(())
 }
 
-fn register_functions(hlr: &hlr::Program, type_registry: &ctxt::TypeRegistry, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    stdlib::register_fns(type_registry, fns)?;
+fn register_functions(hlr: &hlr::Program, tys: &ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+    stdlib::register_fns(tys, fns)?;
 
     for function in &hlr.fns {
-        let return_type = match function.return_type.as_ref() {
-            Some(type_id) => type_registry.get_type_id_by_name(type_id).ok_or(())?,
-            None => type_registry.get_type_id_by_name("()").ok_or(())?,
+        let return_ty = match function.return_ty.as_ref() {
+            Some(ty) => tys.get_ty_by_name(ty).ok_or(())?,
+            None => tys.get_ty_by_name("()").ok_or(())?,
         };
 
         let parameters = function
@@ -141,14 +141,14 @@ fn register_functions(hlr: &hlr::Program, type_registry: &ctxt::TypeRegistry, fn
             .map(|parameter| {
                 Ok(fns::FnParam {
                     name: parameter.name.clone(),
-                    type_: type_registry.get_type_id_by_name(&parameter.param_type).ok_or(())?,
+                    ty: tys.get_ty_by_name(&parameter.ty).ok_or(())?,
                 })
             })
             .collect::<Result<_, _>>()?;
 
         let signature = fns::FnSig {
             name: function.name.clone(),
-            return_type,
+            return_ty,
             parameters,
         };
 

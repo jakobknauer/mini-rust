@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
 };
 
-use crate::ctxt::{fns::Fn, types::TypeId};
+use crate::ctxt::{fns::Fn, ty::Ty};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct StmtId(pub usize);
@@ -28,10 +28,10 @@ pub struct Mlr {
     pub ops: HashMap<OpId, Operand>,
     pub allocated_locs: HashSet<LocId>,
 
-    pub loc_types: HashMap<LocId, TypeId>,
-    pub val_types: HashMap<ValId, TypeId>,
-    pub place_types: HashMap<PlaceId, TypeId>,
-    pub op_types: HashMap<OpId, TypeId>,
+    pub loc_tys: HashMap<LocId, Ty>,
+    pub val_tys: HashMap<ValId, Ty>,
+    pub place_tys: HashMap<PlaceId, Ty>,
+    pub op_tys: HashMap<OpId, Ty>,
     pub body: StmtId,
     pub param_locs: Vec<LocId>,
 }
@@ -45,10 +45,10 @@ impl Mlr {
             ops: HashMap::new(),
             allocated_locs: HashSet::new(),
 
-            loc_types: HashMap::new(),
-            val_types: HashMap::new(),
-            place_types: HashMap::new(),
-            op_types: HashMap::new(),
+            loc_tys: HashMap::new(),
+            val_tys: HashMap::new(),
+            place_tys: HashMap::new(),
+            op_tys: HashMap::new(),
             body: StmtId(0),
             param_locs: Vec::new(),
         }
@@ -69,7 +69,7 @@ pub enum Stmt {
 #[derive(Debug, Clone)]
 pub enum Val {
     Call { callable: OpId, args: Vec<OpId> },
-    Empty { type_id: TypeId },
+    Empty { ty: Ty },
     Use(OpId),
 }
 

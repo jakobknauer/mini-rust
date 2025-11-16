@@ -53,13 +53,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let param_type = self.ctxt.types.get_string_rep(&param.type_);
-            write!(self.writer, "{}: {}", param.name, param_type)?;
+            let param_ty = self.ctxt.tys.get_string_rep(&param.ty);
+            write!(self.writer, "{}: {}", param.name, param_ty)?;
         }
         write!(self.writer, ") -> ")?;
 
-        let return_type = self.ctxt.types.get_string_rep(&signature.return_type);
-        write!(self.writer, "{}", return_type)
+        let return_ty = self.ctxt.tys.get_string_rep(&signature.return_ty);
+        write!(self.writer, "{}", return_ty)
     }
 
     fn print_block(&mut self, statements: &[mlr::StmtId]) -> Result<(), std::io::Error> {
@@ -83,15 +83,15 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         match stmt {
             Some(stmt) => match stmt {
                 Alloc { loc } => {
-                    let loc_type = self
+                    let loc_ty = self
                         .mlr
                         .expect("self.mlr should not be empty")
-                        .loc_types
+                        .loc_tys
                         .get(loc)
                         .expect("type of place should be known");
-                    let type_name = self.ctxt.types.get_string_rep(loc_type);
+                    let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
                     self.indent()?;
-                    writeln!(self.writer, "alloc {}: {};", loc, type_name)
+                    writeln!(self.writer, "alloc {}: {};", loc, ty_name)
                 }
                 Assign { place, value } => {
                     self.indent()?;
@@ -161,9 +161,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     }
                     write!(self.writer, ")")
                 }
-                Empty { type_id } => {
-                    let type_name = self.ctxt.types.get_string_rep(type_id);
-                    write!(self.writer, "empty {}", type_name)
+                Empty { ty } => {
+                    let ty_name = self.ctxt.tys.get_string_rep(ty);
+                    write!(self.writer, "empty {}", ty_name)
                 }
             },
             None => write!(self.writer, "<val id {}>", val_id.0),
@@ -188,13 +188,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, ")")
                 }
                 ProjectToVariant { base, variant_index } => {
-                    let type_id = self
+                    let ty = self
                         .mlr
                         .expect("self.mlr should not be empty")
-                        .place_types
+                        .place_tys
                         .get(base)
                         .expect("type of base place should be known");
-                    let enum_name = self.ctxt.types.get_string_rep(type_id);
+                    let enum_name = self.ctxt.tys.get_string_rep(ty);
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
                     write!(self.writer, " as {}::{})", enum_name, variant_index)

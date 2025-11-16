@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 mod err;
 mod ops;
 mod pattern_util;
-mod type_util;
+mod ty_util;
 mod util;
 
 #[macro_use]
@@ -13,12 +13,12 @@ use crate::{
     ctxt::{
         self,
         fns::{Fn, FnParam, FnSig},
-        types,
+        ty,
     },
     hlr, mlr,
 };
 
-pub use err::{MlrBuilderError, Result, TypeError};
+pub use err::{MlrBuilderError, Result, TyError};
 
 pub struct MlrBuilder<'a> {
     input: &'a hlr::Fn,
@@ -109,11 +109,11 @@ impl<'a> MlrBuilder<'a> {
 
         self.push_scope();
 
-        for FnParam { name, type_ } in parameters {
+        for FnParam { name, ty } in parameters {
             let loc = self.get_next_loc_id();
             self.output.allocated_locs.insert(loc);
             self.add_to_scope(&name, loc);
-            self.output.loc_types.insert(loc, type_);
+            self.output.loc_tys.insert(loc, ty);
             self.output.param_locs.push(loc);
         }
 
@@ -225,9 +225,9 @@ impl<'a> MlrBuilder<'a> {
         let right_op = self.lower_to_op(right)?;
 
         let op = {
-            let left_type = self.get_op_type(&left_op);
-            let right_type = self.get_op_type(&right_op);
-            let fn_ = self.resolve_operator(operator, (left_type, right_type))?;
+            let left_ty = self.get_op_ty(&left_op);
+            let right_ty = self.get_op_ty(&right_op);
+            let fn_ = self.resolve_operator(operator, (left_ty, right_ty))?;
             self.insert_fn_op(fn_)?
         };
 
@@ -300,37 +300,33 @@ impl<'a> MlrBuilder<'a> {
         struct_name: &str,
         fields: &[(String, hlr::Expression)],
     ) -> Result<mlr::ValId> {
-        if let Some(type_id) = self.ctxt.types.get_type_id_by_name(struct_name) {
-            self.build_struct_val(&type_id, fields)
-        } else if let Some((type_id, variant_index)) = self.try_resolve_enum_variant(struct_name) {
-            self.build_enum_val(&type_id, &variant_index, fields)
+        if let Some(ty) = self.ctxt.tys.get_ty_by_name(struct_name) {
+            self.build_struct_val(&ty, fields)
+        } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
+            self.build_enum_val(&ty, &variant_index, fields)
         } else {
-            TypeError::UnresolvableTypeName {
-                type_name: struct_name.to_string(),
+            TyError::UnresolvableTyName {
+                ty_name: struct_name.to_string(),
             }
             .into()
         }
     }
 
-    fn build_struct_val(
-        &mut self,
-        type_id: &types::TypeId,
-        fields: &[(String, hlr::Expression)],
-    ) -> Result<mlr::ValId> {
-        let struct_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*type_id)?);
+    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expression)]) -> Result<mlr::ValId> {
+        let struct_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
         let struct_val_place = self.insert_loc_place(struct_val_loc)?;
-        self.build_struct_field_init_stmts(type_id, fields, &struct_val_place)?;
+        self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
         self.insert_use_place_val(struct_val_place)
     }
 
     fn build_enum_val(
         &mut self,
-        type_id: &types::TypeId,
+        ty: &ty::Ty,
         variant_index: &usize,
         fields: &[(String, hlr::Expression)],
     ) -> Result<mlr::ValId> {
         // Create empty enum value
-        let enum_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*type_id)?);
+        let enum_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
         let base_place = self.insert_loc_place(enum_val_loc)?;
 
         // Fill discriminant
@@ -341,13 +337,13 @@ impl<'a> MlrBuilder<'a> {
 
         // Fill fields
         let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
-        let enum_def = self.get_enum_def(type_id)?;
-        let variant_type_id = enum_def
+        let enum_def = self.get_enum_def(ty)?;
+        let variant_ty = enum_def
             .variants
             .get(*variant_index)
             .expect("variant index should be valid")
-            .type_id;
-        self.build_struct_field_init_stmts(&variant_type_id, fields, &variant_place)?;
+            .ty;
+        self.build_struct_field_init_stmts(&variant_ty, fields, &variant_place)?;
 
         self.insert_use_place_val(base_place)
     }
@@ -362,18 +358,14 @@ impl<'a> MlrBuilder<'a> {
 
         // resolve equality function for discriminant comparisons once
         let eq_fn = {
-            let i32 = self
-                .ctxt
-                .types
-                .get_primitive_type_id(types::PrimitiveType::Integer32)
-                .unwrap();
+            let i32 = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32).unwrap();
             let eq_fn = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
             self.insert_fn_op(eq_fn)?
         };
 
-        let scrutinee_type_id = self.get_loc_type(&scrutinee_loc);
-        let enum_def = self.get_enum_def(&scrutinee_type_id)?;
-        let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_type_id)?;
+        let scrutinee_ty = self.get_loc_ty(&scrutinee_loc);
+        let enum_def = self.get_enum_def(&scrutinee_ty)?;
+        let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
 
         // now build the match statement
         let result_loc = self.insert_fresh_alloc()?;
@@ -449,15 +441,15 @@ impl<'a> MlrBuilder<'a> {
         // can here at this point create temporary variables/places in the current scope.
         let base = self.lower_to_place(base)?;
 
-        let base_type_id = self.get_place_type(&base);
-        let struct_def = self.get_struct_def(&base_type_id)?;
+        let base_ty = self.get_place_ty(&base);
+        let struct_def = self.get_struct_def(&base_ty)?;
 
         let field_index = struct_def
             .fields
             .iter()
             .position(|struct_field| struct_field.name == field_name)
-            .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                type_id: base_type_id,
+            .ok_or(MlrBuilderError::TyError(TyError::NotAStructField {
+                ty: base_ty,
                 field_name: field_name.to_string(),
             }))?;
 
@@ -482,7 +474,7 @@ impl<'a> MlrBuilder<'a> {
             let variant_index = arm_indices[0];
             let arm_result = self.build_arm_block(
                 arm,
-                &self.get_place_type(&scrutinee_place),
+                &self.get_place_ty(&scrutinee_place),
                 &variant_index,
                 &scrutinee_place,
             )?;
@@ -497,7 +489,7 @@ impl<'a> MlrBuilder<'a> {
             self.start_new_block();
             let first_arm_result = self.build_arm_block(
                 first_arm,
-                &self.get_place_type(&scrutinee_place),
+                &self.get_place_ty(&scrutinee_place),
                 &first_variant_index,
                 &scrutinee_place,
             )?;

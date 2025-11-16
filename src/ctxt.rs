@@ -1,20 +1,20 @@
 mod fn_reg;
 pub mod fns;
-mod type_registry;
-pub mod types;
+pub mod ty;
+mod ty_reg;
 
 pub use fn_reg::FnReg;
-pub use type_registry::TypeRegistry;
+pub use ty_reg::TyReg;
 
 pub struct Ctxt {
-    pub types: TypeRegistry,
+    pub tys: TyReg,
     pub fns: FnReg,
 }
 
 impl Ctxt {
     pub fn new() -> Self {
         Self {
-            types: TypeRegistry::new(),
+            tys: TyReg::new(),
             fns: FnReg::new(),
         }
     }

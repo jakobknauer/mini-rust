@@ -1,27 +1,22 @@
 use crate::{
-    ctxt::types::{EnumDefinition, TypeId},
+    ctxt::ty::{EnumDefinition, Ty},
     hlr,
     mlr::{
         self,
-        build::{MlrBuilderError, Result, TypeError, macros::assign_to_new_loc},
+        build::{MlrBuilderError, Result, TyError, macros::assign_to_new_loc},
     },
 };
 
 impl<'a> super::MlrBuilder<'a> {
-    pub fn get_arm_indices(
-        &self,
-        arms: &[hlr::MatchArm],
-        enum_def: &EnumDefinition,
-        type_id: &TypeId,
-    ) -> Result<Vec<usize>> {
+    pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &EnumDefinition, ty: &Ty) -> Result<Vec<usize>> {
         arms.iter()
             .map(|arm| {
                 enum_def
                     .variants
                     .iter()
                     .position(|variant| variant.name == arm.pattern.variant)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAnEnumVariant {
-                        type_id: *type_id,
+                    .ok_or(MlrBuilderError::TyError(TyError::NotAnEnumVariant {
+                        ty: *ty,
                         variant_name: arm.pattern.variant.clone(),
                     }))
             })
@@ -42,18 +37,18 @@ impl<'a> super::MlrBuilder<'a> {
     pub fn build_arm_block(
         &mut self,
         arm: &hlr::MatchArm,
-        enum_type_id: &TypeId,
+        enum_ty: &Ty,
         variant_index: &usize,
         base_place: &mlr::PlaceId,
     ) -> Result<mlr::ValId> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
-        let enum_def = self.get_enum_def(enum_type_id)?;
+        let enum_def = self.get_enum_def(enum_ty)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
             .expect("variant index should be valid");
-        let enum_variant_struct_def = self.get_struct_def(&enum_variant.type_id)?;
+        let enum_variant_struct_def = self.get_struct_def(&enum_variant.ty)?;
 
         let field_indices: Vec<usize> = arm
             .pattern
@@ -64,8 +59,8 @@ impl<'a> super::MlrBuilder<'a> {
                     .fields
                     .iter()
                     .position(|f| f.name == *field_name)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                        type_id: enum_variant.type_id,
+                    .ok_or(MlrBuilderError::TyError(TyError::NotAStructField {
+                        ty: enum_variant.ty,
                         field_name: field_name.clone(),
                     }))
             })

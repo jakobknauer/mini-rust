@@ -7,7 +7,7 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::{ctxt::fns as mr_fns, ctxt::types as mr_types, mlr};
+use crate::{ctxt::fns as mr_fns, ctxt::ty as mr_ty, mlr};
 
 pub struct FnGenerator<'a, 'iw, 'mr> {
     gtor: &'a mut super::Generator<'iw, 'mr>,
@@ -49,7 +49,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         })
     }
 
-    pub fn define_function(&mut self) -> FnGeneratorResult<()> {
+    pub fn define_fn(&mut self) -> FnGeneratorResult<()> {
         let entry_block = self.build_entry_block()?;
         let body_block = self.build_function_body()?;
 
@@ -59,68 +59,56 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn get_iw_type_of_loc(&mut self, loc_id: &mlr::LocId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_type = self.mlr.loc_types.get(loc_id).ok_or(FnGeneratorError)?;
-        let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(FnGeneratorError)?;
-        Ok(iw_type)
+    fn get_iw_ty_of_loc(&mut self, loc_id: &mlr::LocId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
+        let mr_ty = self.mlr.loc_tys.get(loc_id).ok_or(FnGeneratorError)?;
+        let iw_ty = self.gtor.get_ty_as_basic_type_enum(mr_ty).ok_or(FnGeneratorError)?;
+        Ok(iw_ty)
     }
 
-    fn get_iw_type_of_place(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_type = self.mlr.place_types.get(place_id).ok_or(FnGeneratorError)?;
-        let iw_type = self.gtor.get_type_as_basic_type_enum(mr_type).ok_or(FnGeneratorError)?;
-        Ok(iw_type)
+    fn get_iw_ty_of_place(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
+        let mr_ty = self.mlr.place_tys.get(place_id).ok_or(FnGeneratorError)?;
+        let iw_ty = self.gtor.get_ty_as_basic_type_enum(mr_ty).ok_or(FnGeneratorError)?;
+        Ok(iw_ty)
     }
 
-    fn get_function_type_of_loc(&mut self, op_id: &mlr::OpId) -> FnGeneratorResult<FunctionType<'iw>> {
-        let mr_type = self.mlr.op_types.get(op_id).ok_or(FnGeneratorError)?;
-        let mr_type = self
-            .gtor
-            .mr_ctxt
-            .types
-            .get_type_by_id(mr_type)
-            .ok_or(FnGeneratorError)?;
+    fn get_fn_ty_of_loc(&mut self, op_id: &mlr::OpId) -> FnGeneratorResult<FunctionType<'iw>> {
+        let mr_ty = self.mlr.op_tys.get(op_id).ok_or(FnGeneratorError)?;
+        let mr_ty = self.gtor.mr_ctxt.tys.get_ty_def(mr_ty).ok_or(FnGeneratorError)?;
 
-        let mr_types::Type::Fn {
-            return_type,
-            param_types,
-        } = mr_type
-        else {
+        let mr_ty::TyDef::Fn { return_ty, param_tys } = mr_ty else {
             return Err(FnGeneratorError);
         };
 
-        let return_type = self
-            .gtor
-            .get_type_as_basic_type_enum(return_type)
-            .ok_or(FnGeneratorError)?;
+        let return_ty = self.gtor.get_ty_as_basic_type_enum(return_ty).ok_or(FnGeneratorError)?;
 
-        let param_types: Vec<_> = param_types
+        let param_tys: Vec<_> = param_tys
             .iter()
             .map(|param| {
                 self.gtor
-                    .get_type_as_basic_metadata_type_enum(param)
+                    .get_ty_as_basic_metadata_type_enum(param)
                     .ok_or(FnGeneratorError)
             })
             .collect::<FnGeneratorResult<_>>()?;
 
-        Ok(return_type.fn_type(&param_types, false))
+        Ok(return_ty.fn_type(&param_tys, false))
     }
 
     fn build_alloca_for_loc(&mut self, loc_id: &mlr::LocId) -> FnGeneratorResult<PointerValue<'iw>> {
-        let iw_type = self.get_iw_type_of_loc(loc_id)?;
+        let iw_ty = self.get_iw_ty_of_loc(loc_id)?;
         let name = loc_id.to_string();
-        let address = self.build_alloca(iw_type, &name)?;
+        let address = self.build_alloca(iw_ty, &name)?;
         self.locs.insert(*loc_id, address);
         Ok(address)
     }
 
-    fn build_alloca(&mut self, iw_type: BasicTypeEnum<'iw>, name: &str) -> FnGeneratorResult<PointerValue<'iw>> {
+    fn build_alloca(&mut self, iw_ty: BasicTypeEnum<'iw>, name: &str) -> FnGeneratorResult<PointerValue<'iw>> {
         // Remember current block to restore later
         let current_block = self.builder.get_insert_block().ok_or(FnGeneratorError)?;
         // Position builder at the entry block to ensure allocations are at the start
         let entry_block = self.entry_block.ok_or(FnGeneratorError)?;
         self.builder.position_at_end(entry_block);
         // Allocate
-        let address = self.builder.build_alloca(iw_type, name)?;
+        let address = self.builder.build_alloca(iw_ty, name)?;
         // Restore builder position
         self.builder.position_at_end(current_block);
 
@@ -128,14 +116,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_unit_value(&mut self) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        let mr_unit_type = self
+        let mr_unit_ty = self
             .gtor
             .mr_ctxt
-            .types
-            .get_primitive_type_id(mr_types::PrimitiveType::Unit)
+            .tys
+            .get_primitive_ty(mr_ty::Primitive::Unit)
             .ok_or(FnGeneratorError)?;
-        let iw_type = self.gtor.get_or_define_type(&mr_unit_type).ok_or(FnGeneratorError)?;
-        let iw_struct_type: StructType = iw_type.try_into().map_err(|_| FnGeneratorError)?;
+        let iw_ty = self.gtor.get_or_define_ty(&mr_unit_ty).ok_or(FnGeneratorError)?;
+        let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| FnGeneratorError)?;
         Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())
     }
 
@@ -197,7 +185,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         match self.mlr.vals.get(val).ok_or(FnGeneratorError)? {
             Use(place_id) => self.build_op(place_id),
             Call { callable, args } => self.build_call(callable, args),
-            Empty { type_id } => self.build_empty_val(type_id),
+            Empty { ty: type_id } => self.build_empty_val(type_id),
         }
     }
 
@@ -208,7 +196,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Local(loc_id) => self.locs.get(loc_id).ok_or(FnGeneratorError).cloned(),
             FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_type_of_place(base)?
+                    .get_iw_ty_of_place(base)?
                     .try_into()
                     .map_err(|_| FnGeneratorError)?;
 
@@ -225,7 +213,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             }
             EnumDiscriminant { base, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_type_of_place(base)?
+                    .get_iw_ty_of_place(base)?
                     .try_into()
                     .map_err(|_| FnGeneratorError)?;
 
@@ -239,7 +227,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             }
             ProjectToVariant { base, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_type_of_place(base)?
+                    .get_iw_ty_of_place(base)?
                     .try_into()
                     .map_err(|_| FnGeneratorError)?;
 
@@ -266,12 +254,12 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         let value = match constant {
             Int(i) => {
-                let int_type = self.gtor.iw_ctxt.i32_type();
-                int_type.const_int(*i as u64, false).as_basic_value_enum()
+                let int_ty = self.gtor.iw_ctxt.i32_type();
+                int_ty.const_int(*i as u64, false).as_basic_value_enum()
             }
             Bool(b) => {
-                let bool_type = self.gtor.iw_ctxt.bool_type();
-                bool_type.const_int(*b as u64, false).as_basic_value_enum()
+                let bool_ty = self.gtor.iw_ctxt.bool_type();
+                bool_ty.const_int(*b as u64, false).as_basic_value_enum()
             }
             Unit => self.build_unit_value()?,
         };
@@ -289,8 +277,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Constant(constant) => self.build_constant(constant),
             Copy(place_id) => {
                 let place_ptr = self.build_place(place_id)?;
-                let iw_type = self.get_iw_type_of_place(place_id)?;
-                let value = self.builder.build_load(iw_type, place_ptr, "loaded_place")?;
+                let iw_ty = self.get_iw_ty_of_place(place_id)?;
+                let value = self.builder.build_load(iw_ty, place_ptr, "loaded_place")?;
                 Ok(value)
             }
         }
@@ -303,14 +291,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
     fn build_call(&mut self, callable: &mlr::OpId, args: &[mlr::OpId]) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         let fn_ptr = self.build_op(callable)?.into_pointer_value();
-        let fn_type = self.get_function_type_of_loc(callable)?;
+        let fn_ty = self.get_fn_ty_of_loc(callable)?;
 
         let args = args
             .iter()
             .map(|arg| self.build_op(arg).unwrap().into())
             .collect::<Vec<_>>();
 
-        let call_site = self.builder.build_indirect_call(fn_type, fn_ptr, &args, "call_site")?;
+        let call_site = self.builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
 
         call_site.try_as_basic_value().left().ok_or(FnGeneratorError)
     }
@@ -358,9 +346,9 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn build_empty_val(&mut self, type_id: &mr_types::TypeId) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let iw_type = self.gtor.get_type_as_basic_type_enum(type_id).ok_or(FnGeneratorError)?;
-        let struct_value = iw_type.const_zero(); // create a zero value because that's available for BasicValueEnum
+    fn build_empty_val(&mut self, ty: &mr_ty::Ty) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
+        let iw_ty = self.gtor.get_ty_as_basic_type_enum(ty).ok_or(FnGeneratorError)?;
+        let struct_value = iw_ty.const_zero(); // create a zero value because that's available for BasicValueEnum
         Ok(struct_value)
     }
 }

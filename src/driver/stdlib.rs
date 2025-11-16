@@ -1,15 +1,15 @@
-use crate::ctxt::{self, fns, types::PrimitiveType};
+use crate::ctxt::{self, fns, ty::Primitive};
 
 macro_rules! register_fn {
-    ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_type:ident ),* ) -> $return_type:expr ) => {
+    ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_ty:ident ),* ) -> $return_ty:expr ) => {
         $fn_reg.register_fn(fns::FnSig {
             name: $name.to_string(),
-            return_type: $return_type,
+            return_ty: $return_ty,
             parameters: vec![
                 $(
                     fns::FnParam {
                         name: stringify!($param_name).to_string(),
-                        type_: $param_type,
+                        ty: $param_ty,
                     },
                 )*
             ],
@@ -17,12 +17,12 @@ macro_rules! register_fn {
     };
 }
 
-pub fn register_fns(type_registry: &ctxt::TypeRegistry, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    use PrimitiveType::*;
+pub fn register_fns(tys: &ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+    use Primitive::*;
 
-    let i32 = type_registry.get_primitive_type_id(Integer32).ok_or(())?;
-    let bool = type_registry.get_primitive_type_id(Boolean).ok_or(())?;
-    let unit = type_registry.get_primitive_type_id(Unit).ok_or(())?;
+    let i32 = tys.get_primitive_ty(Integer32).ok_or(())?;
+    let bool = tys.get_primitive_ty(Boolean).ok_or(())?;
+    let unit = tys.get_primitive_ty(Unit).ok_or(())?;
 
     register_fn!(fns, "add::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);

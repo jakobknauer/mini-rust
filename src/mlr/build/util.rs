@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
 use crate::{
-    ctxt::{fns, types},
+    ctxt::{fns, ty},
     hlr,
     mlr::{
         self,
-        build::{MlrBuilderError, Result, TypeError},
+        build::{MlrBuilderError, Result, TyError},
     },
 };
 
@@ -40,40 +40,40 @@ impl<'a> mlr::MlrBuilder<'a> {
         id
     }
 
-    pub fn get_loc_type(&self, loc_id: &mlr::LocId) -> types::TypeId {
-        *self.output.loc_types.get(loc_id).expect("type of loc should be known")
+    pub fn get_loc_ty(&self, loc_id: &mlr::LocId) -> ty::Ty {
+        *self.output.loc_tys.get(loc_id).expect("type of loc should be known")
     }
 
-    pub fn try_get_loc_type(&self, loc_id: &mlr::LocId) -> Option<types::TypeId> {
-        self.output.loc_types.get(loc_id).cloned()
+    pub fn try_get_loc_ty(&self, loc_id: &mlr::LocId) -> Option<ty::Ty> {
+        self.output.loc_tys.get(loc_id).cloned()
     }
 
-    pub fn get_place_type(&self, place_id: &mlr::PlaceId) -> types::TypeId {
+    pub fn get_place_ty(&self, place_id: &mlr::PlaceId) -> ty::Ty {
         *self
             .output
-            .place_types
+            .place_tys
             .get(place_id)
             .expect("type of place should be known")
     }
 
-    pub fn try_get_place_type(&self, place_id: &mlr::PlaceId) -> Option<types::TypeId> {
-        self.output.place_types.get(place_id).cloned()
+    pub fn try_get_place_ty(&self, place_id: &mlr::PlaceId) -> Option<ty::Ty> {
+        self.output.place_tys.get(place_id).cloned()
     }
 
-    pub fn get_val_type(&self, val_id: &mlr::ValId) -> types::TypeId {
-        *self.output.val_types.get(val_id).expect("type of val should be known")
+    pub fn get_val_ty(&self, val_id: &mlr::ValId) -> ty::Ty {
+        *self.output.val_tys.get(val_id).expect("type of val should be known")
     }
 
-    pub fn get_op_type(&self, op_id: &mlr::OpId) -> types::TypeId {
-        *self.output.op_types.get(op_id).expect("type of op should be known")
+    pub fn get_op_ty(&self, op_id: &mlr::OpId) -> ty::Ty {
+        *self.output.op_tys.get(op_id).expect("type of op should be known")
     }
 
     pub fn insert_val(&mut self, val: mlr::Val) -> Result<mlr::ValId> {
         let val_id = self.get_next_val_id();
         self.output.vals.insert(val_id, val);
 
-        let type_id = self.infer_val_type(val_id)?;
-        self.output.val_types.insert(val_id, type_id);
+        let ty = self.infer_val_ty(val_id)?;
+        self.output.val_tys.insert(val_id, ty);
 
         Ok(val_id)
     }
@@ -83,8 +83,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_empty_val(&mut self, type_id: types::TypeId) -> Result<mlr::ValId> {
-        let val = mlr::Val::Empty { type_id };
+    pub fn insert_empty_val(&mut self, ty: ty::Ty) -> Result<mlr::ValId> {
+        let val = mlr::Val::Empty { ty };
         self.insert_val(val)
     }
 
@@ -146,22 +146,22 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
         self.assert_place_valid(&place);
 
-        let place_type = self.try_get_place_type(&place);
-        let value_type = self.get_val_type(&value);
+        let place_ty = self.try_get_place_ty(&place);
+        let value_ty = self.get_val_ty(&value);
 
-        if let Some(place_type) = place_type {
-            if !self.ctxt.types.types_equal(&place_type, &value_type) {
-                return mlr::build::TypeError::AssignStmtTypeMismatch {
+        if let Some(place_ty) = place_ty {
+            if !self.ctxt.tys.ty_equal(&place_ty, &value_ty) {
+                return mlr::build::TyError::AssignStmtTyMismatch {
                     place,
-                    expected: place_type,
-                    actual: value_type,
+                    expected: place_ty,
+                    actual: value_ty,
                 }
                 .into();
             }
         } else {
-            self.output.place_types.insert(place, value_type);
+            self.output.place_tys.insert(place, value_ty);
             if let mlr::Place::Local(loc_id) = self.output.places.get(&place).expect("place should be known") {
-                self.output.loc_types.insert(*loc_id, value_type);
+                self.output.loc_tys.insert(*loc_id, value_ty);
             }
         }
 
@@ -176,19 +176,19 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<mlr::StmtId> {
-        let return_type = self
+        let return_ty = self
             .ctxt
             .fns
             .get_signature_by_id(&self.mlr_fn)
             .expect("return stmt only valid in function")
-            .return_type;
+            .return_ty;
 
-        let value_type = self.get_val_type(&value);
+        let val_ty = self.get_val_ty(&value);
 
-        if !self.ctxt.types.types_equal(&return_type, &value_type) {
-            return mlr::build::TypeError::ReturnTypeMismatch {
-                expected: return_type,
-                actual: value_type,
+        if !self.ctxt.tys.ty_equal(&return_ty, &val_ty) {
+            return mlr::build::TyError::ReturnTyMismatch {
+                expected: return_ty,
+                actual: val_ty,
             }
             .into();
         }
@@ -201,9 +201,9 @@ impl<'a> mlr::MlrBuilder<'a> {
         let place_id = self.get_next_place_id();
         self.output.places.insert(place_id, place);
 
-        let type_id = self.try_infer_place_type(&place_id)?;
-        if let Some(type_id) = type_id {
-            self.output.place_types.insert(place_id, type_id);
+        let ty = self.try_infer_place_ty(&place_id)?;
+        if let Some(ty) = ty {
+            self.output.place_tys.insert(place_id, ty);
         };
 
         Ok(place_id)
@@ -236,8 +236,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         let op_id = self.get_next_op_id();
         self.output.ops.insert(op_id, operand);
 
-        let type_id = self.infer_op_type(op_id)?;
-        self.output.op_types.insert(op_id, type_id);
+        let ty = self.infer_op_ty(op_id)?;
+        self.output.op_tys.insert(op_id, ty);
 
         Ok(op_id)
     }
@@ -294,16 +294,16 @@ impl<'a> mlr::MlrBuilder<'a> {
             .cloned()
     }
 
-    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(types::TypeId, usize)> {
-        for (enum_id, enum_def) in self.ctxt.types.get_all_enums() {
+    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Ty, usize)> {
+        for (enum_id, enum_def) in self.ctxt.tys.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
-                    let type_id = self
+                    let ty = self
                         .ctxt
-                        .types
-                        .get_type_id_by_enum_id(enum_id)
-                        .expect("enum type id should be known");
-                    return Some((type_id, idx));
+                        .tys
+                        .get_ty_by_enum_id(enum_id)
+                        .expect("enum type should be known");
+                    return Some((ty, idx));
                 }
             }
         }
@@ -312,11 +312,11 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     pub fn build_struct_field_init_stmts(
         &mut self,
-        type_id: &types::TypeId,
+        ty: &ty::Ty,
         fields: &[(String, hlr::Expression)],
         base_place: &mlr::PlaceId,
     ) -> Result<()> {
-        let field_indices = self.compute_field_indices(type_id, fields.iter().map(|(name, _)| name.as_str()))?;
+        let field_indices = self.compute_field_indices(ty, fields.iter().map(|(name, _)| name.as_str()))?;
 
         fields
             .iter()
@@ -331,20 +331,20 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     pub fn compute_field_indices<'b>(
         &self,
-        type_id: &types::TypeId,
+        ty: &ty::Ty,
         field_names: impl IntoIterator<Item = &'b str>,
     ) -> Result<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
 
-        let struct_def = self.get_struct_def(type_id)?;
+        let struct_def = self.get_struct_def(ty)?;
 
         let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
-            return TypeError::InitializerMissingFields {
-                type_id: *type_id,
+            return TyError::InitializerMissingFields {
+                ty: *ty,
                 missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
             }
             .into();
@@ -352,8 +352,8 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
         if !extra_fields.is_empty() {
-            return TypeError::InitializerExtraFields {
-                type_id: *type_id,
+            return TyError::InitializerExtraFields {
+                ty: *ty,
                 extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
             }
             .into();
@@ -366,8 +366,8 @@ impl<'a> mlr::MlrBuilder<'a> {
                     .fields
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(MlrBuilderError::TypeError(TypeError::NotAStructField {
-                        type_id: *type_id,
+                    .ok_or(MlrBuilderError::TyError(TyError::NotAStructField {
+                        ty: *ty,
                         field_name: field_name.to_string(),
                     }))
             })
@@ -376,40 +376,32 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_indices)
     }
 
-    pub fn get_struct_def(&self, type_id: &types::TypeId) -> Result<&types::StructDefinition> {
-        let type_ = self
-            .ctxt
-            .types
-            .get_type_by_id(type_id)
-            .expect("type should be registered");
+    pub fn get_struct_def(&self, ty: &ty::Ty) -> Result<&ty::StructDefinition> {
+        let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
 
-        let &types::Type::NamedType(_, types::NamedType::Struct(struct_id)) = type_ else {
-            return TypeError::NotAStruct { type_id: *type_id }.into();
+        let &ty::TyDef::Named(_, ty::Named::Struct(struct_id)) = ty_def else {
+            return TyError::NotAStruct { ty: *ty }.into();
         };
 
         let struct_def = self
             .ctxt
-            .types
+            .tys
             .get_struct_definition(&struct_id)
             .expect("struct definition should be registered");
 
         Ok(struct_def)
     }
 
-    pub fn get_enum_def(&self, type_id: &types::TypeId) -> Result<&types::EnumDefinition> {
-        let type_ = self
-            .ctxt
-            .types
-            .get_type_by_id(type_id)
-            .expect("type should be registered");
+    pub fn get_enum_def(&self, ty: &ty::Ty) -> Result<&ty::EnumDefinition> {
+        let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
 
-        let &types::Type::NamedType(_, types::NamedType::Enum(enum_id)) = type_ else {
-            return TypeError::NotAnEnum { type_id: *type_id }.into();
+        let &ty::TyDef::Named(_, ty::Named::Enum(enum_id)) = ty_def else {
+            return TyError::NotAnEnum { ty: *ty }.into();
         };
 
         let enum_def = self
             .ctxt
-            .types
+            .tys
             .get_enum_definition(&enum_id)
             .expect("enum definition should be registered");
 
