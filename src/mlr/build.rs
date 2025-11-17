@@ -136,7 +136,7 @@ impl<'a> MlrBuilder<'a> {
         self.push_scope();
 
         for stmt in &block.stmts {
-            self.build_statement(stmt)?;
+            self.build_stmt(stmt)?;
         }
 
         let output = match &block.return_expr {
@@ -171,7 +171,7 @@ impl<'a> MlrBuilder<'a> {
             } => self.build_if(condition, then_block, else_block.as_ref()),
             Loop { body } => self.build_loop(body),
             Block(block) => self.build_block(block),
-            Match { scrutinee, arms } => self.build_match_expression(scrutinee, arms),
+            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms),
         }
     }
 
@@ -348,7 +348,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_place_val(base_place)
     }
 
-    fn build_match_expression(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
+    fn build_match_expr(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
         let scrutinee = self.lower_to_op(scrutinee)?;
         let scrutinee_loc = assign_to_new_loc!(self, self.insert_use_val(scrutinee)?);
         let scrutinee_place = self.insert_loc_place(scrutinee_loc)?;
@@ -375,18 +375,18 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(result_op)
     }
 
-    fn build_statement(&mut self, stmt: &hlr::Stmt) -> Result<()> {
+    fn build_stmt(&mut self, stmt: &hlr::Stmt) -> Result<()> {
         use hlr::Stmt::*;
 
         match stmt {
-            Let { name, value, .. } => self.build_let_statement(name, value),
-            Expr(expression) => self.build_expression_statement(expression),
-            Return(expression) => self.build_return_statement(expression.as_ref()),
-            Break => self.build_break_statement(),
+            Let { name, value, .. } => self.build_let_stmt(name, value),
+            Expr(expr) => self.build_expr_stmt(expr),
+            Return(expr) => self.build_return_stmt(expr.as_ref()),
+            Break => self.build_break_stmt(),
         }
     }
 
-    fn build_let_statement(&mut self, name: &str, value: &hlr::Expr) -> Result<()> {
+    fn build_let_stmt(&mut self, name: &str, value: &hlr::Expr) -> Result<()> {
         let loc = self.insert_fresh_alloc()?;
 
         self.start_new_block();
@@ -400,18 +400,18 @@ impl<'a> MlrBuilder<'a> {
         Ok(())
     }
 
-    fn build_expression_statement(&mut self, expression: &hlr::Expr) -> Result<()> {
+    fn build_expr_stmt(&mut self, expr: &hlr::Expr) -> Result<()> {
         self.start_new_block();
-        let _ = assign_to_new_loc!(self, self.lower_to_val(expression)?);
+        let _ = assign_to_new_loc!(self, self.lower_to_val(expr)?);
         self.end_and_insert_current_block();
         Ok(())
     }
 
-    fn build_return_statement(&mut self, expression: Option<&hlr::Expr>) -> Result<()> {
+    fn build_return_stmt(&mut self, expr: Option<&hlr::Expr>) -> Result<()> {
         self.start_new_block();
 
-        let return_val = match expression {
-            Some(expression) => self.lower_to_val(expression)?,
+        let return_val = match expr {
+            Some(expr) => self.lower_to_val(expr)?,
             None => {
                 let unit = self.insert_unit_op()?;
                 self.insert_use_val(unit)?
@@ -423,7 +423,7 @@ impl<'a> MlrBuilder<'a> {
         Ok(())
     }
 
-    fn build_break_statement(&mut self) -> Result<()> {
+    fn build_break_stmt(&mut self) -> Result<()> {
         self.insert_break_stmt().map(|_| ())
     }
 

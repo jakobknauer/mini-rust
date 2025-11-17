@@ -37,7 +37,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         if let Some(mlr) = self.mlr {
             writeln!(self.writer)?;
-            self.print_statement(&mlr.body)
+            self.print_stmt(&mlr.body)
         } else {
             write!(self.writer, ";")
         }
@@ -62,12 +62,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "{}", return_ty)
     }
 
-    fn print_block(&mut self, statements: &[mlr::Stmt]) -> Result<(), std::io::Error> {
+    fn print_block(&mut self, stmts: &[mlr::Stmt]) -> Result<(), std::io::Error> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
-        for stmt in statements {
-            self.print_statement(stmt)?;
+        for stmt in stmts {
+            self.print_stmt(stmt)?;
         }
 
         self.indent_level -= 1;
@@ -75,7 +75,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "}}")
     }
 
-    fn print_statement(&mut self, stmt: &mlr::Stmt) -> Result<(), std::io::Error> {
+    fn print_stmt(&mut self, stmt: &mlr::Stmt) -> Result<(), std::io::Error> {
         use mlr::StmtDef::*;
 
         let stmt_def = &self.mlr.expect("self.mlr should not be empty").stmts.get(stmt);
@@ -121,16 +121,16 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "if ")?;
                     self.print_op(&if_.cond)?;
                     writeln!(self.writer)?;
-                    self.print_statement(&if_.then)?;
+                    self.print_stmt(&if_.then)?;
                     self.indent()?;
                     writeln!(self.writer, "else")?;
-                    self.print_statement(&if_.else_)
+                    self.print_stmt(&if_.else_)
                     // writeln!(self.writer)
                 }
                 Loop { body } => {
                     self.indent()?;
                     writeln!(self.writer, "loop")?;
-                    self.print_statement(body)
+                    self.print_stmt(body)
                     // writeln!(self.writer)
                 }
             },
