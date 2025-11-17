@@ -253,9 +253,7 @@ impl<'a> HlrParser<'a> {
             }
 
             if self.current() == Some(&Token::RBrace) {
-                if stmt_kind == StmtKind::UndelimitedExpr
-                    || stmt_kind == StmtKind::BlockExpr
-                {
+                if stmt_kind == StmtKind::UndelimitedExpr || stmt_kind == StmtKind::BlockExpr {
                     let Stmt::Expr(expr) = stmt else {
                         unreachable!();
                     };
@@ -271,10 +269,7 @@ impl<'a> HlrParser<'a> {
 
         self.expect_token(Token::RBrace)?;
 
-        Ok(Block {
-            stmts,
-            return_expr,
-        })
+        Ok(Block { stmts, return_expr })
     }
 
     fn parse_stmt(&mut self) -> Result<(Stmt, StmtKind), ParserError> {
@@ -405,10 +400,7 @@ impl<'a> HlrParser<'a> {
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_function_call_and_field_access(
-        &mut self,
-        allow_top_level_struct_expr: bool,
-    ) -> Result<Expr, ParserError> {
+    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
         let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;
 
         loop {
@@ -474,10 +466,7 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    Ok(Expr::Struct {
-                        name: ident,
-                        fields,
-                    })
+                    Ok(Expr::Struct { name: ident, fields })
                 } else {
                     Ok(Expr::Var(ident))
                 }
@@ -839,10 +828,7 @@ mod tests {
                 operator: BinaryOperator::Subtract,
                 right: Box::new(Expr::Call {
                     callee: Box::new(Expr::Var("arctan2".to_string())),
-                    arguments: vec![
-                        Expr::Var("x".to_string()),
-                        Expr::Var("y".to_string()),
-                    ],
+                    arguments: vec![Expr::Var("x".to_string()), Expr::Var("y".to_string())],
                 }),
             };
             parse_and_compare(input, expected);
@@ -915,10 +901,7 @@ mod tests {
                         base: Box::new(Expr::Var("obj".to_string())),
                         name: "method".to_string(),
                     }),
-                    arguments: vec![
-                        Expr::Var("arg1".to_string()),
-                        Expr::Var("arg2".to_string()),
-                    ],
+                    arguments: vec![Expr::Var("arg1".to_string()), Expr::Var("arg2".to_string())],
                 }),
                 name: "field".to_string(),
             };

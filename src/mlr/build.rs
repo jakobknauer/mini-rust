@@ -163,7 +163,10 @@ impl<'a> MlrBuilder<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
-            Struct { name: struct_name, fields } => self.build_struct_or_enum_val(struct_name, fields),
+            Struct {
+                name: struct_name,
+                fields,
+            } => self.build_struct_or_enum_val(struct_name, fields),
             If {
                 condition,
                 then_block,
@@ -295,11 +298,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(unit)
     }
 
-    fn build_struct_or_enum_val(
-        &mut self,
-        struct_name: &str,
-        fields: &[(String, hlr::Expr)],
-    ) -> Result<mlr::Val> {
+    fn build_struct_or_enum_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expr)]) -> Result<mlr::Val> {
         if let Some(ty) = self.ctxt.tys.get_ty_by_name(struct_name) {
             self.build_struct_val(&ty, fields)
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
