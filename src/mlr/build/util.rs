@@ -285,13 +285,13 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Ty, usize)> {
-        for (enum_id, enum_def) in self.ctxt.tys.get_all_enums() {
+        for (enum_, enum_def) in self.ctxt.tys.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
                     let ty = self
                         .ctxt
                         .tys
-                        .get_ty_by_enum_id(enum_id)
+                        .get_ty_of_enum(enum_)
                         .expect("enum type should be known");
                     return Some((ty, idx));
                 }
@@ -369,14 +369,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_struct_def(&self, ty: &ty::Ty) -> Result<&ty::StructDefinition> {
         let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
 
-        let &ty::TyDef::Named(_, ty::Named::Struct(struct_id)) = ty_def else {
+        let &ty::TyDef::Named(_, ty::Named::Struct(struct_)) = ty_def else {
             return TyError::NotAStruct { ty: *ty }.into();
         };
 
         let struct_def = self
             .ctxt
             .tys
-            .get_struct_definition(&struct_id)
+            .get_struct_definition(&struct_)
             .expect("struct definition should be registered");
 
         Ok(struct_def)
@@ -385,14 +385,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_enum_def(&self, ty: &ty::Ty) -> Result<&ty::EnumDefinition> {
         let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
 
-        let &ty::TyDef::Named(_, ty::Named::Enum(enum_id)) = ty_def else {
+        let &ty::TyDef::Named(_, ty::Named::Enum(enum_)) = ty_def else {
             return TyError::NotAnEnum { ty: *ty }.into();
         };
 
         let enum_def = self
             .ctxt
             .tys
-            .get_enum_definition(&enum_id)
+            .get_enum_definition(&enum_)
             .expect("enum definition should be registered");
 
         Ok(enum_def)

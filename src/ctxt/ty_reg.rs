@@ -6,8 +6,8 @@ use crate::ctxt::ty::*;
 
 pub struct TyReg {
     tys: BiMap<Ty, TyDef>,
-    structs: HashMap<StructId, StructDefinition>,
-    enums: HashMap<EnumId, EnumDefinition>,
+    structs: HashMap<Struct, StructDefinition>,
+    enums: HashMap<Enum, EnumDefinition>,
 
     i32_ty: Option<Ty>,
     bool_ty: Option<Ty>,
@@ -16,8 +16,8 @@ pub struct TyReg {
     named_tys: BTreeMap<String, Ty>,
 
     next_ty: Ty,
-    next_struct_id: StructId,
-    next_enum_id: EnumId,
+    next_struct: Struct,
+    next_enum: Enum,
 }
 
 impl TyReg {
@@ -34,8 +34,8 @@ impl TyReg {
             named_tys: BTreeMap::new(),
 
             next_ty: Ty(0),
-            next_struct_id: StructId(0),
-            next_enum_id: EnumId(0),
+            next_struct: Struct(0),
+            next_enum: Enum(0),
         }
     }
 
@@ -68,20 +68,20 @@ impl TyReg {
     }
 
     pub fn register_struct(&mut self, name: &str) -> Result<Ty, ()> {
-        let struct_id = self.next_struct_id;
-        self.next_struct_id.0 += 1;
+        let struct_ = self.next_struct;
+        self.next_struct.0 += 1;
 
-        let ty = self.register_named_ty(name, Named::Struct(struct_id))?;
-        self.structs.insert(struct_id, StructDefinition { fields: vec![] });
+        let ty = self.register_named_ty(name, Named::Struct(struct_))?;
+        self.structs.insert(struct_, StructDefinition { fields: vec![] });
         Ok(ty)
     }
 
     pub fn register_enum(&mut self, name: &str) -> Result<Ty, ()> {
-        let enum_id = self.next_enum_id;
-        self.next_enum_id.0 += 1;
+        let enum_ = self.next_enum;
+        self.next_enum.0 += 1;
 
-        let ty = self.register_named_ty(name, Named::Enum(enum_id))?;
-        self.enums.insert(enum_id, EnumDefinition { variants: vec![] });
+        let ty = self.register_named_ty(name, Named::Enum(enum_))?;
+        self.enums.insert(enum_, EnumDefinition { variants: vec![] });
         Ok(ty)
     }
 
@@ -106,18 +106,18 @@ impl TyReg {
         self.tys.get_by_left(&ty)
     }
 
-    pub fn get_struct_definition(&self, struct_id: &StructId) -> Option<&StructDefinition> {
-        self.structs.get(struct_id)
+    pub fn get_struct_definition(&self, struct_: &Struct) -> Option<&StructDefinition> {
+        self.structs.get(struct_)
     }
 
-    pub fn get_enum_definition(&self, enum_id: &EnumId) -> Option<&EnumDefinition> {
-        self.enums.get(enum_id)
+    pub fn get_enum_definition(&self, enum_: &Enum) -> Option<&EnumDefinition> {
+        self.enums.get(enum_)
     }
 
     pub fn get_mut_struct_definition_by_name(&mut self, name: &str) -> Option<&mut StructDefinition> {
         let ty_def = self.get_ty_def_by_name(name)?;
-        if let TyDef::Named(_, Named::Struct(struct_id)) = ty_def {
-            self.structs.get_mut(&struct_id.clone())
+        if let TyDef::Named(_, Named::Struct(struct_)) = ty_def {
+            self.structs.get_mut(&struct_.clone())
         } else {
             None
         }
@@ -125,8 +125,8 @@ impl TyReg {
 
     pub fn get_mut_enum_definition_by_name(&mut self, name: &str) -> Option<&mut EnumDefinition> {
         let ty_def = self.get_ty_def_by_name(name)?;
-        if let TyDef::Named(_, Named::Enum(enum_id)) = ty_def {
-            self.enums.get_mut(&enum_id.clone())
+        if let TyDef::Named(_, Named::Enum(enum_)) = ty_def {
+            self.enums.get_mut(&enum_.clone())
         } else {
             None
         }
@@ -175,11 +175,11 @@ impl TyReg {
         })
     }
 
-    pub fn get_ty_by_enum_id(&self, enum_id: &EnumId) -> Option<Ty> {
-        self.get_named_ty(Named::Enum(*enum_id))
+    pub fn get_ty_of_enum(&self, enum_: &Enum) -> Option<Ty> {
+        self.get_named_ty(Named::Enum(*enum_))
     }
 
-    pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&EnumId, &EnumDefinition)> {
+    pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&Enum, &EnumDefinition)> {
         self.enums.iter()
     }
 }

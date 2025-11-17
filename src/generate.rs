@@ -78,8 +78,8 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                     Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                     Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
-                Struct(struct_id) => self.define_struct(name, ty, struct_id),
-                Enum(enum_id) => self.define_enum(name, enum_id),
+                Struct(struct_) => self.define_struct(name, ty, struct_),
+                Enum(enum_) => self.define_enum(name, enum_),
             },
             Fn { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
         };
@@ -98,11 +98,11 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn define_struct(&mut self, name: &str, ty: &mr_tys::Ty, struct_id: &mr_tys::StructId) -> AnyTypeEnum<'iw> {
+    fn define_struct(&mut self, name: &str, ty: &mr_tys::Ty, struct_: &mr_tys::Struct) -> AnyTypeEnum<'iw> {
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(name);
         self.types.insert(*ty, iw_struct.as_any_type_enum());
 
-        let struct_def = self.mr_ctxt.tys.get_struct_definition(struct_id).unwrap();
+        let struct_def = self.mr_ctxt.tys.get_struct_definition(struct_).unwrap();
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
@@ -113,8 +113,8 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         iw_struct.as_any_type_enum()
     }
 
-    fn define_enum(&mut self, name: &str, enum_id: &mr_tys::EnumId) -> AnyTypeEnum<'iw> {
-        let enum_def = self.mr_ctxt.tys.get_enum_definition(enum_id).unwrap();
+    fn define_enum(&mut self, name: &str, enum_: &mr_tys::Enum) -> AnyTypeEnum<'iw> {
+        let enum_def = self.mr_ctxt.tys.get_enum_definition(enum_).unwrap();
 
         let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);

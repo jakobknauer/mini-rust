@@ -2,10 +2,10 @@
 pub struct Ty(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct StructId(pub usize);
+pub struct Struct(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct EnumId(pub usize);
+pub struct Enum(pub usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
@@ -16,8 +16,8 @@ pub enum TyDef {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Named {
     Primitve(Primitive),
-    Struct(StructId),
-    Enum(EnumId),
+    Struct(Struct),
+    Enum(Enum),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
