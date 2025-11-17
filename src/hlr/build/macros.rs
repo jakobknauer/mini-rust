@@ -4,7 +4,7 @@ macro_rules! parse_left_associative {
         $next_fn:ident,
         [ $( $token:pat => $op:expr ),+ $(,)? ]
     ) => {
-        fn $name(&mut self, allow_struct: bool) -> Result<Expression, ParserError> {
+        fn $name(&mut self, allow_struct: bool) -> Result<Expr, ParserError> {
             let mut acc = self.$next_fn(allow_struct)?;
 
             while let Some(token) = self.current() {
@@ -16,7 +16,7 @@ macro_rules! parse_left_associative {
                 };
                 self.position += 1; // consume operator
                 let right = self.$next_fn(allow_struct)?;
-                acc = Expression::BinaryOp {
+                acc = Expr::BinaryOp {
                     left: Box::new(acc),
                     operator,
                     right: Box::new(right),

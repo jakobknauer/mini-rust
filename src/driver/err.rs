@@ -6,7 +6,7 @@ pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     match err {
         LexerError(lexer_error) => format!("Lexer error at position {}", lexer_error.position),
         UnexpectedToken(token) => format!("Parser error: Unexpected token {:?}", token),
-        UndelimitedStatement => "Parser error: Undelimited statement".to_string(),
+        UndelimitedStmt => "Parser error: Undelimited statement".to_string(),
         InvalidLiteral => "Parser error: Invalid literal".to_string(),
         UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
     }

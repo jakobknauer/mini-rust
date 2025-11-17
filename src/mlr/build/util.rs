@@ -303,7 +303,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn build_struct_field_init_stmts(
         &mut self,
         ty: &ty::Ty,
-        fields: &[(String, hlr::Expression)],
+        fields: &[(String, hlr::Expr)],
         base_place: &mlr::Place,
     ) -> Result<()> {
         let field_indices = self.compute_field_indices(ty, fields.iter().map(|(name, _)| name.as_str()))?;

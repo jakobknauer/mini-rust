@@ -12,10 +12,10 @@ pub fn build_program(input: &str) -> Result<Program, ParserError> {
 }
 
 #[cfg(test)]
-fn build_expr(input: &str) -> Result<Expression, ParserError> {
+fn build_expr(input: &str) -> Result<Expr, ParserError> {
     let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
     let mut parser = HlrParser::new(&tokens[..]);
-    parser.parse_expression(true)
+    parser.parse_expr(true)
 }
 
 #[cfg(test)]
@@ -29,7 +29,7 @@ fn build_block(input: &str) -> Result<Block, ParserError> {
 pub enum ParserError {
     LexerError(LexerError),
     UnexpectedToken(Token),
-    UndelimitedStatement,
+    UndelimitedStmt,
     InvalidLiteral,
     UnexpectedEOF,
 }
@@ -40,14 +40,14 @@ struct HlrParser<'a> {
 }
 
 #[derive(PartialEq, Eq)]
-enum StatementKind {
+enum StmtKind {
     /// A statement that is an expression but is delimited by a closing brace, e.g. if, loop,
     /// match, or a block. This is allowed as the last statement in a block, but is also allowed
     /// to be followed by other statements without requireing a semicolon in between.
-    BlockExpression,
+    BlockExpr,
     /// A statement that is an expression but is not delimited by a semicolon, e.g. `1 + a`.
     /// This is only allowed as the final statement in a block, representing the return value.
-    UndelimitedExpression,
+    UndelimitedExpr,
     /// A statement that is explicitly delimited by a semicolon. If the last statement in a block
     /// is of this kind, it does not represent the return value of the block.
     ExplicitelyDelimited,
@@ -231,8 +231,8 @@ impl<'a> HlrParser<'a> {
 
     /// TODO allow loop/if/block expression statements without delimiting semicolon
     fn parse_block(&mut self) -> Result<Block, ParserError> {
-        let mut statements = Vec::new();
-        let mut return_expression = None;
+        let mut stmts = Vec::new();
+        let mut return_expr = None;
 
         self.expect_token(Token::LBrace)?;
 
@@ -243,88 +243,88 @@ impl<'a> HlrParser<'a> {
                 break;
             }
 
-            let (statement, statement_kind) = self.parse_statement()?;
+            let (stmt, stmt_kind) = self.parse_stmt()?;
 
-            if statement_kind == StatementKind::UndelimitedExpression {
+            if stmt_kind == StmtKind::UndelimitedExpr {
                 // expect that we are at the end of the block
                 if self.current() != Some(&Token::RBrace) {
-                    return Err(ParserError::UndelimitedStatement);
+                    return Err(ParserError::UndelimitedStmt);
                 }
             }
 
             if self.current() == Some(&Token::RBrace) {
-                if statement_kind == StatementKind::UndelimitedExpression
-                    || statement_kind == StatementKind::BlockExpression
+                if stmt_kind == StmtKind::UndelimitedExpr
+                    || stmt_kind == StmtKind::BlockExpr
                 {
-                    let Statement::Expression(expr) = statement else {
+                    let Stmt::Expr(expr) = stmt else {
                         unreachable!();
                     };
-                    return_expression = Some(Box::new(expr));
+                    return_expr = Some(Box::new(expr));
                 } else {
-                    statements.push(statement);
+                    stmts.push(stmt);
                 }
                 break;
             } else {
-                statements.push(statement);
+                stmts.push(stmt);
             }
         }
 
         self.expect_token(Token::RBrace)?;
 
         Ok(Block {
-            statements,
-            return_expression,
+            stmts,
+            return_expr,
         })
     }
 
-    fn parse_statement(&mut self) -> Result<(Statement, StatementKind), ParserError> {
+    fn parse_stmt(&mut self) -> Result<(Stmt, StmtKind), ParserError> {
         match self.current() {
             Some(Token::Keyword(Keyword::Let)) => {
-                let stmt = self.parse_let_statement()?;
+                let stmt = self.parse_let_stmt()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, StatementKind::ExplicitelyDelimited))
+                Ok((stmt, StmtKind::ExplicitelyDelimited))
             }
             Some(Token::Keyword(Keyword::Return)) => {
-                let stmt = self.parse_return_statement()?;
+                let stmt = self.parse_return_stmt()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, StatementKind::ExplicitelyDelimited))
+                Ok((stmt, StmtKind::ExplicitelyDelimited))
             }
             Some(Token::Keyword(Keyword::Break)) => {
-                let stmt = self.parse_break_statement()?;
+                let stmt = self.parse_break_stmt()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, StatementKind::ExplicitelyDelimited))
+                Ok((stmt, StmtKind::ExplicitelyDelimited))
             }
             Some(Token::LBrace) => {
                 let expr = self.parse_block()?;
-                let stmt = Statement::Expression(Expression::Block(expr));
-                Ok((stmt, StatementKind::BlockExpression))
+                let stmt = Stmt::Expr(Expr::Block(expr));
+                Ok((stmt, StmtKind::BlockExpr))
             }
             Some(Token::Keyword(Keyword::If)) => {
                 let expr = self.parse_if_expr()?;
-                Ok((Statement::Expression(expr), StatementKind::BlockExpression))
+                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
             }
             Some(Token::Keyword(Keyword::Loop)) => {
                 let expr = self.parse_loop()?;
-                Ok((Statement::Expression(expr), StatementKind::BlockExpression))
+                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
             }
             Some(Token::Keyword(Keyword::Match)) => {
                 let expr = self.parse_match()?;
-                Ok((Statement::Expression(expr), StatementKind::BlockExpression))
+                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
             }
             _ => {
-                let stmt = self.parse_expression_statement()?;
+                let stmt = self.parse_expr_stmt()?;
                 let semicolon = self.advance_if(Token::Semicolon);
-                let statement_kind = if semicolon {
-                    StatementKind::ExplicitelyDelimited
+                let stmt_kind = if semicolon {
+                    StmtKind::ExplicitelyDelimited
                 } else {
-                    StatementKind::UndelimitedExpression
+                    StmtKind::UndelimitedExpr
                 };
-                Ok((stmt, statement_kind))
+                Ok((stmt, stmt_kind))
             }
         }
     }
 
-    fn parse_let_statement(&mut self) -> Result<Statement, ParserError> {
+    fn parse_let_stmt(&mut self) -> Result<Stmt, ParserError> {
         self.expect_keyword(Keyword::Let)?;
         let name = self.expect_identifier()?;
         let ty_annot = if self.advance_if(Token::Colon) {
@@ -333,39 +333,39 @@ impl<'a> HlrParser<'a> {
             None
         };
         self.expect_token(Token::Equal)?;
-        let value = self.parse_expression(true)?;
-        Ok(Statement::Let { name, ty_annot, value })
+        let value = self.parse_expr(true)?;
+        Ok(Stmt::Let { name, ty_annot, value })
     }
 
-    fn parse_return_statement(&mut self) -> Result<Statement, ParserError> {
+    fn parse_return_stmt(&mut self) -> Result<Stmt, ParserError> {
         self.expect_keyword(Keyword::Return)?;
         if let Some(Token::Semicolon) = self.current() {
-            Ok(Statement::Return(None))
+            Ok(Stmt::Return(None))
         } else {
-            let expr = self.parse_expression(true)?;
-            Ok(Statement::Return(Some(expr)))
+            let expr = self.parse_expr(true)?;
+            Ok(Stmt::Return(Some(expr)))
         }
     }
 
-    fn parse_break_statement(&mut self) -> Result<Statement, ParserError> {
+    fn parse_break_stmt(&mut self) -> Result<Stmt, ParserError> {
         self.expect_keyword(Keyword::Break)?;
-        Ok(Statement::Break)
+        Ok(Stmt::Break)
     }
 
-    fn parse_expression_statement(&mut self) -> Result<Statement, ParserError> {
-        let expr = self.parse_expression(true)?;
-        Ok(Statement::Expression(expr))
+    fn parse_expr_stmt(&mut self) -> Result<Stmt, ParserError> {
+        let expr = self.parse_expr(true)?;
+        Ok(Stmt::Expr(expr))
     }
 
-    fn parse_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
-        self.parse_assignment_expression(allow_top_level_struct_expr)
+    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
+        self.parse_assign_expr(allow_top_level_struct_expr)
     }
 
-    fn parse_assignment_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
         let target = self.parse_disjunction(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
             let value = self.parse_disjunction(allow_top_level_struct_expr)?;
-            Ok(Expression::Assignment {
+            Ok(Expr::Assign {
                 target: Box::new(target),
                 value: Box::new(value),
             })
@@ -378,28 +378,28 @@ impl<'a> HlrParser<'a> {
         Token::Pipe => BinaryOperator::BitOr
     ]);
 
-    parse_left_associative!(parse_conjunction, parse_equality_expression, [
+    parse_left_associative!(parse_conjunction, parse_equality_expr, [
         Token::Ampersand => BinaryOperator::BitAnd
     ]);
 
-    parse_left_associative!(parse_equality_expression, parse_comparison, [
+    parse_left_associative!(parse_equality_expr, parse_comparison, [
         Token::EqualEqual => BinaryOperator::Equal,
         Token::BangEqual => BinaryOperator::NotEqual
     ]);
 
-    parse_left_associative!(parse_comparison, parse_sum_expression, [
+    parse_left_associative!(parse_comparison, parse_sum, [
         Token::Smaller => BinaryOperator::LessThan,
         Token::Greater => BinaryOperator::GreaterThan,
         Token::SmallerEqual => BinaryOperator::LessThanOrEqual,
         Token::GreaterEqual => BinaryOperator::GreaterThanOrEqual
     ]);
 
-    parse_left_associative!(parse_sum_expression, parse_product_expression, [
+    parse_left_associative!(parse_sum, parse_product, [
         Token::Plus => BinaryOperator::Add,
         Token::Minus => BinaryOperator::Subtract
     ]);
 
-    parse_left_associative!(parse_product_expression, parse_function_call_and_field_access, [
+    parse_left_associative!(parse_product, parse_function_call_and_field_access, [
         Token::Asterisk => BinaryOperator::Multiply,
         Token::Slash => BinaryOperator::Divide,
         Token::Percent => BinaryOperator::Remainder
@@ -408,31 +408,31 @@ impl<'a> HlrParser<'a> {
     fn parse_function_call_and_field_access(
         &mut self,
         allow_top_level_struct_expr: bool,
-    ) -> Result<Expression, ParserError> {
-        let mut acc = self.parse_primary_expression(allow_top_level_struct_expr)?;
+    ) -> Result<Expr, ParserError> {
+        let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;
 
         loop {
             if self.advance_if(Token::LParen) {
                 // function call
                 let mut arguments = Vec::new();
                 while self.current() != Some(&Token::RParen) {
-                    let argument = self.parse_expression(true)?; // Allow top-level struct expression in argument
+                    let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
                     arguments.push(argument);
                     if !self.advance_if(Token::Comma) {
                         break;
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                acc = Expression::Call {
+                acc = Expr::Call {
                     callee: Box::new(acc),
                     arguments,
                 };
             } else if self.advance_if(Token::Dot) {
                 // field access
                 let field_name = self.expect_identifier()?;
-                acc = Expression::FieldAccess {
+                acc = Expr::FieldAccess {
                     base: Box::new(acc),
-                    field_name,
+                    name: field_name,
                 };
             } else {
                 break;
@@ -442,19 +442,19 @@ impl<'a> HlrParser<'a> {
         Ok(acc)
     }
 
-    fn parse_primary_expression(&mut self, allow_top_level_struct_expr: bool) -> Result<Expression, ParserError> {
+    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
         let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
 
         match current {
             Token::NumLiteral(value) => {
                 let value = value.parse().map_err(|_| ParserError::InvalidLiteral)?;
                 self.position += 1;
-                Ok(Expression::Literal(Literal::Int(value)))
+                Ok(Expr::Lit(Lit::Int(value)))
             }
             Token::BoolLiteral(b) => {
                 let value = *b;
                 self.position += 1;
-                Ok(Expression::Literal(Literal::Bool(value)))
+                Ok(Expr::Lit(Lit::Bool(value)))
             }
             Token::Identifier(ident) => {
                 let ident = ident.clone();
@@ -467,30 +467,30 @@ impl<'a> HlrParser<'a> {
                         let field_name = field_name.clone();
                         self.position += 1; // consume field name
                         self.expect_token(Token::Colon)?;
-                        let field_value = self.parse_expression(true)?;
+                        let field_value = self.parse_expr(true)?;
                         fields.push((field_name, field_value));
                         if !self.advance_if(Token::Comma) {
                             break;
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    Ok(Expression::StructExpr {
-                        struct_name: ident,
+                    Ok(Expr::Struct {
+                        name: ident,
                         fields,
                     })
                 } else {
-                    Ok(Expression::Variable(ident))
+                    Ok(Expr::Var(ident))
                 }
             }
             Token::LParen => {
                 self.position += 1;
-                let expr = self.parse_expression(true)?; // Allow top-level struct expression in parens
+                let expr = self.parse_expr(true)?; // Allow top-level struct expression in parens
                 self.expect_token(Token::RParen)?;
                 Ok(expr)
             }
             Token::LBrace => {
                 let block = self.parse_block()?;
-                Ok(Expression::Block(block))
+                Ok(Expr::Block(block))
             }
             Token::Keyword(Keyword::If) => self.parse_if_expr(),
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
@@ -500,31 +500,31 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expression, ParserError> {
+    fn parse_if_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_keyword(Keyword::If)?;
-        let condition = self.parse_expression(false)?; // Don't allow top-level struct in if condition
+        let condition = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
         let else_block = if self.advance_if(Token::Keyword(Keyword::Else)) {
             Some(self.parse_block()?)
         } else {
             None
         };
-        Ok(Expression::If {
+        Ok(Expr::If {
             condition: Box::new(condition),
             then_block,
             else_block,
         })
     }
 
-    fn parse_loop(&mut self) -> Result<Expression, ParserError> {
+    fn parse_loop(&mut self) -> Result<Expr, ParserError> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
-        Ok(Expression::Loop { body })
+        Ok(Expr::Loop { body })
     }
 
-    fn parse_match(&mut self) -> Result<Expression, ParserError> {
+    fn parse_match(&mut self) -> Result<Expr, ParserError> {
         self.expect_keyword(Keyword::Match)?;
-        let scrutinee = self.parse_expression(false)?; // Don't allow top-level struct in match scrutinee
+        let scrutinee = self.parse_expr(false)?; // Don't allow top-level struct in match scrutinee
 
         let mut arms = Vec::new();
         self.expect_token(Token::LBrace)?;
@@ -532,7 +532,7 @@ impl<'a> HlrParser<'a> {
         while Some(&Token::RBrace) != self.current() {
             let pattern = self.parse_struct_pattern()?;
             self.expect_token(Token::BoldArrow)?;
-            let value = self.parse_expression(true)?; // Allow top-level struct expr in match arm body
+            let value = self.parse_expr(true)?; // Allow top-level struct expr in match arm body
 
             arms.push(MatchArm {
                 pattern,
@@ -546,7 +546,7 @@ impl<'a> HlrParser<'a> {
 
         self.expect_token(Token::RBrace)?;
 
-        Ok(Expression::Match {
+        Ok(Expr::Match {
             scrutinee: Box::new(scrutinee),
             arms,
         })
@@ -611,8 +611,8 @@ mod tests {
                     return_ty: None,
                     parameters: vec![],
                     body: Block {
-                        statements: vec![],
-                        return_expression: None,
+                        stmts: vec![],
+                        return_expr: None,
                     },
                 }],
                 structs: vec![Struct {
@@ -651,12 +651,12 @@ mod tests {
                         },
                     ],
                     body: Block {
-                        statements: vec![Statement::Return(Some(Expression::BinaryOp {
-                            left: Box::new(Expression::Variable("a".to_string())),
+                        stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
+                            left: Box::new(Expr::Var("a".to_string())),
                             operator: BinaryOperator::Add,
-                            right: Box::new(Expression::Variable("b".to_string())),
+                            right: Box::new(Expr::Var("b".to_string())),
                         }))],
-                        return_expression: None,
+                        return_expr: None,
                     },
                 }],
                 structs: vec![],
@@ -743,8 +743,8 @@ mod tests {
             let input = "{}";
 
             let expected = Block {
-                statements: vec![],
-                return_expression: None,
+                stmts: vec![],
+                return_expr: None,
             };
 
             parse_and_compare(input, expected);
@@ -765,83 +765,83 @@ mod tests {
             }"#;
 
             let expected = Block {
-                statements: vec![
-                    Statement::Let {
+                stmts: vec![
+                    Stmt::Let {
                         name: "result".to_string(),
                         ty_annot: None,
-                        value: Expression::Literal(Literal::Int(1)),
+                        value: Expr::Lit(Lit::Int(1)),
                     },
-                    Statement::Expression(Expression::Loop {
+                    Stmt::Expr(Expr::Loop {
                         body: Block {
-                            statements: vec![
-                                Statement::Expression(Expression::If {
-                                    condition: Box::new(Expression::BinaryOp {
-                                        left: Box::new(Expression::Variable("n".to_string())),
+                            stmts: vec![
+                                Stmt::Expr(Expr::If {
+                                    condition: Box::new(Expr::BinaryOp {
+                                        left: Box::new(Expr::Var("n".to_string())),
                                         operator: BinaryOperator::Equal,
-                                        right: Box::new(Expression::Literal(Literal::Int(1))),
+                                        right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
                                     then_block: Block {
-                                        statements: vec![Statement::Break],
-                                        return_expression: None,
+                                        stmts: vec![Stmt::Break],
+                                        return_expr: None,
                                     },
                                     else_block: None,
                                 }),
-                                Statement::Expression(Expression::Assignment {
-                                    target: Box::new(Expression::Variable("result".to_string())),
-                                    value: Box::new(Expression::BinaryOp {
-                                        left: Box::new(Expression::Variable("result".to_string())),
+                                Stmt::Expr(Expr::Assign {
+                                    target: Box::new(Expr::Var("result".to_string())),
+                                    value: Box::new(Expr::BinaryOp {
+                                        left: Box::new(Expr::Var("result".to_string())),
                                         operator: BinaryOperator::Multiply,
-                                        right: Box::new(Expression::Variable("n".to_string())),
+                                        right: Box::new(Expr::Var("n".to_string())),
                                     }),
                                 }),
-                                Statement::Expression(Expression::Assignment {
-                                    target: Box::new(Expression::Variable("n".to_string())),
-                                    value: Box::new(Expression::BinaryOp {
-                                        left: Box::new(Expression::Variable("n".to_string())),
+                                Stmt::Expr(Expr::Assign {
+                                    target: Box::new(Expr::Var("n".to_string())),
+                                    value: Box::new(Expr::BinaryOp {
+                                        left: Box::new(Expr::Var("n".to_string())),
                                         operator: BinaryOperator::Subtract,
-                                        right: Box::new(Expression::Literal(Literal::Int(1))),
+                                        right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
                                 }),
                             ],
-                            return_expression: None,
+                            return_expr: None,
                         },
                     }),
                 ],
-                return_expression: Some(Box::new(Expression::Variable("result".to_string()))),
+                return_expr: Some(Box::new(Expr::Var("result".to_string()))),
             };
 
             parse_and_compare(input, expected);
         }
     }
 
-    mod expression {
+    mod expr {
         use super::*;
 
-        fn parse_and_compare(input: &str, expected: Expression) {
+        fn parse_and_compare(input: &str, expected: Expr) {
             let parsed = build_expr(input).expect("Failed to parse HLR");
             assert_eq!(parsed, expected);
         }
 
         #[test]
-        fn test_parse_arithmetic_expression() {
+        fn test_parse_arithmetic_expr() {
             let input = r#"1 + 2 * a - arctan2(x, y)"#;
 
-            let expected = Expression::BinaryOp {
-                left: Box::new(Expression::BinaryOp {
-                    left: Box::new(Expression::Literal(Literal::Int(1))),
+            let expected = Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Lit(Lit::Int(1))),
                     operator: BinaryOperator::Add,
-                    right: Box::new(Expression::BinaryOp {
-                        left: Box::new(Expression::Literal(Literal::Int(2))),
+                    right: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Lit(Lit::Int(2))),
                         operator: BinaryOperator::Multiply {},
-                        right: Box::new(Expression::Variable("a".to_string())),
+                        right: Box::new(Expr::Var("a".to_string())),
                     }),
                 }),
                 operator: BinaryOperator::Subtract,
-                right: Box::new(Expression::Call {
-                    callee: Box::new(Expression::Variable("arctan2".to_string())),
+                right: Box::new(Expr::Call {
+                    callee: Box::new(Expr::Var("arctan2".to_string())),
                     arguments: vec![
-                        Expression::Variable("x".to_string()),
-                        Expression::Variable("y".to_string()),
+                        Expr::Var("x".to_string()),
+                        Expr::Var("y".to_string()),
                     ],
                 }),
             };
@@ -856,20 +856,20 @@ mod tests {
                     radius: 3
                 }"#;
 
-            let expected = Expression::StructExpr {
-                struct_name: "Circle".to_string(),
+            let expected = Expr::Struct {
+                name: "Circle".to_string(),
                 fields: vec![
                     (
                         "center".to_string(),
-                        Expression::StructExpr {
-                            struct_name: "Point".to_string(),
+                        Expr::Struct {
+                            name: "Point".to_string(),
                             fields: vec![
-                                ("x".to_string(), Expression::Literal(Literal::Int(1))),
-                                ("y".to_string(), Expression::Literal(Literal::Int(2))),
+                                ("x".to_string(), Expr::Lit(Lit::Int(1))),
+                                ("y".to_string(), Expr::Lit(Lit::Int(2))),
                             ],
                         },
                     ),
-                    ("radius".to_string(), Expression::Literal(Literal::Int(3))),
+                    ("radius".to_string(), Expr::Lit(Lit::Int(3))),
                 ],
             };
 
@@ -879,27 +879,27 @@ mod tests {
         #[test]
         fn test_parse_int_literal() {
             let input = "42";
-            let expected = Expression::Literal(Literal::Int(42));
+            let expected = Expr::Lit(Lit::Int(42));
             parse_and_compare(input, expected);
         }
 
         #[test]
-        fn test_parse_if_expression() {
+        fn test_parse_if_expr() {
             let input = r#"if condition {
                 42
             } else {
                 0
             }"#;
 
-            let expected = Expression::If {
-                condition: Box::new(Expression::Variable("condition".to_string())),
+            let expected = Expr::If {
+                condition: Box::new(Expr::Var("condition".to_string())),
                 then_block: Block {
-                    statements: vec![],
-                    return_expression: Some(Box::new(Expression::Literal(Literal::Int(42)))),
+                    stmts: vec![],
+                    return_expr: Some(Box::new(Expr::Lit(Lit::Int(42)))),
                 },
                 else_block: Some(Block {
-                    statements: vec![],
-                    return_expression: Some(Box::new(Expression::Literal(Literal::Int(0)))),
+                    stmts: vec![],
+                    return_expr: Some(Box::new(Expr::Lit(Lit::Int(0)))),
                 }),
             };
 
@@ -909,31 +909,31 @@ mod tests {
         #[test]
         fn test_parse_function_call_and_field_access() {
             let input = "obj.method(arg1, arg2).field";
-            let expected = Expression::FieldAccess {
-                base: Box::new(Expression::Call {
-                    callee: Box::new(Expression::FieldAccess {
-                        base: Box::new(Expression::Variable("obj".to_string())),
-                        field_name: "method".to_string(),
+            let expected = Expr::FieldAccess {
+                base: Box::new(Expr::Call {
+                    callee: Box::new(Expr::FieldAccess {
+                        base: Box::new(Expr::Var("obj".to_string())),
+                        name: "method".to_string(),
                     }),
                     arguments: vec![
-                        Expression::Variable("arg1".to_string()),
-                        Expression::Variable("arg2".to_string()),
+                        Expr::Var("arg1".to_string()),
+                        Expr::Var("arg2".to_string()),
                     ],
                 }),
-                field_name: "field".to_string(),
+                name: "field".to_string(),
             };
             parse_and_compare(input, expected);
         }
 
         #[test]
-        fn test_parse_match_expression() {
+        fn test_parse_match_expr() {
             let input = r#"match value {
                 Some { inner: a } => a,
                 None {} => 0,
             }"#;
 
-            let expected = Expression::Match {
-                scrutinee: Box::new(Expression::Variable("value".to_string())),
+            let expected = Expr::Match {
+                scrutinee: Box::new(Expr::Var("value".to_string())),
                 arms: vec![
                     MatchArm {
                         pattern: StructPattern {
@@ -943,14 +943,14 @@ mod tests {
                                 binding_name: "a".to_string(),
                             }],
                         },
-                        value: Box::new(Expression::Variable("a".to_string())),
+                        value: Box::new(Expr::Var("a".to_string())),
                     },
                     MatchArm {
                         pattern: StructPattern {
                             variant: "None".to_string(),
                             fields: vec![],
                         },
-                        value: Box::new(Expression::Literal(Literal::Int(0))),
+                        value: Box::new(Expr::Lit(Lit::Int(0))),
                     },
                 ],
             };

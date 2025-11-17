@@ -135,11 +135,11 @@ impl<'a> MlrBuilder<'a> {
     pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::Val> {
         self.push_scope();
 
-        for stmt in &block.statements {
+        for stmt in &block.stmts {
             self.build_statement(stmt)?;
         }
 
-        let output = match &block.return_expression {
+        let output = match &block.return_expr {
             Some(expr) => self.lower_to_val(expr)?,
             None => {
                 let unit = self.insert_unit_op()?;
@@ -152,18 +152,18 @@ impl<'a> MlrBuilder<'a> {
         Ok(output)
     }
 
-    fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::Val> {
-        use hlr::Expression::*;
+    fn lower_to_val(&mut self, expr: &hlr::Expr) -> Result<mlr::Val> {
+        use hlr::Expr::*;
 
         match expr {
-            Literal(..) | Variable(..) | FieldAccess { .. } => {
+            Lit(..) | Var(..) | FieldAccess { .. } => {
                 let op = self.lower_to_op(expr)?;
                 self.insert_use_val(op)
             }
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
-            Assignment { target, value } => self.build_assignment(target, value),
+            Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
-            StructExpr { struct_name, fields } => self.build_struct_or_enum_val(struct_name, fields),
+            Struct { name: struct_name, fields } => self.build_struct_or_enum_val(struct_name, fields),
             If {
                 condition,
                 then_block,
@@ -175,22 +175,22 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::Place> {
-        use hlr::Expression::*;
+    fn lower_to_place(&mut self, expr: &hlr::Expr) -> Result<mlr::Place> {
+        use hlr::Expr::*;
 
         match expr {
-            Variable(name) => self.lower_var_to_place(name),
-            FieldAccess { base, field_name } => self.lower_field_access_to_place(base, field_name),
+            Var(name) => self.lower_var_to_place(name),
+            FieldAccess { base, name: field_name } => self.lower_field_access_to_place(base, field_name),
             _ => panic!("Only variables and field access expressions are supported as places."),
         }
     }
 
-    fn lower_to_op(&mut self, expr: &hlr::Expression) -> Result<mlr::Op> {
-        use hlr::Expression::*;
+    fn lower_to_op(&mut self, expr: &hlr::Expr) -> Result<mlr::Op> {
+        use hlr::Expr::*;
 
         match expr {
-            Literal(literal) => self.build_literal(literal),
-            Variable(name) => self.build_variable(name),
+            Lit(literal) => self.build_literal(literal),
+            Var(name) => self.build_variable(name),
             FieldAccess { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)
@@ -202,8 +202,8 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Op> {
-        use hlr::Literal::*;
+    fn build_literal(&mut self, literal: &hlr::Lit) -> Result<mlr::Op> {
+        use hlr::Lit::*;
 
         match literal {
             Int(n) => self.insert_int_op(*n),
@@ -217,9 +217,9 @@ impl<'a> MlrBuilder<'a> {
 
     fn build_binary_op(
         &mut self,
-        left: &hlr::Expression,
+        left: &hlr::Expr,
         operator: &hlr::BinaryOperator,
-        right: &hlr::Expression,
+        right: &hlr::Expr,
     ) -> Result<mlr::Val> {
         let left_op = self.lower_to_op(left)?;
         let right_op = self.lower_to_op(right)?;
@@ -234,7 +234,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_call_val(op, vec![left_op, right_op])
     }
 
-    fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::Val> {
+    fn build_assignment(&mut self, target: &hlr::Expr, value: &hlr::Expr) -> Result<mlr::Val> {
         let loc = self.lower_to_place(target)?;
         let value = self.lower_to_val(value)?;
         self.insert_assign_stmt(loc, value)?;
@@ -243,7 +243,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::Val> {
+    fn build_call(&mut self, callee: &hlr::Expr, arguments: &[hlr::Expr]) -> Result<mlr::Val> {
         let callee = self.lower_to_op(callee)?;
 
         let args = arguments
@@ -256,7 +256,7 @@ impl<'a> MlrBuilder<'a> {
 
     fn build_if(
         &mut self,
-        condition: &hlr::Expression,
+        condition: &hlr::Expr,
         then_block: &hlr::Block,
         else_block: Option<&hlr::Block>,
     ) -> Result<mlr::Val> {
@@ -298,7 +298,7 @@ impl<'a> MlrBuilder<'a> {
     fn build_struct_or_enum_val(
         &mut self,
         struct_name: &str,
-        fields: &[(String, hlr::Expression)],
+        fields: &[(String, hlr::Expr)],
     ) -> Result<mlr::Val> {
         if let Some(ty) = self.ctxt.tys.get_ty_by_name(struct_name) {
             self.build_struct_val(&ty, fields)
@@ -312,7 +312,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expression)]) -> Result<mlr::Val> {
+    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expr)]) -> Result<mlr::Val> {
         let struct_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
         let struct_val_place = self.insert_loc_place(struct_val_loc)?;
         self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
@@ -323,7 +323,7 @@ impl<'a> MlrBuilder<'a> {
         &mut self,
         ty: &ty::Ty,
         variant_index: &usize,
-        fields: &[(String, hlr::Expression)],
+        fields: &[(String, hlr::Expr)],
     ) -> Result<mlr::Val> {
         // Create empty enum value
         let enum_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
@@ -348,7 +348,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_place_val(base_place)
     }
 
-    fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
+    fn build_match_expression(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
         let scrutinee = self.lower_to_op(scrutinee)?;
         let scrutinee_loc = assign_to_new_loc!(self, self.insert_use_val(scrutinee)?);
         let scrutinee_place = self.insert_loc_place(scrutinee_loc)?;
@@ -375,18 +375,18 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(result_op)
     }
 
-    fn build_statement(&mut self, stmt: &hlr::Statement) -> Result<()> {
-        use hlr::Statement::*;
+    fn build_statement(&mut self, stmt: &hlr::Stmt) -> Result<()> {
+        use hlr::Stmt::*;
 
         match stmt {
             Let { name, value, .. } => self.build_let_statement(name, value),
-            Expression(expression) => self.build_expression_statement(expression),
+            Expr(expression) => self.build_expression_statement(expression),
             Return(expression) => self.build_return_statement(expression.as_ref()),
             Break => self.build_break_statement(),
         }
     }
 
-    fn build_let_statement(&mut self, name: &str, value: &hlr::Expression) -> Result<()> {
+    fn build_let_statement(&mut self, name: &str, value: &hlr::Expr) -> Result<()> {
         let loc = self.insert_fresh_alloc()?;
 
         self.start_new_block();
@@ -400,14 +400,14 @@ impl<'a> MlrBuilder<'a> {
         Ok(())
     }
 
-    fn build_expression_statement(&mut self, expression: &hlr::Expression) -> Result<()> {
+    fn build_expression_statement(&mut self, expression: &hlr::Expr) -> Result<()> {
         self.start_new_block();
         let _ = assign_to_new_loc!(self, self.lower_to_val(expression)?);
         self.end_and_insert_current_block();
         Ok(())
     }
 
-    fn build_return_statement(&mut self, expression: Option<&hlr::Expression>) -> Result<()> {
+    fn build_return_statement(&mut self, expression: Option<&hlr::Expr>) -> Result<()> {
         self.start_new_block();
 
         let return_val = match expression {
@@ -435,7 +435,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_loc_place(loc)
     }
 
-    fn lower_field_access_to_place(&mut self, base: &hlr::Expression, field_name: &str) -> Result<mlr::Place> {
+    fn lower_field_access_to_place(&mut self, base: &hlr::Expr, field_name: &str) -> Result<mlr::Place> {
         // TODO allow general expressions as base (by lowering to val and then creating a
         // temporary place). This however requires a better builder infrastructure, so we
         // can here at this point create temporary variables/places in the current scope.

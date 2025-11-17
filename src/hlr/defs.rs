@@ -55,45 +55,45 @@ pub struct EnumVariant {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Block {
-    pub statements: Vec<Statement>,
-    pub return_expression: Option<Box<Expression>>,
+    pub stmts: Vec<Stmt>,
+    pub return_expr: Option<Box<Expr>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Statement {
+pub enum Stmt {
     Let {
         name: String,
         ty_annot: Option<String>,
-        value: Expression,
+        value: Expr,
     },
-    Expression(Expression),
-    Return(Option<Expression>),
+    Expr(Expr),
+    Return(Option<Expr>),
     Break,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Expression {
-    Literal(Literal),
-    Variable(String),
+pub enum Expr {
+    Lit(Lit),
+    Var(String),
     BinaryOp {
-        left: Box<Expression>,
+        left: Box<Expr>,
         operator: BinaryOperator,
-        right: Box<Expression>,
+        right: Box<Expr>,
     },
-    Assignment {
-        target: Box<Expression>,
-        value: Box<Expression>,
+    Assign {
+        target: Box<Expr>,
+        value: Box<Expr>,
     },
     Call {
-        callee: Box<Expression>,
-        arguments: Vec<Expression>,
+        callee: Box<Expr>,
+        arguments: Vec<Expr>,
     },
-    StructExpr {
-        struct_name: String,
-        fields: Vec<(String, Expression)>,
+    Struct {
+        name: String,
+        fields: Vec<(String, Expr)>,
     },
     If {
-        condition: Box<Expression>,
+        condition: Box<Expr>,
         then_block: Block,
         else_block: Option<Block>,
     },
@@ -102,17 +102,17 @@ pub enum Expression {
     },
     Block(Block),
     FieldAccess {
-        base: Box<Expression>,
-        field_name: String,
+        base: Box<Expr>,
+        name: String,
     },
     Match {
-        scrutinee: Box<Expression>,
+        scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,
     },
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Literal {
+pub enum Lit {
     Int(i64),
     Bool(bool),
 }
@@ -137,7 +137,7 @@ pub enum BinaryOperator {
 #[derive(Debug, PartialEq, Eq)]
 pub struct MatchArm {
     pub pattern: Pattern,
-    pub value: Box<Expression>,
+    pub value: Box<Expr>,
 }
 
 type Pattern = StructPattern;
