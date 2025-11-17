@@ -7,8 +7,8 @@ use crate::{
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn infer_val_ty(&mut self, val: mlr::ValId) -> Result<Ty> {
-        use mlr::Val::*;
+    pub fn infer_val_ty(&mut self, val: mlr::Val) -> Result<Ty> {
+        use mlr::ValDef::*;
 
         let val = self
             .output
@@ -19,12 +19,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         match val {
             Call { callable, args } => self.infer_ty_of_call(callable, args),
             Empty { ty } => Ok(*ty),
-            Use(op_id) => Ok(self.get_op_ty(op_id)),
+            Use(op) => Ok(self.get_op_ty(op)),
         }
     }
 
-    fn infer_ty_of_constant(&self, constant: &mlr::Constant) -> Result<Ty> {
-        use mlr::Constant::*;
+    fn infer_ty_of_constant(&self, constant: &mlr::Const) -> Result<Ty> {
+        use mlr::Const::*;
 
         let ty = match constant {
             Int(_) => Primitive::Integer32,
@@ -38,7 +38,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveTy)
     }
 
-    fn infer_ty_of_call(&self, callable: &mlr::OpId, args: &[mlr::OpId]) -> Result<Ty> {
+    fn infer_ty_of_call(&self, callable: &mlr::Op, args: &[mlr::Op]) -> Result<Ty> {
         let ty = self.get_op_ty(callable);
         let callable_ty_def = self
             .ctxt
@@ -78,7 +78,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let signature = self
             .ctxt
             .fns
-            .get_signature_by_id(&fn_)
+            .get_signature(&fn_)
             .expect("function signature should be registered");
 
         let param_tys: Vec<_> = signature.parameters.iter().map(|param| param.ty).collect();
@@ -88,17 +88,17 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(fn_ty)
     }
 
-    pub fn try_infer_place_ty(&self, place_id: &mlr::PlaceId) -> Result<Option<Ty>> {
-        use mlr::Place::*;
+    pub fn try_infer_place_ty(&self, place: &mlr::Place) -> Result<Option<Ty>> {
+        use mlr::PlaceDef::*;
 
         let place = self
             .output
             .places
-            .get(place_id)
+            .get(place)
             .expect("infer_ty_of_place should only be called with a valid PlaceId");
 
         match place {
-            Local(loc_id) => self.try_infer_ty_of_local_place(loc_id),
+            Loc(loc) => self.try_infer_ty_of_local_place(loc),
             FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index).map(Some),
             EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(base).map(Some),
             ProjectToVariant { base, variant_index } => {
@@ -107,11 +107,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn try_infer_ty_of_local_place(&self, loc_id: &mlr::LocId) -> Result<Option<Ty>> {
-        Ok(self.try_get_loc_ty(loc_id))
+    fn try_infer_ty_of_local_place(&self, loc: &mlr::Loc) -> Result<Option<Ty>> {
+        Ok(self.try_get_loc_ty(loc))
     }
 
-    fn infer_ty_of_field_access_place(&self, base: &mlr::PlaceId, field_index: &usize) -> Result<Ty> {
+    fn infer_ty_of_field_access_place(&self, base: &mlr::Place, field_index: &usize) -> Result<Ty> {
         let base_ty = self.get_place_ty(base);
         let struct_def = self.get_struct_def(&base_ty)?;
 
@@ -124,7 +124,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_ty)
     }
 
-    fn infer_ty_of_enum_discriminant(&self, base: &mlr::PlaceId) -> Result<Ty> {
+    fn infer_ty_of_enum_discriminant(&self, base: &mlr::Place) -> Result<Ty> {
         let base_ty = self.get_place_ty(base);
         let _enum_def = self.get_enum_def(&base_ty)?;
 
@@ -137,7 +137,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(int_ty)
     }
 
-    fn infer_ty_of_project_to_variant_place(&self, base: &mlr::PlaceId, variant_index: &usize) -> Result<Ty> {
+    fn infer_ty_of_project_to_variant_place(&self, base: &mlr::Place, variant_index: &usize) -> Result<Ty> {
         let base_ty = self.get_place_ty(base);
         let enum_def = self.get_enum_def(&base_ty)?;
         let variant =
@@ -152,19 +152,19 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(variant.ty)
     }
 
-    pub fn infer_op_ty(&mut self, op_id: mlr::OpId) -> Result<Ty> {
-        use mlr::Operand::*;
+    pub fn infer_op_ty(&mut self, op: mlr::Op) -> Result<Ty> {
+        use mlr::OpDef::*;
 
         let op = self
             .output
             .ops
-            .get(&op_id)
+            .get(&op)
             .expect("infer_ty_of_operand should only be called with a valid OpId");
 
         match op {
             Fn(fn_) => self.infer_ty_of_fn(*fn_),
-            Constant(constant) => self.infer_ty_of_constant(constant),
-            Copy(place_id) => self.try_infer_place_ty(place_id).map(|opt| opt.unwrap()),
+            Const(constant) => self.infer_ty_of_constant(constant),
+            Copy(place) => self.try_infer_place_ty(place).map(|opt| opt.unwrap()),
         }
     }
 }

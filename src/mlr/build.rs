@@ -29,17 +29,17 @@ pub struct MlrBuilder<'a> {
     output: mlr::Mlr,
 
     scopes: VecDeque<Scope>,
-    blocks: VecDeque<Vec<mlr::StmtId>>,
+    blocks: VecDeque<Vec<mlr::Stmt>>,
 
-    next_val_id: mlr::ValId,
-    next_place_id: mlr::PlaceId,
-    next_stmt_id: mlr::StmtId,
-    next_loc_id: mlr::LocId,
-    next_op_id: mlr::OpId,
+    next_val: mlr::Val,
+    next_place: mlr::Place,
+    next_stmt: mlr::Stmt,
+    next_loc: mlr::Loc,
+    next_op: mlr::Op,
 }
 
 struct Scope {
-    vars: HashMap<String, mlr::LocId>,
+    vars: HashMap<String, mlr::Loc>,
 }
 
 impl Scope {
@@ -60,11 +60,11 @@ impl<'a> MlrBuilder<'a> {
             scopes: VecDeque::new(),
             blocks: VecDeque::new(),
 
-            next_val_id: mlr::ValId(0),
-            next_place_id: mlr::PlaceId(0),
-            next_stmt_id: mlr::StmtId(0),
-            next_loc_id: mlr::LocId(0),
-            next_op_id: mlr::OpId(0),
+            next_val: mlr::Val(0),
+            next_place: mlr::Place(0),
+            next_stmt: mlr::Stmt(0),
+            next_loc: mlr::Loc(0),
+            next_op: mlr::Op(0),
         }
     }
 
@@ -80,7 +80,7 @@ impl<'a> MlrBuilder<'a> {
         self.scopes.pop_back();
     }
 
-    fn add_to_scope(&mut self, name: &str, loc: mlr::LocId) {
+    fn add_to_scope(&mut self, name: &str, loc: mlr::Loc) {
         self.current_scope().vars.insert(name.to_string(), loc);
     }
 
@@ -88,29 +88,29 @@ impl<'a> MlrBuilder<'a> {
         self.blocks.push_back(Vec::new());
     }
 
-    fn release_current_block(&mut self) -> mlr::StmtId {
+    fn release_current_block(&mut self) -> mlr::Stmt {
         let stmts = self.blocks.pop_back().expect("self.blocks should never be empty");
-        let block = mlr::Stmt::Block(stmts);
-        let stmt_id = self.get_next_stmt_id();
-        self.output.stmts.insert(stmt_id, block);
-        stmt_id
+        let block = mlr::StmtDef::Block(stmts);
+        let stmt = self.get_next_stmt();
+        self.output.stmts.insert(stmt, block);
+        stmt
     }
 
     fn end_and_insert_current_block(&mut self) {
-        let block_stmt_id = self.release_current_block();
+        let block_stmt = self.release_current_block();
         self.blocks
             .back_mut()
             .expect("self.blocks should never be empty")
-            .push(block_stmt_id);
+            .push(block_stmt);
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
-        let FnSig { parameters, .. } = self.ctxt.fns.get_signature_by_id(&self.mlr_fn).cloned().unwrap();
+        let FnSig { parameters, .. } = self.ctxt.fns.get_signature(&self.mlr_fn).cloned().unwrap();
 
         self.push_scope();
 
         for FnParam { name, ty } in parameters {
-            let loc = self.get_next_loc_id();
+            let loc = self.get_next_loc();
             self.output.allocated_locs.insert(loc);
             self.add_to_scope(&name, loc);
             self.output.loc_tys.insert(loc, ty);
@@ -132,7 +132,7 @@ impl<'a> MlrBuilder<'a> {
     /// all while in a new scope.
     ///
     /// This method does not start or end a new MLR block; but it does push and pop a new scope.
-    pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::ValId> {
+    pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::Val> {
         self.push_scope();
 
         for stmt in &block.statements {
@@ -152,7 +152,7 @@ impl<'a> MlrBuilder<'a> {
         Ok(output)
     }
 
-    fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::ValId> {
+    fn lower_to_val(&mut self, expr: &hlr::Expression) -> Result<mlr::Val> {
         use hlr::Expression::*;
 
         match expr {
@@ -175,7 +175,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::PlaceId> {
+    fn lower_to_place(&mut self, expr: &hlr::Expression) -> Result<mlr::Place> {
         use hlr::Expression::*;
 
         match expr {
@@ -185,7 +185,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn lower_to_op(&mut self, expr: &hlr::Expression) -> Result<mlr::OpId> {
+    fn lower_to_op(&mut self, expr: &hlr::Expression) -> Result<mlr::Op> {
         use hlr::Expression::*;
 
         match expr {
@@ -202,7 +202,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::OpId> {
+    fn build_literal(&mut self, literal: &hlr::Literal) -> Result<mlr::Op> {
         use hlr::Literal::*;
 
         match literal {
@@ -211,7 +211,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_variable(&mut self, name: &str) -> Result<mlr::OpId> {
+    fn build_variable(&mut self, name: &str) -> Result<mlr::Op> {
         self.resolve_name(name)
     }
 
@@ -220,7 +220,7 @@ impl<'a> MlrBuilder<'a> {
         left: &hlr::Expression,
         operator: &hlr::BinaryOperator,
         right: &hlr::Expression,
-    ) -> Result<mlr::ValId> {
+    ) -> Result<mlr::Val> {
         let left_op = self.lower_to_op(left)?;
         let right_op = self.lower_to_op(right)?;
 
@@ -234,7 +234,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_call_val(op, vec![left_op, right_op])
     }
 
-    fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::ValId> {
+    fn build_assignment(&mut self, target: &hlr::Expression, value: &hlr::Expression) -> Result<mlr::Val> {
         let loc = self.lower_to_place(target)?;
         let value = self.lower_to_val(value)?;
         self.insert_assign_stmt(loc, value)?;
@@ -243,7 +243,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::ValId> {
+    fn build_call(&mut self, callee: &hlr::Expression, arguments: &[hlr::Expression]) -> Result<mlr::Val> {
         let callee = self.lower_to_op(callee)?;
 
         let args = arguments
@@ -259,7 +259,7 @@ impl<'a> MlrBuilder<'a> {
         condition: &hlr::Expression,
         then_block: &hlr::Block,
         else_block: Option<&hlr::Block>,
-    ) -> Result<mlr::ValId> {
+    ) -> Result<mlr::Val> {
         let cond = self.lower_to_op(condition)?;
 
         let result_loc = self.insert_fresh_alloc()?;
@@ -285,7 +285,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(result_op)
     }
 
-    fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::ValId> {
+    fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::Val> {
         self.start_new_block();
         self.build_block(body)?;
         let body = self.release_current_block();
@@ -299,7 +299,7 @@ impl<'a> MlrBuilder<'a> {
         &mut self,
         struct_name: &str,
         fields: &[(String, hlr::Expression)],
-    ) -> Result<mlr::ValId> {
+    ) -> Result<mlr::Val> {
         if let Some(ty) = self.ctxt.tys.get_ty_by_name(struct_name) {
             self.build_struct_val(&ty, fields)
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
@@ -312,7 +312,7 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expression)]) -> Result<mlr::ValId> {
+    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expression)]) -> Result<mlr::Val> {
         let struct_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
         let struct_val_place = self.insert_loc_place(struct_val_loc)?;
         self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
@@ -324,7 +324,7 @@ impl<'a> MlrBuilder<'a> {
         ty: &ty::Ty,
         variant_index: &usize,
         fields: &[(String, hlr::Expression)],
-    ) -> Result<mlr::ValId> {
+    ) -> Result<mlr::Val> {
         // Create empty enum value
         let enum_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
         let base_place = self.insert_loc_place(enum_val_loc)?;
@@ -348,7 +348,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_place_val(base_place)
     }
 
-    fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::ValId> {
+    fn build_match_expression(&mut self, scrutinee: &hlr::Expression, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
         let scrutinee = self.lower_to_op(scrutinee)?;
         let scrutinee_loc = assign_to_new_loc!(self, self.insert_use_val(scrutinee)?);
         let scrutinee_place = self.insert_loc_place(scrutinee_loc)?;
@@ -427,7 +427,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_break_stmt().map(|_| ())
     }
 
-    fn lower_var_to_place(&mut self, name: &str) -> Result<mlr::PlaceId> {
+    fn lower_var_to_place(&mut self, name: &str) -> Result<mlr::Place> {
         let loc = self
             .resolve_name_to_location(name)
             .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
@@ -435,7 +435,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_loc_place(loc)
     }
 
-    fn lower_field_access_to_place(&mut self, base: &hlr::Expression, field_name: &str) -> Result<mlr::PlaceId> {
+    fn lower_field_access_to_place(&mut self, base: &hlr::Expression, field_name: &str) -> Result<mlr::Place> {
         // TODO allow general expressions as base (by lowering to val and then creating a
         // temporary place). This however requires a better builder infrastructure, so we
         // can here at this point create temporary variables/places in the current scope.
@@ -460,10 +460,10 @@ impl<'a> MlrBuilder<'a> {
         &mut self,
         arms: &[hlr::MatchArm],
         arm_indices: &[usize],
-        eq_fn: mlr::OpId,
-        discriminant: mlr::OpId,
-        scrutinee_place: mlr::PlaceId,
-        result_loc: mlr::LocId,
+        eq_fn: mlr::Op,
+        discriminant: mlr::Op,
+        scrutinee_place: mlr::Place,
+        result_loc: mlr::Loc,
     ) -> Result<()> {
         if arms.is_empty() {
             panic!("Match expressions must have at least one arm.");

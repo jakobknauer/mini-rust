@@ -36,7 +36,7 @@ impl FnReg {
         Ok(fn_)
     }
 
-    pub fn get_signature_by_id(&self, fn_: &Fn) -> Option<&FnSig> {
+    pub fn get_signature(&self, fn_: &Fn) -> Option<&FnSig> {
         self.sigs.get(fn_)
     }
 

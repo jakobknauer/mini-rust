@@ -6,34 +6,34 @@ use std::{
 use crate::ctxt::{fns::Fn, ty::Ty};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct StmtId(pub usize);
+pub struct Stmt(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ValId(pub usize);
+pub struct Val(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PlaceId(pub usize);
+pub struct Place(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct LocId(pub usize);
+pub struct Loc(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct OpId(pub usize);
+pub struct Op(pub usize);
 
 #[derive(Debug)]
 pub struct Mlr {
-    pub vals: HashMap<ValId, Val>,
-    pub stmts: HashMap<StmtId, Stmt>,
-    pub places: HashMap<PlaceId, Place>,
-    pub ops: HashMap<OpId, Operand>,
-    pub allocated_locs: HashSet<LocId>,
+    pub vals: HashMap<Val, ValDef>,
+    pub stmts: HashMap<Stmt, StmtDef>,
+    pub places: HashMap<Place, PlaceDef>,
+    pub ops: HashMap<Op, OpDef>,
+    pub allocated_locs: HashSet<Loc>,
 
-    pub loc_tys: HashMap<LocId, Ty>,
-    pub val_tys: HashMap<ValId, Ty>,
-    pub place_tys: HashMap<PlaceId, Ty>,
-    pub op_tys: HashMap<OpId, Ty>,
-    pub body: StmtId,
-    pub param_locs: Vec<LocId>,
+    pub loc_tys: HashMap<Loc, Ty>,
+    pub val_tys: HashMap<Val, Ty>,
+    pub place_tys: HashMap<Place, Ty>,
+    pub op_tys: HashMap<Op, Ty>,
+    pub body: Stmt,
+    pub param_locs: Vec<Loc>,
 }
 
 impl Mlr {
@@ -49,47 +49,47 @@ impl Mlr {
             val_tys: HashMap::new(),
             place_tys: HashMap::new(),
             op_tys: HashMap::new(),
-            body: StmtId(0),
+            body: Stmt(0),
             param_locs: Vec::new(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Stmt {
-    Alloc { loc: LocId },
-    Assign { place: PlaceId, value: ValId },
-    Return { value: ValId },
-    Block(Vec<StmtId>),
+pub enum StmtDef {
+    Alloc { loc: Loc },
+    Assign { place: Place, value: Val },
+    Return { value: Val },
+    Block(Vec<Stmt>),
     If(If),
-    Loop { body: StmtId },
+    Loop { body: Stmt },
     Break,
 }
 
 #[derive(Debug, Clone)]
-pub enum Val {
-    Call { callable: OpId, args: Vec<OpId> },
+pub enum ValDef {
+    Call { callable: Op, args: Vec<Op> },
     Empty { ty: Ty },
-    Use(OpId),
+    Use(Op),
 }
 
 #[derive(Debug, Clone)]
-pub enum Operand {
+pub enum OpDef {
     Fn(Fn),
-    Constant(Constant),
-    Copy(PlaceId),
+    Const(Const),
+    Copy(Place),
 }
 
 #[derive(Debug, Clone)]
-pub enum Place {
-    Local(LocId),
-    FieldAccess { base: PlaceId, field_index: usize },
-    EnumDiscriminant { base: PlaceId },
-    ProjectToVariant { base: PlaceId, variant_index: usize },
+pub enum PlaceDef {
+    Loc(Loc),
+    FieldAccess { base: Place, field_index: usize },
+    EnumDiscriminant { base: Place },
+    ProjectToVariant { base: Place, variant_index: usize },
 }
 
 #[derive(Debug, Clone)]
-pub enum Constant {
+pub enum Const {
     Int(i64),
     Bool(bool),
     Unit,
@@ -97,12 +97,12 @@ pub enum Constant {
 
 #[derive(Debug, Clone)]
 pub struct If {
-    pub condition: OpId,
-    pub then_block: StmtId,
-    pub else_block: StmtId,
+    pub cond: Op,
+    pub then: Stmt,
+    pub else_: Stmt,
 }
 
-impl Display for LocId {
+impl Display for Loc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "_{}", self.0)
     }

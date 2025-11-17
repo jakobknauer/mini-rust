@@ -26,9 +26,9 @@ impl<'a> super::MlrBuilder<'a> {
     pub fn build_arm_condition(
         &mut self,
         variant_index: &usize,
-        eq_fn: &mlr::OpId,
-        discriminant: &mlr::OpId,
-    ) -> Result<mlr::OpId> {
+        eq_fn: &mlr::Op,
+        discriminant: &mlr::Op,
+    ) -> Result<mlr::Op> {
         let variant_index = self.insert_int_op(*variant_index as i64)?;
         let condition_loc = assign_to_new_loc!(self, self.insert_call_val(*eq_fn, vec![*discriminant, variant_index])?);
         self.insert_copy_loc_op(condition_loc)
@@ -39,8 +39,8 @@ impl<'a> super::MlrBuilder<'a> {
         arm: &hlr::MatchArm,
         enum_ty: &Ty,
         variant_index: &usize,
-        base_place: &mlr::PlaceId,
-    ) -> Result<mlr::ValId> {
+        base_place: &mlr::Place,
+    ) -> Result<mlr::Val> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
         let enum_def = self.get_enum_def(enum_ty)?;

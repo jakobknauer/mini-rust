@@ -10,140 +10,133 @@ use crate::{
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn get_next_val_id(&mut self) -> mlr::ValId {
-        let id = self.next_val_id;
-        self.next_val_id.0 += 1;
-        id
+    pub fn get_next_val(&mut self) -> mlr::Val {
+        let val = self.next_val;
+        self.next_val.0 += 1;
+        val
     }
 
-    pub fn get_next_stmt_id(&mut self) -> mlr::StmtId {
-        let id = self.next_stmt_id;
-        self.next_stmt_id.0 += 1;
-        id
+    pub fn get_next_stmt(&mut self) -> mlr::Stmt {
+        let stmt = self.next_stmt;
+        self.next_stmt.0 += 1;
+        stmt
     }
 
-    pub fn get_next_loc_id(&mut self) -> mlr::LocId {
-        let id = self.next_loc_id;
-        self.next_loc_id.0 += 1;
-        id
+    pub fn get_next_loc(&mut self) -> mlr::Loc {
+        let loc = self.next_loc;
+        self.next_loc.0 += 1;
+        loc
     }
 
-    pub fn get_next_place_id(&mut self) -> mlr::PlaceId {
-        let id = self.next_place_id;
-        self.next_place_id.0 += 1;
-        id
+    pub fn get_next_place(&mut self) -> mlr::Place {
+        let place = self.next_place;
+        self.next_place.0 += 1;
+        place
     }
 
-    pub fn get_next_op_id(&mut self) -> mlr::OpId {
-        let id = self.next_op_id;
-        self.next_op_id.0 += 1;
-        id
+    pub fn get_next_op(&mut self) -> mlr::Op {
+        let op = self.next_op;
+        self.next_op.0 += 1;
+        op
     }
 
-    pub fn get_loc_ty(&self, loc_id: &mlr::LocId) -> ty::Ty {
-        *self.output.loc_tys.get(loc_id).expect("type of loc should be known")
+    pub fn get_loc_ty(&self, loc: &mlr::Loc) -> ty::Ty {
+        *self.output.loc_tys.get(loc).expect("type of loc should be known")
     }
 
-    pub fn try_get_loc_ty(&self, loc_id: &mlr::LocId) -> Option<ty::Ty> {
-        self.output.loc_tys.get(loc_id).cloned()
+    pub fn try_get_loc_ty(&self, loc: &mlr::Loc) -> Option<ty::Ty> {
+        self.output.loc_tys.get(loc).cloned()
     }
 
-    pub fn get_place_ty(&self, place_id: &mlr::PlaceId) -> ty::Ty {
-        *self
-            .output
-            .place_tys
-            .get(place_id)
-            .expect("type of place should be known")
+    pub fn get_place_ty(&self, place: &mlr::Place) -> ty::Ty {
+        *self.output.place_tys.get(place).expect("type of place should be known")
     }
 
-    pub fn try_get_place_ty(&self, place_id: &mlr::PlaceId) -> Option<ty::Ty> {
-        self.output.place_tys.get(place_id).cloned()
+    pub fn try_get_place_ty(&self, place: &mlr::Place) -> Option<ty::Ty> {
+        self.output.place_tys.get(place).cloned()
     }
 
-    pub fn get_val_ty(&self, val_id: &mlr::ValId) -> ty::Ty {
-        *self.output.val_tys.get(val_id).expect("type of val should be known")
+    pub fn get_val_ty(&self, val: &mlr::Val) -> ty::Ty {
+        *self.output.val_tys.get(val).expect("type of val should be known")
     }
 
-    pub fn get_op_ty(&self, op_id: &mlr::OpId) -> ty::Ty {
-        *self.output.op_tys.get(op_id).expect("type of op should be known")
+    pub fn get_op_ty(&self, op: &mlr::Op) -> ty::Ty {
+        *self.output.op_tys.get(op).expect("type of op should be known")
     }
 
-    pub fn insert_val(&mut self, val: mlr::Val) -> Result<mlr::ValId> {
-        let val_id = self.get_next_val_id();
-        self.output.vals.insert(val_id, val);
+    pub fn insert_val(&mut self, val_def: mlr::ValDef) -> Result<mlr::Val> {
+        let val = self.get_next_val();
+        self.output.vals.insert(val, val_def);
 
-        let ty = self.infer_val_ty(val_id)?;
-        self.output.val_tys.insert(val_id, ty);
+        let ty = self.infer_val_ty(val)?;
+        self.output.val_tys.insert(val, ty);
 
-        Ok(val_id)
+        Ok(val)
     }
 
-    pub fn insert_call_val(&mut self, callable: mlr::OpId, args: Vec<mlr::OpId>) -> Result<mlr::ValId> {
-        let val = mlr::Val::Call { callable, args };
+    pub fn insert_call_val(&mut self, callable: mlr::Op, args: Vec<mlr::Op>) -> Result<mlr::Val> {
+        let val = mlr::ValDef::Call { callable, args };
         self.insert_val(val)
     }
 
-    pub fn insert_empty_val(&mut self, ty: ty::Ty) -> Result<mlr::ValId> {
-        let val = mlr::Val::Empty { ty };
+    pub fn insert_empty_val(&mut self, ty: ty::Ty) -> Result<mlr::Val> {
+        let val = mlr::ValDef::Empty { ty };
         self.insert_val(val)
     }
 
-    pub fn insert_use_val(&mut self, op: mlr::OpId) -> Result<mlr::ValId> {
-        let val = mlr::Val::Use(op);
+    pub fn insert_use_val(&mut self, op: mlr::Op) -> Result<mlr::Val> {
+        let val = mlr::ValDef::Use(op);
         self.insert_val(val)
     }
 
-    pub fn insert_use_place_val(&mut self, place: mlr::PlaceId) -> Result<mlr::ValId> {
+    pub fn insert_use_place_val(&mut self, place: mlr::Place) -> Result<mlr::Val> {
         let op = self.insert_copy_op(place)?;
         self.insert_use_val(op)
     }
 
-    pub fn insert_if_stmt(&mut self, cond: mlr::OpId, then_: mlr::StmtId, else_: mlr::StmtId) -> Result<mlr::StmtId> {
-        let if_ = mlr::Stmt::If(mlr::If {
-            condition: cond,
-            then_block: then_,
-            else_block: else_,
+    pub fn insert_if_stmt(&mut self, cond: mlr::Op, then_: mlr::Stmt, else_: mlr::Stmt) -> Result<mlr::Stmt> {
+        let if_ = mlr::StmtDef::If(mlr::If {
+            cond,
+            then: then_,
+            else_,
         });
         self.insert_stmt(if_)
     }
 
-    pub fn insert_loop_stmt(&mut self, body: mlr::StmtId) -> Result<mlr::StmtId> {
-        let val = mlr::Stmt::Loop { body };
+    pub fn insert_loop_stmt(&mut self, body: mlr::Stmt) -> Result<mlr::Stmt> {
+        let val = mlr::StmtDef::Loop { body };
         self.insert_stmt(val)
     }
 
-    pub fn insert_stmt(&mut self, stmt: mlr::Stmt) -> Result<mlr::StmtId> {
-        let stmt_id = self.get_next_stmt_id();
-        self.output.stmts.insert(stmt_id, stmt);
+    pub fn insert_stmt(&mut self, stmt_def: mlr::StmtDef) -> Result<mlr::Stmt> {
+        let stmt = self.get_next_stmt();
+        self.output.stmts.insert(stmt, stmt_def);
         self.blocks
             .back_mut()
             .expect("self.blocks should not be empty")
-            .push(stmt_id);
-        Ok(stmt_id)
+            .push(stmt);
+        Ok(stmt)
     }
 
-    pub fn insert_alloc_stmt(&mut self, loc_id: mlr::LocId) -> Result<mlr::StmtId> {
-        assert!(
-            !self.output.allocated_locs.contains(&loc_id),
-            "location already allocated"
-        );
-        self.output.allocated_locs.insert(loc_id);
-        let stmt = mlr::Stmt::Alloc { loc: loc_id };
+    pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc) -> Result<mlr::Stmt> {
+        assert!(!self.output.allocated_locs.contains(&loc), "location already allocated");
+        self.output.allocated_locs.insert(loc);
+        let stmt = mlr::StmtDef::Alloc { loc };
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_fresh_alloc(&mut self) -> Result<mlr::LocId> {
-        let loc_id = self.get_next_loc_id();
-        self.insert_alloc_stmt(loc_id)?;
-        Ok(loc_id)
+    pub fn insert_fresh_alloc(&mut self) -> Result<mlr::Loc> {
+        let loc = self.get_next_loc();
+        self.insert_alloc_stmt(loc)?;
+        Ok(loc)
     }
 
-    pub fn insert_break_stmt(&mut self) -> Result<mlr::StmtId> {
-        let stmt = mlr::Stmt::Break;
+    pub fn insert_break_stmt(&mut self) -> Result<mlr::Stmt> {
+        let stmt = mlr::StmtDef::Break;
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::PlaceId, value: mlr::ValId) -> Result<mlr::StmtId> {
+    pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::Val) -> Result<mlr::Stmt> {
         self.assert_place_valid(&place);
 
         let place_ty = self.try_get_place_ty(&place);
@@ -160,26 +153,26 @@ impl<'a> mlr::MlrBuilder<'a> {
             }
         } else {
             self.output.place_tys.insert(place, value_ty);
-            if let mlr::Place::Local(loc_id) = self.output.places.get(&place).expect("place should be known") {
-                self.output.loc_tys.insert(*loc_id, value_ty);
+            if let mlr::PlaceDef::Loc(loc) = self.output.places.get(&place).expect("place should be known") {
+                self.output.loc_tys.insert(*loc, value_ty);
             }
         }
 
-        let stmt = mlr::Stmt::Assign { place, value };
+        let stmt = mlr::StmtDef::Assign { place, value };
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_assign_to_loc_stmt(&mut self, loc_id: mlr::LocId, value: mlr::ValId) -> Result<mlr::StmtId> {
-        let place = mlr::Place::Local(loc_id);
-        let place_id = self.insert_place(place)?;
-        self.insert_assign_stmt(place_id, value)
+    pub fn insert_assign_to_loc_stmt(&mut self, loc: mlr::Loc, value: mlr::Val) -> Result<mlr::Stmt> {
+        let place = mlr::PlaceDef::Loc(loc);
+        let place = self.insert_place(place)?;
+        self.insert_assign_stmt(place, value)
     }
 
-    pub fn insert_return_stmt(&mut self, value: mlr::ValId) -> Result<mlr::StmtId> {
+    pub fn insert_return_stmt(&mut self, value: mlr::Val) -> Result<mlr::Stmt> {
         let return_ty = self
             .ctxt
             .fns
-            .get_signature_by_id(&self.mlr_fn)
+            .get_signature(&self.mlr_fn)
             .expect("return stmt only valid in function")
             .return_ty;
 
@@ -193,90 +186,87 @@ impl<'a> mlr::MlrBuilder<'a> {
             .into();
         }
 
-        let stmt = mlr::Stmt::Return { value };
+        let stmt = mlr::StmtDef::Return { value };
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_place(&mut self, place: mlr::Place) -> Result<mlr::PlaceId> {
-        let place_id = self.get_next_place_id();
-        self.output.places.insert(place_id, place);
+    pub fn insert_place(&mut self, place_def: mlr::PlaceDef) -> Result<mlr::Place> {
+        let place = self.get_next_place();
+        self.output.places.insert(place, place_def);
 
-        let ty = self.try_infer_place_ty(&place_id)?;
+        let ty = self.try_infer_place_ty(&place)?;
         if let Some(ty) = ty {
-            self.output.place_tys.insert(place_id, ty);
+            self.output.place_tys.insert(place, ty);
         };
 
-        Ok(place_id)
+        Ok(place)
     }
 
-    pub fn insert_loc_place(&mut self, loc_id: mlr::LocId) -> Result<mlr::PlaceId> {
-        let place = mlr::Place::Local(loc_id);
+    pub fn insert_loc_place(&mut self, loc: mlr::Loc) -> Result<mlr::Place> {
+        let place = mlr::PlaceDef::Loc(loc);
         self.insert_place(place)
     }
 
-    pub fn insert_enum_discriminant_place(&mut self, base: mlr::PlaceId) -> Result<mlr::PlaceId> {
-        let place = mlr::Place::EnumDiscriminant { base };
+    pub fn insert_enum_discriminant_place(&mut self, base: mlr::Place) -> Result<mlr::Place> {
+        let place = mlr::PlaceDef::EnumDiscriminant { base };
         self.insert_place(place)
     }
 
-    pub fn insert_project_to_variant_place(&mut self, base: mlr::PlaceId, variant_idx: usize) -> Result<mlr::PlaceId> {
-        let place = mlr::Place::ProjectToVariant {
-            base,
-            variant_index: variant_idx,
-        };
+    pub fn insert_project_to_variant_place(&mut self, base: mlr::Place, variant_index: usize) -> Result<mlr::Place> {
+        let place = mlr::PlaceDef::ProjectToVariant { base, variant_index };
         self.insert_place(place)
     }
 
-    pub fn insert_field_access_place(&mut self, base: mlr::PlaceId, field_index: usize) -> Result<mlr::PlaceId> {
-        let place = mlr::Place::FieldAccess { base, field_index };
+    pub fn insert_field_access_place(&mut self, base: mlr::Place, field_index: usize) -> Result<mlr::Place> {
+        let place = mlr::PlaceDef::FieldAccess { base, field_index };
         self.insert_place(place)
     }
 
-    pub fn insert_op(&mut self, operand: mlr::Operand) -> Result<mlr::OpId> {
-        let op_id = self.get_next_op_id();
-        self.output.ops.insert(op_id, operand);
+    pub fn insert_op(&mut self, op_def: mlr::OpDef) -> Result<mlr::Op> {
+        let op = self.get_next_op();
+        self.output.ops.insert(op, op_def);
 
-        let ty = self.infer_op_ty(op_id)?;
-        self.output.op_tys.insert(op_id, ty);
+        let ty = self.infer_op_ty(op)?;
+        self.output.op_tys.insert(op, ty);
 
-        Ok(op_id)
+        Ok(op)
     }
 
-    pub fn insert_fn_op(&mut self, fn_: fns::Fn) -> Result<mlr::OpId> {
-        let op = mlr::Operand::Fn(fn_);
+    pub fn insert_fn_op(&mut self, fn_: fns::Fn) -> Result<mlr::Op> {
+        let op = mlr::OpDef::Fn(fn_);
         self.insert_op(op)
     }
 
-    pub fn insert_int_op(&mut self, int: i64) -> Result<mlr::OpId> {
-        let val = mlr::Operand::Constant(mlr::Constant::Int(int));
+    pub fn insert_int_op(&mut self, int: i64) -> Result<mlr::Op> {
+        let val = mlr::OpDef::Const(mlr::Const::Int(int));
         self.insert_op(val)
     }
 
-    pub fn insert_bool_op(&mut self, boolean: bool) -> Result<mlr::OpId> {
-        let op = mlr::Operand::Constant(mlr::Constant::Bool(boolean));
+    pub fn insert_bool_op(&mut self, boolean: bool) -> Result<mlr::Op> {
+        let op = mlr::OpDef::Const(mlr::Const::Bool(boolean));
         self.insert_op(op)
     }
 
-    pub fn insert_unit_op(&mut self) -> Result<mlr::OpId> {
-        let op = mlr::Operand::Constant(mlr::Constant::Unit);
+    pub fn insert_unit_op(&mut self) -> Result<mlr::Op> {
+        let op = mlr::OpDef::Const(mlr::Const::Unit);
         self.insert_op(op)
     }
 
-    pub fn insert_copy_op(&mut self, place: mlr::PlaceId) -> Result<mlr::OpId> {
-        let op = mlr::Operand::Copy(place);
+    pub fn insert_copy_op(&mut self, place: mlr::Place) -> Result<mlr::Op> {
+        let op = mlr::OpDef::Copy(place);
         self.insert_op(op)
     }
 
-    pub fn insert_copy_loc_op(&mut self, loc_id: mlr::LocId) -> Result<mlr::OpId> {
-        let place = self.insert_loc_place(loc_id)?;
+    pub fn insert_copy_loc_op(&mut self, loc: mlr::Loc) -> Result<mlr::Op> {
+        let place = self.insert_loc_place(loc)?;
         self.insert_copy_op(place)
     }
 
     /// TODO move resolution functionality to an impl block in another submodule,
     /// or create resolver submodule.
-    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::OpId> {
-        if let Some(loc_id) = self.resolve_name_to_location(name) {
-            let place = self.insert_loc_place(loc_id)?;
+    pub fn resolve_name(&mut self, name: &str) -> Result<mlr::Op> {
+        if let Some(loc) = self.resolve_name_to_location(name) {
+            let place = self.insert_loc_place(loc)?;
             self.insert_copy_op(place)
         } else if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
             self.insert_fn_op(fn_)
@@ -285,7 +275,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    pub fn resolve_name_to_location(&self, name: &str) -> Option<mlr::LocId> {
+    pub fn resolve_name_to_location(&self, name: &str) -> Option<mlr::Loc> {
         self.scopes
             .iter()
             .rev()
@@ -314,7 +304,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         &mut self,
         ty: &ty::Ty,
         fields: &[(String, hlr::Expression)],
-        base_place: &mlr::PlaceId,
+        base_place: &mlr::Place,
     ) -> Result<()> {
         let field_indices = self.compute_field_indices(ty, fields.iter().map(|(name, _)| name.as_str()))?;
 
@@ -408,7 +398,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(enum_def)
     }
 
-    pub fn assert_place_valid(&self, place: &mlr::PlaceId) {
+    pub fn assert_place_valid(&self, place: &mlr::Place) {
         let place = self
             .output
             .places
@@ -416,10 +406,10 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("place should be known for validity check");
 
         match place {
-            mlr::Place::Local(loc_id) => assert!(self.output.allocated_locs.contains(loc_id)),
-            mlr::Place::FieldAccess { base, .. } => self.assert_place_valid(base),
-            mlr::Place::EnumDiscriminant { base } => self.assert_place_valid(base),
-            mlr::Place::ProjectToVariant { base, .. } => self.assert_place_valid(base),
+            mlr::PlaceDef::Loc(loc) => assert!(self.output.allocated_locs.contains(loc)),
+            mlr::PlaceDef::FieldAccess { base, .. } => self.assert_place_valid(base),
+            mlr::PlaceDef::EnumDiscriminant { base } => self.assert_place_valid(base),
+            mlr::PlaceDef::ProjectToVariant { base, .. } => self.assert_place_valid(base),
         }
     }
 }

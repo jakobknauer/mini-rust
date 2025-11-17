@@ -11,7 +11,7 @@ pub enum MlrBuilderError {
 #[derive(Debug)]
 pub enum TyError {
     AssignStmtTyMismatch {
-        place: mlr::PlaceId,
+        place: mlr::Place,
         expected: Ty,
         actual: Ty,
     },

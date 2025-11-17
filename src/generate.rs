@@ -142,7 +142,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
 
     fn declare_functions(&mut self) {
         for fn_ in self.mr_ctxt.fns.get_all_fns() {
-            let signature = self.mr_ctxt.fns.get_signature_by_id(fn_).unwrap();
+            let signature = self.mr_ctxt.fns.get_signature(fn_).unwrap();
             let return_type: BasicTypeEnum = self.get_ty_as_basic_type_enum(&signature.return_ty).unwrap();
             let param_types: Vec<_> = signature
                 .parameters

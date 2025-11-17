@@ -12,7 +12,7 @@ pub fn print_mlr<W: Write>(fn_: &Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Resul
     let mut printer = MlrPrinter {
         fn_: *fn_,
         mlr: ctxt.fns.get_fn_def(fn_),
-        signature: ctxt.fns.get_signature_by_id(fn_),
+        signature: ctxt.fns.get_signature(fn_),
         ctxt,
         indent_level: 0,
         writer,
@@ -62,12 +62,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "{}", return_ty)
     }
 
-    fn print_block(&mut self, statements: &[mlr::StmtId]) -> Result<(), std::io::Error> {
+    fn print_block(&mut self, statements: &[mlr::Stmt]) -> Result<(), std::io::Error> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
-        for stmt_id in statements {
-            self.print_statement(stmt_id)?;
+        for stmt in statements {
+            self.print_statement(stmt)?;
         }
 
         self.indent_level -= 1;
@@ -75,12 +75,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "}}")
     }
 
-    fn print_statement(&mut self, stmt_id: &mlr::StmtId) -> Result<(), std::io::Error> {
-        use mlr::Stmt::*;
+    fn print_statement(&mut self, stmt: &mlr::Stmt) -> Result<(), std::io::Error> {
+        use mlr::StmtDef::*;
 
-        let stmt = &self.mlr.expect("self.mlr should not be empty").stmts.get(stmt_id);
+        let stmt_def = &self.mlr.expect("self.mlr should not be empty").stmts.get(stmt);
 
-        match stmt {
+        match stmt_def {
             Some(stmt) => match stmt {
                 Alloc { loc } => {
                     let loc_ty = self
@@ -111,20 +111,20 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.indent()?;
                     writeln!(self.writer, "break;")
                 }
-                Block(stmt_ids) => {
+                Block(stmts) => {
                     self.indent()?;
-                    self.print_block(stmt_ids)?;
+                    self.print_block(stmts)?;
                     writeln!(self.writer)
                 }
                 If(if_) => {
                     self.indent()?;
                     write!(self.writer, "if ")?;
-                    self.print_op(&if_.condition)?;
+                    self.print_op(&if_.cond)?;
                     writeln!(self.writer)?;
-                    self.print_statement(&if_.then_block)?;
+                    self.print_statement(&if_.then)?;
                     self.indent()?;
                     writeln!(self.writer, "else")?;
-                    self.print_statement(&if_.else_block)
+                    self.print_statement(&if_.else_)
                     // writeln!(self.writer)
                 }
                 Loop { body } => {
@@ -134,16 +134,16 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     // writeln!(self.writer)
                 }
             },
-            None => writeln!(self.writer, "<stmt id {}>", stmt_id.0),
+            None => writeln!(self.writer, "<stmt id {}>", stmt.0),
         }
     }
 
-    fn print_val(&mut self, val_id: &mlr::ValId) -> Result<(), std::io::Error> {
-        use mlr::Val::*;
+    fn print_val(&mut self, val: &mlr::Val) -> Result<(), std::io::Error> {
+        use mlr::ValDef::*;
 
-        let val = &self.mlr.expect("self.mlr should not be empty").vals.get(val_id);
+        let val_def = &self.mlr.expect("self.mlr should not be empty").vals.get(val);
 
-        match val {
+        match val_def {
             Some(val) => match val {
                 Use(op) => {
                     // write!(self.writer, "use ")?;
@@ -166,18 +166,18 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "empty {}", ty_name)
                 }
             },
-            None => write!(self.writer, "<val id {}>", val_id.0),
+            None => write!(self.writer, "<val id {}>", val.0),
         }
     }
 
-    fn print_place(&mut self, place_id: &mlr::PlaceId) -> Result<(), std::io::Error> {
-        use mlr::Place::*;
+    fn print_place(&mut self, place: &mlr::Place) -> Result<(), std::io::Error> {
+        use mlr::PlaceDef::*;
 
-        let place = &self.mlr.expect("self.mlr should not be empty").places.get(place_id);
+        let place_def = &self.mlr.expect("self.mlr should not be empty").places.get(place);
 
-        match place {
+        match place_def {
             Some(place) => match place {
-                Local(loc_id) => write!(self.writer, "{}", loc_id),
+                Loc(loc) => write!(self.writer, "{}", loc),
                 FieldAccess { base, field_index, .. } => {
                     self.print_place(base)?;
                     write!(self.writer, ".{}", field_index)
@@ -200,26 +200,26 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, " as {}::{})", enum_name, variant_index)
                 }
             },
-            None => write!(self.writer, "<place id {}>", place_id.0),
+            None => write!(self.writer, "<place id {}>", place.0),
         }
     }
 
-    fn print_op(&mut self, op_id: &mlr::OpId) -> Result<(), std::io::Error> {
-        use mlr::Constant::*;
-        use mlr::Operand::*;
+    fn print_op(&mut self, op: &mlr::Op) -> Result<(), std::io::Error> {
+        use mlr::Const::*;
+        use mlr::OpDef::*;
 
-        let operand = &self.mlr.expect("self.mlr should not be empty").ops.get(op_id);
+        let op_def = &self.mlr.expect("self.mlr should not be empty").ops.get(op);
 
-        match operand {
+        match op_def {
             Some(operand) => match operand {
                 Fn(fn_) => {
-                    if let Some(func) = self.ctxt.fns.get_signature_by_id(fn_) {
+                    if let Some(func) = self.ctxt.fns.get_signature(fn_) {
                         write!(self.writer, "fn {}", func.name)
                     } else {
                         write!(self.writer, "<fn id {}>", fn_.0)
                     }
                 }
-                Constant(constant) => match constant {
+                Const(constant) => match constant {
                     Int(i) => write!(self.writer, "const {}", i),
                     Bool(b) => write!(self.writer, "const {}", b),
                     Unit => write!(self.writer, "const ()"),
@@ -229,7 +229,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_place(place)
                 }
             },
-            None => write!(self.writer, "<op id {}>", op_id.0),
+            None => write!(self.writer, "<op id {}>", op.0),
         }
     }
 

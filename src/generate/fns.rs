@@ -14,7 +14,7 @@ pub struct FnGenerator<'a, 'iw, 'mr> {
     iw_fn: FunctionValue<'iw>,
     builder: Builder<'iw>,
     mlr: &'a mlr::Mlr,
-    locs: HashMap<mlr::LocId, PointerValue<'iw>>,
+    locs: HashMap<mlr::Loc, PointerValue<'iw>>,
     entry_block: Option<BasicBlock<'iw>>,
     after_loop_blocks: VecDeque<BasicBlock<'iw>>,
 }
@@ -59,20 +59,20 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn get_iw_ty_of_loc(&mut self, loc_id: &mlr::LocId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.mlr.loc_tys.get(loc_id).ok_or(FnGeneratorError)?;
+    fn get_iw_ty_of_loc(&mut self, loc: &mlr::Loc) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
+        let mr_ty = self.mlr.loc_tys.get(loc).ok_or(FnGeneratorError)?;
         let iw_ty = self.gtor.get_ty_as_basic_type_enum(mr_ty).ok_or(FnGeneratorError)?;
         Ok(iw_ty)
     }
 
-    fn get_iw_ty_of_place(&mut self, place_id: &mlr::PlaceId) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.mlr.place_tys.get(place_id).ok_or(FnGeneratorError)?;
+    fn get_iw_ty_of_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
+        let mr_ty = self.mlr.place_tys.get(place).ok_or(FnGeneratorError)?;
         let iw_ty = self.gtor.get_ty_as_basic_type_enum(mr_ty).ok_or(FnGeneratorError)?;
         Ok(iw_ty)
     }
 
-    fn get_fn_ty_of_loc(&mut self, op_id: &mlr::OpId) -> FnGeneratorResult<FunctionType<'iw>> {
-        let mr_ty = self.mlr.op_tys.get(op_id).ok_or(FnGeneratorError)?;
+    fn get_fn_ty_of_loc(&mut self, op: &mlr::Op) -> FnGeneratorResult<FunctionType<'iw>> {
+        let mr_ty = self.mlr.op_tys.get(op).ok_or(FnGeneratorError)?;
         let mr_ty = self.gtor.mr_ctxt.tys.get_ty_def(mr_ty).ok_or(FnGeneratorError)?;
 
         let mr_ty::TyDef::Fn { return_ty, param_tys } = mr_ty else {
@@ -93,11 +93,11 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(return_ty.fn_type(&param_tys, false))
     }
 
-    fn build_alloca_for_loc(&mut self, loc_id: &mlr::LocId) -> FnGeneratorResult<PointerValue<'iw>> {
-        let iw_ty = self.get_iw_ty_of_loc(loc_id)?;
-        let name = loc_id.to_string();
+    fn build_alloca_for_loc(&mut self, loc: &mlr::Loc) -> FnGeneratorResult<PointerValue<'iw>> {
+        let iw_ty = self.get_iw_ty_of_loc(loc)?;
+        let name = loc.to_string();
         let address = self.build_alloca(iw_ty, &name)?;
-        self.locs.insert(*loc_id, address);
+        self.locs.insert(*loc, address);
         Ok(address)
     }
 
@@ -132,8 +132,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.entry_block = Some(entry_block);
         self.builder.position_at_end(entry_block);
 
-        for (param_index, param_loc_id) in self.mlr.param_locs.iter().enumerate() {
-            let param_address = self.build_alloca_for_loc(param_loc_id)?;
+        for (param_index, param_loc) in self.mlr.param_locs.iter().enumerate() {
+            let param_address = self.build_alloca_for_loc(param_loc)?;
             self.builder
                 .build_store(param_address, self.iw_fn.get_nth_param(param_index as u32).unwrap())?;
         }
@@ -144,13 +144,13 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_function_body(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
         let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.builder.position_at_end(body_block);
-        self.build_statement(&self.mlr.body)?;
+        self.build_stmt(&self.mlr.body)?;
 
         Ok(body_block)
     }
 
-    fn build_statement(&mut self, _stmt: &mlr::StmtId) -> FnGeneratorResult<()> {
-        use mlr::Stmt::*;
+    fn build_stmt(&mut self, _stmt: &mlr::Stmt) -> FnGeneratorResult<()> {
+        use mlr::StmtDef::*;
 
         let stmt = self.mlr.stmts.get(_stmt).unwrap();
 
@@ -171,7 +171,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 let after_loop_block = self.after_loop_blocks.back().ok_or(FnGeneratorError)?;
                 self.builder.build_unconditional_branch(*after_loop_block)?;
             }
-            Block(stmt_ids) => self.build_block(stmt_ids)?,
+            Block(stmts) => self.build_block(stmts)?,
             If(if_) => self.build_if(if_)?,
             Loop { body } => self.build_loop(body)?,
         }
@@ -179,21 +179,21 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn build_val(&mut self, val: &mlr::ValId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        use mlr::Val::*;
+    fn build_val(&mut self, val: &mlr::Val) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        use mlr::ValDef::*;
 
         match self.mlr.vals.get(val).ok_or(FnGeneratorError)? {
-            Use(place_id) => self.build_op(place_id),
+            Use(place) => self.build_op(place),
             Call { callable, args } => self.build_call(callable, args),
-            Empty { ty: type_id } => self.build_empty_val(type_id),
+            Empty { ty } => self.build_empty_val(ty),
         }
     }
 
-    fn build_place(&mut self, place: &mlr::PlaceId) -> FnGeneratorResult<PointerValue<'iw>> {
-        use mlr::Place::*;
+    fn build_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<PointerValue<'iw>> {
+        use mlr::PlaceDef::*;
 
         match self.mlr.places.get(place).ok_or(FnGeneratorError)? {
-            Local(loc_id) => self.locs.get(loc_id).ok_or(FnGeneratorError).cloned(),
+            Loc(loc) => self.locs.get(loc).ok_or(FnGeneratorError).cloned(),
             FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
                     .get_iw_ty_of_place(base)?
@@ -242,15 +242,15 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_block(&mut self, statements: &[mlr::StmtId]) -> FnGeneratorResult<()> {
-        for stmt in statements {
-            self.build_statement(stmt)?;
+    fn build_block(&mut self, stmts: &[mlr::Stmt]) -> FnGeneratorResult<()> {
+        for stmt in stmts {
+            self.build_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn build_constant(&mut self, constant: &mlr::Constant) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        use mlr::Constant::*;
+    fn build_constant(&mut self, constant: &mlr::Const) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        use mlr::Const::*;
 
         let value = match constant {
             Int(i) => {
@@ -267,17 +267,17 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(value)
     }
 
-    fn build_op(&mut self, place_id: &mlr::OpId) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        use mlr::Operand::*;
+    fn build_op(&mut self, op: &mlr::Op) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        use mlr::OpDef::*;
 
-        let operand = self.mlr.ops.get(place_id).ok_or(FnGeneratorError)?;
+        let op = self.mlr.ops.get(op).ok_or(FnGeneratorError)?;
 
-        match operand {
+        match op {
             Fn(fn_) => self.build_global_function(fn_),
-            Constant(constant) => self.build_constant(constant),
-            Copy(place_id) => {
-                let place_ptr = self.build_place(place_id)?;
-                let iw_ty = self.get_iw_ty_of_place(place_id)?;
+            Const(constant) => self.build_constant(constant),
+            Copy(place) => {
+                let place_ptr = self.build_place(place)?;
+                let iw_ty = self.get_iw_ty_of_place(place)?;
                 let value = self.builder.build_load(iw_ty, place_ptr, "loaded_place")?;
                 Ok(value)
             }
@@ -289,7 +289,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
     }
 
-    fn build_call(&mut self, callable: &mlr::OpId, args: &[mlr::OpId]) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+    fn build_call(&mut self, callable: &mlr::Op, args: &[mlr::Op]) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         let fn_ptr = self.build_op(callable)?.into_pointer_value();
         let fn_ty = self.get_fn_ty_of_loc(callable)?;
 
@@ -305,7 +305,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
     fn build_if(&mut self, if_: &mlr::If) -> FnGeneratorResult<()> {
         // Build condition
-        let cond_value = self.build_op(&if_.condition)?.into_int_value();
+        let cond_value = self.build_op(&if_.cond)?.into_int_value();
 
         // Create blocks for then, else, and merge
         let then_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "then");
@@ -318,12 +318,12 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         // Build then block
         self.builder.position_at_end(then_block);
-        self.build_statement(&if_.then_block)?;
+        self.build_stmt(&if_.then)?;
         self.builder.build_unconditional_branch(merge_block)?;
 
         // Build else block
         self.builder.position_at_end(else_block);
-        self.build_statement(&if_.else_block)?;
+        self.build_stmt(&if_.else_)?;
         self.builder.build_unconditional_branch(merge_block)?;
 
         // Build merge block
@@ -331,14 +331,14 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn build_loop(&mut self, body: &mlr::StmtId) -> FnGeneratorResult<()> {
+    fn build_loop(&mut self, body: &mlr::Stmt) -> FnGeneratorResult<()> {
         let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "loop");
         let after_loop = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "loop_after");
 
         self.builder.build_unconditional_branch(body_block)?;
         self.after_loop_blocks.push_back(after_loop);
         self.builder.position_at_end(body_block);
-        self.build_statement(body)?;
+        self.build_stmt(body)?;
         self.builder.build_unconditional_branch(body_block)?;
         self.after_loop_blocks.pop_back();
 
