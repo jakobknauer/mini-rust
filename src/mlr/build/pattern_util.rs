@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::ty::{EnumDefinition, Ty},
+    ctxt::ty,
     hlr,
     mlr::{
         self,
@@ -8,7 +8,7 @@ use crate::{
 };
 
 impl<'a> super::MlrBuilder<'a> {
-    pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &EnumDefinition, ty: &Ty) -> Result<Vec<usize>> {
+    pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &ty::EnumDef, ty: &ty::Ty) -> Result<Vec<usize>> {
         arms.iter()
             .map(|arm| {
                 enum_def
@@ -37,7 +37,7 @@ impl<'a> super::MlrBuilder<'a> {
     pub fn build_arm_block(
         &mut self,
         arm: &hlr::MatchArm,
-        enum_ty: &Ty,
+        enum_ty: &ty::Ty,
         variant_index: &usize,
         base_place: &mlr::Place,
     ) -> Result<mlr::Val> {

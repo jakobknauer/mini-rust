@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::{fns::Fn, ty::*},
+    ctxt::{fns, ty},
     mlr::{
         self,
         build::{MlrBuilderError, Result, TyError},
@@ -7,7 +7,7 @@ use crate::{
 };
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn infer_val_ty(&mut self, val: mlr::Val) -> Result<Ty> {
+    pub fn infer_val_ty(&mut self, val: mlr::Val) -> Result<ty::Ty> {
         use mlr::ValDef::*;
 
         let val = self
@@ -23,13 +23,13 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn infer_ty_of_constant(&self, constant: &mlr::Const) -> Result<Ty> {
+    fn infer_ty_of_constant(&self, constant: &mlr::Const) -> Result<ty::Ty> {
         use mlr::Const::*;
 
         let ty = match constant {
-            Int(_) => Primitive::Integer32,
-            Bool(_) => Primitive::Boolean,
-            Unit => Primitive::Unit,
+            Int(_) => ty::Primitive::Integer32,
+            Bool(_) => ty::Primitive::Boolean,
+            Unit => ty::Primitive::Unit,
         };
 
         self.ctxt
@@ -38,7 +38,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ok_or(MlrBuilderError::UnknownPrimitiveTy)
     }
 
-    fn infer_ty_of_call(&self, callable: &mlr::Op, args: &[mlr::Op]) -> Result<Ty> {
+    fn infer_ty_of_call(&self, callable: &mlr::Op, args: &[mlr::Op]) -> Result<ty::Ty> {
         let ty = self.get_op_ty(callable);
         let callable_ty_def = self
             .ctxt
@@ -46,7 +46,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .get_ty_def(&ty)
             .expect("type of callable should be registered");
 
-        let TyDef::Fn { param_tys, return_ty } = callable_ty_def else {
+        let ty::TyDef::Fn { param_tys, return_ty } = callable_ty_def else {
             return TyError::ValNotCallable.into();
         };
 
@@ -74,7 +74,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(*return_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_: Fn) -> Result<Ty> {
+    fn infer_ty_of_fn(&mut self, fn_: fns::Fn) -> Result<ty::Ty> {
         let signature = self
             .ctxt
             .fns
@@ -88,7 +88,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(fn_ty)
     }
 
-    pub fn try_infer_place_ty(&self, place: &mlr::Place) -> Result<Option<Ty>> {
+    pub fn try_infer_place_ty(&self, place: &mlr::Place) -> Result<Option<ty::Ty>> {
         use mlr::PlaceDef::*;
 
         let place = self
@@ -107,11 +107,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
     }
 
-    fn try_infer_ty_of_local_place(&self, loc: &mlr::Loc) -> Result<Option<Ty>> {
+    fn try_infer_ty_of_local_place(&self, loc: &mlr::Loc) -> Result<Option<ty::Ty>> {
         Ok(self.try_get_loc_ty(loc))
     }
 
-    fn infer_ty_of_field_access_place(&self, base: &mlr::Place, field_index: &usize) -> Result<Ty> {
+    fn infer_ty_of_field_access_place(&self, base: &mlr::Place, field_index: &usize) -> Result<ty::Ty> {
         let base_ty = self.get_place_ty(base);
         let struct_def = self.get_struct_def(&base_ty)?;
 
@@ -124,7 +124,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_ty)
     }
 
-    fn infer_ty_of_enum_discriminant(&self, base: &mlr::Place) -> Result<Ty> {
+    fn infer_ty_of_enum_discriminant(&self, base: &mlr::Place) -> Result<ty::Ty> {
         let base_ty = self.get_place_ty(base);
         let _enum_def = self.get_enum_def(&base_ty)?;
 
@@ -132,12 +132,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         let int_ty = self
             .ctxt
             .tys
-            .get_primitive_ty(Primitive::Integer32)
+            .get_primitive_ty(ty::Primitive::Integer32)
             .expect("integer primitive type should be registered");
         Ok(int_ty)
     }
 
-    fn infer_ty_of_project_to_variant_place(&self, base: &mlr::Place, variant_index: &usize) -> Result<Ty> {
+    fn infer_ty_of_project_to_variant_place(&self, base: &mlr::Place, variant_index: &usize) -> Result<ty::Ty> {
         let base_ty = self.get_place_ty(base);
         let enum_def = self.get_enum_def(&base_ty)?;
         let variant =
@@ -152,7 +152,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(variant.ty)
     }
 
-    pub fn infer_op_ty(&mut self, op: mlr::Op) -> Result<Ty> {
+    pub fn infer_op_ty(&mut self, op: mlr::Op) -> Result<ty::Ty> {
         use mlr::OpDef::*;
 
         let op = self

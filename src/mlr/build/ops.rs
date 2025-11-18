@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::{fns::Fn, ty::*},
+    ctxt::{fns, ty},
     hlr,
     mlr::{
         self,
@@ -30,10 +30,10 @@ macro_rules! op_match {
 }
 
 impl<'a> mlr::MlrBuilder<'a> {
-    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (Ty, Ty)) -> Result<Fn> {
+    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (ty::Ty, ty::Ty)) -> Result<fns::Fn> {
         use MlrBuilderError::UnknownPrimitiveTy;
-        use Primitive::*;
         use hlr::BinaryOperator::*;
+        use ty::Primitive::*;
 
         let tys = &self.ctxt.tys;
         let i32 = tys.get_primitive_ty(Integer32).ok_or(UnknownPrimitiveTy)?;

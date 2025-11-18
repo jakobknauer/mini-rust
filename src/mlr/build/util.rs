@@ -172,7 +172,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let return_ty = self
             .ctxt
             .fns
-            .get_signature(&self.mlr_fn)
+            .get_signature(&self.target_fn)
             .expect("return stmt only valid in function")
             .return_ty;
 
@@ -362,7 +362,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(field_indices)
     }
 
-    pub fn get_struct_def(&self, ty: &ty::Ty) -> Result<&ty::StructDefinition> {
+    pub fn get_struct_def(&self, ty: &ty::Ty) -> Result<&ty::StructDef> {
         let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
 
         let &ty::TyDef::Named(_, ty::Named::Struct(struct_)) = ty_def else {
@@ -372,13 +372,13 @@ impl<'a> mlr::MlrBuilder<'a> {
         let struct_def = self
             .ctxt
             .tys
-            .get_struct_definition(&struct_)
+            .get_struct_def(&struct_)
             .expect("struct definition should be registered");
 
         Ok(struct_def)
     }
 
-    pub fn get_enum_def(&self, ty: &ty::Ty) -> Result<&ty::EnumDefinition> {
+    pub fn get_enum_def(&self, ty: &ty::Ty) -> Result<&ty::EnumDef> {
         let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
 
         let &ty::TyDef::Named(_, ty::Named::Enum(enum_)) = ty_def else {
@@ -388,7 +388,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let enum_def = self
             .ctxt
             .tys
-            .get_enum_definition(&enum_)
+            .get_enum_def(&enum_)
             .expect("enum definition should be registered");
 
         Ok(enum_def)

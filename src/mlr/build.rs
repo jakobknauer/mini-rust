@@ -10,11 +10,7 @@ mod util;
 mod macros;
 
 use crate::{
-    ctxt::{
-        self,
-        fns::{Fn, FnParam, FnSig},
-        ty,
-    },
+    ctxt::{self, fns, ty},
     hlr, mlr,
 };
 
@@ -23,7 +19,7 @@ pub use err::{MlrBuilderError, Result, TyError};
 pub struct MlrBuilder<'a> {
     input: &'a hlr::Fn,
 
-    mlr_fn: Fn,
+    target_fn: fns::Fn,
     ctxt: &'a mut ctxt::Ctxt,
 
     output: mlr::Mlr,
@@ -49,10 +45,10 @@ impl Scope {
 }
 
 impl<'a> MlrBuilder<'a> {
-    pub fn new(input: &'a hlr::Fn, fn_: Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
+    pub fn new(input: &'a hlr::Fn, target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
             input,
-            mlr_fn: fn_,
+            target_fn,
             ctxt,
 
             output: mlr::Mlr::new(),
@@ -105,11 +101,17 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
-        let FnSig { parameters, .. } = self.ctxt.fns.get_signature(&self.mlr_fn).cloned().unwrap();
+        let parameters = self
+            .ctxt
+            .fns
+            .get_signature(&self.target_fn)
+            .cloned()
+            .unwrap()
+            .parameters;
 
         self.push_scope();
 
-        for FnParam { name, ty } in parameters {
+        for fns::FnParam { name, ty } in parameters {
             let loc = self.get_next_loc();
             self.output.allocated_locs.insert(loc);
             self.add_to_scope(&name, loc);
@@ -163,10 +165,7 @@ impl<'a> MlrBuilder<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
-            Struct {
-                name: struct_name,
-                fields,
-            } => self.build_struct_or_enum_val(struct_name, fields),
+            Struct { name, fields } => self.build_struct_or_enum_val(name, fields),
             If {
                 condition,
                 then_block,
@@ -183,7 +182,7 @@ impl<'a> MlrBuilder<'a> {
 
         match expr {
             Var(name) => self.lower_var_to_place(name),
-            FieldAccess { base, name: field_name } => self.lower_field_access_to_place(base, field_name),
+            FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             _ => panic!("Only variables and field access expressions are supported as places."),
         }
     }

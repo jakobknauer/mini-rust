@@ -27,7 +27,7 @@ pub enum Primitive {
     Unit,
 }
 
-pub struct StructDefinition {
+pub struct StructDef {
     pub fields: Vec<StructField>,
 }
 
@@ -36,7 +36,7 @@ pub struct StructField {
     pub ty: Ty,
 }
 
-pub struct EnumDefinition {
+pub struct EnumDef {
     pub variants: Vec<EnumVariant>,
 }
 

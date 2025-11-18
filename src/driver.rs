@@ -98,8 +98,8 @@ fn define_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
             })
             .collect::<Result<_, _>>()?;
 
-        let enum_definition = tys.get_mut_enum_definition_by_name(&enum_.name).ok_or(())?;
-        enum_definition.variants = variants;
+        let enum_def = tys.get_mut_enum_def_by_name(&enum_.name).ok_or(())?;
+        enum_def.variants = variants;
     }
 
     Ok(())
@@ -120,8 +120,8 @@ fn set_struct_fields<'a>(
         })
         .collect::<Result<_, _>>()?;
 
-    let struct_definition = tys.get_mut_struct_definition_by_name(struct_name).ok_or(())?;
-    struct_definition.fields = fields;
+    let struct_def = tys.get_mut_struct_def_by_name(struct_name).ok_or(())?;
+    struct_def.fields = fields;
 
     Ok(())
 }

@@ -102,7 +102,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(name);
         self.types.insert(*ty, iw_struct.as_any_type_enum());
 
-        let struct_def = self.mr_ctxt.tys.get_struct_definition(struct_).unwrap();
+        let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap();
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
@@ -114,7 +114,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn define_enum(&mut self, name: &str, enum_: &mr_tys::Enum) -> AnyTypeEnum<'iw> {
-        let enum_def = self.mr_ctxt.tys.get_enum_definition(enum_).unwrap();
+        let enum_def = self.mr_ctxt.tys.get_enum_def(enum_).unwrap();
 
         let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);

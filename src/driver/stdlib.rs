@@ -1,4 +1,4 @@
-use crate::ctxt::{self, fns, ty::Primitive};
+use crate::ctxt::{self, fns, ty};
 
 macro_rules! register_fn {
     ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_ty:ident ),* ) -> $return_ty:expr ) => {
@@ -18,7 +18,7 @@ macro_rules! register_fn {
 }
 
 pub fn register_fns(tys: &ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    use Primitive::*;
+    use ty::Primitive::*;
 
     let i32 = tys.get_primitive_ty(Integer32).ok_or(())?;
     let bool = tys.get_primitive_ty(Boolean).ok_or(())?;
