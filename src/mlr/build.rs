@@ -113,7 +113,6 @@ impl<'a> MlrBuilder<'a> {
 
         for fns::FnParam { name, ty } in parameters {
             let loc = self.get_next_loc();
-            self.output.allocated_locs.insert(loc);
             self.add_to_scope(&name, loc);
             self.output.loc_tys.insert(loc, ty);
             self.output.param_locs.push(loc);

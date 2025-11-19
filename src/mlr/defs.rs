@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-};
+use std::{collections::HashMap, fmt::Display};
 
 use crate::ctxt::{fns::Fn, ty::Ty};
 
@@ -26,7 +23,6 @@ pub struct Mlr {
     pub stmts: HashMap<Stmt, StmtDef>,
     pub places: HashMap<Place, PlaceDef>,
     pub ops: HashMap<Op, OpDef>,
-    pub allocated_locs: HashSet<Loc>,
 
     pub loc_tys: HashMap<Loc, Ty>,
     pub val_tys: HashMap<Val, Ty>,
@@ -43,7 +39,6 @@ impl Mlr {
             stmts: HashMap::new(),
             places: HashMap::new(),
             ops: HashMap::new(),
-            allocated_locs: HashSet::new(),
 
             loc_tys: HashMap::new(),
             val_tys: HashMap::new(),

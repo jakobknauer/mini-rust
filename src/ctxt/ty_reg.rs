@@ -1,11 +1,10 @@
-use bimap::BiMap;
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::ctxt::ty::*;
 
 pub struct TyReg {
-    tys: BiMap<Ty, TyDef>,
+    tys: HashMap<Ty, TyDef>,
     structs: HashMap<Struct, StructDef>,
     enums: HashMap<Enum, EnumDef>,
 
@@ -20,10 +19,15 @@ pub struct TyReg {
     next_enum: Enum,
 }
 
+pub enum UnificationError {
+    FunctionParamCountMismatch,
+    TypeMismatch,
+}
+
 impl TyReg {
     pub fn new() -> TyReg {
         TyReg {
-            tys: BiMap::new(),
+            tys: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
 
@@ -40,14 +44,10 @@ impl TyReg {
     }
 
     fn register_ty(&mut self, ty_def: TyDef) -> Ty {
-        if let Some(ty) = self.tys.get_by_right(&ty_def) {
-            *ty
-        } else {
-            let ty = self.next_ty;
-            self.next_ty.0 += 1;
-            self.tys.insert(ty, ty_def);
-            ty
-        }
+        let ty = self.next_ty;
+        self.next_ty.0 += 1;
+        self.tys.insert(ty, ty_def);
+        ty
     }
 
     fn register_named_ty(&mut self, name: &str, ty_def: Named) -> Result<Ty, ()> {
@@ -94,7 +94,8 @@ impl TyReg {
     }
 
     pub fn get_ty_def(&self, id: &Ty) -> Option<&TyDef> {
-        self.tys.get_by_left(id)
+        let id = self.canonicalize(id);
+        self.tys.get(&id)
     }
 
     pub fn get_ty_by_name(&self, name: &str) -> Option<Ty> {
@@ -103,7 +104,7 @@ impl TyReg {
 
     fn get_ty_def_by_name(&self, name: &str) -> Option<&TyDef> {
         let ty = self.get_ty_by_name(name)?;
-        self.tys.get_by_left(&ty)
+        self.tys.get(&ty)
     }
 
     pub fn get_struct_def(&self, struct_: &Struct) -> Option<&StructDef> {
@@ -133,7 +134,7 @@ impl TyReg {
     }
 
     pub fn get_string_rep(&self, ty: &Ty) -> String {
-        let Some(ty_def) = self.tys.get_by_left(ty) else {
+        let Some(ty_def) = self.tys.get(ty) else {
             return format!("<type id {}>", ty.0).to_string();
         };
 
@@ -144,11 +145,70 @@ impl TyReg {
                 let return_name = self.get_string_rep(return_ty);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
+            TyDef::Alias(ty) => self.get_string_rep(ty),
+            TyDef::Undef => "<undefined>".to_string(),
         }
     }
 
-    pub fn ty_equal(&self, t1: &Ty, t2: &Ty) -> bool {
-        t1 == t2
+    pub fn unify(&mut self, t1: &Ty, t2: &Ty) -> Result<(), UnificationError> {
+        use TyDef::*;
+
+        let t1 = self.canonicalize(t1);
+        let t2 = self.canonicalize(t2);
+
+        if t1 == t2 {
+            return Ok(());
+        }
+
+        let def1 = self.tys.get(&t1).unwrap().clone();
+        let def2 = self.tys.get(&t2).unwrap().clone();
+
+        match (def1, def2) {
+            (Alias(_), _) | (_, Alias(_)) => {
+                unreachable!("Types should have been canonicalized");
+            }
+
+            (Undef, _) => {
+                self.tys.insert(t1, Alias(t2));
+                Ok(())
+            }
+            (_, Undef) => {
+                self.tys.insert(t2, Alias(t1));
+                Ok(())
+            }
+
+            (
+                Fn {
+                    param_tys: params1,
+                    return_ty: ret1,
+                },
+                Fn {
+                    param_tys: params2,
+                    return_ty: ret2,
+                },
+            ) => {
+                if params1.len() != params2.len() {
+                    return Err(UnificationError::FunctionParamCountMismatch);
+                }
+
+                for (p1, p2) in params1.iter().zip(params2.iter()) {
+                    self.unify(p1, p2)?;
+                }
+                self.unify(&ret1, &ret2)
+            }
+
+            (Named(_, n1), Named(_, n2)) if n1 == n2 => Ok(()),
+
+            _ => Err(UnificationError::TypeMismatch),
+        }
+    }
+
+    pub fn canonicalize(&self, ty: &Ty) -> Ty {
+        let mut current_ty = *ty;
+        while let TyDef::Alias(next_ty) = self.tys.get(&current_ty).unwrap() {
+            current_ty = *next_ty;
+        }
+        current_ty
     }
 
     pub fn get_primitive_ty(&self, primitive: Primitive) -> Option<Ty> {
@@ -181,5 +241,9 @@ impl TyReg {
 
     pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&Enum, &EnumDef)> {
         self.enums.iter()
+    }
+
+    pub fn get_undef_ty(&mut self) -> Ty {
+        self.register_ty(TyDef::Undef)
     }
 }

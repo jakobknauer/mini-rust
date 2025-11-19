@@ -44,16 +44,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         *self.output.loc_tys.get(loc).expect("type of loc should be known")
     }
 
-    pub fn try_get_loc_ty(&self, loc: &mlr::Loc) -> Option<ty::Ty> {
-        self.output.loc_tys.get(loc).cloned()
-    }
-
     pub fn get_place_ty(&self, place: &mlr::Place) -> ty::Ty {
         *self.output.place_tys.get(place).expect("type of place should be known")
-    }
-
-    pub fn try_get_place_ty(&self, place: &mlr::Place) -> Option<ty::Ty> {
-        self.output.place_tys.get(place).cloned()
     }
 
     pub fn get_val_ty(&self, val: &mlr::Val) -> ty::Ty {
@@ -119,14 +111,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc) -> Result<mlr::Stmt> {
-        assert!(!self.output.allocated_locs.contains(&loc), "location already allocated");
-        self.output.allocated_locs.insert(loc);
         let stmt = mlr::StmtDef::Alloc { loc };
         self.insert_stmt(stmt)
     }
 
     pub fn insert_fresh_alloc(&mut self) -> Result<mlr::Loc> {
         let loc = self.get_next_loc();
+        self.output.loc_tys.insert(loc, self.ctxt.tys.get_undef_ty());
+
         self.insert_alloc_stmt(loc)?;
         Ok(loc)
     }
@@ -137,26 +129,18 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::Val) -> Result<mlr::Stmt> {
-        self.assert_place_valid(&place);
-
-        let place_ty = self.try_get_place_ty(&place);
+        let place_ty = self.get_place_ty(&place);
         let value_ty = self.get_val_ty(&value);
 
-        if let Some(place_ty) = place_ty {
-            if !self.ctxt.tys.ty_equal(&place_ty, &value_ty) {
-                return mlr::build::TyError::AssignStmtTyMismatch {
-                    place,
-                    expected: place_ty,
-                    actual: value_ty,
-                }
-                .into();
-            }
-        } else {
-            self.output.place_tys.insert(place, value_ty);
-            if let mlr::PlaceDef::Loc(loc) = self.output.places.get(&place).expect("place should be known") {
-                self.output.loc_tys.insert(*loc, value_ty);
-            }
-        }
+        self.ctxt
+            .tys
+            .unify(&place_ty, &value_ty)
+            .map_err(|_| mlr::build::TyError::AssignStmtTyMismatch {
+                place,
+                expected: place_ty,
+                actual: value_ty,
+            })
+            .map_err(MlrBuilderError::TyError)?;
 
         let stmt = mlr::StmtDef::Assign { place, value };
         self.insert_stmt(stmt)
@@ -178,13 +162,14 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let val_ty = self.get_val_ty(&value);
 
-        if !self.ctxt.tys.ty_equal(&return_ty, &val_ty) {
-            return mlr::build::TyError::ReturnTyMismatch {
+        self.ctxt
+            .tys
+            .unify(&return_ty, &val_ty)
+            .map_err(|_| mlr::build::TyError::ReturnTyMismatch {
                 expected: return_ty,
                 actual: val_ty,
-            }
-            .into();
-        }
+            })
+            .map_err(MlrBuilderError::TyError)?;
 
         let stmt = mlr::StmtDef::Return { value };
         self.insert_stmt(stmt)
@@ -194,10 +179,8 @@ impl<'a> mlr::MlrBuilder<'a> {
         let place = self.get_next_place();
         self.output.places.insert(place, place_def);
 
-        let ty = self.try_infer_place_ty(&place)?;
-        if let Some(ty) = ty {
-            self.output.place_tys.insert(place, ty);
-        };
+        let ty = self.infer_place_ty(&place)?;
+        self.output.place_tys.insert(place, ty);
 
         Ok(place)
     }
@@ -392,20 +375,5 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("enum definition should be registered");
 
         Ok(enum_def)
-    }
-
-    pub fn assert_place_valid(&self, place: &mlr::Place) {
-        let place = self
-            .output
-            .places
-            .get(place)
-            .expect("place should be known for validity check");
-
-        match place {
-            mlr::PlaceDef::Loc(loc) => assert!(self.output.allocated_locs.contains(loc)),
-            mlr::PlaceDef::FieldAccess { base, .. } => self.assert_place_valid(base),
-            mlr::PlaceDef::EnumDiscriminant { base } => self.assert_place_valid(base),
-            mlr::PlaceDef::ProjectToVariant { base, .. } => self.assert_place_valid(base),
-        }
     }
 }

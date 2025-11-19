@@ -9,12 +9,16 @@ use crate::{
 
 macro_rules! op_match {
     (
-        $operator:expr, $left:expr, $right:expr,
+        $ty_reg:expr, $operator:expr,  $left:expr, $right:expr,
         $(
             ($op:pat, $left_ty:ident, $right_ty:ident) => $fn_name:expr
         ),* $(,)?
-    ) => {
-        match ($operator, $left, $right) {
+    ) => {{
+        let ty_reg = $ty_reg;
+        let left = ty_reg.canonicalize(&$left);
+        let right = ty_reg.canonicalize(&$right);
+
+        match ($operator, left, right) {
             $(
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
@@ -26,7 +30,7 @@ macro_rules! op_match {
                 .into();
             }
         }
-    };
+    }};
 }
 
 impl<'a> mlr::MlrBuilder<'a> {
@@ -36,11 +40,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         use ty::Primitive::*;
 
         let tys = &self.ctxt.tys;
+
         let i32 = tys.get_primitive_ty(Integer32).ok_or(UnknownPrimitiveTy)?;
         let bool = tys.get_primitive_ty(Boolean).ok_or(UnknownPrimitiveTy)?;
         let unit = tys.get_primitive_ty(Unit).ok_or(UnknownPrimitiveTy)?;
 
-        let fn_name = op_match!(operator, left, right,
+        let fn_name = op_match!(tys, operator, left, right,
             (Add,       i32, i32) => "add::<i32>",
             (Subtract,  i32, i32) => "sub::<i32>",
             (Multiply,  i32, i32) => "mul::<i32>",
