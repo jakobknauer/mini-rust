@@ -48,13 +48,15 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             return write!(self.writer, "<signature for fn id {}>", self.fn_.0);
         };
 
+        let mlr = self.mlr.expect("self.mlr should not be empty");
+
         write!(self.writer, "fn {}(", signature.name)?;
-        for (i, param) in signature.parameters.iter().enumerate() {
+        for (i, (param, param_loc)) in signature.parameters.iter().zip(&mlr.param_locs).enumerate() {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
             let param_ty = self.ctxt.tys.get_string_rep(&param.ty);
-            write!(self.writer, "{}: {}", param.name, param_ty)?;
+            write!(self.writer, "{}: {}", param_loc, param_ty)?;
         }
         write!(self.writer, ") -> ")?;
 
