@@ -23,6 +23,7 @@
     - ~~Decomposition of enum values - `match` or `if let`~~
 
 ## Version 2
+- References
 - Higher-order functions / functions as first-class citizens
 - Generic functions and structs (without trait bounds)
 
