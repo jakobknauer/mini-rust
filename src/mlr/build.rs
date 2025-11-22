@@ -376,15 +376,25 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Stmt::*;
 
         match stmt {
-            Let { name, value, .. } => self.build_let_stmt(name, value),
+            Let { name, value, ty_annot } => self.build_let_stmt(name, ty_annot.as_ref(), value),
             Expr(expr) => self.build_expr_stmt(expr),
             Return(expr) => self.build_return_stmt(expr.as_ref()),
             Break => self.build_break_stmt(),
         }
     }
 
-    fn build_let_stmt(&mut self, name: &str, value: &hlr::Expr) -> Result<()> {
-        let loc = self.insert_fresh_alloc()?;
+    fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> Result<()> {
+        let loc = match ty_annot {
+            Some(annot) => {
+                let annot_ty = self
+                    .ctxt
+                    .tys
+                    .get_ty_by_hlr_annot(annot)
+                    .ok_or(MlrBuilderError::TyError(TyError::UnresolvableTyAnnot))?;
+                self.insert_alloc_with_ty(annot_ty)?
+            }
+            None => self.insert_fresh_alloc()?,
+        };
 
         self.start_new_block();
 

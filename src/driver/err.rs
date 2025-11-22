@@ -103,6 +103,7 @@ fn print_ty_error(fn_name: &str, err: mlr::TyError, ctxt: &ctxt::Ctxt) -> String
             ctxt.tys.get_string_rep(&ty),
             variant_name
         ),
+        UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

@@ -65,6 +65,7 @@ pub enum TyError {
         ty: Ty,
         variant_name: String,
     },
+    UnresolvableTyAnnot,
 }
 
 pub type Result<T> = std::result::Result<T, MlrBuilderError>;

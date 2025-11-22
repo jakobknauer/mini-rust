@@ -116,8 +116,13 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_fresh_alloc(&mut self) -> Result<mlr::Loc> {
+        let undef = self.ctxt.tys.get_undef_ty();
+        self.insert_alloc_with_ty(undef)
+    }
+
+    pub fn insert_alloc_with_ty(&mut self, ty: ty::Ty) -> Result<mlr::Loc> {
         let loc = self.get_next_loc();
-        self.output.loc_tys.insert(loc, self.ctxt.tys.get_undef_ty());
+        self.output.loc_tys.insert(loc, ty);
 
         self.insert_alloc_stmt(loc)?;
         Ok(loc)
