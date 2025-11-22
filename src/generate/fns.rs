@@ -152,7 +152,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_stmt(&mut self, _stmt: &mlr::Stmt) -> FnGeneratorResult<()> {
         use mlr::StmtDef::*;
 
-        let stmt = self.mlr.stmts.get(_stmt).unwrap();
+        let stmt = self.mlr.stmts.get(_stmt).ok_or(FnGeneratorError)?;
 
         match stmt {
             Alloc { loc } => {
@@ -182,17 +182,22 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_val(&mut self, val: &mlr::Val) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         use mlr::ValDef::*;
 
-        match self.mlr.vals.get(val).ok_or(FnGeneratorError)? {
+        let val = self.mlr.vals.get(val).ok_or(FnGeneratorError)?;
+
+        match val {
             Use(place) => self.build_op(place),
             Call { callable, args } => self.build_call(callable, args),
             Empty { ty } => self.build_empty_val(ty),
+            AddressOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
         }
     }
 
     fn build_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<PointerValue<'iw>> {
         use mlr::PlaceDef::*;
 
-        match self.mlr.places.get(place).ok_or(FnGeneratorError)? {
+        let place = self.mlr.places.get(place).ok_or(FnGeneratorError)?;
+
+        match place {
             Loc(loc) => self.locs.get(loc).ok_or(FnGeneratorError).cloned(),
             FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
@@ -238,6 +243,10 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                         .build_struct_gep(iw_base_struct_type, base_address, 1, "enum_variant_ptr")?;
 
                 Ok(variant_ptr)
+            }
+            Deref(op) => {
+                let ptr_value = self.build_op(op)?.into_pointer_value();
+                Ok(ptr_value)
             }
         }
     }

@@ -444,8 +444,8 @@ impl<'a> MlrBuilder<'a> {
 
     fn lower_field_access_to_place(&mut self, base: &hlr::Expr, field_name: &str) -> Result<mlr::Place> {
         // TODO allow general expressions as base (by lowering to val and then creating a
-        // temporary place). This however requires a better builder infrastructure, so we
-        // can here at this point create temporary variables/places in the current scope.
+        // temporary place). This requires some attention to different expressions (temporaries vs.
+        // places).
         let base = self.lower_to_place(base)?;
 
         let base_ty = self.get_place_ty(&base);
@@ -519,4 +519,5 @@ impl<'a> MlrBuilder<'a> {
 
         Ok(())
     }
+
 }

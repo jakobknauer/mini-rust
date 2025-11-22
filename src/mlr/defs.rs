@@ -66,6 +66,7 @@ pub enum ValDef {
     Call { callable: Op, args: Vec<Op> },
     Empty { ty: Ty },
     Use(Op),
+    AddressOf(Place),
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +82,7 @@ pub enum PlaceDef {
     FieldAccess { base: Place, field_index: usize },
     EnumDiscriminant { base: Place },
     ProjectToVariant { base: Place, variant_index: usize },
+    Deref(Op),
 }
 
 #[derive(Debug, Clone)]

@@ -167,6 +167,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let ty_name = self.ctxt.tys.get_string_rep(ty);
                     write!(self.writer, "empty {}", ty_name)
                 }
+                AddressOf(place) => {
+                    write!(self.writer, "AddressOf(")?;
+                    self.print_place(place)?;
+                    write!(self.writer, ")")
+                }
             },
             None => write!(self.writer, "<val id {}>", val.0),
         }
@@ -200,6 +205,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
                     write!(self.writer, " as {}::{})", enum_name, variant_index)
+                }
+                Deref(op) => {
+                    write!(self.writer, "Deref(")?;
+                    self.print_op(op)?;
+                    write!(self.writer, ")")
                 }
             },
             None => write!(self.writer, "<place id {}>", place.0),

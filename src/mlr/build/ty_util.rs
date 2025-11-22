@@ -21,6 +21,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             Call { callable, args } => self.infer_ty_of_call(&callable, &args),
             Empty { ty } => Ok(ty),
             Use(op) => Ok(self.get_op_ty(&op)),
+            AddressOf(place) => self.infer_ty_of_address_of_place(&place),
         }
     }
 
@@ -77,7 +78,13 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(return_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_: fns::Fn) -> Result<ty::Ty> {
+    fn infer_ty_of_address_of_place(&mut self, place: &mlr::Place) -> std::result::Result<ty::Ty, MlrBuilderError> {
+        let place_ty = self.get_place_ty(place);
+        let ref_ty = self.ctxt.tys.register_ref_ty(place_ty);
+        Ok(ref_ty)
+    }
+
+    fn infer_ty_of_fn(&mut self, fn_: &fns::Fn) -> Result<ty::Ty> {
         let signature = self
             .ctxt
             .fns
@@ -91,20 +98,24 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(fn_ty)
     }
 
-    pub fn infer_place_ty(&self, place: &mlr::Place) -> Result<ty::Ty> {
+    pub fn infer_place_ty(&mut self, place: &mlr::Place) -> Result<ty::Ty> {
         use mlr::PlaceDef::*;
 
         let place = self
             .output
             .places
             .get(place)
-            .expect("infer_ty_of_place should only be called with a valid PlaceId");
+            .expect("infer_ty_of_place should only be called with a valid PlaceId")
+            .clone();
 
         match place {
-            Loc(loc) => self.infer_ty_of_loc(loc),
-            FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index),
-            EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(base),
-            ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
+            Loc(loc) => self.infer_ty_of_loc(&loc),
+            FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(&base, &field_index),
+            EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(&base),
+            ProjectToVariant { base, variant_index } => {
+                self.infer_ty_of_project_to_variant_place(&base, &variant_index)
+            }
+            Deref(op) => self.infer_ty_of_deref_place(&op),
         }
     }
 
@@ -160,12 +171,27 @@ impl<'a> mlr::MlrBuilder<'a> {
             .output
             .ops
             .get(&op)
-            .expect("infer_ty_of_operand should only be called with a valid OpId");
+            .expect("infer_ty_of_operand should only be called with a valid OpId").clone();
 
         match op {
-            Fn(fn_) => self.infer_ty_of_fn(*fn_),
-            Const(constant) => self.infer_ty_of_constant(constant),
-            Copy(place) => self.infer_place_ty(place),
+            Fn(fn_) => self.infer_ty_of_fn(&fn_),
+            Const(constant) => self.infer_ty_of_constant(&constant),
+            Copy(place) => self.infer_place_ty(&place),
+        }
+    }
+
+    fn infer_ty_of_deref_place(&mut self, op: &mlr::Op) -> Result<ty::Ty> {
+        let ref_ty = self.get_op_ty(op);
+        let ty_def = self
+            .ctxt
+            .tys
+            .get_ty_def(&ref_ty)
+            .expect("type of dereferenced op should be registered")
+            .clone();
+
+        match ty_def {
+            ty::TyDef::Ref(referenced_ty) => Ok(referenced_ty),
+            _ => TyError::DereferenceOfNonRefTy { ty: ref_ty }.into(),
         }
     }
 }

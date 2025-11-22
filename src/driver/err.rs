@@ -104,6 +104,10 @@ fn print_ty_error(fn_name: &str, err: mlr::TyError, ctxt: &ctxt::Ctxt) -> String
             variant_name
         ),
         UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
+        DereferenceOfNonRefTy { ty } => format!(
+            "Cannot dereference type '{}', which is not a reference type",
+            ctxt.tys.get_string_rep(&ty)
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }
