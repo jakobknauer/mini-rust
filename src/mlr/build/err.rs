@@ -5,6 +5,7 @@ pub enum MlrBuilderError {
     MissingOperatorImpl { name: String },
     UnresolvableSymbol { name: String },
     UnknownPrimitiveTy,
+    NotAPlace,
     TyError(TyError),
 }
 

@@ -20,6 +20,9 @@ pub fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &
         MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
         UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
         UnknownPrimitiveTy => "Unknown primitive type".to_string(),
+        NotAPlace => {
+            "Only variables, field access expressions, and derefs of references are supported as places.".to_string()
+        }
     }
 }
 

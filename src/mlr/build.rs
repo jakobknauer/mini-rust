@@ -184,7 +184,7 @@ impl<'a> MlrBuilder<'a> {
             Var(name) => self.lower_var_to_place(name),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
-            _ => panic!("Only variables, field access expressions, and derefs of references are supported as places."),
+            _ => Err(MlrBuilderError::NotAPlace),
         }
     }
 
