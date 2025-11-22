@@ -81,7 +81,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                 Struct(struct_) => self.define_struct(name, ty, struct_),
                 Enum(enum_) => self.define_enum(name, enum_),
             },
-            Fn { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Undef => unreachable!("type_ should not be Undef at this point"),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
         };

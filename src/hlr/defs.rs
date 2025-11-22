@@ -19,14 +19,14 @@ impl Program {
 pub struct Fn {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_ty: Option<String>,
+    pub return_ty: Option<TyAnnot>,
     pub body: Block,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
-    pub ty: String,
+    pub ty: TyAnnot,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -38,7 +38,7 @@ pub struct Struct {
 #[derive(Debug, PartialEq, Eq)]
 pub struct StructField {
     pub name: String,
-    pub ty: String,
+    pub ty: TyAnnot,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub struct Block {
 pub enum Stmt {
     Let {
         name: String,
-        ty_annot: Option<String>,
+        ty_annot: Option<TyAnnot>,
         value: Expr,
     },
     Expr(Expr),
@@ -152,4 +152,10 @@ pub struct StructPattern {
 pub struct StructPatternField {
     pub field_name: String,
     pub binding_name: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TyAnnot {
+    Named(String),
+    Reference(Box<TyAnnot>),
 }

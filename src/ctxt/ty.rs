@@ -11,6 +11,7 @@ pub struct Enum(pub usize);
 pub enum TyDef {
     Named(String, Named),
     Fn { param_tys: Vec<Ty>, return_ty: Ty },
+    Ref(Ty),
     Alias(Ty),
     Undef,
 }

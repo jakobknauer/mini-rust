@@ -19,6 +19,10 @@ fn scalar_product(p: Point, q: Point) -> i32 {
     p.x * q.x + p.y * q.y
 }
 
+fn select_ref(switch: bool, a: &i32, b: &i32) -> &i32 {
+    if switch { a } else { b }
+}
+
 struct Point {
     x: i32,
     y: i32,

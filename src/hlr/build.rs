@@ -155,13 +155,13 @@ impl<'a> HlrParser<'a> {
     fn parse_function_parameter(&mut self) -> Result<Parameter, ParserError> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
-        let param_type = self.expect_identifier()?;
-        Ok(Parameter { name, ty: param_type })
+        let ty = self.parse_ty_annot()?;
+        Ok(Parameter { name, ty })
     }
 
-    fn parse_function_return_type(&mut self) -> Result<Option<String>, ParserError> {
+    fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot>, ParserError> {
         if self.advance_if(Token::Arrow) {
-            let return_type = self.expect_identifier()?;
+            let return_type = self.parse_ty_annot()?;
             Ok(Some(return_type))
         } else {
             Ok(None)
@@ -194,8 +194,8 @@ impl<'a> HlrParser<'a> {
     fn parse_struct_field(&mut self) -> Result<StructField, ParserError> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
-        let field_type = self.expect_identifier()?;
-        Ok(StructField { name, ty: field_type })
+        let ty = self.parse_ty_annot()?;
+        Ok(StructField { name, ty })
     }
 
     fn parse_enum(&mut self) -> Result<Enum, ParserError> {
@@ -323,7 +323,7 @@ impl<'a> HlrParser<'a> {
         self.expect_keyword(Keyword::Let)?;
         let name = self.expect_identifier()?;
         let ty_annot = if self.advance_if(Token::Colon) {
-            Some(self.expect_identifier()?)
+            Some(self.parse_ty_annot()?)
         } else {
             None
         };
@@ -567,6 +567,29 @@ impl<'a> HlrParser<'a> {
 
         Ok(StructPattern { variant, fields })
     }
+
+    fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserError> {
+        let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
+        match current {
+            Token::Identifier(ident) => {
+                let ident = ident.clone();
+                self.position += 1;
+                Ok(TyAnnot::Named(ident))
+            }
+            Token::Ampersand => {
+                self.position += 1;
+                let inner_ty = self.parse_ty_annot()?;
+                Ok(TyAnnot::Reference(Box::new(inner_ty)))
+            }
+            Token::AmpersandAmpersand => {
+                // Two levels of reference
+                self.position += 1;
+                let inner_ty = self.parse_ty_annot()?;
+                Ok(TyAnnot::Reference(Box::new(TyAnnot::Reference(Box::new(inner_ty)))))
+            }
+            token => Err(ParserError::UnexpectedToken(token.clone())),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -628,15 +651,15 @@ mod tests {
             let expected = Program {
                 fns: vec![Fn {
                     name: "add".to_string(),
-                    return_ty: Some("int".to_string()),
+                    return_ty: Some(TyAnnot::Named("int".to_string())),
                     parameters: vec![
                         Parameter {
                             name: "a".to_string(),
-                            ty: "int".to_string(),
+                            ty: TyAnnot::Named("int".to_string()),
                         },
                         Parameter {
                             name: "b".to_string(),
-                            ty: "int".to_string(),
+                            ty: TyAnnot::Named("int".to_string()),
                         },
                     ],
                     body: Block {
@@ -670,11 +693,11 @@ mod tests {
                     fields: vec![
                         StructField {
                             name: "x".to_string(),
-                            ty: "int".to_string(),
+                            ty: TyAnnot::Named("int".to_string()),
                         },
                         StructField {
                             name: "y".to_string(),
-                            ty: "int".to_string(),
+                            ty: TyAnnot::Named("int".to_string()),
                         },
                     ],
                 }],

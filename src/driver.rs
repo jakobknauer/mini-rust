@@ -37,7 +37,7 @@ where
     print_pretty("Building MLR from HLR");
     register_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error registering types")?;
     define_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error defining types")?;
-    register_functions(&hlr, &ctxt.tys, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
+    register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
 
     if let Some(mlr_path) = output_paths.mlr {
@@ -115,7 +115,7 @@ fn set_struct_fields<'a>(
         .map(|field| {
             Ok(ty::StructField {
                 name: field.name.clone(),
-                ty: tys.get_ty_by_name(&field.ty).ok_or(())?,
+                ty: tys.get_ty_by_hlr_annot(&field.ty).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
@@ -126,12 +126,12 @@ fn set_struct_fields<'a>(
     Ok(())
 }
 
-fn register_functions(hlr: &hlr::Program, tys: &ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+fn register_functions(hlr: &hlr::Program, tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
     stdlib::register_fns(tys, fns)?;
 
     for function in &hlr.fns {
         let return_ty = match function.return_ty.as_ref() {
-            Some(ty) => tys.get_ty_by_name(ty).ok_or(())?,
+            Some(ty) => tys.get_ty_by_hlr_annot(ty).ok_or(())?,
             None => tys.get_ty_by_name("()").ok_or(())?,
         };
 
@@ -141,7 +141,7 @@ fn register_functions(hlr: &hlr::Program, tys: &ctxt::TyReg, fns: &mut ctxt::FnR
             .map(|parameter| {
                 Ok(fns::FnParam {
                     name: parameter.name.clone(),
-                    ty: tys.get_ty_by_name(&parameter.ty).ok_or(())?,
+                    ty: tys.get_ty_by_hlr_annot(&parameter.ty).ok_or(())?,
                 })
             })
             .collect::<Result<_, _>>()?;

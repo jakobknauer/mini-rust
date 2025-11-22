@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
 
-use crate::ctxt::ty::*;
+use crate::{ctxt::ty::*, hlr};
 
 pub struct TyReg {
     tys: HashMap<Ty, TyDef>,
@@ -93,6 +93,11 @@ impl TyReg {
         self.register_ty(fn_ty)
     }
 
+    pub fn register_ref_ty(&mut self, inner_ty: Ty) -> Ty {
+        let ref_ty = TyDef::Ref(inner_ty);
+        self.register_ty(ref_ty)
+    }
+
     pub fn get_ty_def(&self, id: &Ty) -> Option<&TyDef> {
         let id = self.canonicalize(id);
         self.tys.get(&id)
@@ -100,6 +105,16 @@ impl TyReg {
 
     pub fn get_ty_by_name(&self, name: &str) -> Option<Ty> {
         self.named_tys.get(name).cloned()
+    }
+
+    pub fn get_ty_by_hlr_annot(&mut self, annot: &hlr::TyAnnot) -> Option<Ty> {
+        match annot {
+            hlr::TyAnnot::Named(name) => self.get_ty_by_name(name),
+            hlr::TyAnnot::Reference(ty_annot) => {
+                let inner_ty = self.get_ty_by_hlr_annot(ty_annot)?;
+                Some(self.register_ref_ty(inner_ty))
+            }
+        }
     }
 
     fn get_ty_def_by_name(&self, name: &str) -> Option<&TyDef> {
@@ -145,6 +160,7 @@ impl TyReg {
                 let return_name = self.get_string_rep(return_ty);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
+            TyDef::Ref(ty) => format!("&{}", self.get_string_rep(ty)),
             TyDef::Alias(ty) => self.get_string_rep(ty),
             TyDef::Undef => "<undefined>".to_string(),
         }
@@ -196,6 +212,8 @@ impl TyReg {
                 }
                 self.unify(&ret1, &ret2)
             }
+
+            (Ref(inner1), Ref(inner2)) => self.unify(&inner1, &inner2),
 
             (Named(_, n1), Named(_, n2)) if n1 == n2 => Ok(()),
 
