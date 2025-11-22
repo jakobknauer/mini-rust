@@ -403,14 +403,10 @@ impl<'a> HlrParser<'a> {
     fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
         if self.advance_if(Token::Asterisk) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::Deref {
-                base: Box::new(base),
-            })
+            Ok(Expr::Deref { base: Box::new(base) })
         } else if self.advance_if(Token::Ampersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::AddrOf {
-                base: Box::new(base),
-            })
+            Ok(Expr::AddrOf { base: Box::new(base) })
         } else {
             self.parse_function_call_and_field_access(allow_top_level_struct_expr)
         }

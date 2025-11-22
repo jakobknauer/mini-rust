@@ -171,7 +171,8 @@ impl<'a> mlr::MlrBuilder<'a> {
             .output
             .ops
             .get(&op)
-            .expect("infer_ty_of_operand should only be called with a valid OpId").clone();
+            .expect("infer_ty_of_operand should only be called with a valid OpId")
+            .clone();
 
         match op {
             Fn(fn_) => self.infer_ty_of_fn(&fn_),
