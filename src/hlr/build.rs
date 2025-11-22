@@ -394,11 +394,27 @@ impl<'a> HlrParser<'a> {
         Token::Minus => BinaryOperator::Subtract
     ]);
 
-    parse_left_associative!(parse_product, parse_function_call_and_field_access, [
+    parse_left_associative!(parse_product, parse_unary_expr, [
         Token::Asterisk => BinaryOperator::Multiply,
         Token::Slash => BinaryOperator::Divide,
         Token::Percent => BinaryOperator::Remainder
     ]);
+
+    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
+        if self.advance_if(Token::Asterisk) {
+            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+            Ok(Expr::Deref {
+                base: Box::new(base),
+            })
+        } else if self.advance_if(Token::Ampersand) {
+            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+            Ok(Expr::AddrOf {
+                base: Box::new(base),
+            })
+        } else {
+            self.parse_function_call_and_field_access(allow_top_level_struct_expr)
+        }
+    }
 
     fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
         let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;

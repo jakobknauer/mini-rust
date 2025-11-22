@@ -188,7 +188,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             Use(place) => self.build_op(place),
             Call { callable, args } => self.build_call(callable, args),
             Empty { ty } => self.build_empty_val(ty),
-            AddressOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
+            AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
         }
     }
 

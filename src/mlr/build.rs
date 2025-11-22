@@ -157,7 +157,7 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(..) | Var(..) | FieldAccess { .. } => {
+            Lit(..) | Var(..) | FieldAccess { .. } | Deref { .. } => {
                 let op = self.lower_to_op(expr)?;
                 self.insert_use_val(op)
             }
@@ -173,6 +173,7 @@ impl<'a> MlrBuilder<'a> {
             Loop { body } => self.build_loop(body),
             Block(block) => self.build_block(block),
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms),
+            AddrOf { base } => self.build_addr_of_val(base),
         }
     }
 
@@ -182,7 +183,8 @@ impl<'a> MlrBuilder<'a> {
         match expr {
             Var(name) => self.lower_var_to_place(name),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
-            _ => panic!("Only variables and field access expressions are supported as places."),
+            Deref { base } => self.lower_deref_to_place(base),
+            _ => panic!("Only variables, field access expressions, and derefs of references are supported as places."),
         }
     }
 
@@ -192,7 +194,7 @@ impl<'a> MlrBuilder<'a> {
         match expr {
             Lit(literal) => self.build_literal(literal),
             Var(name) => self.build_variable(name),
-            FieldAccess { .. } => {
+            FieldAccess { .. } | Deref { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)
             }
@@ -372,6 +374,11 @@ impl<'a> MlrBuilder<'a> {
         self.insert_use_val(result_op)
     }
 
+    fn build_addr_of_val(&mut self, base: &hlr::Expr) -> Result<mlr::Val> {
+        let base = self.lower_to_place(base)?;
+        self.insert_addr_of_val(base)
+    }
+
     fn build_stmt(&mut self, stmt: &hlr::Stmt) -> Result<()> {
         use hlr::Stmt::*;
 
@@ -463,6 +470,11 @@ impl<'a> MlrBuilder<'a> {
         self.insert_field_access_place(base, field_index)
     }
 
+    fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> Result<mlr::Place> {
+        let base_op = self.lower_to_op(base)?;
+        self.insert_deref_place(base_op)
+    }
+
     fn build_match_arms(
         &mut self,
         arms: &[hlr::MatchArm],
@@ -519,5 +531,4 @@ impl<'a> MlrBuilder<'a> {
 
         Ok(())
     }
-
 }

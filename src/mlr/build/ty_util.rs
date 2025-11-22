@@ -21,7 +21,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             Call { callable, args } => self.infer_ty_of_call(&callable, &args),
             Empty { ty } => Ok(ty),
             Use(op) => Ok(self.get_op_ty(&op)),
-            AddressOf(place) => self.infer_ty_of_address_of_place(&place),
+            AddrOf(place) => self.infer_ty_of_addr_of_place(&place),
         }
     }
 
@@ -78,7 +78,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(return_ty)
     }
 
-    fn infer_ty_of_address_of_place(&mut self, place: &mlr::Place) -> std::result::Result<ty::Ty, MlrBuilderError> {
+    fn infer_ty_of_addr_of_place(&mut self, place: &mlr::Place) -> std::result::Result<ty::Ty, MlrBuilderError> {
         let place_ty = self.get_place_ty(place);
         let ref_ty = self.ctxt.tys.register_ref_ty(place_ty);
         Ok(ref_ty)

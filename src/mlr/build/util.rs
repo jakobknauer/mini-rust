@@ -86,6 +86,11 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_use_val(op)
     }
 
+    pub fn insert_addr_of_val(&mut self, place: mlr::Place) -> Result<mlr::Val> {
+        let val = mlr::ValDef::AddrOf(place);
+        self.insert_val(val)
+    }
+
     pub fn insert_if_stmt(&mut self, cond: mlr::Op, then_: mlr::Stmt, else_: mlr::Stmt) -> Result<mlr::Stmt> {
         let if_ = mlr::StmtDef::If(mlr::If {
             cond,
@@ -207,6 +212,11 @@ impl<'a> mlr::MlrBuilder<'a> {
 
     pub fn insert_field_access_place(&mut self, base: mlr::Place, field_index: usize) -> Result<mlr::Place> {
         let place = mlr::PlaceDef::FieldAccess { base, field_index };
+        self.insert_place(place)
+    }
+
+    pub fn insert_deref_place(&mut self, op: mlr::Op) -> Result<mlr::Place> {
+        let place = mlr::PlaceDef::Deref(op);
         self.insert_place(place)
     }
 

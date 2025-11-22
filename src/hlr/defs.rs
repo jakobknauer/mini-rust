@@ -109,6 +109,12 @@ pub enum Expr {
         scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,
     },
+    Deref {
+        base: Box<Expr>,
+    },
+    AddrOf {
+        base: Box<Expr>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
