@@ -52,4 +52,6 @@ fn eval(expr: Expr) -> i32 {
     }
 }
 
-fn generic<T>() -> () {}
+fn identity<T>(x: T) -> T {
+    x
+}

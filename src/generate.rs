@@ -138,12 +138,15 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn declare_functions(&mut self) {
         for fn_ in self.mr_ctxt.fns.get_all_fns() {
             let signature = self.mr_ctxt.fns.get_signature(fn_).unwrap();
-            let return_type: BasicTypeEnum = self.get_ty_as_basic_type_enum(&signature.return_ty).unwrap();
+            if !signature.gen_params.is_empty() {
+                continue;
+            }
             let param_types: Vec<_> = signature
                 .params
                 .iter()
                 .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty).unwrap())
                 .collect();
+            let return_type: BasicTypeEnum = self.get_ty_as_basic_type_enum(&signature.return_ty).unwrap();
             let fn_type = return_type.fn_type(&param_types, false);
             let fn_value = self.iw_module.add_function(&signature.name, fn_type, None);
             self.functions.insert(*fn_, fn_value);
