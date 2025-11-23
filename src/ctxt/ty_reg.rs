@@ -108,11 +108,26 @@ impl TyReg {
     }
 
     pub fn get_ty_by_hlr_annot(&mut self, annot: &hlr::TyAnnot) -> Option<Ty> {
+        use hlr::TyAnnot::*;
+
         match annot {
-            hlr::TyAnnot::Named(name) => self.get_ty_by_name(name),
-            hlr::TyAnnot::Reference(ty_annot) => {
-                let inner_ty = self.get_ty_by_hlr_annot(ty_annot)?;
-                Some(self.register_ref_ty(inner_ty))
+            Named(name) => self.get_ty_by_name(name),
+            Reference(ty_annot) => self
+                .get_ty_by_hlr_annot(ty_annot)
+                .map(|inner| self.register_ref_ty(inner)),
+            Unit => self.get_primitive_ty(Primitive::Unit),
+            Fn { param_tys, return_ty } => {
+                let param_tys: Vec<Ty> = param_tys
+                    .iter()
+                    .map(|pt| self.get_ty_by_hlr_annot(pt))
+                    .collect::<Option<Vec<_>>>()?;
+
+                let return_ty = match return_ty {
+                    Some(rt) => self.get_ty_by_hlr_annot(rt),
+                    None => self.get_primitive_ty(Primitive::Unit),
+                }?;
+
+                Some(self.register_fn_ty(param_tys, return_ty))
             }
         }
     }

@@ -136,7 +136,7 @@ fn register_functions(hlr: &hlr::Program, tys: &mut ctxt::TyReg, fns: &mut ctxt:
         };
 
         let parameters = function
-            .parameters
+            .params
             .iter()
             .map(|parameter| {
                 Ok(fns::FnParam {

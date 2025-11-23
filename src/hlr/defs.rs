@@ -18,13 +18,13 @@ impl Program {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fn {
     pub name: String,
-    pub parameters: Vec<Parameter>,
+    pub params: Vec<Param>,
     pub return_ty: Option<TyAnnot>,
     pub body: Block,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Parameter {
+pub struct Param {
     pub name: String,
     pub ty: TyAnnot,
 }
@@ -164,4 +164,9 @@ pub struct StructPatternField {
 pub enum TyAnnot {
     Named(String),
     Reference(Box<TyAnnot>),
+    Unit,
+    Fn {
+        param_tys: Vec<TyAnnot>,
+        return_ty: Option<Box<TyAnnot>>,
+    },
 }

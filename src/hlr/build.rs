@@ -126,37 +126,37 @@ impl<'a> HlrParser<'a> {
         let name = self.expect_identifier()?;
 
         self.expect_token(Token::LParen)?;
-        let parameters = self.parse_function_parameters()?;
+        let params = self.parse_fn_params()?;
         self.expect_token(Token::RParen)?;
 
-        let return_type = self.parse_function_return_type()?;
+        let return_ty = self.parse_function_return_type()?;
         let body = self.parse_block()?;
 
         Ok(Fn {
             name,
-            return_ty: return_type,
-            parameters,
+            return_ty,
+            params,
             body,
         })
     }
 
-    fn parse_function_parameters(&mut self) -> Result<Vec<Parameter>, ParserError> {
-        let mut parameters = Vec::new();
+    fn parse_fn_params(&mut self) -> Result<Vec<Param>, ParserError> {
+        let mut params = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
-            parameters.push(self.parse_function_parameter()?);
+            params.push(self.parse_function_param()?);
 
             if !self.advance_if(Token::Comma) {
                 break;
             }
         }
-        Ok(parameters)
+        Ok(params)
     }
 
-    fn parse_function_parameter(&mut self) -> Result<Parameter, ParserError> {
+    fn parse_function_param(&mut self) -> Result<Param, ParserError> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let ty = self.parse_ty_annot()?;
-        Ok(Parameter { name, ty })
+        Ok(Param { name, ty })
     }
 
     fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot>, ParserError> {
@@ -407,6 +407,11 @@ impl<'a> HlrParser<'a> {
         } else if self.advance_if(Token::Ampersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
             Ok(Expr::AddrOf { base: Box::new(base) })
+        } else if self.advance_if(Token::AmpersandAmpersand) {
+            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+            Ok(Expr::AddrOf {
+                base: Box::new(Expr::AddrOf { base: Box::new(base) }),
+            })
         } else {
             self.parse_function_call_and_field_access(allow_top_level_struct_expr)
         }
@@ -599,6 +604,32 @@ impl<'a> HlrParser<'a> {
                 let inner_ty = self.parse_ty_annot()?;
                 Ok(TyAnnot::Reference(Box::new(TyAnnot::Reference(Box::new(inner_ty)))))
             }
+            Token::LParen => {
+                self.position += 1;
+                self.expect_token(Token::RParen)?;
+                Ok(TyAnnot::Unit)
+            }
+            Token::Keyword(Keyword::Fn) => {
+                self.position += 1;
+                self.expect_token(Token::LParen)?;
+                let mut param_tys = Vec::new();
+                while self.current() != Some(&Token::RParen) {
+                    let param_type = self.parse_ty_annot()?;
+                    param_tys.push(param_type);
+                    if !self.advance_if(Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect_token(Token::RParen)?;
+
+                let return_ty = if self.advance_if(Token::Arrow) {
+                    Some(Box::new(self.parse_ty_annot()?))
+                } else {
+                    None
+                };
+
+                Ok(TyAnnot::Fn { param_tys, return_ty })
+            }
             token => Err(ParserError::UnexpectedToken(token.clone())),
         }
     }
@@ -633,7 +664,7 @@ mod tests {
                 fns: vec![Fn {
                     name: "empty".to_string(),
                     return_ty: None,
-                    parameters: vec![],
+                    params: vec![],
                     body: Block {
                         stmts: vec![],
                         return_expr: None,
@@ -664,12 +695,12 @@ mod tests {
                 fns: vec![Fn {
                     name: "add".to_string(),
                     return_ty: Some(TyAnnot::Named("int".to_string())),
-                    parameters: vec![
-                        Parameter {
+                    params: vec![
+                        Param {
                             name: "a".to_string(),
                             ty: TyAnnot::Named("int".to_string()),
                         },
-                        Parameter {
+                        Param {
                             name: "b".to_string(),
                             ty: TyAnnot::Named("int".to_string()),
                         },

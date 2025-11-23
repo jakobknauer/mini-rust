@@ -1,8 +1,15 @@
 fn main() -> i32 {
-    let a: i32 = 2;
-    let b: i32 = 3;
-    *select_ref(false, &a, &b) = 5;
-    a + b
+    let n = 4;
+    increase(&n);
+    invoke(fac, n)
+}
+
+fn increase(x: &i32) -> () {
+    *x = *x + 1
+}
+
+fn invoke(f: fn(i32) -> i32, x: i32) -> i32 {
+    f(x)
 }
 
 fn fac(n: i32) -> i32 {
