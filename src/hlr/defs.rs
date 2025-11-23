@@ -18,6 +18,7 @@ impl Program {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fn {
     pub name: String,
+    pub gen_params: Vec<String>,
     pub params: Vec<Param>,
     pub return_ty: Option<TyAnnot>,
     pub body: Block,

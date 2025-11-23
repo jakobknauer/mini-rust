@@ -125,6 +125,12 @@ impl<'a> HlrParser<'a> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 
+        let gen_params = if self.current() == Some(&Token::Smaller) {
+            self.parse_fn_generic_params()?
+        } else {
+            Vec::new()
+        };
+
         self.expect_token(Token::LParen)?;
         let params = self.parse_fn_params()?;
         self.expect_token(Token::RParen)?;
@@ -134,10 +140,27 @@ impl<'a> HlrParser<'a> {
 
         Ok(Fn {
             name,
-            return_ty,
+            gen_params,
             params,
+            return_ty,
             body,
         })
+    }
+
+    fn parse_fn_generic_params(&mut self) -> Result<Vec<String>, ParserError> {
+        self.expect_token(Token::Smaller)?;
+
+        let mut params = Vec::new();
+        while let Some(Token::Identifier(_)) = self.current() {
+            let arg = self.expect_identifier()?;
+            params.push(arg);
+
+            if !self.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        self.expect_token(Token::Greater)?;
+        Ok(params)
     }
 
     fn parse_fn_params(&mut self) -> Result<Vec<Param>, ParserError> {

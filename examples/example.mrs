@@ -51,3 +51,5 @@ fn eval(expr: Expr) -> i32 {
         Mul { left: a, right: b } => a * b,
     }
 }
+
+fn generic<T>() -> () {}
