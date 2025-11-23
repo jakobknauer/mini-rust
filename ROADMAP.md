@@ -10,7 +10,7 @@
     - ~~Make temporary values explicit (and define their lifetime using blocks; this makes dropping easier later on)~~
     - ~~Determine all types (bidirectional; no HM-style, as we don't have generics yet)~~
 - ~~Generate LLVM IR from typed IR~~
-- Missing:
+- ~~Missing:~~
     - ~~breaking out of loops~~
     - ~~creating struct and enum values~~
     - ~~accessing struct fields~~
@@ -23,8 +23,8 @@
     - ~~Decomposition of enum values - `match` or `if let`~~
 
 ## Version 2
-~~- References~~
-- Higher-order functions / functions as first-class citizens
+- ~~References~~
+- ~~Higher-order functions / functions as first-class citizens~~
 - Generic functions and structs (without trait bounds)
 
 ## Version 3
