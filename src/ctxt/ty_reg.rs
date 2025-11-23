@@ -1,7 +1,10 @@
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{ctxt::ty::*, hlr};
+use crate::{
+    ctxt::{fns::GenParam, ty::*},
+    hlr,
+};
 
 pub struct TyReg {
     tys: HashMap<Ty, TyDef>,
@@ -112,23 +115,28 @@ impl TyReg {
         self.named_tys.get(name).cloned()
     }
 
-    pub fn get_ty_by_hlr_annot(&mut self, annot: &hlr::TyAnnot) -> Option<Ty> {
+    pub fn get_ty_by_hlr_annot(&mut self, annot: &hlr::TyAnnot, gen_vars: &Vec<GenParam>) -> Option<Ty> {
         use hlr::TyAnnot::*;
 
         match annot {
-            Named(name) => self.get_ty_by_name(name),
+            Named(name) => {
+                gen_vars
+                    .iter()
+                    .find_map(|gp| (&gp.name == name).then_some(gp.ty))
+                    .or_else(|| self.get_ty_by_name(name))
+            }
             Reference(ty_annot) => self
-                .get_ty_by_hlr_annot(ty_annot)
+                .get_ty_by_hlr_annot(ty_annot, gen_vars)
                 .map(|inner| self.register_ref_ty(inner)),
             Unit => self.get_primitive_ty(Primitive::Unit),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys
                     .iter()
-                    .map(|pt| self.get_ty_by_hlr_annot(pt))
+                    .map(|pt| self.get_ty_by_hlr_annot(pt, gen_vars))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.get_ty_by_hlr_annot(rt),
+                    Some(rt) => self.get_ty_by_hlr_annot(rt, gen_vars),
                     None => self.get_primitive_ty(Primitive::Unit),
                 }?;
 
@@ -256,10 +264,6 @@ impl TyReg {
             Primitive::Boolean => self.bool_ty,
             Primitive::Unit => self.unit_ty,
         }
-    }
-
-    pub fn get_all_tys(&self) -> impl IntoIterator<Item = (&Ty, &TyDef)> {
-        &self.tys
     }
 
     pub fn get_named_ty(&self, named_ty: Named) -> Option<Ty> {

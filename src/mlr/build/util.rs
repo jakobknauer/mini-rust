@@ -391,4 +391,21 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         Ok(enum_def)
     }
+
+    pub fn get_signature(&self) -> &fns::FnSig {
+        self.ctxt
+            .fns
+            .get_signature(&self.target_fn)
+            .expect("function signature should be registered")
+    }
+
+    pub fn resolve_hlr_ty_annot(&mut self, annot: &hlr::TyAnnot) -> Result<ty::Ty> {
+        let gen_params = self.get_signature().gen_params.clone();
+        let ty = self
+            .ctxt
+            .tys
+            .get_ty_by_hlr_annot(annot, &gen_params)
+            .ok_or(MlrBuilderError::TyError(TyError::UnresolvableTyAnnot))?;
+        Ok(ty)
+    }
 }

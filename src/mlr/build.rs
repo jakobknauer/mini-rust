@@ -101,7 +101,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
-        let params = self.ctxt.fns.get_signature(&self.target_fn).cloned().unwrap().params;
+        let params = self.get_signature().params.clone();
 
         self.push_scope();
 
@@ -387,11 +387,7 @@ impl<'a> MlrBuilder<'a> {
     fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> Result<()> {
         let loc = match ty_annot {
             Some(annot) => {
-                let annot_ty = self
-                    .ctxt
-                    .tys
-                    .get_ty_by_hlr_annot(annot)
-                    .ok_or(MlrBuilderError::TyError(TyError::UnresolvableTyAnnot))?;
+                let annot_ty = self.resolve_hlr_ty_annot(annot)?;
                 self.insert_alloc_with_ty(annot_ty)?
             }
             None => self.insert_fresh_alloc()?,

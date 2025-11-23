@@ -115,7 +115,7 @@ fn set_struct_fields<'a>(
         .map(|field| {
             Ok(ty::StructField {
                 name: field.name.clone(),
-                ty: tys.get_ty_by_hlr_annot(&field.ty).ok_or(())?,
+                ty: tys.get_ty_by_hlr_annot(&field.ty, &Vec::new()).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
@@ -152,13 +152,13 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
         .map(|parameter| {
             Ok(fns::FnParam {
                 name: parameter.name.clone(),
-                ty: tys.get_ty_by_hlr_annot(&parameter.ty).ok_or(())?,
+                ty: tys.get_ty_by_hlr_annot(&parameter.ty, &gen_params).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
-        Some(ty) => tys.get_ty_by_hlr_annot(ty).ok_or(())?,
+        Some(ty) => tys.get_ty_by_hlr_annot(ty, &gen_params).ok_or(())?,
         None => tys.get_ty_by_name("()").ok_or(())?,
     };
 
