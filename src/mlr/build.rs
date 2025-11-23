@@ -101,17 +101,11 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn build(mut self) -> Result<mlr::Mlr> {
-        let parameters = self
-            .ctxt
-            .fns
-            .get_signature(&self.target_fn)
-            .cloned()
-            .unwrap()
-            .params;
+        let params = self.ctxt.fns.get_signature(&self.target_fn).cloned().unwrap().params;
 
         self.push_scope();
 
-        for fns::FnParam { name, ty } in parameters {
+        for fns::FnParam { name, ty } in params {
             let loc = self.get_next_loc();
             self.add_to_scope(&name, loc);
             self.output.loc_tys.insert(loc, ty);
