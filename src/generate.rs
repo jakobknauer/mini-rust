@@ -21,7 +21,6 @@ pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) -> String {
     let mut generator = Generator::new(&iw_ctxt, ctxt);
 
     generator.set_target_triple();
-    generator.define_types();
     generator.declare_functions();
     generator.define_functions();
 
@@ -56,12 +55,6 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.iw_module.set_triple(&target_triple);
     }
 
-    fn define_types(&mut self) {
-        for (ty, _) in self.mr_ctxt.tys.get_all_tys() {
-            self.get_or_define_ty(ty);
-        }
-    }
-
     fn get_or_define_ty(&mut self, ty: &mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Named::*, Primitive::*, TyDef::*};
 
@@ -84,6 +77,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Undef => unreachable!("type_ should not be Undef at this point"),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
+            GenVar(_) => unreachable!("generic parameters should be monomorphized before this point"),
         };
 
         if !self.types.contains_key(ty) {
@@ -147,7 +141,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             let signature = self.mr_ctxt.fns.get_signature(fn_).unwrap();
             let return_type: BasicTypeEnum = self.get_ty_as_basic_type_enum(&signature.return_ty).unwrap();
             let param_types: Vec<_> = signature
-                .parameters
+                .params
                 .iter()
                 .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty).unwrap())
                 .collect();
