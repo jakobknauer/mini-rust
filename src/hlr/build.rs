@@ -686,8 +686,9 @@ mod tests {
             let expected = Program {
                 fns: vec![Fn {
                     name: "empty".to_string(),
-                    return_ty: None,
+                    gen_params: vec![],
                     params: vec![],
+                    return_ty: None,
                     body: Block {
                         stmts: vec![],
                         return_expr: None,
@@ -717,7 +718,7 @@ mod tests {
             let expected = Program {
                 fns: vec![Fn {
                     name: "add".to_string(),
-                    return_ty: Some(TyAnnot::Named("int".to_string())),
+                    gen_params: vec![],
                     params: vec![
                         Param {
                             name: "a".to_string(),
@@ -728,6 +729,7 @@ mod tests {
                             ty: TyAnnot::Named("int".to_string()),
                         },
                     ],
+                    return_ty: Some(TyAnnot::Named("int".to_string())),
                     body: Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
                             left: Box::new(Expr::Ident("a".to_string())),

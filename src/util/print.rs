@@ -50,8 +50,22 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         let mlr = self.mlr.expect("self.mlr should not be empty");
 
-        write!(self.writer, "fn {}(", signature.name)?;
-        for (i, (param, param_loc)) in signature.parameters.iter().zip(&mlr.param_locs).enumerate() {
+        write!(self.writer, "fn {}", signature.name)?;
+
+        for (i, gen_param) in signature.gen_params.iter().enumerate() {
+            if i == 0 {
+                write!(self.writer, "<")?;
+            } else {
+                write!(self.writer, ", ")?;
+            }
+            write!(self.writer, "{}", gen_param.name)?;
+        }
+        if !signature.gen_params.is_empty() {
+            write!(self.writer, ">")?;
+        }
+
+        write!(self.writer, "(")?;
+        for (i, (param, param_loc)) in signature.params.iter().zip(&mlr.param_locs).enumerate() {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }

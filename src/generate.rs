@@ -24,8 +24,7 @@ pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) -> String {
     generator.declare_functions();
     generator.define_functions();
 
-    let ir = generator.iw_module.print_to_string();
-    ir.to_string()
+    generator.iw_module.print_to_string().to_string()
 }
 
 struct Generator<'iw, 'mr> {

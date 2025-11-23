@@ -107,7 +107,7 @@ impl<'a> MlrBuilder<'a> {
             .get_signature(&self.target_fn)
             .cloned()
             .unwrap()
-            .parameters;
+            .params;
 
         self.push_scope();
 

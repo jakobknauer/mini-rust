@@ -98,6 +98,11 @@ impl TyReg {
         self.register_ty(ref_ty)
     }
 
+    pub fn register_gen_var_ty(&mut self, name: &str) -> Ty {
+        let gen_param_ty = TyDef::GenVar(name.to_string());
+        self.register_ty(gen_param_ty)
+    }
+
     pub fn get_ty_def(&self, id: &Ty) -> Option<&TyDef> {
         let id = self.canonicalize(id);
         self.tys.get(&id)
@@ -178,6 +183,7 @@ impl TyReg {
             TyDef::Ref(ty) => format!("&{}", self.get_string_rep(ty)),
             TyDef::Alias(ty) => self.get_string_rep(ty),
             TyDef::Undef => "<undefined>".to_string(),
+            TyDef::GenVar(name) => name.clone(),
         }
     }
 

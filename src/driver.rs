@@ -130,30 +130,46 @@ fn register_functions(hlr: &hlr::Program, tys: &mut ctxt::TyReg, fns: &mut ctxt:
     stdlib::register_fns(tys, fns)?;
 
     for function in &hlr.fns {
-        let return_ty = match function.return_ty.as_ref() {
-            Some(ty) => tys.get_ty_by_hlr_annot(ty).ok_or(())?,
-            None => tys.get_ty_by_name("()").ok_or(())?,
-        };
-
-        let parameters = function
-            .params
-            .iter()
-            .map(|parameter| {
-                Ok(fns::FnParam {
-                    name: parameter.name.clone(),
-                    ty: tys.get_ty_by_hlr_annot(&parameter.ty).ok_or(())?,
-                })
-            })
-            .collect::<Result<_, _>>()?;
-
-        let signature = fns::FnSig {
-            name: function.name.clone(),
-            return_ty,
-            parameters,
-        };
-
-        fns.register_fn(signature)?;
+        register_function(function, tys, fns)?;
     }
+
+    Ok(())
+}
+
+fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+    let gen_params = hlr_fn
+        .gen_params
+        .iter()
+        .map(|gp| ctxt::fns::GenParam {
+            name: gp.clone(),
+            ty: tys.register_gen_var_ty(gp),
+        })
+        .collect();
+
+    let params = hlr_fn
+        .params
+        .iter()
+        .map(|parameter| {
+            Ok(fns::FnParam {
+                name: parameter.name.clone(),
+                ty: tys.get_ty_by_hlr_annot(&parameter.ty).ok_or(())?,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
+    let return_ty = match hlr_fn.return_ty.as_ref() {
+        Some(ty) => tys.get_ty_by_hlr_annot(ty).ok_or(())?,
+        None => tys.get_ty_by_name("()").ok_or(())?,
+    };
+
+    let signature = fns::FnSig {
+        name: hlr_fn.name.clone(),
+        gen_params,
+        return_ty,
+        params,
+    };
+
+    fns.register_fn(signature)?;
 
     Ok(())
 }

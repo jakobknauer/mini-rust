@@ -4,8 +4,8 @@ macro_rules! register_fn {
     ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_ty:ident ),* ) -> $return_ty:expr ) => {
         $fn_reg.register_fn(fns::FnSig {
             name: $name.to_string(),
-            return_ty: $return_ty,
-            parameters: vec![
+            gen_params: vec![],
+            params: vec![
                 $(
                     fns::FnParam {
                         name: stringify!($param_name).to_string(),
@@ -13,6 +13,7 @@ macro_rules! register_fn {
                     },
                 )*
             ],
+            return_ty: $return_ty,
         })?;
     };
 }

@@ -14,6 +14,7 @@ pub enum TyDef {
     Ref(Ty),
     Alias(Ty),
     Undef,
+    GenVar(String),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
