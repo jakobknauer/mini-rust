@@ -157,7 +157,7 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(..) | Var(..) | FieldAccess { .. } | Deref { .. } => {
+            Lit(..) | Ident(..) | FieldAccess { .. } | Deref { .. } => {
                 let op = self.lower_to_op(expr)?;
                 self.insert_use_val(op)
             }
@@ -181,7 +181,7 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Var(name) => self.lower_var_to_place(name),
+            Ident(name) => self.lower_ident_to_place(name),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
             _ => Err(MlrBuilderError::NotAPlace),
@@ -192,8 +192,8 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(literal) => self.build_literal(literal),
-            Var(name) => self.build_variable(name),
+            Lit(lit) => self.build_literal(lit),
+            Ident(name) => self.build_ident(name),
             FieldAccess { .. } | Deref { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)
@@ -205,16 +205,16 @@ impl<'a> MlrBuilder<'a> {
         }
     }
 
-    fn build_literal(&mut self, literal: &hlr::Lit) -> Result<mlr::Op> {
+    fn build_literal(&mut self, lit: &hlr::Lit) -> Result<mlr::Op> {
         use hlr::Lit::*;
 
-        match literal {
+        match lit {
             Int(n) => self.insert_int_op(*n),
             Bool(b) => self.insert_bool_op(*b),
         }
     }
 
-    fn build_variable(&mut self, name: &str) -> Result<mlr::Op> {
+    fn build_ident(&mut self, name: &str) -> Result<mlr::Op> {
         self.resolve_name(name)
     }
 
@@ -441,7 +441,7 @@ impl<'a> MlrBuilder<'a> {
         self.insert_break_stmt().map(|_| ())
     }
 
-    fn lower_var_to_place(&mut self, name: &str) -> Result<mlr::Place> {
+    fn lower_ident_to_place(&mut self, name: &str) -> Result<mlr::Place> {
         let loc = self
             .resolve_name_to_location(name)
             .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;

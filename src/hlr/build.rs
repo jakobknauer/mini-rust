@@ -485,7 +485,7 @@ impl<'a> HlrParser<'a> {
                     self.expect_token(Token::RBrace)?;
                     Ok(Expr::Struct { name: ident, fields })
                 } else {
-                    Ok(Expr::Var(ident))
+                    Ok(Expr::Ident(ident))
                 }
             }
             Token::LParen => {
@@ -707,9 +707,9 @@ mod tests {
                     ],
                     body: Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
-                            left: Box::new(Expr::Var("a".to_string())),
+                            left: Box::new(Expr::Ident("a".to_string())),
                             operator: BinaryOperator::Add,
-                            right: Box::new(Expr::Var("b".to_string())),
+                            right: Box::new(Expr::Ident("b".to_string())),
                         }))],
                         return_expr: None,
                     },
@@ -831,7 +831,7 @@ mod tests {
                             stmts: vec![
                                 Stmt::Expr(Expr::If {
                                     condition: Box::new(Expr::BinaryOp {
-                                        left: Box::new(Expr::Var("n".to_string())),
+                                        left: Box::new(Expr::Ident("n".to_string())),
                                         operator: BinaryOperator::Equal,
                                         right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
@@ -842,17 +842,17 @@ mod tests {
                                     else_block: None,
                                 }),
                                 Stmt::Expr(Expr::Assign {
-                                    target: Box::new(Expr::Var("result".to_string())),
+                                    target: Box::new(Expr::Ident("result".to_string())),
                                     value: Box::new(Expr::BinaryOp {
-                                        left: Box::new(Expr::Var("result".to_string())),
+                                        left: Box::new(Expr::Ident("result".to_string())),
                                         operator: BinaryOperator::Multiply,
-                                        right: Box::new(Expr::Var("n".to_string())),
+                                        right: Box::new(Expr::Ident("n".to_string())),
                                     }),
                                 }),
                                 Stmt::Expr(Expr::Assign {
-                                    target: Box::new(Expr::Var("n".to_string())),
+                                    target: Box::new(Expr::Ident("n".to_string())),
                                     value: Box::new(Expr::BinaryOp {
-                                        left: Box::new(Expr::Var("n".to_string())),
+                                        left: Box::new(Expr::Ident("n".to_string())),
                                         operator: BinaryOperator::Subtract,
                                         right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
@@ -862,7 +862,7 @@ mod tests {
                         },
                     }),
                 ],
-                return_expr: Some(Box::new(Expr::Var("result".to_string()))),
+                return_expr: Some(Box::new(Expr::Ident("result".to_string()))),
             };
 
             parse_and_compare(input, expected);
@@ -888,13 +888,13 @@ mod tests {
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::Lit(Lit::Int(2))),
                         operator: BinaryOperator::Multiply {},
-                        right: Box::new(Expr::Var("a".to_string())),
+                        right: Box::new(Expr::Ident("a".to_string())),
                     }),
                 }),
                 operator: BinaryOperator::Subtract,
                 right: Box::new(Expr::Call {
-                    callee: Box::new(Expr::Var("arctan2".to_string())),
-                    arguments: vec![Expr::Var("x".to_string()), Expr::Var("y".to_string())],
+                    callee: Box::new(Expr::Ident("arctan2".to_string())),
+                    arguments: vec![Expr::Ident("x".to_string()), Expr::Ident("y".to_string())],
                 }),
             };
             parse_and_compare(input, expected);
@@ -944,7 +944,7 @@ mod tests {
             }"#;
 
             let expected = Expr::If {
-                condition: Box::new(Expr::Var("condition".to_string())),
+                condition: Box::new(Expr::Ident("condition".to_string())),
                 then_block: Block {
                     stmts: vec![],
                     return_expr: Some(Box::new(Expr::Lit(Lit::Int(42)))),
@@ -964,10 +964,10 @@ mod tests {
             let expected = Expr::FieldAccess {
                 base: Box::new(Expr::Call {
                     callee: Box::new(Expr::FieldAccess {
-                        base: Box::new(Expr::Var("obj".to_string())),
+                        base: Box::new(Expr::Ident("obj".to_string())),
                         name: "method".to_string(),
                     }),
-                    arguments: vec![Expr::Var("arg1".to_string()), Expr::Var("arg2".to_string())],
+                    arguments: vec![Expr::Ident("arg1".to_string()), Expr::Ident("arg2".to_string())],
                 }),
                 name: "field".to_string(),
             };
@@ -982,7 +982,7 @@ mod tests {
             }"#;
 
             let expected = Expr::Match {
-                scrutinee: Box::new(Expr::Var("value".to_string())),
+                scrutinee: Box::new(Expr::Ident("value".to_string())),
                 arms: vec![
                     MatchArm {
                         pattern: StructPattern {
@@ -992,7 +992,7 @@ mod tests {
                                 binding_name: "a".to_string(),
                             }],
                         },
-                        value: Box::new(Expr::Var("a".to_string())),
+                        value: Box::new(Expr::Ident("a".to_string())),
                     },
                     MatchArm {
                         pattern: StructPattern {

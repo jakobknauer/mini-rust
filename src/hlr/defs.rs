@@ -74,7 +74,7 @@ pub enum Stmt {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Lit(Lit),
-    Var(String),
+    Ident(String),
     BinaryOp {
         left: Box<Expr>,
         operator: BinaryOperator,

@@ -88,7 +88,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let signature = self
             .ctxt
             .fns
-            .get_signature(&fn_)
+            .get_signature(fn_)
             .expect("function signature should be registered");
 
         let param_tys: Vec<_> = signature.parameters.iter().map(|param| param.ty).collect();
