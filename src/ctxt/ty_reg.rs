@@ -119,12 +119,10 @@ impl TyReg {
         use hlr::TyAnnot::*;
 
         match annot {
-            Named(name) => {
-                gen_vars
-                    .iter()
-                    .find_map(|gp| (&gp.name == name).then_some(gp.ty))
-                    .or_else(|| self.get_ty_by_name(name))
-            }
+            Named(name) => gen_vars
+                .iter()
+                .find_map(|gp| (&gp.name == name).then_some(gp.ty))
+                .or_else(|| self.get_ty_by_name(name)),
             Reference(ty_annot) => self
                 .get_ty_by_hlr_annot(ty_annot, gen_vars)
                 .map(|inner| self.register_ref_ty(inner)),
