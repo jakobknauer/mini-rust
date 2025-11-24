@@ -2,12 +2,20 @@ use crate::{ctxt::ty::Ty, mlr};
 
 #[derive(Debug)]
 pub enum MlrBuilderError {
-    MissingOperatorImpl { name: String },
-    UnresolvableSymbol { name: String },
+    MissingOperatorImpl {
+        name: String,
+    },
+    UnresolvableSymbol {
+        name: String,
+    },
     UnknownPrimitiveTy,
     NotAPlace,
     TyError(TyError),
-    GenericArgCountMismatch { name: String, expected: usize, actual: usize },
+    GenericArgCountMismatch {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
 }
 
 #[derive(Debug)]

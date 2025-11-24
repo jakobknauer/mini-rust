@@ -23,7 +23,11 @@ pub fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &
         NotAPlace => {
             "Only variables, field access expressions, and derefs of references are supported as places.".to_string()
         }
-        GenericArgCountMismatch { name, expected, actual: found } => format!(
+        GenericArgCountMismatch {
+            name,
+            expected,
+            actual: found,
+        } => format!(
             "Generic argument count mismatch for '{}': expected {}, found {}",
             name, expected, found
         ),
