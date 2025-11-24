@@ -22,3 +22,9 @@ pub struct FnParam {
     pub name: String,
     pub ty: Ty,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct InstantiatedFn {
+    pub fn_: Fn,
+    pub gen_args: Vec<Ty>,
+}

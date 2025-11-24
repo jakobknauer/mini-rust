@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     ctxt::{fns, ty},
     mlr::{
@@ -84,17 +86,34 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(ref_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_: &fns::Fn) -> Result<ty::Ty> {
+    fn infer_ty_of_fn(&mut self, fn_: &fns::Fn, gen_args: &[ty::Ty]) -> Result<ty::Ty> {
         let signature = self
             .ctxt
             .fns
-            .get_signature(fn_)
+            .get_sig(fn_)
             .expect("function signature should be registered");
+
+        if signature.gen_params.len() != gen_args.len() {
+            return MlrBuilderError::GenericArgCountMismatch {
+                name: signature.name.clone(),
+                expected: signature.gen_params.len(),
+                actual: gen_args.len(),
+            }
+            .into();
+        }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let return_ty = signature.return_ty;
         let fn_ty = self.ctxt.tys.register_fn_ty(param_tys, return_ty);
 
+        let substitutions: HashMap<String, ty::Ty> = signature
+            .gen_params
+            .iter()
+            .zip(gen_args)
+            .map(|(gp, ga)| (gp.name.clone(), *ga))
+            .collect();
+
+        let fn_ty = self.ctxt.tys.replace_gen_args(&fn_ty, &substitutions);
         Ok(fn_ty)
     }
 
@@ -175,7 +194,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .clone();
 
         match op {
-            Fn(fn_) => self.infer_ty_of_fn(&fn_),
+            Fn(fn_, gen_args) => self.infer_ty_of_fn(&fn_, &gen_args),
             Const(constant) => self.infer_ty_of_constant(&constant),
             Copy(place) => self.infer_place_ty(&place),
         }

@@ -151,7 +151,7 @@ impl<'a> MlrBuilder<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(..) | Ident(..) | FieldAccess { .. } | Deref { .. } => {
+            Lit(..) | Ident(..) | GenQualIdent { .. } | FieldAccess { .. } | Deref { .. } => {
                 let op = self.lower_to_op(expr)?;
                 self.insert_use_val(op)
             }
@@ -188,6 +188,7 @@ impl<'a> MlrBuilder<'a> {
         match expr {
             Lit(lit) => self.build_literal(lit),
             Ident(name) => self.build_ident(name),
+            GenQualIdent { ident, gen_args } => self.build_gen_qual_ident(ident, gen_args),
             FieldAccess { .. } | Deref { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)
@@ -210,6 +211,33 @@ impl<'a> MlrBuilder<'a> {
 
     fn build_ident(&mut self, name: &str) -> Result<mlr::Op> {
         self.resolve_name(name)
+    }
+
+    fn build_gen_qual_ident(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> Result<mlr::Op> {
+        let fn_ = self
+            .ctxt
+            .fns
+            .get_fn_by_name(ident)
+            .ok_or_else(|| MlrBuilderError::UnresolvableSymbol {
+                name: ident.to_string(),
+            })?;
+
+        let fn_sig = self.ctxt.fns.get_sig(&fn_).unwrap();
+
+        if fn_sig.gen_params.len() != gen_args.len() {
+            return Err(MlrBuilderError::GenericArgCountMismatch {
+                name: ident.to_string(),
+                expected: fn_sig.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+
+        let gen_arg_tys = gen_args
+            .iter()
+            .map(|annot| self.resolve_hlr_ty_annot(annot))
+            .collect::<Result<Vec<_>>>()?;
+
+        self.insert_gen_fn_op(fn_, gen_arg_tys)
     }
 
     fn build_binary_op(

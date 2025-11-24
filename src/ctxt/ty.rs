@@ -31,19 +31,23 @@ pub enum Primitive {
     Unit,
 }
 
+#[derive(Clone)]
 pub struct StructDef {
     pub fields: Vec<StructField>,
 }
 
+#[derive(Clone)]
 pub struct StructField {
     pub name: String,
     pub ty: Ty,
 }
 
+#[derive(Clone)]
 pub struct EnumDef {
     pub variants: Vec<EnumVariant>,
 }
 
+#[derive(Clone)]
 pub struct EnumVariant {
     pub name: String,
     pub ty: Ty,

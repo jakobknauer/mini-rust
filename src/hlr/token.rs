@@ -16,6 +16,7 @@ pub enum Token {
     BangEqual,          // !=
     Dot,                // .
     Colon,              // :
+    ColonColon,         // ::
     Ampersand,          // &
     AmpersandAmpersand, // &&
     Pipe,               // |

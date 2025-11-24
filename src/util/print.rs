@@ -12,7 +12,7 @@ pub fn print_mlr<W: Write>(fn_: &Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Resul
     let mut printer = MlrPrinter {
         fn_: *fn_,
         mlr: ctxt.fns.get_fn_def(fn_),
-        signature: ctxt.fns.get_signature(fn_),
+        signature: ctxt.fns.get_sig(fn_),
         ctxt,
         indent_level: 0,
         writer,
@@ -238,12 +238,24 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match op_def {
             Some(operand) => match operand {
-                Fn(fn_) => {
-                    if let Some(func) = self.ctxt.fns.get_signature(fn_) {
-                        write!(self.writer, "fn {}", func.name)
+                Fn(fn_, gen_args) => {
+                    if let Some(func) = self.ctxt.fns.get_sig(fn_) {
+                        write!(self.writer, "fn {}", func.name)?
                     } else {
-                        write!(self.writer, "<fn id {}>", fn_.0)
+                        write!(self.writer, "<fn id {}>", fn_.0)?
+                    };
+                    if !gen_args.is_empty() {
+                        write!(self.writer, "::<")?;
+                        for (i, gen_arg) in gen_args.iter().enumerate() {
+                            if i > 0 {
+                                write!(self.writer, ", ")?;
+                            }
+                            let ty_name = self.ctxt.tys.get_string_rep(gen_arg);
+                            write!(self.writer, "{}", ty_name)?;
+                        }
+                        write!(self.writer, ">")?;
                     }
+                    Ok(())
                 }
                 Const(constant) => match constant {
                     Int(i) => write!(self.writer, "const {}", i),

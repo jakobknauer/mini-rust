@@ -7,6 +7,7 @@ pub enum MlrBuilderError {
     UnknownPrimitiveTy,
     NotAPlace,
     TyError(TyError),
+    GenericArgCountMismatch { name: String, expected: usize, actual: usize },
 }
 
 #[derive(Debug)]

@@ -12,13 +12,17 @@ use inkwell::{
 };
 
 use crate::{
-    ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_tys},
+    ctxt::{
+        self as mr_ctxt,
+        fns::{self as mr_fns, InstantiatedFn},
+        ty as mr_tys,
+    },
     generate::fns::FnGenerator,
 };
 
-pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt) -> String {
+pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt, inst: Vec<InstantiatedFn>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = Generator::new(&iw_ctxt, ctxt);
+    let mut generator = Generator::new(&iw_ctxt, ctxt, inst);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -33,16 +37,19 @@ struct Generator<'iw, 'mr> {
 
     mr_ctxt: &'mr mr_ctxt::Ctxt,
 
+    inst: Vec<InstantiatedFn>,
+
     types: HashMap<mr_tys::Ty, AnyTypeEnum<'iw>>,
-    functions: HashMap<mr_fns::Fn, FunctionValue<'iw>>,
+    functions: HashMap<mr_fns::InstantiatedFn, FunctionValue<'iw>>,
 }
 
 impl<'iw, 'mr> Generator<'iw, 'mr> {
-    pub fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mr_ctxt::Ctxt) -> Self {
+    pub fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mr_ctxt::Ctxt, inst: Vec<InstantiatedFn>) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         Generator {
             iw_ctxt,
             iw_module,
+            inst,
             mr_ctxt,
             types: HashMap::new(),
             functions: HashMap::new(),
@@ -54,7 +61,11 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.iw_module.set_triple(&target_triple);
     }
 
-    fn get_or_define_ty(&mut self, ty: &mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
+    fn get_or_define_ty(
+        &mut self,
+        ty: &mr_tys::Ty,
+        substitutions: &HashMap<String, mr_tys::Ty>,
+    ) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Named::*, Primitive::*, TyDef::*};
 
         if self.types.contains_key(ty) {
@@ -76,7 +87,13 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Undef => unreachable!("type_ should not be Undef at this point"),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
-            GenVar(_) => unreachable!("generic parameters should be monomorphized before this point"),
+            GenVar(name) => {
+                let substituted_ty = substitutions
+                    .get(name)
+                    .expect("No substitution found for generic variable");
+                let output = self.get_or_define_ty(substituted_ty, substitutions)?;
+                return Some(output);
+            }
         };
 
         if !self.types.contains_key(ty) {
@@ -85,12 +102,20 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.types.get(ty).cloned()
     }
 
-    fn get_ty_as_basic_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicTypeEnum<'iw>> {
-        self.get_or_define_ty(ty)?.try_into().ok()
+    fn get_ty_as_basic_type_enum(
+        &mut self,
+        ty: &mr_tys::Ty,
+        substitutions: &HashMap<String, mr_tys::Ty>,
+    ) -> Option<BasicTypeEnum<'iw>> {
+        self.get_or_define_ty(ty, substitutions)?.try_into().ok()
     }
 
-    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
-        self.get_or_define_ty(ty)?.try_into().ok()
+    fn get_ty_as_basic_metadata_type_enum(
+        &mut self,
+        ty: &mr_tys::Ty,
+        substitutions: &HashMap<String, mr_tys::Ty>,
+    ) -> Option<BasicMetadataTypeEnum<'iw>> {
+        self.get_or_define_ty(ty, substitutions)?.try_into().ok()
     }
 
     fn define_struct(&mut self, name: &str, ty: &mr_tys::Ty, struct_: &mr_tys::Struct) -> AnyTypeEnum<'iw> {
@@ -101,7 +126,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
-            .map(|field| self.get_ty_as_basic_type_enum(&field.ty).unwrap())
+            .map(|field| self.get_ty_as_basic_type_enum(&field.ty, &HashMap::new()).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);
@@ -118,7 +143,11 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             .variants
             .iter()
             .map(|variant| {
-                let variant_type: StructType = self.get_ty_as_basic_type_enum(&variant.ty).unwrap().try_into().unwrap();
+                let variant_type: StructType = self
+                    .get_ty_as_basic_type_enum(&variant.ty, &HashMap::new())
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
 
                 TargetData::create("").get_store_size(&variant_type)
             })
@@ -136,30 +165,56 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn declare_functions(&mut self) {
-        for fn_ in self.mr_ctxt.fns.get_all_fns() {
-            let signature = self.mr_ctxt.fns.get_signature(fn_).unwrap();
-            if !signature.gen_params.is_empty() {
-                continue;
-            }
+        for inst_fn in self.inst.clone() {
+            let signature = self.mr_ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
+            let substitutions: HashMap<String, mr_tys::Ty> = signature
+                .gen_params
+                .iter()
+                .zip(&inst_fn.gen_args)
+                .map(|(gp, ga)| (gp.name.clone(), *ga))
+                .collect();
             let param_types: Vec<_> = signature
                 .params
                 .iter()
-                .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty).unwrap())
+                .map(|param| {
+                    self.get_or_define_ty(&param.ty, &substitutions)
+                        .unwrap()
+                        .try_into()
+                        .unwrap()
+                })
                 .collect();
-            let return_type: BasicTypeEnum = self.get_ty_as_basic_type_enum(&signature.return_ty).unwrap();
+            let return_type: BasicTypeEnum = self
+                .get_or_define_ty(&signature.return_ty, &substitutions)
+                .unwrap()
+                .try_into()
+                .unwrap();
             let fn_type = return_type.fn_type(&param_types, false);
-            let fn_value = self.iw_module.add_function(&signature.name, fn_type, None);
-            self.functions.insert(*fn_, fn_value);
+            let full_name = if signature.gen_params.is_empty() {
+                signature.name.to_string()
+            } else {
+                format!(
+                    "{}<{}>",
+                    signature.name,
+                    inst_fn
+                        .gen_args
+                        .iter()
+                        .map(|ty| self.mr_ctxt.tys.get_string_rep(ty))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            let fn_value = self.iw_module.add_function(&full_name, fn_type, None);
+            self.functions.insert(inst_fn.clone(), fn_value);
         }
     }
 
     pub fn define_functions(&mut self) {
-        for fn_ in self.mr_ctxt.fns.get_all_fns() {
-            let Some(mut fn_gen) = FnGenerator::new(self, *fn_) else {
+        for inst_fn in self.inst.clone() {
+            let Some(mut fn_gen) = FnGenerator::new(self, inst_fn.clone()) else {
                 continue;
             };
             if fn_gen.define_fn().is_err() {
-                let fn_name = self.mr_ctxt.fns.get_fn_name(fn_).unwrap();
+                let fn_name = self.mr_ctxt.fns.get_fn_name(&inst_fn.fn_).unwrap();
                 eprintln!("Failed to define function {fn_name}");
             }
         }

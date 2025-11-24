@@ -44,6 +44,7 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
     ('=', '>', Token::BoldArrow),
     ('<', '=', Token::SmallerEqual),
     ('>', '=', Token::GreaterEqual),
+    (':', ':', Token::ColonColon),
 ];
 
 impl<'a> Lexer<'a> {

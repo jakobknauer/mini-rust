@@ -1,7 +1,7 @@
 fn main() -> i32 {
-    let n = 4;
-    increase(&n);
-    invoke(fac, n)
+    identity::<bool>(false);
+    identity::<i32>(3);
+    5
 }
 
 fn increase(x: &i32) -> () {
@@ -25,7 +25,6 @@ fn fac(n: i32) -> i32 {
 }
 
 fn scalar_product(p: Point, q: Point) -> i32 {
-    q.x = 5;
     p.x * q.x + p.y * q.y
 }
 
@@ -52,6 +51,6 @@ fn eval(expr: Expr) -> i32 {
     }
 }
 
-fn identity<T>(x: T) -> T {
-    x
+fn identity<T>(x: T) -> T { 
+    x 
 }

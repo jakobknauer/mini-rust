@@ -507,6 +507,19 @@ impl<'a> HlrParser<'a> {
                     }
                     self.expect_token(Token::RBrace)?;
                     Ok(Expr::Struct { name: ident, fields })
+                } else if self.advance_if(Token::ColonColon) {
+                    // parse generic qualified ident
+                    let mut gen_args = Vec::new();
+                    self.expect_token(Token::Smaller)?;
+                    while let Some(_) = self.current() {
+                        let gen_arg = self.parse_ty_annot()?;
+                        gen_args.push(gen_arg);
+                        if !self.advance_if(Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(Token::Greater)?;
+                    Ok(Expr::GenQualIdent { ident, gen_args })
                 } else {
                     Ok(Expr::Ident(ident))
                 }

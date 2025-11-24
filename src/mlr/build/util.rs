@@ -166,7 +166,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         let return_ty = self
             .ctxt
             .fns
-            .get_signature(&self.target_fn)
+            .get_sig(&self.target_fn)
             .expect("return stmt only valid in function")
             .return_ty;
 
@@ -231,7 +231,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_fn_op(&mut self, fn_: fns::Fn) -> Result<mlr::Op> {
-        let op = mlr::OpDef::Fn(fn_);
+        self.insert_gen_fn_op(fn_, Vec::new())
+    }
+
+    pub fn insert_gen_fn_op(&mut self, fn_: fns::Fn, gen_args: Vec<ty::Ty>) -> Result<mlr::Op> {
+        self.ctxt
+            .fns
+            .add_instantiated_fn(&self.target_fn, &fn_, gen_args.clone());
+        let op = mlr::OpDef::Fn(fn_, gen_args);
         self.insert_op(op)
     }
 
@@ -395,7 +402,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     pub fn get_signature(&self) -> &fns::FnSig {
         self.ctxt
             .fns
-            .get_signature(&self.target_fn)
+            .get_sig(&self.target_fn)
             .expect("function signature should be registered")
     }
 

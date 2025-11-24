@@ -287,4 +287,32 @@ impl TyReg {
     pub fn get_undef_ty(&mut self) -> Ty {
         self.register_ty(TyDef::Undef)
     }
+
+    pub fn replace_gen_args(&mut self, ty: &Ty, substitutions: &HashMap<String, Ty>) -> Ty {
+        let ty = self.canonicalize(ty);
+        let ty_def = self.tys.get(&ty).unwrap().clone();
+
+        match ty_def {
+            TyDef::GenVar(name) => {
+                if let Some(replacement_ty) = substitutions.get(&name) {
+                    *replacement_ty
+                } else {
+                    ty
+                }
+            }
+            TyDef::Fn { param_tys, return_ty } => {
+                let new_param_tys = param_tys
+                    .iter()
+                    .map(|pt| self.replace_gen_args(pt, substitutions))
+                    .collect::<Vec<_>>();
+                let new_return_ty = self.replace_gen_args(&return_ty, substitutions);
+                self.register_fn_ty(new_param_tys, new_return_ty)
+            }
+            TyDef::Ref(inner_ty) => {
+                let new_inner_ty = self.replace_gen_args(&inner_ty, substitutions);
+                self.register_ref_ty(new_inner_ty)
+            }
+            _ => ty,
+        }
+    }
 }

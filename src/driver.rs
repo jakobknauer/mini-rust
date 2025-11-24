@@ -1,10 +1,17 @@
 mod err;
 mod stdlib;
 
-use std::path::Path;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    path::Path,
+};
 
 use crate::{
-    ctxt::{self, fns, ty},
+    ctxt::{
+        self,
+        fns::{self, InstantiatedFn},
+        ty,
+    },
     generate, hlr, mlr,
     util::print,
 };
@@ -45,8 +52,13 @@ where
         print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
     }
 
+    print_pretty("Determining all concrete function instantiations");
+    let inst =
+        determine_all_concrete_instantiations(&mut ctxt).map_err(|_| "Error determining concrete instantiations")?;
+    print_detail(&format!("Found {} concrete function instantiations", inst.len()));
+
     print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = generate::generate_llvm_ir(&ctxt);
+    let llvm_ir = generate::generate_llvm_ir(&mut ctxt, inst.into_iter().collect());
 
     if let Some(llvm_ir_path) = output_paths.llvm_ir {
         print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.as_ref().display()));
@@ -54,6 +66,53 @@ where
     }
 
     Ok(())
+}
+
+fn determine_all_concrete_instantiations(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<InstantiatedFn>, ()> {
+    let main_fn = ctxt.fns.get_fn_by_name("main").ok_or(())?;
+
+    let mut open: VecDeque<ctxt::fns::InstantiatedFn> = VecDeque::new();
+    open.push_back(fns::InstantiatedFn {
+        fn_: main_fn,
+        gen_args: Vec::new(),
+    });
+
+    let mut closed: HashSet<ctxt::fns::InstantiatedFn> = HashSet::new();
+
+    while let Some(inst_fn) = open.pop_front() {
+        if closed.contains(&inst_fn) {
+            continue;
+        }
+        closed.insert(inst_fn.clone());
+
+        let inst_fn_sig = ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
+
+        let substitutions: HashMap<String, ty::Ty> = inst_fn_sig
+            .gen_params
+            .iter()
+            .zip(&inst_fn.gen_args)
+            .map(|(gp, ga)| (gp.name.clone(), *ga))
+            .collect();
+
+        let instantiated_fns = ctxt.fns.get_instantiated_fns(&inst_fn.fn_);
+
+        let instantiated_fns = instantiated_fns.iter().map(|inst_fn| {
+            let new_gen_args = inst_fn
+                .gen_args
+                .iter()
+                .map(|ty| ctxt.tys.replace_gen_args(ty, &substitutions))
+                .collect::<Vec<_>>();
+
+            ctxt::fns::InstantiatedFn {
+                fn_: inst_fn.fn_,
+                gen_args: new_gen_args,
+            }
+        });
+
+        open.extend(instantiated_fns);
+    }
+
+    Ok(closed)
 }
 
 fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {

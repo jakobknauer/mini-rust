@@ -76,6 +76,10 @@ pub enum Stmt {
 pub enum Expr {
     Lit(Lit),
     Ident(String),
+    GenQualIdent {
+        ident: String,
+        gen_args: Vec<TyAnnot>,
+    },
     BinaryOp {
         left: Box<Expr>,
         operator: BinaryOperator,

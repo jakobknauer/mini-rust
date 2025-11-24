@@ -17,7 +17,7 @@ pub struct Loc(pub usize);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Op(pub usize);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Mlr {
     pub vals: HashMap<Val, ValDef>,
     pub stmts: HashMap<Stmt, StmtDef>,
@@ -71,7 +71,7 @@ pub enum ValDef {
 
 #[derive(Debug, Clone)]
 pub enum OpDef {
-    Fn(Fn),
+    Fn(Fn, Vec<Ty>),
     Const(Const),
     Copy(Place),
 }
