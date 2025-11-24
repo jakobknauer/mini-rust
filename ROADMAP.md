@@ -25,7 +25,7 @@
 ## Version 2
 - ~~References~~
 - ~~Higher-order functions / functions as first-class citizens~~
-- Generic functions and structs (without trait bounds)
+- Generic ~~functions and~~ structs (without trait bounds)
 
 ## Version 3
 - Traits and trait bounds
