@@ -23,14 +23,6 @@ pub fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &
         NotAPlace => {
             "Only variables, field access expressions, and derefs of references are supported as places.".to_string()
         }
-        GenericArgCountMismatch {
-            name,
-            expected,
-            actual: found,
-        } => format!(
-            "Generic argument count mismatch for '{}': expected {}, found {}",
-            name, expected, found
-        ),
     }
 }
 
@@ -118,6 +110,12 @@ fn print_ty_error(fn_name: &str, err: mlr::TyError, ctxt: &ctxt::Ctxt) -> String
         DereferenceOfNonRefTy { ty } => format!(
             "Cannot dereference type '{}', which is not a reference type",
             ctxt.tys.get_string_rep(&ty)
+        ),
+        GenericArgCountMismatch { fn_, expected, actual } => format!(
+            "Generic argument count mismatch in function '{}': expected {}, got {}",
+            ctxt.fns.get_sig(&fn_).map(|sig| sig.name.as_str()).unwrap_or("<unknown>"),
+            expected,
+            actual
         ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)

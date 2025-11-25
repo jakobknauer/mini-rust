@@ -222,20 +222,10 @@ impl<'a> MlrBuilder<'a> {
                 name: ident.to_string(),
             })?;
 
-        let fn_sig = self.ctxt.fns.get_sig(&fn_).unwrap();
-
-        if fn_sig.gen_params.len() != gen_args.len() {
-            return Err(MlrBuilderError::GenericArgCountMismatch {
-                name: ident.to_string(),
-                expected: fn_sig.gen_params.len(),
-                actual: gen_args.len(),
-            });
-        }
-
         let gen_arg_tys = gen_args
             .iter()
             .map(|annot| self.resolve_hlr_ty_annot(annot))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<_>>()?;
 
         self.insert_gen_fn_op(fn_, gen_arg_tys)
     }

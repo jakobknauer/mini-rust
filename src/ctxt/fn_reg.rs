@@ -73,11 +73,11 @@ impl FnReg {
         self.fn_names.values()
     }
 
-    pub fn add_instantiated_fn(&mut self, caller: &Fn, callee: &Fn, gen_args: Vec<Ty>) {
-        self.instantiated_fns
-            .entry(*caller)
-            .or_default()
-            .push(InstantiatedFn { fn_: *callee, gen_args });
+    pub fn add_instantiated_fn(&mut self, caller: &Fn, callee: &Fn, gen_args: impl Into<Vec<Ty>>) {
+        self.instantiated_fns.entry(*caller).or_default().push(InstantiatedFn {
+            fn_: *callee,
+            gen_args: gen_args.into(),
+        });
     }
 
     pub fn get_instantiated_fns(&self, caller: &Fn) -> &Vec<InstantiatedFn> {

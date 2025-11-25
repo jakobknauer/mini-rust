@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     ctxt::{fns, ty},
     mlr::{
@@ -86,7 +84,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         Ok(ref_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_: &fns::Fn, gen_args: &[ty::Ty]) -> Result<ty::Ty> {
+    fn infer_ty_of_fn(&mut self, fns::InstantiatedFn { fn_, gen_args }: &fns::InstantiatedFn) -> Result<ty::Ty> {
         let signature = self
             .ctxt
             .fns
@@ -94,8 +92,8 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("function signature should be registered");
 
         if signature.gen_params.len() != gen_args.len() {
-            return MlrBuilderError::GenericArgCountMismatch {
-                name: signature.name.clone(),
+            return TyError::GenericArgCountMismatch {
+                fn_: *fn_,
                 expected: signature.gen_params.len(),
                 actual: gen_args.len(),
             }
@@ -103,18 +101,12 @@ impl<'a> mlr::MlrBuilder<'a> {
         }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let return_ty = signature.return_ty;
-        let fn_ty = self.ctxt.tys.register_fn_ty(param_tys, return_ty);
+        let fn_ty = self.ctxt.tys.register_fn_ty(param_tys, signature.return_ty);
 
-        let substitutions: HashMap<String, ty::Ty> = signature
-            .gen_params
-            .iter()
-            .zip(gen_args)
-            .map(|(gp, ga)| (gp.name.clone(), *ga))
-            .collect();
+        let substitutions = signature.build_substitutions(gen_args);
+        let inst_fn_ty = self.ctxt.tys.substitute_gen_vars(&fn_ty, &substitutions);
 
-        let fn_ty = self.ctxt.tys.replace_gen_args(&fn_ty, &substitutions);
-        Ok(fn_ty)
+        Ok(inst_fn_ty)
     }
 
     pub fn infer_place_ty(&mut self, place: &mlr::Place) -> Result<ty::Ty> {
@@ -194,7 +186,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .clone();
 
         match op {
-            Fn(fn_, gen_args) => self.infer_ty_of_fn(&fn_, &gen_args),
+            Fn(inst_fn) => self.infer_ty_of_fn(&inst_fn),
             Const(constant) => self.infer_ty_of_constant(&constant),
             Copy(place) => self.infer_place_ty(&place),
         }

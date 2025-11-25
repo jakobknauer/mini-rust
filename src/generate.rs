@@ -64,7 +64,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn get_or_define_ty(
         &mut self,
         ty: &mr_tys::Ty,
-        substitutions: &HashMap<String, mr_tys::Ty>,
+        substitutions: &HashMap<&str, mr_tys::Ty>,
     ) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Named::*, Primitive::*, TyDef::*};
 
@@ -89,7 +89,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(name) => {
                 let substituted_ty = substitutions
-                    .get(name)
+                    .get(name.as_str())
                     .expect("No substitution found for generic variable");
                 let output = self.get_or_define_ty(substituted_ty, substitutions)?;
                 return Some(output);
@@ -105,7 +105,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn get_ty_as_basic_type_enum(
         &mut self,
         ty: &mr_tys::Ty,
-        substitutions: &HashMap<String, mr_tys::Ty>,
+        substitutions: &HashMap<&str, mr_tys::Ty>,
     ) -> Option<BasicTypeEnum<'iw>> {
         self.get_or_define_ty(ty, substitutions)?.try_into().ok()
     }
@@ -113,7 +113,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn get_ty_as_basic_metadata_type_enum(
         &mut self,
         ty: &mr_tys::Ty,
-        substitutions: &HashMap<String, mr_tys::Ty>,
+        substitutions: &HashMap<&str, mr_tys::Ty>,
     ) -> Option<BasicMetadataTypeEnum<'iw>> {
         self.get_or_define_ty(ty, substitutions)?.try_into().ok()
     }
@@ -167,12 +167,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     fn declare_functions(&mut self) {
         for inst_fn in self.inst.clone() {
             let signature = self.mr_ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
-            let substitutions: HashMap<String, mr_tys::Ty> = signature
-                .gen_params
-                .iter()
-                .zip(&inst_fn.gen_args)
-                .map(|(gp, ga)| (gp.name.clone(), *ga))
-                .collect();
+            let substitutions = signature.build_substitutions(&inst_fn.gen_args);
             let param_types: Vec<_> = signature
                 .params
                 .iter()

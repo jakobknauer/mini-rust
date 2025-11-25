@@ -511,7 +511,7 @@ impl<'a> HlrParser<'a> {
                     // parse generic qualified ident
                     let mut gen_args = Vec::new();
                     self.expect_token(Token::Smaller)?;
-                    while let Some(_) = self.current() {
+                    while self.current() != Some(&Token::Greater) {
                         let gen_arg = self.parse_ty_annot()?;
                         gen_args.push(gen_arg);
                         if !self.advance_if(Token::Comma) {

@@ -1,21 +1,15 @@
-use crate::{ctxt::ty::Ty, mlr};
+use crate::{
+    ctxt::{fns::Fn, ty::Ty},
+    mlr,
+};
 
 #[derive(Debug)]
 pub enum MlrBuilderError {
-    MissingOperatorImpl {
-        name: String,
-    },
-    UnresolvableSymbol {
-        name: String,
-    },
+    MissingOperatorImpl { name: String },
+    UnresolvableSymbol { name: String },
     UnknownPrimitiveTy,
     NotAPlace,
     TyError(TyError),
-    GenericArgCountMismatch {
-        name: String,
-        expected: usize,
-        actual: usize,
-    },
 }
 
 #[derive(Debug)]
@@ -78,6 +72,11 @@ pub enum TyError {
     UnresolvableTyAnnot,
     DereferenceOfNonRefTy {
         ty: Ty,
+    },
+    GenericArgCountMismatch {
+        fn_: Fn,
+        expected: usize,
+        actual: usize,
     },
 }
 

@@ -2,7 +2,7 @@ mod err;
 mod stdlib;
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     path::Path,
 };
 
@@ -17,25 +17,17 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct OutputPaths<T1, T2>
-where
-    T1: AsRef<Path>,
-    T2: AsRef<Path>,
-{
-    pub mlr: Option<T1>,
-    pub llvm_ir: Option<T2>,
+pub struct OutputPaths<'a> {
+    pub mlr: Option<&'a Path>,
+    pub llvm_ir: Option<&'a Path>,
 }
 
-pub fn compile<T1, T2>(
+pub fn compile(
     source: &str,
     print_pretty: impl Fn(&str),
     print_detail: impl Fn(&str),
-    output_paths: OutputPaths<T1, T2>,
-) -> Result<(), String>
-where
-    T1: AsRef<Path>,
-    T2: AsRef<Path>,
-{
+    output_paths: &OutputPaths,
+) -> Result<(), String> {
     let mut ctxt = ctxt::Ctxt::new();
 
     print_pretty("Building HLR from source");
@@ -48,60 +40,48 @@ where
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
 
     if let Some(mlr_path) = output_paths.mlr {
-        print_detail(&format!("Saving MLR to {}", mlr_path.as_ref().display()));
+        print_detail(&format!("Saving MLR to {}", mlr_path.display()));
         print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
     }
 
-    print_pretty("Determining all concrete function instantiations");
+    print_pretty("Collecting monomorphized function instantiations");
     let inst =
         determine_all_concrete_instantiations(&mut ctxt).map_err(|_| "Error determining concrete instantiations")?;
-    print_detail(&format!("Found {} concrete function instantiations", inst.len()));
 
     print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = generate::generate_llvm_ir(&mut ctxt, inst.into_iter().collect());
+    let llvm_ir = generate::generate_llvm_ir(&ctxt, inst.into_iter().collect());
 
     if let Some(llvm_ir_path) = output_paths.llvm_ir {
-        print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.as_ref().display()));
-        std::fs::write(&llvm_ir_path, &llvm_ir).map_err(|_| "Could not write LLVM IR file")?;
+        print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
+        std::fs::write(llvm_ir_path, &llvm_ir).map_err(|_| "Could not write LLVM IR file")?;
     }
 
     Ok(())
 }
 
 fn determine_all_concrete_instantiations(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<InstantiatedFn>, ()> {
-    let main_fn = ctxt.fns.get_fn_by_name("main").ok_or(())?;
-
-    let mut open: VecDeque<ctxt::fns::InstantiatedFn> = VecDeque::new();
+    let mut open = VecDeque::new();
     open.push_back(fns::InstantiatedFn {
-        fn_: main_fn,
+        fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
         gen_args: Vec::new(),
     });
 
-    let mut closed: HashSet<ctxt::fns::InstantiatedFn> = HashSet::new();
+    let mut closed = HashSet::new();
 
     while let Some(inst_fn) = open.pop_front() {
         if closed.contains(&inst_fn) {
             continue;
         }
-        closed.insert(inst_fn.clone());
 
-        let inst_fn_sig = ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
+        let fn_sig = ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
+        let substitutions = fn_sig.build_substitutions(&inst_fn.gen_args);
 
-        let substitutions: HashMap<String, ty::Ty> = inst_fn_sig
-            .gen_params
-            .iter()
-            .zip(&inst_fn.gen_args)
-            .map(|(gp, ga)| (gp.name.clone(), *ga))
-            .collect();
-
-        let instantiated_fns = ctxt.fns.get_instantiated_fns(&inst_fn.fn_);
-
-        let instantiated_fns = instantiated_fns.iter().map(|inst_fn| {
+        let instantiated_fns = ctxt.fns.get_instantiated_fns(&inst_fn.fn_).iter().map(|inst_fn| {
             let new_gen_args = inst_fn
                 .gen_args
                 .iter()
-                .map(|ty| ctxt.tys.replace_gen_args(ty, &substitutions))
-                .collect::<Vec<_>>();
+                .map(|ty| ctxt.tys.substitute_gen_vars(ty, &substitutions))
+                .collect();
 
             ctxt::fns::InstantiatedFn {
                 fn_: inst_fn.fn_,
@@ -110,6 +90,7 @@ fn determine_all_concrete_instantiations(ctxt: &mut ctxt::Ctxt) -> Result<HashSe
         });
 
         open.extend(instantiated_fns);
+        closed.insert(inst_fn);
     }
 
     Ok(closed)

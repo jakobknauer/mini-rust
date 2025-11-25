@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::ctxt::{fns::Fn, ty::Ty};
+use crate::ctxt::{fns::InstantiatedFn, ty::Ty};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Stmt(pub usize);
@@ -71,7 +71,7 @@ pub enum ValDef {
 
 #[derive(Debug, Clone)]
 pub enum OpDef {
-    Fn(Fn, Vec<Ty>),
+    Fn(InstantiatedFn),
     Const(Const),
     Copy(Place),
 }

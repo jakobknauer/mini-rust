@@ -238,7 +238,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.ctxt
             .fns
             .add_instantiated_fn(&self.target_fn, &fn_, gen_args.clone());
-        let op = mlr::OpDef::Fn(fn_, gen_args);
+        let op = mlr::OpDef::Fn(fns::InstantiatedFn { fn_, gen_args });
         self.insert_op(op)
     }
 

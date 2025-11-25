@@ -17,7 +17,7 @@ pub struct FnGenerator<'a, 'iw, 'mr> {
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
     entry_block: Option<BasicBlock<'iw>>,
     after_loop_blocks: VecDeque<BasicBlock<'iw>>,
-    substitutions: HashMap<String, mr_ty::Ty>,
+    substitutions: HashMap<&'a str, mr_ty::Ty>,
 }
 
 #[derive(Debug)]
@@ -40,12 +40,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let after_loop_blocks = VecDeque::new();
 
         let signature = gtor.mr_ctxt.fns.get_sig(&inst_fn.fn_)?;
-        let substitutions: HashMap<String, mr_ty::Ty> = signature
-            .gen_params
-            .iter()
-            .zip(&inst_fn.gen_args)
-            .map(|(gp, ga)| (gp.name.clone(), *ga))
-            .collect();
+        let substitutions = signature.build_substitutions(&inst_fn.gen_args);
 
         Some(Self {
             gtor,
@@ -304,7 +299,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         let op = self.mlr.ops.get(op).ok_or(FnGeneratorError)?;
 
         match op {
-            Fn(fn_, gen_args) => self.build_global_function(fn_, gen_args),
+            Fn(inst_fn) => self.build_global_function(inst_fn),
             Const(constant) => self.build_constant(constant),
             Copy(place) => {
                 let place_ptr = self.build_place(place)?;
@@ -317,8 +312,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
     fn build_global_function(
         &mut self,
-        fn_: &mr_fns::Fn,
-        gen_args: &[mr_ty::Ty],
+        mr_fns::InstantiatedFn { fn_, gen_args }: &mr_fns::InstantiatedFn,
     ) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         let inst_fn = mr_fns::InstantiatedFn {
             fn_: *fn_,

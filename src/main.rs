@@ -23,11 +23,11 @@ fn main() {
     };
 
     let output_paths = mini_rust::driver::OutputPaths {
-        mlr: input_path.with_extension("mlr").into(),
-        llvm_ir: input_path.with_extension("ll").into(),
+        mlr: Some(&input_path.with_extension("mlr")),
+        llvm_ir: Some(&input_path.with_extension("ll")),
     };
 
-    if let Err(err) = mini_rust::driver::compile(&source, print_pretty, print_detail, output_paths) {
+    if let Err(err) = mini_rust::driver::compile(&source, print_pretty, print_detail, &output_paths) {
         print_error(&format!("Compilation failed: {}", err));
         std::process::exit(1);
     };
