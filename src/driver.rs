@@ -199,7 +199,7 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
         Some(ty) => tys.get_ty_by_hlr_annot(ty, &gen_params).ok_or(())?,
-        None => tys.get_ty_by_name("()").ok_or(())?,
+        None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit).ok_or(())?,
     };
 
     let signature = fns::FnSig {
@@ -231,10 +231,7 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     Ok(())
 }
 
-fn print_functions<T>(ctxt: &ctxt::Ctxt, path: T) -> Result<(), ()>
-where
-    T: AsRef<Path>,
-{
+fn print_functions(ctxt: &ctxt::Ctxt, path: &Path) -> Result<(), ()> {
     let mut file = std::fs::File::create(path).map_err(|_| ())?;
 
     for fn_ in ctxt.fns.get_all_fns() {
