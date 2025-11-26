@@ -315,4 +315,49 @@ impl TyReg {
             _ => ty,
         }
     }
+
+    pub fn tys_equal(&self, t1: &Ty, t2: &Ty) -> bool {
+        if t1 == t2 {
+            return true;
+        }
+
+        let t1 = self.canonicalize(t1);
+        let t2 = self.canonicalize(t2);
+        if t1 == t2 {
+            return true;
+        }
+
+        let def1 = self.tys.get(&t1).unwrap();
+        let def2 = self.tys.get(&t2).unwrap();
+
+        match (def1, def2) {
+            (TyDef::Alias(_), _) | (_, TyDef::Alias(_)) => {
+                unreachable!("Types should have been canonicalized");
+            }
+
+            (
+                TyDef::Fn {
+                    param_tys: params1,
+                    return_ty: ret1,
+                },
+                TyDef::Fn {
+                    param_tys: params2,
+                    return_ty: ret2,
+                },
+            ) => {
+                (params1.len() == params2.len())
+                    && params1
+                        .iter()
+                        .zip(params2.iter())
+                        .all(|(p1, p2)| self.tys_equal(p1, p2))
+                    && self.tys_equal(ret1, ret2)
+            }
+
+            (TyDef::Ref(inner1), TyDef::Ref(inner2)) => self.tys_equal(inner1, inner2),
+
+            (TyDef::Named(_, n1), TyDef::Named(_, n2)) if n1 == n2 => true,
+
+            _ => false,
+        }
+    }
 }

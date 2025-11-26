@@ -310,16 +310,17 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_global_function(
-        &mut self,
-        mr_fns::InstantiatedFn { fn_, gen_args }: &mr_fns::InstantiatedFn,
-    ) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        let inst_fn = mr_fns::InstantiatedFn {
-            fn_: *fn_,
-            gen_args: gen_args.to_vec(),
-        };
-        let iw_fn = *self.gtor.functions.get(&inst_fn).ok_or(FnGeneratorError)?;
-        Ok(iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
+    fn build_global_function(&mut self, inst_fn: &mr_fns::InstantiatedFn) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+        self.gtor
+            .functions
+            .iter()
+            .find_map(|(other, iw_fn)| {
+                self.gtor
+                    .mr_ctxt
+                    .inst_fn_equal(inst_fn, other)
+                    .then(|| iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
+            })
+            .ok_or(FnGeneratorError)
     }
 
     fn build_call(&mut self, callable: &mlr::Op, args: &[mlr::Op]) -> FnGeneratorResult<BasicValueEnum<'iw>> {
