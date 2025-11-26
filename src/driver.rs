@@ -7,11 +7,7 @@ use std::{
 };
 
 use crate::{
-    ctxt::{
-        self,
-        fns::{self, InstantiatedFn},
-        ty,
-    },
+    ctxt::{self, fns, ty},
     generate, hlr, mlr,
     util::print,
 };
@@ -45,8 +41,7 @@ pub fn compile(
     }
 
     print_pretty("Collecting monomorphized function instantiations");
-    let inst =
-        determine_all_concrete_instantiations(&mut ctxt).map_err(|_| "Error determining concrete instantiations")?;
+    let inst = monomorphize_functions(&mut ctxt).map_err(|_| "Error determining concrete instantiations")?;
 
     print_pretty("Building LLVM IR from MLR");
     let llvm_ir = generate::generate_llvm_ir(&ctxt, inst.into_iter().collect());
@@ -59,7 +54,7 @@ pub fn compile(
     Ok(())
 }
 
-fn determine_all_concrete_instantiations(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<InstantiatedFn>, ()> {
+fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::InstantiatedFn>, ()> {
     let mut open = VecDeque::new();
     open.push_back(fns::InstantiatedFn {
         fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
@@ -68,29 +63,29 @@ fn determine_all_concrete_instantiations(ctxt: &mut ctxt::Ctxt) -> Result<HashSe
 
     let mut closed = HashSet::new();
 
-    while let Some(inst_fn) = open.pop_front() {
-        if closed.contains(&inst_fn) {
+    while let Some(current) = open.pop_front() {
+        if closed.contains(&current) {
             continue;
         }
 
-        let fn_sig = ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
-        let substitutions = fn_sig.build_substitutions(&inst_fn.gen_args);
+        let current_sig = ctxt.fns.get_sig(&current.fn_).unwrap();
+        let substitutions = current_sig.build_substitutions(&current.gen_args);
 
-        let instantiated_fns = ctxt.fns.get_instantiated_fns(&inst_fn.fn_).iter().map(|inst_fn| {
+        let inst_fns = ctxt.fns.get_instantiated_fns(&current.fn_).iter().map(|inst_fn| {
             let new_gen_args = inst_fn
                 .gen_args
                 .iter()
                 .map(|ty| ctxt.tys.substitute_gen_vars(ty, &substitutions))
                 .collect();
 
-            ctxt::fns::InstantiatedFn {
+            fns::InstantiatedFn {
                 fn_: inst_fn.fn_,
                 gen_args: new_gen_args,
             }
         });
 
-        open.extend(instantiated_fns);
-        closed.insert(inst_fn);
+        open.extend(inst_fns);
+        closed.insert(current);
     }
 
     Ok(closed)
@@ -180,7 +175,7 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
     let gen_params = hlr_fn
         .gen_params
         .iter()
-        .map(|gp| ctxt::fns::GenParam {
+        .map(|gp| fns::GenParam {
             name: gp.clone(),
             ty: tys.register_gen_var_ty(gp),
         })

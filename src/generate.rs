@@ -183,7 +183,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                 .unwrap()
                 .try_into()
                 .unwrap();
-            let fn_type = return_type.fn_type(&param_types, false);
+            let iw_fn_type = return_type.fn_type(&param_types, false);
             let full_name = if signature.gen_params.is_empty() {
                 signature.name.to_string()
             } else {
@@ -198,8 +198,8 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                         .join(", ")
                 )
             };
-            let fn_value = self.iw_module.add_function(&full_name, fn_type, None);
-            self.functions.insert(inst_fn.clone(), fn_value);
+            let fn_value = self.iw_module.add_function(&full_name, iw_fn_type, None);
+            self.functions.insert(inst_fn, fn_value);
         }
     }
 
