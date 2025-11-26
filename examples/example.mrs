@@ -1,15 +1,7 @@
 fn main() -> i32 {
-    identity::<bool>(false);
-    identity::<i32>(3);
-    5
-}
-
-fn increase(x: &i32) -> () {
-    *x = *x + 1
-}
-
-fn invoke(f: fn(i32) -> i32, x: i32) -> i32 {
-    f(x)
+    let f = select::<fn(i32) -> i32>(true, fac, identity::<i32>);    
+    let b = concat::<i32, Point, bool>(diag_point, is_origin, f(3));
+    if b { 1 } else { 2 }
 }
 
 fn fac(n: i32) -> i32 {
@@ -24,17 +16,21 @@ fn fac(n: i32) -> i32 {
     result
 }
 
+struct Point {
+    x: i32,
+    y: i32,
+}
+
 fn scalar_product(p: Point, q: Point) -> i32 {
     p.x * q.x + p.y * q.y
 }
 
-fn select_ref(switch: bool, a: &i32, b: &i32) -> &i32 {
-    if switch { a } else { b }
+fn is_origin(p: Point) -> bool {
+    p.x == 0 & p.y == 0
 }
 
-struct Point {
-    x: i32,
-    y: i32,
+fn diag_point(c: i32) -> Point {
+    Point { x: c, y: c }
 }
 
 enum Expr {
@@ -53,4 +49,16 @@ fn eval(expr: Expr) -> i32 {
 
 fn identity<T>(x: T) -> T { 
     x 
+}
+
+fn invoke<A, B>(f: fn(A) -> B, x: A) -> B {
+    f(x)
+}
+
+fn select<T>(switch: bool, a: T, b: T) -> T {
+    if switch { a } else { b }
+}
+
+fn concat<A, B, C>(f: fn(A) -> B, g: fn(B) -> C, a: A) -> C {
+    g(f(a))
 }
