@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::{
     ctxt::{
         self,
-        fns::{Fn, FnSig, InstantiatedFn},
+        fns::{Fn, FnSig},
     },
     mlr,
 };
@@ -238,24 +238,9 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match op_def {
             Some(operand) => match operand {
-                Fn(InstantiatedFn { fn_, gen_args }) => {
-                    if let Some(func) = self.ctxt.fns.get_sig(fn_) {
-                        write!(self.writer, "fn {}", func.name)?
-                    } else {
-                        write!(self.writer, "<fn id {}>", fn_.0)?
-                    };
-                    if !gen_args.is_empty() {
-                        write!(self.writer, "::<")?;
-                        for (i, gen_arg) in gen_args.iter().enumerate() {
-                            if i > 0 {
-                                write!(self.writer, ", ")?;
-                            }
-                            let ty_name = self.ctxt.tys.get_string_rep(gen_arg);
-                            write!(self.writer, "{}", ty_name)?;
-                        }
-                        write!(self.writer, ">")?;
-                    }
-                    Ok(())
+                Fn(inst_fn) => {
+                    let fn_name = self.ctxt.get_inst_fn_name(inst_fn);
+                    write!(self.writer, "fn {}", fn_name)
                 }
                 Const(constant) => match constant {
                     Int(i) => write!(self.writer, "const {}", i),

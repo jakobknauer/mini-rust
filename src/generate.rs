@@ -166,39 +166,19 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
 
     fn declare_functions(&mut self) {
         for inst_fn in self.inst.clone() {
-            let signature = self.mr_ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
-            let substitutions = signature.build_substitutions(&inst_fn.gen_args);
-            let param_types: Vec<_> = signature
+            let sig = self.mr_ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
+            let subst = sig.build_substitutions(&inst_fn.gen_args);
+
+            let param_types: Vec<_> = sig
                 .params
                 .iter()
-                .map(|param| {
-                    self.get_or_define_ty(&param.ty, &substitutions)
-                        .unwrap()
-                        .try_into()
-                        .unwrap()
-                })
+                .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty, &subst).unwrap())
                 .collect();
-            let return_type: BasicTypeEnum = self
-                .get_or_define_ty(&signature.return_ty, &substitutions)
-                .unwrap()
-                .try_into()
-                .unwrap();
+            let return_type = self.get_ty_as_basic_type_enum(&sig.return_ty, &subst).unwrap();
             let iw_fn_type = return_type.fn_type(&param_types, false);
-            let full_name = if signature.gen_params.is_empty() {
-                signature.name.to_string()
-            } else {
-                format!(
-                    "{}<{}>",
-                    signature.name,
-                    inst_fn
-                        .gen_args
-                        .iter()
-                        .map(|ty| self.mr_ctxt.tys.get_string_rep(ty))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            };
-            let fn_value = self.iw_module.add_function(&full_name, iw_fn_type, None);
+
+            let fn_name = self.mr_ctxt.get_inst_fn_name(&inst_fn);
+            let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
             self.functions.insert(inst_fn, fn_value);
         }
     }
@@ -209,7 +189,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                 continue;
             };
             if fn_gen.define_fn().is_err() {
-                let fn_name = self.mr_ctxt.fns.get_fn_name(&inst_fn.fn_).unwrap();
+                let fn_name = self.mr_ctxt.get_inst_fn_name(&inst_fn);
                 eprintln!("Failed to define function {fn_name}");
             }
         }

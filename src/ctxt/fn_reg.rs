@@ -47,10 +47,6 @@ impl FnReg {
         self.sigs.get(fn_)
     }
 
-    pub fn get_fn_name(&self, fn_: &Fn) -> Option<&str> {
-        self.sigs.get(fn_).map(|sig| sig.name.as_str())
-    }
-
     pub fn get_fn_by_name(&self, name: &str) -> Option<Fn> {
         self.fn_names.get(name).cloned()
     }

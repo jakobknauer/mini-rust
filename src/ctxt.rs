@@ -27,4 +27,22 @@ impl Ctxt {
                 .zip(b.gen_args.iter())
                 .all(|(a_ty, b_ty)| self.tys.tys_equal(a_ty, b_ty))
     }
+
+    pub fn get_inst_fn_name(&self, inst_fn: &fns::InstantiatedFn) -> String {
+        let signature = self.fns.get_sig(&inst_fn.fn_).unwrap();
+        if signature.gen_params.is_empty() {
+            signature.name.to_string()
+        } else {
+            format!(
+                "{}::<{}>",
+                signature.name,
+                inst_fn
+                    .gen_args
+                    .iter()
+                    .map(|ty| self.tys.get_string_rep(ty))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    }
 }
