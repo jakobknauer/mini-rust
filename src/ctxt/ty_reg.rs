@@ -7,7 +7,8 @@ use crate::{
 };
 
 pub struct TyReg {
-    tys: HashMap<Ty, TyDef>,
+    tys: HashMap<Ty, Option<TyDef>>,
+    tys_inv: HashMap<TyDef, Ty>,
     structs: HashMap<Struct, StructDef>,
     enums: HashMap<Enum, EnumDef>,
 
@@ -31,6 +32,7 @@ impl TyReg {
     pub fn new() -> TyReg {
         TyReg {
             tys: HashMap::new(),
+            tys_inv: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
 
@@ -47,9 +49,21 @@ impl TyReg {
     }
 
     fn register_ty(&mut self, ty_def: TyDef) -> Ty {
+        if let Some(existing_ty) = self.tys_inv.get(&ty_def) {
+            return *existing_ty;
+        }
+
         let ty = self.next_ty;
         self.next_ty.0 += 1;
-        self.tys.insert(ty, ty_def);
+        self.tys.insert(ty, Some(ty_def.clone()));
+        self.tys_inv.insert(ty_def, ty);
+        ty
+    }
+
+    pub fn get_undef_ty(&mut self) -> Ty {
+        let ty = self.next_ty;
+        self.next_ty.0 += 1;
+        self.tys.insert(ty, None);
         ty
     }
 
@@ -108,7 +122,7 @@ impl TyReg {
 
     pub fn get_ty_def(&self, id: &Ty) -> Option<&TyDef> {
         let id = self.canonicalize(id);
-        self.tys.get(&id)
+        self.tys.get(&id).and_then(|inner| inner.as_ref())
     }
 
     pub fn get_ty_by_name(&self, name: &str) -> Option<Ty> {
@@ -145,7 +159,7 @@ impl TyReg {
 
     fn get_ty_def_by_name(&self, name: &str) -> Option<&TyDef> {
         let ty = self.get_ty_by_name(name)?;
-        self.tys.get(&ty)
+        self.get_ty_def(&ty)
     }
 
     pub fn get_struct_def(&self, struct_: &Struct) -> Option<&StructDef> {
@@ -175,8 +189,12 @@ impl TyReg {
     }
 
     pub fn get_string_rep(&self, ty: &Ty) -> String {
-        let Some(ty_def) = self.tys.get(ty) else {
-            return format!("<type id {}>", ty.0).to_string();
+        if !self.tys.contains_key(ty) {
+            return format!("<unknown type id {}>", ty.0).to_string();
+        }
+
+        let Some(ty_def) = self.get_ty_def(ty) else {
+            return format!("<undefined type id {}>", ty.0).to_string();
         };
 
         match ty_def {
@@ -188,69 +206,70 @@ impl TyReg {
             }
             TyDef::Ref(ty) => format!("&{}", self.get_string_rep(ty)),
             TyDef::Alias(ty) => self.get_string_rep(ty),
-            TyDef::Undef => "<undefined>".to_string(),
             TyDef::GenVar(name) => name.clone(),
         }
     }
 
-    pub fn unify(&mut self, t1: &Ty, t2: &Ty) -> Result<(), UnificationError> {
+    pub fn unify(&mut self, ty1: &Ty, ty2: &Ty) -> Result<(), UnificationError> {
         use TyDef::*;
 
-        let t1 = self.canonicalize(t1);
-        let t2 = self.canonicalize(t2);
+        let ty1 = self.canonicalize(ty1);
+        let ty2 = self.canonicalize(ty2);
 
-        if t1 == t2 {
+        if ty1 == ty2 {
             return Ok(());
         }
 
-        let def1 = self.tys.get(&t1).unwrap().clone();
-        let def2 = self.tys.get(&t2).unwrap().clone();
+        let def1 = self.tys.get(&ty1).expect("ty1 should be registered").clone();
+        let def2 = self.tys.get(&ty2).expect("ty2 should be registered").clone();
 
         match (def1, def2) {
-            (Alias(_), _) | (_, Alias(_)) => {
-                unreachable!("Types should have been canonicalized");
-            }
-
-            (Undef, _) => {
-                self.tys.insert(t1, Alias(t2));
+            (None, _) => {
+                self.tys.insert(ty1, Some(Alias(ty2)));
                 Ok(())
             }
-            (_, Undef) => {
-                self.tys.insert(t2, Alias(t1));
+            (_, None) => {
+                self.tys.insert(ty2, Some(Alias(ty1)));
                 Ok(())
             }
 
-            (
-                Fn {
-                    param_tys: params1,
-                    return_ty: ret1,
-                },
-                Fn {
-                    param_tys: params2,
-                    return_ty: ret2,
-                },
-            ) => {
-                if params1.len() != params2.len() {
-                    return Err(UnificationError::FunctionParamCountMismatch);
+            (Some(def1), Some(def2)) => match (def1, def2) {
+                (Alias(_), _) | (_, Alias(_)) => {
+                    unreachable!("Types should have been canonicalized");
                 }
 
-                for (p1, p2) in params1.iter().zip(params2.iter()) {
-                    self.unify(p1, p2)?;
+                (
+                    Fn {
+                        param_tys: params1,
+                        return_ty: ret1,
+                    },
+                    Fn {
+                        param_tys: params2,
+                        return_ty: ret2,
+                    },
+                ) => {
+                    if params1.len() != params2.len() {
+                        return Err(UnificationError::FunctionParamCountMismatch);
+                    }
+
+                    for (p1, p2) in params1.iter().zip(params2.iter()) {
+                        self.unify(p1, p2)?;
+                    }
+                    self.unify(&ret1, &ret2)
                 }
-                self.unify(&ret1, &ret2)
-            }
 
-            (Ref(inner1), Ref(inner2)) => self.unify(&inner1, &inner2),
+                (Ref(inner1), Ref(inner2)) => self.unify(&inner1, &inner2),
 
-            (Named(_, n1), Named(_, n2)) if n1 == n2 => Ok(()),
+                (Named(_, n1), Named(_, n2)) if n1 == n2 => Ok(()),
 
-            _ => Err(UnificationError::TypeMismatch),
+                _ => Err(UnificationError::TypeMismatch),
+            },
         }
     }
 
     pub fn canonicalize(&self, ty: &Ty) -> Ty {
         let mut current_ty = *ty;
-        while let TyDef::Alias(next_ty) = self.tys.get(&current_ty).unwrap() {
+        while let Some(TyDef::Alias(next_ty)) = self.tys.get(&current_ty).expect("current_ty should be registered") {
             current_ty = *next_ty;
         }
         current_ty
@@ -266,7 +285,7 @@ impl TyReg {
 
     pub fn get_named_ty(&self, named_ty: Named) -> Option<Ty> {
         self.tys.iter().find_map(|(ty, ty_def)| {
-            if let TyDef::Named(_, nt) = ty_def
+            if let Some(TyDef::Named(_, nt)) = ty_def
                 && *nt == named_ty
             {
                 Some(*ty)
@@ -284,15 +303,13 @@ impl TyReg {
         self.enums.iter()
     }
 
-    pub fn get_undef_ty(&mut self) -> Ty {
-        self.register_ty(TyDef::Undef)
-    }
-
     pub fn substitute_gen_vars(&mut self, ty: &Ty, substitutions: &HashMap<&str, Ty>) -> Ty {
         let ty = self.canonicalize(ty);
-        let ty_def = self.tys.get(&ty).unwrap().clone();
+        let Some(ty_def) = self.tys.get(&ty).expect("ty should be registered") else {
+            return ty;
+        };
 
-        match ty_def {
+        match ty_def.clone() {
             TyDef::GenVar(name) => {
                 if let Some(replacement_ty) = substitutions.get(name.as_str()) {
                     *replacement_ty
@@ -313,51 +330,6 @@ impl TyReg {
                 self.register_ref_ty(new_inner_ty)
             }
             _ => ty,
-        }
-    }
-
-    pub fn tys_equal(&self, t1: &Ty, t2: &Ty) -> bool {
-        if t1 == t2 {
-            return true;
-        }
-
-        let t1 = self.canonicalize(t1);
-        let t2 = self.canonicalize(t2);
-        if t1 == t2 {
-            return true;
-        }
-
-        let def1 = self.tys.get(&t1).unwrap();
-        let def2 = self.tys.get(&t2).unwrap();
-
-        match (def1, def2) {
-            (TyDef::Alias(_), _) | (_, TyDef::Alias(_)) => {
-                unreachable!("Types should have been canonicalized");
-            }
-
-            (
-                TyDef::Fn {
-                    param_tys: params1,
-                    return_ty: ret1,
-                },
-                TyDef::Fn {
-                    param_tys: params2,
-                    return_ty: ret2,
-                },
-            ) => {
-                (params1.len() == params2.len())
-                    && params1
-                        .iter()
-                        .zip(params2.iter())
-                        .all(|(p1, p2)| self.tys_equal(p1, p2))
-                    && self.tys_equal(ret1, ret2)
-            }
-
-            (TyDef::Ref(inner1), TyDef::Ref(inner2)) => self.tys_equal(inner1, inner2),
-
-            (TyDef::Named(_, n1), TyDef::Named(_, n2)) if n1 == n2 => true,
-
-            _ => false,
         }
     }
 }

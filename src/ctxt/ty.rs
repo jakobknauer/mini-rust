@@ -13,7 +13,6 @@ pub enum TyDef {
     Fn { param_tys: Vec<Ty>, return_ty: Ty },
     Ref(Ty),
     Alias(Ty),
-    Undef,
     GenVar(String),
 }
 

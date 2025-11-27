@@ -313,13 +313,8 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_global_function(&mut self, inst_fn: &mr_fns::InstantiatedFn) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         self.gtor
             .functions
-            .iter()
-            .find_map(|(other, iw_fn)| {
-                self.gtor
-                    .mr_ctxt
-                    .inst_fn_equal(inst_fn, other)
-                    .then(|| iw_fn.as_global_value().as_pointer_value().as_basic_value_enum())
-            })
+            .get(inst_fn)
+            .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
             .ok_or(FnGeneratorError)
     }
 

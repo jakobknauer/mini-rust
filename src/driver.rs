@@ -218,7 +218,7 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
             .build()
             .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;
 
-        mlr::opt::canonicalize_types(&mut mlr, ctxt).map_err(|_| "Error canonicalizing types".to_string())?;
+        mlr::opt::canonicalize_types(&mut mlr, ctxt);
 
         ctxt.fns.add_fn_def(&function.name, mlr);
     }
