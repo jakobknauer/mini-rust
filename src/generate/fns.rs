@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
-    types::{BasicType, BasicTypeEnum, FunctionType, StructType},
+    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
@@ -11,13 +11,13 @@ use crate::{ctxt::fns as mr_fns, ctxt::ty as mr_ty, mlr};
 
 pub struct FnGenerator<'a, 'iw, 'mr> {
     gtor: &'a mut super::Generator<'iw, 'mr>,
+    specialization: mr_fns::FnSpecialization,
     iw_fn: FunctionValue<'iw>,
     builder: Builder<'iw>,
-    mlr: &'a mlr::Mlr,
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
     entry_block: Option<BasicBlock<'iw>>,
     after_loop_blocks: VecDeque<BasicBlock<'iw>>,
-    substitutions: HashMap<&'a str, mr_ty::Ty>,
+    substitutions: HashMap<String, mr_ty::Ty>,
 }
 
 #[derive(Debug)]
@@ -32,21 +32,28 @@ impl From<BuilderError> for FnGeneratorError {
 pub type FnGeneratorResult<T> = Result<T, FnGeneratorError>;
 
 impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
-    pub fn new(gtor: &'a mut super::Generator<'iw, 'mr>, inst_fn: mr_fns::InstantiatedFn) -> Option<Self> {
-        let builder = gtor.iw_ctxt.create_builder();
-        let mlr = gtor.mr_ctxt.fns.get_fn_def(&inst_fn.fn_)?;
-        let locs = HashMap::new();
-        let iw_fn = *gtor.functions.get(&inst_fn)?;
-        let after_loop_blocks = VecDeque::new();
+    pub fn new(gtor: &'a mut super::Generator<'iw, 'mr>, specialization: mr_fns::FnSpecialization) -> Option<Self> {
+        if !gtor.mr_ctxt.fns.is_fn_defined(&specialization.fn_) {
+            return None;
+        }
 
-        let signature = gtor.mr_ctxt.fns.get_sig(&inst_fn.fn_)?;
-        let substitutions = signature.build_substitutions(&inst_fn.gen_args);
+        let builder = gtor.iw_ctxt.create_builder();
+        let locs = HashMap::new();
+        let iw_fn = *gtor.functions.get(&specialization)?;
+        let after_loop_blocks = VecDeque::new();
+        let substitutions = gtor
+            .mr_ctxt
+            .fns
+            .get_substitutions_for_specialization(&specialization)
+            .iter()
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect();
 
         Some(Self {
             gtor,
+            specialization,
             iw_fn,
             builder,
-            mlr,
             locs,
             entry_block: None,
             after_loop_blocks,
@@ -65,46 +72,47 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn get_iw_ty_of_loc(&mut self, loc: &mlr::Loc) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.mlr.loc_tys.get(loc).ok_or(FnGeneratorError)?;
-        let iw_ty = self
-            .gtor
-            .get_ty_as_basic_type_enum(mr_ty, &self.substitutions)
-            .ok_or(FnGeneratorError)?;
+        let mr_ty = *self.mlr().loc_tys.get(loc).ok_or(FnGeneratorError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(&mr_ty).ok_or(FnGeneratorError)?;
         Ok(iw_ty)
     }
 
     fn get_iw_ty_of_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.mlr.place_tys.get(place).ok_or(FnGeneratorError)?;
-        let iw_ty = self
-            .gtor
-            .get_ty_as_basic_type_enum(mr_ty, &self.substitutions)
-            .ok_or(FnGeneratorError)?;
+        let mr_ty = *self.mlr().place_tys.get(place).ok_or(FnGeneratorError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(&mr_ty).ok_or(FnGeneratorError)?;
         Ok(iw_ty)
     }
 
     fn get_fn_ty_of_loc(&mut self, op: &mlr::Op) -> FnGeneratorResult<FunctionType<'iw>> {
-        let mr_ty = self.mlr.op_tys.get(op).ok_or(FnGeneratorError)?;
-        let mr_ty = self.gtor.mr_ctxt.tys.get_ty_def(mr_ty).ok_or(FnGeneratorError)?;
+        let mr_ty = *self.mlr().op_tys.get(op).ok_or(FnGeneratorError)?;
+        let mr_ty = self
+            .gtor
+            .mr_ctxt
+            .tys
+            .get_ty_def(&mr_ty)
+            .ok_or(FnGeneratorError)?
+            .clone();
 
         let mr_ty::TyDef::Fn { return_ty, param_tys } = mr_ty else {
             return Err(FnGeneratorError);
         };
 
-        let return_ty = self
-            .gtor
-            .get_ty_as_basic_type_enum(return_ty, &self.substitutions)
-            .ok_or(FnGeneratorError)?;
+        let return_ty = self.get_ty_as_basic_type_enum(&return_ty).ok_or(FnGeneratorError)?;
 
         let param_tys: Vec<_> = param_tys
             .iter()
-            .map(|param| {
-                self.gtor
-                    .get_ty_as_basic_metadata_type_enum(param, &self.substitutions)
-                    .ok_or(FnGeneratorError)
-            })
+            .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(FnGeneratorError))
             .collect::<FnGeneratorResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, false))
+    }
+
+    fn mlr(&self) -> &mlr::Mlr {
+        self.gtor
+            .mr_ctxt
+            .fns
+            .get_fn_def(&self.specialization.fn_)
+            .expect("MLR for function should be defined")
     }
 
     fn build_alloca_for_loc(&mut self, loc: &mlr::Loc) -> FnGeneratorResult<PointerValue<'iw>> {
@@ -136,10 +144,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             .tys
             .get_primitive_ty(mr_ty::Primitive::Unit)
             .ok_or(FnGeneratorError)?;
-        let iw_ty = self
-            .gtor
-            .get_or_define_ty(&mr_unit_ty, &self.substitutions)
-            .ok_or(FnGeneratorError)?;
+        let iw_ty = self.gtor.get_or_define_ty(&mr_unit_ty).ok_or(FnGeneratorError)?;
         let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| FnGeneratorError)?;
         Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())
     }
@@ -149,7 +154,9 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         self.entry_block = Some(entry_block);
         self.builder.position_at_end(entry_block);
 
-        for (param_index, param_loc) in self.mlr.param_locs.iter().enumerate() {
+        let param_locs = self.mlr().param_locs.clone();
+
+        for (param_index, param_loc) in param_locs.iter().enumerate() {
             let param_address = self.build_alloca_for_loc(param_loc)?;
             self.builder
                 .build_store(param_address, self.iw_fn.get_nth_param(param_index as u32).unwrap())?;
@@ -161,7 +168,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_function_body(&mut self) -> FnGeneratorResult<BasicBlock<'iw>> {
         let body_block = self.gtor.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.builder.position_at_end(body_block);
-        self.build_stmt(&self.mlr.body)?;
+        self.build_stmt(&self.mlr().body.clone())?;
 
         Ok(body_block)
     }
@@ -169,28 +176,28 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_stmt(&mut self, _stmt: &mlr::Stmt) -> FnGeneratorResult<()> {
         use mlr::StmtDef::*;
 
-        let stmt = self.mlr.stmts.get(_stmt).ok_or(FnGeneratorError)?;
+        let stmt = self.mlr().stmts.get(_stmt).ok_or(FnGeneratorError)?.clone();
 
         match stmt {
             Alloc { loc } => {
-                self.build_alloca_for_loc(loc)?;
+                self.build_alloca_for_loc(&loc)?;
             }
             Assign { place, value } => {
-                let place = self.build_place(place)?;
-                let value = self.build_val(value)?;
+                let place = self.build_place(&place)?;
+                let value = self.build_val(&value)?;
                 self.builder.build_store(place, value)?;
             }
             Return { value } => {
-                let ret_value = self.build_val(value)?;
+                let ret_value = self.build_val(&value)?;
                 self.builder.build_return(Some(&ret_value))?;
             }
             Break => {
                 let after_loop_block = self.after_loop_blocks.back().ok_or(FnGeneratorError)?;
                 self.builder.build_unconditional_branch(*after_loop_block)?;
             }
-            Block(stmts) => self.build_block(stmts)?,
-            If(if_) => self.build_if(if_)?,
-            Loop { body } => self.build_loop(body)?,
+            Block(stmts) => self.build_block(&stmts)?,
+            If(if_) => self.build_if(&if_)?,
+            Loop { body } => self.build_loop(&body)?,
         }
 
         Ok(())
@@ -199,35 +206,35 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_val(&mut self, val: &mlr::Val) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         use mlr::ValDef::*;
 
-        let val = self.mlr.vals.get(val).ok_or(FnGeneratorError)?;
+        let val = self.mlr().vals.get(val).ok_or(FnGeneratorError)?.clone();
 
         match val {
-            Use(place) => self.build_op(place),
-            Call { callable, args } => self.build_call(callable, args),
-            Empty { ty } => self.build_empty_val(ty),
-            AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
+            Use(place) => self.build_op(&place),
+            Call { callable, args } => self.build_call(&callable, &args),
+            Empty { ty } => self.build_empty_val(&ty),
+            AddrOf(place) => self.build_place(&place).map(|ptr| ptr.as_basic_value_enum()),
         }
     }
 
     fn build_place(&mut self, place: &mlr::Place) -> FnGeneratorResult<PointerValue<'iw>> {
         use mlr::PlaceDef::*;
 
-        let place = self.mlr.places.get(place).ok_or(FnGeneratorError)?;
+        let place = self.mlr().places.get(place).ok_or(FnGeneratorError)?.clone();
 
         match place {
-            Loc(loc) => self.locs.get(loc).ok_or(FnGeneratorError).cloned(),
+            Loc(loc) => self.locs.get(&loc).ok_or(FnGeneratorError).cloned(),
             FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(base)?
+                    .get_iw_ty_of_place(&base)?
                     .try_into()
                     .map_err(|_| FnGeneratorError)?;
 
-                let base_address = self.build_place(base)?;
+                let base_address = self.build_place(&base)?;
 
                 let field_ptr = self.builder.build_struct_gep(
                     iw_base_struct_type,
                     base_address,
-                    *field_index as u32,
+                    field_index as u32,
                     "field_ptr",
                 )?;
 
@@ -235,11 +242,11 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             }
             EnumDiscriminant { base, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(base)?
+                    .get_iw_ty_of_place(&base)?
                     .try_into()
                     .map_err(|_| FnGeneratorError)?;
 
-                let base_address = self.build_place(base)?;
+                let base_address = self.build_place(&base)?;
 
                 let discrim_ptr =
                     self.builder
@@ -249,11 +256,11 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
             }
             ProjectToVariant { base, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(base)?
+                    .get_iw_ty_of_place(&base)?
                     .try_into()
                     .map_err(|_| FnGeneratorError)?;
 
-                let base_address = self.build_place(base)?;
+                let base_address = self.build_place(&base)?;
 
                 let variant_ptr =
                     self.builder
@@ -262,7 +269,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
                 Ok(variant_ptr)
             }
             Deref(op) => {
-                let ptr_value = self.build_op(op)?.into_pointer_value();
+                let ptr_value = self.build_op(&op)?.into_pointer_value();
                 Ok(ptr_value)
             }
         }
@@ -296,24 +303,24 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     fn build_op(&mut self, op: &mlr::Op) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         use mlr::OpDef::*;
 
-        let op = self.mlr.ops.get(op).ok_or(FnGeneratorError)?;
+        let op = self.mlr().ops.get(op).ok_or(FnGeneratorError)?.clone();
 
         match op {
-            Fn(inst_fn) => self.build_global_function(inst_fn),
-            Const(constant) => self.build_constant(constant),
+            Fn(fn_spec) => self.build_global_function(&fn_spec),
+            Const(constant) => self.build_constant(&constant),
             Copy(place) => {
-                let place_ptr = self.build_place(place)?;
-                let iw_ty = self.get_iw_ty_of_place(place)?;
+                let place_ptr = self.build_place(&place)?;
+                let iw_ty = self.get_iw_ty_of_place(&place)?;
                 let value = self.builder.build_load(iw_ty, place_ptr, "loaded_place")?;
                 Ok(value)
             }
         }
     }
 
-    fn build_global_function(&mut self, inst_fn: &mr_fns::InstantiatedFn) -> FnGeneratorResult<BasicValueEnum<'iw>> {
+    fn build_global_function(&mut self, fn_spec: &mr_fns::FnSpecialization) -> FnGeneratorResult<BasicValueEnum<'iw>> {
         self.gtor
             .functions
-            .get(inst_fn)
+            .get(fn_spec)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
             .ok_or(FnGeneratorError)
     }
@@ -376,11 +383,18 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_empty_val(&mut self, ty: &mr_ty::Ty) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let iw_ty = self
-            .gtor
-            .get_ty_as_basic_type_enum(ty, &self.substitutions)
-            .ok_or(FnGeneratorError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(FnGeneratorError)?;
         let struct_value = iw_ty.const_zero(); // create a zero value because that's available for BasicValueEnum
         Ok(struct_value)
+    }
+
+    fn get_ty_as_basic_type_enum(&mut self, ty: &mr_ty::Ty) -> Option<BasicTypeEnum<'iw>> {
+        let ty = self.gtor.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions);
+        self.gtor.get_ty_as_basic_type_enum(&ty)
+    }
+
+    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: &mr_ty::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
+        let ty = self.gtor.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions);
+        self.gtor.get_ty_as_basic_metadata_type_enum(&ty)
     }
 }

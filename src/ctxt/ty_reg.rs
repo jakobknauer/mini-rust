@@ -1,5 +1,9 @@
 use itertools::Itertools;
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, HashMap},
+    hash::Hash,
+};
 
 use crate::{
     ctxt::{fns::GenParam, ty::*},
@@ -303,7 +307,7 @@ impl TyReg {
         self.enums.iter()
     }
 
-    pub fn substitute_gen_vars(&mut self, ty: &Ty, substitutions: &HashMap<&str, Ty>) -> Ty {
+    pub fn substitute_gen_vars(&mut self, ty: &Ty, substitutions: &HashMap<impl Borrow<str> + Eq + Hash, Ty>) -> Ty {
         let ty = self.canonicalize(ty);
         let Some(ty_def) = self.tys.get(&ty).expect("ty should be registered") else {
             return ty;
@@ -311,7 +315,7 @@ impl TyReg {
 
         match ty_def.clone() {
             TyDef::GenVar(name) => {
-                if let Some(replacement_ty) = substitutions.get(name.as_str()) {
+                if let Some(replacement_ty) = substitutions.get(&name) {
                     *replacement_ty
                 } else {
                     ty

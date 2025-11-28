@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     ctxt::{
-        fns::{Fn, FnSig, InstantiatedFn},
+        fns::{Fn, FnSig, FnSpecialization},
         ty::Ty,
     },
     mlr::Mlr,
@@ -14,7 +14,7 @@ pub struct FnReg {
     next_fn: Fn,
     defs: HashMap<Fn, Mlr>,
 
-    instantiated_fns: HashMap<Fn, Vec<InstantiatedFn>>,
+    called_specializations: HashMap<Fn, Vec<FnSpecialization>>,
 }
 
 impl FnReg {
@@ -24,7 +24,7 @@ impl FnReg {
             sigs: HashMap::new(),
             next_fn: Fn(0),
             defs: HashMap::new(),
-            instantiated_fns: HashMap::new(),
+            called_specializations: HashMap::new(),
         }
     }
 
@@ -38,7 +38,7 @@ impl FnReg {
 
         self.fn_names.insert(signature.name.to_string(), fn_);
         self.sigs.insert(fn_, signature);
-        self.instantiated_fns.insert(fn_, Vec::new());
+        self.called_specializations.insert(fn_, Vec::new());
 
         Ok(fn_)
     }
@@ -69,14 +69,26 @@ impl FnReg {
         self.fn_names.values()
     }
 
-    pub fn add_instantiated_fn(&mut self, caller: &Fn, callee: &Fn, gen_args: impl Into<Vec<Ty>>) {
-        self.instantiated_fns.entry(*caller).or_default().push(InstantiatedFn {
-            fn_: *callee,
-            gen_args: gen_args.into(),
-        });
+    pub fn specialize_fn(&mut self, caller: &Fn, callee: &Fn, gen_args: impl Into<Vec<Ty>>) {
+        self.called_specializations
+            .entry(*caller)
+            .or_default()
+            .push(FnSpecialization {
+                fn_: *callee,
+                gen_args: gen_args.into(),
+            });
     }
 
-    pub fn get_instantiated_fns(&self, caller: &Fn) -> &Vec<InstantiatedFn> {
-        self.instantiated_fns.get(caller).unwrap()
+    pub fn get_called_specializations(&self, caller: &Fn) -> &Vec<FnSpecialization> {
+        self.called_specializations.get(caller).unwrap()
+    }
+
+    pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<&str, Ty> {
+        let sig = self.get_sig(&fn_specialization.fn_).unwrap();
+        sig.gen_params
+            .iter()
+            .zip(&fn_specialization.gen_args)
+            .map(|(gen_param, gen_arg)| (gen_param.name.as_str(), *gen_arg))
+            .collect()
     }
 }

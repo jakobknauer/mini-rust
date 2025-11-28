@@ -14,15 +14,15 @@ use inkwell::{
 use crate::{
     ctxt::{
         self as mr_ctxt,
-        fns::{self as mr_fns, InstantiatedFn},
+        fns::{self as mr_fns, FnSpecialization},
         ty as mr_tys,
     },
     generate::fns::FnGenerator,
 };
 
-pub fn generate_llvm_ir(ctxt: &mr_ctxt::Ctxt, inst: Vec<InstantiatedFn>) -> String {
+pub fn generate_llvm_ir(ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<FnSpecialization>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = Generator::new(&iw_ctxt, ctxt, inst);
+    let mut generator = Generator::new(&iw_ctxt, ctxt, fn_specs);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -35,21 +35,21 @@ struct Generator<'iw, 'mr> {
     iw_ctxt: &'iw IwContext,
     iw_module: Module<'iw>,
 
-    mr_ctxt: &'mr mr_ctxt::Ctxt,
+    mr_ctxt: &'mr mut mr_ctxt::Ctxt,
 
-    inst: Vec<InstantiatedFn>,
+    fn_specs: Vec<FnSpecialization>,
 
     types: HashMap<mr_tys::Ty, AnyTypeEnum<'iw>>,
-    functions: HashMap<mr_fns::InstantiatedFn, FunctionValue<'iw>>,
+    functions: HashMap<mr_fns::FnSpecialization, FunctionValue<'iw>>,
 }
 
 impl<'iw, 'mr> Generator<'iw, 'mr> {
-    pub fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mr_ctxt::Ctxt, inst: Vec<InstantiatedFn>) -> Self {
+    pub fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mut mr_ctxt::Ctxt, fn_specs: Vec<FnSpecialization>) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         Generator {
             iw_ctxt,
             iw_module,
-            inst,
+            fn_specs,
             mr_ctxt,
             types: HashMap::new(),
             functions: HashMap::new(),
@@ -61,18 +61,14 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.iw_module.set_triple(&target_triple);
     }
 
-    fn get_or_define_ty(
-        &mut self,
-        ty: &mr_tys::Ty,
-        substitutions: &HashMap<&str, mr_tys::Ty>,
-    ) -> Option<AnyTypeEnum<'iw>> {
+    fn get_or_define_ty(&mut self, ty: &mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Named::*, Primitive::*, TyDef::*};
 
         if self.types.contains_key(ty) {
             return self.types.get(ty).cloned();
         }
 
-        let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
+        let type_ = self.mr_ctxt.tys.get_ty_def(ty)?.clone();
 
         let inkwell_type = match type_ {
             Named(name, named_type) => match named_type {
@@ -81,18 +77,12 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
                     Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                     Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
-                Struct(struct_) => self.define_struct(name, ty, struct_),
-                Enum(enum_) => self.define_enum(name, enum_),
+                Struct(struct_) => self.define_struct(&name, ty, &struct_),
+                Enum(enum_) => self.define_enum(&name, &enum_),
             },
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
-            GenVar(name) => {
-                let substituted_ty = substitutions
-                    .get(name.as_str())
-                    .expect("No substitution found for generic variable");
-                let output = self.get_or_define_ty(substituted_ty, substitutions)?;
-                return Some(output);
-            }
+            GenVar(_) => unreachable!("generic type variables should be substituted before this point"),
         };
 
         if !self.types.contains_key(ty) {
@@ -101,31 +91,23 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.types.get(ty).cloned()
     }
 
-    fn get_ty_as_basic_type_enum(
-        &mut self,
-        ty: &mr_tys::Ty,
-        substitutions: &HashMap<&str, mr_tys::Ty>,
-    ) -> Option<BasicTypeEnum<'iw>> {
-        self.get_or_define_ty(ty, substitutions)?.try_into().ok()
+    fn get_ty_as_basic_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicTypeEnum<'iw>> {
+        self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn get_ty_as_basic_metadata_type_enum(
-        &mut self,
-        ty: &mr_tys::Ty,
-        substitutions: &HashMap<&str, mr_tys::Ty>,
-    ) -> Option<BasicMetadataTypeEnum<'iw>> {
-        self.get_or_define_ty(ty, substitutions)?.try_into().ok()
+    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
+        self.get_or_define_ty(ty)?.try_into().ok()
     }
 
     fn define_struct(&mut self, name: &str, ty: &mr_tys::Ty, struct_: &mr_tys::Struct) -> AnyTypeEnum<'iw> {
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(name);
         self.types.insert(*ty, iw_struct.as_any_type_enum());
 
-        let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap();
+        let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap().clone();
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
-            .map(|field| self.get_ty_as_basic_type_enum(&field.ty, &HashMap::new()).unwrap())
+            .map(|field| self.get_ty_as_basic_type_enum(&field.ty).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);
@@ -133,7 +115,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn define_enum(&mut self, name: &str, enum_: &mr_tys::Enum) -> AnyTypeEnum<'iw> {
-        let enum_def = self.mr_ctxt.tys.get_enum_def(enum_).unwrap();
+        let enum_def = self.mr_ctxt.tys.get_enum_def(enum_).unwrap().clone();
 
         let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);
@@ -142,12 +124,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             .variants
             .iter()
             .map(|variant| {
-                let variant_type: StructType = self
-                    .get_ty_as_basic_type_enum(&variant.ty, &HashMap::new())
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
-
+                let variant_type: StructType = self.get_ty_as_basic_type_enum(&variant.ty).unwrap().try_into().unwrap();
                 TargetData::create("").get_store_size(&variant_type)
             })
             .max()
@@ -164,31 +141,30 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn declare_functions(&mut self) {
-        for inst_fn in self.inst.clone() {
-            let sig = self.mr_ctxt.fns.get_sig(&inst_fn.fn_).unwrap();
-            let subst = sig.build_substitutions(&inst_fn.gen_args);
+        for fn_spec in self.fn_specs.clone() {
+            let sig = self.mr_ctxt.get_specialized_fn_sig(&fn_spec);
 
             let param_types: Vec<_> = sig
                 .params
                 .iter()
-                .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty, &subst).unwrap())
+                .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty).unwrap())
                 .collect();
-            let return_type = self.get_ty_as_basic_type_enum(&sig.return_ty, &subst).unwrap();
+            let return_type = self.get_ty_as_basic_type_enum(&sig.return_ty).unwrap();
             let iw_fn_type = return_type.fn_type(&param_types, false);
 
-            let fn_name = self.mr_ctxt.get_inst_fn_name(&inst_fn);
+            let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
-            self.functions.insert(inst_fn, fn_value);
+            self.functions.insert(fn_spec, fn_value);
         }
     }
 
     pub fn define_functions(&mut self) {
-        for inst_fn in self.inst.clone() {
-            let Some(mut fn_gen) = FnGenerator::new(self, inst_fn.clone()) else {
+        for fn_spec in self.fn_specs.clone() {
+            let Some(mut fn_gen) = FnGenerator::new(self, fn_spec.clone()) else {
                 continue;
             };
             if fn_gen.define_fn().is_err() {
-                let fn_name = self.mr_ctxt.get_inst_fn_name(&inst_fn);
+                let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
                 eprintln!("Failed to define function {fn_name}");
             }
         }

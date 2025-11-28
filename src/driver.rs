@@ -40,11 +40,11 @@ pub fn compile(
         print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
     }
 
-    print_pretty("Collecting monomorphized function instantiations");
-    let inst = monomorphize_functions(&mut ctxt).map_err(|_| "Error determining concrete instantiations")?;
+    print_pretty("Collecting monomorphized function specializations");
+    let fn_specs = monomorphize_functions(&mut ctxt).map_err(|_| "Error determining concrete specializations")?;
 
     print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = generate::generate_llvm_ir(&ctxt, inst.into_iter().collect());
+    let llvm_ir = generate::generate_llvm_ir(&mut ctxt, fn_specs.into_iter().collect());
 
     if let Some(llvm_ir_path) = output_paths.llvm_ir {
         print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -54,9 +54,9 @@ pub fn compile(
     Ok(())
 }
 
-fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::InstantiatedFn>, ()> {
+fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecialization>, ()> {
     let mut open = VecDeque::new();
-    open.push_back(fns::InstantiatedFn {
+    open.push_back(fns::FnSpecialization {
         fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
         gen_args: Vec::new(),
     });
@@ -68,23 +68,25 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::Instanti
             continue;
         }
 
-        let current_sig = ctxt.fns.get_sig(&current.fn_).unwrap();
-        let substitutions = current_sig.build_substitutions(&current.gen_args);
+        let subst = ctxt.fns.get_substitutions_for_specialization(&current);
 
-        let inst_fns = ctxt.fns.get_instantiated_fns(&current.fn_).iter().map(|inst_fn| {
-            let new_gen_args = inst_fn
-                .gen_args
+        let fn_specs =
+            ctxt.fns
+                .get_called_specializations(&current.fn_)
                 .iter()
-                .map(|ty| ctxt.tys.substitute_gen_vars(ty, &substitutions))
-                .collect();
+                .map(|fns::FnSpecialization { fn_, gen_args }| {
+                    let new_gen_args = gen_args
+                        .iter()
+                        .map(|ty| ctxt.tys.substitute_gen_vars(ty, &subst))
+                        .collect();
 
-            fns::InstantiatedFn {
-                fn_: inst_fn.fn_,
-                gen_args: new_gen_args,
-            }
-        });
+                    fns::FnSpecialization {
+                        fn_: *fn_,
+                        gen_args: new_gen_args,
+                    }
+                });
 
-        open.extend(inst_fns);
+        open.extend(fn_specs);
         closed.insert(current);
     }
 

@@ -238,8 +238,8 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match op_def {
             Some(operand) => match operand {
-                Fn(inst_fn) => {
-                    let fn_name = self.ctxt.get_inst_fn_name(inst_fn);
+                Fn(fn_spec) => {
+                    let fn_name = self.ctxt.get_fn_spec_name(fn_spec);
                     write!(self.writer, "fn {}", fn_name)
                 }
                 Const(constant) => match constant {

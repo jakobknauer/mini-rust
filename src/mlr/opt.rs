@@ -25,7 +25,7 @@ fn collect_types_in_mlr_mut(mlr: &mut mlr::Mlr) -> impl Iterator<Item = &mut ty:
             mlr.ops
                 .values_mut()
                 .filter_map(|op_def| match op_def {
-                    mlr::OpDef::Fn(fns::InstantiatedFn { gen_args, .. }) => Some(gen_args),
+                    mlr::OpDef::Fn(fns::FnSpecialization { gen_args, .. }) => Some(gen_args),
                     _ => None,
                 })
                 .flatten(),
