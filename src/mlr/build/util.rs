@@ -235,9 +235,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_gen_fn_op(&mut self, fn_: fns::Fn, gen_args: Vec<ty::Ty>) -> Result<mlr::Op> {
-        self.ctxt
-            .fns
-            .specialize_fn(&self.target_fn, &fn_, gen_args.clone());
+        self.ctxt.fns.specialize_fn(&self.target_fn, &fn_, gen_args.clone());
         let op = mlr::OpDef::Fn(fns::FnSpecialization { fn_, gen_args });
         self.insert_op(op)
     }
