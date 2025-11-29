@@ -77,7 +77,7 @@ pub enum Const {
     Unit,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct If {
     pub cond: Op,
     pub then: Stmt,

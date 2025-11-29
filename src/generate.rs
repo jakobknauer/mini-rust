@@ -68,17 +68,17 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
             return self.types.get(ty).cloned();
         }
 
-        let type_ = self.mr_ctxt.tys.get_ty_def(ty)?.clone();
+        let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
 
-        let inkwell_type = match type_ {
-            Named(name, named_type) => match named_type {
-                Primitve(primitive_type) => match primitive_type {
+        let inkwell_type = match *type_ {
+            Named(ref name, ref named_type) => match *named_type {
+                Primitve(ref primitive_type) => match primitive_type {
                     Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                     Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                     Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 },
-                Struct(struct_) => self.define_struct(&name, ty, &struct_),
-                Enum(enum_) => self.define_enum(&name, &enum_),
+                Struct(struct_) => self.define_struct(&name.clone(), ty, &struct_),
+                Enum(enum_) => self.define_enum(&name.clone(), &enum_),
             },
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
