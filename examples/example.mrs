@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    let f = select::<fn(i32) -> i32>(true, fac, identity::<i32>);    
+    let f = select::<fn(i32) -> i32>(true, fac, identity::<i32>);
     let b = concat::<i32, Point, bool>(diag_point, is_origin, f(3));
     noop::<&i32>();
     if b { 1 } else { 2 }

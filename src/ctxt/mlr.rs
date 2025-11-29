@@ -135,10 +135,6 @@ impl Mlr {
         op
     }
 
-    pub fn insert_loc(&mut self) -> Loc {
-        self.get_next_loc()
-    }
-
     pub fn insert_typed_loc(&mut self, ty: Ty) -> Loc {
         let loc = self.get_next_loc();
         self.loc_tys.insert(loc, ty);
@@ -242,10 +238,6 @@ impl Mlr {
                     })
                     .flatten(),
             )
-    }
-
-    pub fn set_loc_ty(&mut self, loc: Loc, ty: Ty) {
-        self.loc_tys.insert(loc, ty);
     }
 
     pub fn set_val_ty(&mut self, val: Val, ty: Ty) {

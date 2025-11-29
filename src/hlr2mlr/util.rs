@@ -67,15 +67,15 @@ impl<'a> super::Hlr2Mlr<'a> {
         self.insert_stmt(stmt)
     }
 
-    pub fn insert_fresh_alloc(&mut self) -> Result<mlr::Loc> {
+    pub fn insert_fresh_alloc(&mut self) -> Result<mlr::Place> {
         let undef = self.ctxt.tys.get_undef_ty();
         self.insert_alloc_with_ty(undef)
     }
 
-    pub fn insert_alloc_with_ty(&mut self, ty: ty::Ty) -> Result<mlr::Loc> {
+    pub fn insert_alloc_with_ty(&mut self, ty: ty::Ty) -> Result<mlr::Place> {
         let loc = self.ctxt.mlr.insert_typed_loc(ty);
         self.insert_alloc_stmt(loc)?;
-        Ok(loc)
+        self.insert_loc_place(loc)
     }
 
     pub fn insert_break_stmt(&mut self) -> Result<mlr::Stmt> {
@@ -195,11 +195,6 @@ impl<'a> super::Hlr2Mlr<'a> {
     pub fn insert_copy_op(&mut self, place: mlr::Place) -> Result<mlr::Op> {
         let op = mlr::OpDef::Copy(place);
         self.insert_op(op)
-    }
-
-    pub fn insert_copy_loc_op(&mut self, loc: mlr::Loc) -> Result<mlr::Op> {
-        let place = self.insert_loc_place(loc)?;
-        self.insert_copy_op(place)
     }
 
     /// TODO move resolution functionality to an impl block in another submodule,

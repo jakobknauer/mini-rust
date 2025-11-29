@@ -174,8 +174,8 @@ impl<'a> Hlr2Mlr<'a> {
                 self.insert_copy_op(place)
             }
             _ => {
-                let val_loc = assign_to_new_loc!(self, self.lower_to_val(expr)?);
-                self.insert_copy_loc_op(val_loc)
+                let val_place = assign_to_fresh_alloc!(self, self.lower_to_val(expr)?);
+                self.insert_copy_op(val_place)
             }
         }
     }
@@ -257,11 +257,11 @@ impl<'a> Hlr2Mlr<'a> {
     ) -> Result<mlr::Val> {
         let cond = self.lower_to_op(condition)?;
 
-        let result_loc = self.insert_fresh_alloc()?;
+        let result_place = self.insert_fresh_alloc()?;
 
         self.start_new_block();
         let then_result = self.build_block(then_block)?;
-        self.insert_assign_to_loc_stmt(result_loc, then_result)?;
+        self.insert_assign_stmt(result_place, then_result)?;
         let then_block = self.release_current_block();
 
         self.start_new_block();
@@ -272,11 +272,11 @@ impl<'a> Hlr2Mlr<'a> {
                 self.insert_use_val(unit)
             }
         }?;
-        self.insert_assign_to_loc_stmt(result_loc, else_result)?;
+        self.insert_assign_stmt(result_place, else_result)?;
         let else_block = self.release_current_block();
 
         self.insert_if_stmt(cond, then_block, else_block)?;
-        let result_op = self.insert_copy_loc_op(result_loc)?;
+        let result_op = self.insert_copy_op(result_place)?;
         self.insert_use_val(result_op)
     }
 
@@ -304,8 +304,7 @@ impl<'a> Hlr2Mlr<'a> {
     }
 
     fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expr)]) -> Result<mlr::Val> {
-        let struct_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
-        let struct_val_place = self.insert_loc_place(struct_val_loc)?;
+        let struct_val_place = assign_to_fresh_alloc!(self, self.insert_empty_val(*ty)?);
         self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
         self.insert_use_place_val(struct_val_place)
     }
@@ -317,8 +316,7 @@ impl<'a> Hlr2Mlr<'a> {
         fields: &[(String, hlr::Expr)],
     ) -> Result<mlr::Val> {
         // Create empty enum value
-        let enum_val_loc = assign_to_new_loc!(self, self.insert_empty_val(*ty)?);
-        let base_place = self.insert_loc_place(enum_val_loc)?;
+        let base_place = assign_to_fresh_alloc!(self, self.insert_empty_val(*ty)?);
 
         // Fill discriminant
         let discriminant_place = self.insert_enum_discriminant_place(base_place)?;
@@ -341,8 +339,7 @@ impl<'a> Hlr2Mlr<'a> {
 
     fn build_match_expr(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
         let scrutinee = self.lower_to_op(scrutinee)?;
-        let scrutinee_loc = assign_to_new_loc!(self, self.insert_use_val(scrutinee)?);
-        let scrutinee_place = self.insert_loc_place(scrutinee_loc)?;
+        let scrutinee_place = assign_to_fresh_alloc!(self, self.insert_use_val(scrutinee)?);
 
         let discriminant_place = self.insert_enum_discriminant_place(scrutinee_place)?;
         let discriminant = self.insert_copy_op(discriminant_place)?;
@@ -354,7 +351,7 @@ impl<'a> Hlr2Mlr<'a> {
             self.insert_fn_op(eq_fn)?
         };
 
-        let scrutinee_ty = self.ctxt.mlr.get_loc_ty(&scrutinee_loc);
+        let scrutinee_ty = self.ctxt.mlr.get_place_ty(&scrutinee_place);
         let enum_def = self
             .ctxt
             .tys
@@ -366,7 +363,7 @@ impl<'a> Hlr2Mlr<'a> {
         let result_loc = self.insert_fresh_alloc()?;
         self.build_match_arms(arms, &arm_indices, eq_fn, discriminant, scrutinee_place, result_loc)?;
 
-        let result_op = self.insert_copy_loc_op(result_loc)?;
+        let result_op = self.insert_copy_op(result_loc)?;
         self.insert_use_val(result_op)
     }
 
@@ -387,13 +384,12 @@ impl<'a> Hlr2Mlr<'a> {
     }
 
     fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> Result<()> {
-        let loc = match ty_annot {
-            Some(annot) => {
-                let annot_ty = self.resolve_hlr_ty_annot(annot)?;
-                self.insert_alloc_with_ty(annot_ty)?
-            }
-            None => self.insert_fresh_alloc()?,
+        let annot_ty = match ty_annot {
+            Some(ty_annot) => self.resolve_hlr_ty_annot(ty_annot)?,
+            None => self.ctxt.tys.get_undef_ty(),
         };
+        let loc = self.ctxt.mlr.insert_typed_loc(annot_ty);
+        self.insert_alloc_stmt(loc)?;
 
         self.start_new_block();
 
@@ -408,7 +404,7 @@ impl<'a> Hlr2Mlr<'a> {
 
     fn build_expr_stmt(&mut self, expr: &hlr::Expr) -> Result<()> {
         self.start_new_block();
-        let _ = assign_to_new_loc!(self, self.lower_to_val(expr)?);
+        let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr)?);
         self.end_and_insert_current_block();
         Ok(())
     }
@@ -478,7 +474,7 @@ impl<'a> Hlr2Mlr<'a> {
         eq_fn: mlr::Op,
         discriminant: mlr::Op,
         scrutinee_place: mlr::Place,
-        result_loc: mlr::Loc,
+        result_place: mlr::Place,
     ) -> Result<()> {
         if arms.is_empty() {
             panic!("Match expressions must have at least one arm.");
@@ -493,7 +489,7 @@ impl<'a> Hlr2Mlr<'a> {
                 &variant_index,
                 &scrutinee_place,
             )?;
-            self.insert_assign_to_loc_stmt(result_loc, arm_result)?;
+            self.insert_assign_stmt(result_place, arm_result)?;
             return Ok(());
         } else {
             let first_arm = &arms[0];
@@ -508,7 +504,7 @@ impl<'a> Hlr2Mlr<'a> {
                 &first_variant_index,
                 &scrutinee_place,
             )?;
-            self.insert_assign_to_loc_stmt(result_loc, first_arm_result)?;
+            self.insert_assign_stmt(result_place, first_arm_result)?;
             let then_block = self.release_current_block();
 
             self.start_new_block();
@@ -518,7 +514,7 @@ impl<'a> Hlr2Mlr<'a> {
                 eq_fn,
                 discriminant,
                 scrutinee_place,
-                result_loc,
+                result_place,
             )?;
             let else_block = self.release_current_block();
 

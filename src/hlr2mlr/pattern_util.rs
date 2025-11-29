@@ -1,7 +1,7 @@
 use crate::{
     ctxt::{mlr, ty},
     hlr,
-    hlr2mlr::{Hlr2MlrErr, Result, TyErr, macros::assign_to_new_loc},
+    hlr2mlr::{Hlr2MlrErr, Result, TyErr, macros::assign_to_fresh_alloc},
 };
 
 impl<'a> super::Hlr2Mlr<'a> {
@@ -27,8 +27,9 @@ impl<'a> super::Hlr2Mlr<'a> {
         discriminant: &mlr::Op,
     ) -> Result<mlr::Op> {
         let variant_index = self.insert_int_op(*variant_index as i64)?;
-        let condition_loc = assign_to_new_loc!(self, self.insert_call_val(*eq_fn, vec![*discriminant, variant_index])?);
-        self.insert_copy_loc_op(condition_loc)
+        let condition_place =
+            assign_to_fresh_alloc!(self, self.insert_call_val(*eq_fn, vec![*discriminant, variant_index])?);
+        self.insert_copy_op(condition_place)
     }
 
     pub fn build_arm_block(
@@ -73,7 +74,8 @@ impl<'a> super::Hlr2Mlr<'a> {
         for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
         {
             let field_place = self.insert_field_access_place(variant_place, field_index)?;
-            let assign_loc = assign_to_new_loc!(self, self.insert_use_place_val(field_place)?);
+            let field_ty = self.ctxt.mlr.get_place_ty(&field_place);
+            let assign_loc = self.ctxt.mlr.insert_typed_loc(field_ty);
             self.add_to_scope(binding_name, assign_loc);
         }
 
