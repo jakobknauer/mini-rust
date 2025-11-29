@@ -23,10 +23,10 @@ impl<'a> Typechecker<'a> {
     pub fn infer_val_ty(&mut self, val: Val) -> MlrBuilderResult<ty::Ty> {
         use ValDef::*;
 
-        let val_def = self.mlr.get_val_def(&val).clone();
+        let val_def = self.mlr.get_val_def(&val);
 
-        let ty = match val_def {
-            Call { callable, args } => self.infer_ty_of_call(&callable, &args),
+        let ty = match *val_def {
+            Call { callable, ref args } => self.infer_ty_of_call(&callable, &args.clone()),
             Empty { ty } => Ok(ty),
             Use(op) => Ok(self.mlr.get_op_ty(&op)),
             AddrOf(place) => self.infer_ty_of_addr_of_place(&place),
@@ -56,11 +56,11 @@ impl<'a> Typechecker<'a> {
     pub fn infer_op_ty(&mut self, op: Op) -> MlrBuilderResult<ty::Ty> {
         use OpDef::*;
 
-        let op_def = self.mlr.get_op_def(&op).clone();
+        let op_def = self.mlr.get_op_def(&op);
 
-        let ty = match op_def {
-            Fn(fn_spec) => self.infer_ty_of_fn(&fn_spec),
-            Const(constant) => self.infer_ty_of_constant(&constant),
+        let ty = match *op_def {
+            Fn(ref fn_spec) => self.infer_ty_of_fn(&fn_spec.clone()),
+            Const(ref constant) => self.infer_ty_of_constant(constant),
             Copy(place) => self.infer_place_ty(place),
         }?;
 
@@ -82,13 +82,9 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_call(&mut self, callable: &Op, args: &[Op]) -> MlrBuilderResult<ty::Ty> {
         let ty = self.mlr.get_op_ty(callable);
-        let callable_ty_def = self
-            .tys
-            .get_ty_def(&ty)
-            .expect("type of callable should be registered")
-            .clone();
+        let callable_ty_def = self.tys.get_ty_def(&ty).expect("type of callable should be registered");
 
-        let ty::TyDef::Fn { param_tys, return_ty } = callable_ty_def else {
+        let ty::TyDef::Fn { param_tys, return_ty } = callable_ty_def.clone() else {
             return TyErr::ValNotCallable.into();
         };
 
@@ -197,10 +193,9 @@ impl<'a> Typechecker<'a> {
         let ty_def = self
             .tys
             .get_ty_def(&ref_ty)
-            .expect("type of dereferenced op should be registered")
-            .clone();
+            .expect("type of dereferenced op should be registered");
 
-        match ty_def {
+        match *ty_def {
             ty::TyDef::Ref(referenced_ty) => Ok(referenced_ty),
             _ => TyErr::DereferenceOfNonRefTy { ty: ref_ty }.into(),
         }
