@@ -177,8 +177,8 @@ impl TyReg {
 
     pub fn get_mut_struct_def_by_name(&mut self, name: &str) -> Option<&mut StructDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
-        if let TyDef::Named(_, Named::Struct(struct_)) = ty_def {
-            self.structs.get_mut(&struct_.clone())
+        if let TyDef::Named(_, Named::Struct(struct_)) = *ty_def {
+            self.structs.get_mut(&struct_)
         } else {
             None
         }
@@ -186,8 +186,8 @@ impl TyReg {
 
     pub fn get_mut_enum_def_by_name(&mut self, name: &str) -> Option<&mut EnumDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
-        if let TyDef::Named(_, Named::Enum(enum_)) = ty_def {
-            self.enums.get_mut(&enum_.clone())
+        if let TyDef::Named(_, Named::Enum(enum_)) = *ty_def {
+            self.enums.get_mut(&enum_)
         } else {
             None
         }
@@ -225,8 +225,8 @@ impl TyReg {
             return Ok(());
         }
 
-        let def1 = self.tys.get(&ty1).expect("ty1 should be registered").clone();
-        let def2 = self.tys.get(&ty2).expect("ty2 should be registered").clone();
+        let def1 = self.tys.get(&ty1).expect("ty1 should be registered");
+        let def2 = self.tys.get(&ty2).expect("ty2 should be registered");
 
         match (def1, def2) {
             (None, _) => {
@@ -244,12 +244,12 @@ impl TyReg {
                 }
 
                 (
-                    Fn {
-                        param_tys: params1,
+                    &Fn {
+                        param_tys: ref params1,
                         return_ty: ret1,
                     },
-                    Fn {
-                        param_tys: params2,
+                    &Fn {
+                        param_tys: ref params2,
                         return_ty: ret2,
                     },
                 ) => {
@@ -257,13 +257,14 @@ impl TyReg {
                         return Err(UnificationError::FunctionParamCountMismatch);
                     }
 
-                    for (p1, p2) in params1.iter().zip(params2.iter()) {
-                        self.unify(p1, p2)?;
+                    let pairs = params1.clone().into_iter().zip(params2.clone());
+                    for (p1, p2) in pairs {
+                        self.unify(&p1, &p2)?;
                     }
                     self.unify(&ret1, &ret2)
                 }
 
-                (Ref(inner1), Ref(inner2)) => self.unify(&inner1, &inner2),
+                (&Ref(inner1), &Ref(inner2)) => self.unify(&inner1, &inner2),
 
                 (Named(_, n1), Named(_, n2)) if n1 == n2 => Ok(()),
 
@@ -314,18 +315,22 @@ impl TyReg {
             return ty;
         };
 
-        match ty_def.clone() {
-            TyDef::GenVar(name) => {
-                if let Some(replacement_ty) = substitutions.get(&name) {
+        match *ty_def {
+            TyDef::GenVar(ref name) => {
+                if let Some(replacement_ty) = substitutions.get(name) {
                     *replacement_ty
                 } else {
                     ty
                 }
             }
-            TyDef::Fn { param_tys, return_ty } => {
+            TyDef::Fn {
+                ref param_tys,
+                return_ty,
+            } => {
                 let new_param_tys = param_tys
-                    .iter()
-                    .map(|pt| self.substitute_gen_vars(pt, substitutions))
+                    .clone()
+                    .into_iter()
+                    .map(|pt| self.substitute_gen_vars(&pt, substitutions))
                     .collect::<Vec<_>>();
                 let new_return_ty = self.substitute_gen_vars(&return_ty, substitutions);
                 self.register_fn_ty(new_param_tys, new_return_ty)
