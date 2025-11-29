@@ -1,37 +1,29 @@
-use std::collections::{HashMap, VecDeque};
+pub mod opt;
 
 mod err;
 mod ops;
 mod pattern_util;
-mod ty_util;
 mod util;
-
 #[macro_use]
 mod macros;
 
+use std::collections::{HashMap, VecDeque};
+
 use crate::{
-    ctxt::{self, fns, ty},
-    hlr, mlr,
+    ctxt::{self, fns, mlr, ty},
+    hlr,
 };
 
-pub use err::{MlrBuilderError, Result, TyError};
+pub use err::{Hlr2MlrErr, Result, TyErr};
 
-pub struct MlrBuilder<'a> {
+pub struct Hlr2Mlr<'a> {
     input: &'a hlr::Fn,
 
     target_fn: fns::Fn,
     ctxt: &'a mut ctxt::Ctxt,
 
-    output: mlr::Mlr,
-
     scopes: VecDeque<Scope>,
     blocks: VecDeque<Vec<mlr::Stmt>>,
-
-    next_val: mlr::Val,
-    next_place: mlr::Place,
-    next_stmt: mlr::Stmt,
-    next_loc: mlr::Loc,
-    next_op: mlr::Op,
 }
 
 struct Scope {
@@ -44,23 +36,15 @@ impl Scope {
     }
 }
 
-impl<'a> MlrBuilder<'a> {
+impl<'a> Hlr2Mlr<'a> {
     pub fn new(input: &'a hlr::Fn, target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
             input,
             target_fn,
             ctxt,
 
-            output: mlr::Mlr::new(),
-
             scopes: VecDeque::new(),
             blocks: VecDeque::new(),
-
-            next_val: mlr::Val(0),
-            next_place: mlr::Place(0),
-            next_stmt: mlr::Stmt(0),
-            next_loc: mlr::Loc(0),
-            next_op: mlr::Op(0),
         }
     }
 
@@ -87,9 +71,7 @@ impl<'a> MlrBuilder<'a> {
     fn release_current_block(&mut self) -> mlr::Stmt {
         let stmts = self.blocks.pop_back().expect("self.blocks should never be empty");
         let block = mlr::StmtDef::Block(stmts);
-        let stmt = self.get_next_stmt();
-        self.output.stmts.insert(stmt, block);
-        stmt
+        self.ctxt.mlr.insert_stmt(block)
     }
 
     fn end_and_insert_current_block(&mut self) {
@@ -100,16 +82,14 @@ impl<'a> MlrBuilder<'a> {
             .push(block_stmt);
     }
 
-    pub fn build(mut self) -> Result<mlr::Mlr> {
-        let params = self.get_signature().params.clone();
-
+    pub fn build(mut self) -> Result<fns::FnMlr> {
         self.push_scope();
 
-        for fns::FnParam { name, ty } in params {
-            let loc = self.get_next_loc();
+        let mut param_locs = Vec::new();
+        for fns::FnParam { name, ty } in self.get_signature().params.clone() {
+            let loc = self.ctxt.mlr.insert_typed_loc(ty);
             self.add_to_scope(&name, loc);
-            self.output.loc_tys.insert(loc, ty);
-            self.output.param_locs.push(loc);
+            param_locs.push(loc);
         }
 
         self.start_new_block();
@@ -117,9 +97,9 @@ impl<'a> MlrBuilder<'a> {
         let return_val = self.build_block(&self.input.body)?;
         self.insert_return_stmt(return_val)?;
 
-        self.output.body = self.release_current_block();
+        let body = self.release_current_block();
 
-        Ok(self.output)
+        Ok(fns::FnMlr { body, param_locs })
     }
 
     /// Build an HLR block by inserting the statements into the current MLR block
@@ -178,7 +158,7 @@ impl<'a> MlrBuilder<'a> {
             Ident(name) => self.lower_ident_to_place(name),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
-            _ => Err(MlrBuilderError::NotAPlace),
+            _ => Err(Hlr2MlrErr::NotAPlace),
         }
     }
 
@@ -218,7 +198,7 @@ impl<'a> MlrBuilder<'a> {
             .ctxt
             .fns
             .get_fn_by_name(ident)
-            .ok_or_else(|| MlrBuilderError::UnresolvableSymbol {
+            .ok_or_else(|| Hlr2MlrErr::UnresolvableSymbol {
                 name: ident.to_string(),
             })?;
 
@@ -240,8 +220,8 @@ impl<'a> MlrBuilder<'a> {
         let right_op = self.lower_to_op(right)?;
 
         let op = {
-            let left_ty = self.get_op_ty(&left_op);
-            let right_ty = self.get_op_ty(&right_op);
+            let left_ty = self.ctxt.mlr.get_op_ty(&left_op);
+            let right_ty = self.ctxt.mlr.get_op_ty(&right_op);
             let fn_ = self.resolve_operator(operator, (left_ty, right_ty))?;
             self.insert_fn_op(fn_)?
         };
@@ -316,7 +296,7 @@ impl<'a> MlrBuilder<'a> {
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&ty, &variant_index, fields)
         } else {
-            TyError::UnresolvableTyName {
+            TyErr::UnresolvableTyName {
                 ty_name: struct_name.to_string(),
             }
             .into()
@@ -348,7 +328,7 @@ impl<'a> MlrBuilder<'a> {
 
         // Fill fields
         let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
-        let enum_def = self.get_enum_def(ty)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(ty).map_err(Hlr2MlrErr::TyErr)?;
         let variant_ty = enum_def
             .variants
             .get(*variant_index)
@@ -374,8 +354,12 @@ impl<'a> MlrBuilder<'a> {
             self.insert_fn_op(eq_fn)?
         };
 
-        let scrutinee_ty = self.get_loc_ty(&scrutinee_loc);
-        let enum_def = self.get_enum_def(&scrutinee_ty)?;
+        let scrutinee_ty = self.ctxt.mlr.get_loc_ty(&scrutinee_loc);
+        let enum_def = self
+            .ctxt
+            .tys
+            .get_enum_def_by_ty(&scrutinee_ty)
+            .map_err(Hlr2MlrErr::TyErr)?;
         let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
 
         // now build the match statement
@@ -452,7 +436,7 @@ impl<'a> MlrBuilder<'a> {
     fn lower_ident_to_place(&mut self, name: &str) -> Result<mlr::Place> {
         let loc = self
             .resolve_name_to_location(name)
-            .ok_or_else(|| MlrBuilderError::UnresolvableSymbol { name: name.to_string() })?;
+            .ok_or_else(|| Hlr2MlrErr::UnresolvableSymbol { name: name.to_string() })?;
 
         self.insert_loc_place(loc)
     }
@@ -463,14 +447,18 @@ impl<'a> MlrBuilder<'a> {
         // places).
         let base = self.lower_to_place(base)?;
 
-        let base_ty = self.get_place_ty(&base);
-        let struct_def = self.get_struct_def(&base_ty)?;
+        let base_ty = self.ctxt.mlr.get_place_ty(&base);
+        let struct_def = self
+            .ctxt
+            .tys
+            .get_struct_def_by_ty(&base_ty)
+            .map_err(Hlr2MlrErr::TyErr)?;
 
         let field_index = struct_def
             .fields
             .iter()
             .position(|struct_field| struct_field.name == field_name)
-            .ok_or(MlrBuilderError::TyError(TyError::NotAStructField {
+            .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAStructField {
                 ty: base_ty,
                 field_name: field_name.to_string(),
             }))?;
@@ -501,7 +489,7 @@ impl<'a> MlrBuilder<'a> {
             let variant_index = arm_indices[0];
             let arm_result = self.build_arm_block(
                 arm,
-                &self.get_place_ty(&scrutinee_place),
+                &self.ctxt.mlr.get_place_ty(&scrutinee_place),
                 &variant_index,
                 &scrutinee_place,
             )?;
@@ -516,7 +504,7 @@ impl<'a> MlrBuilder<'a> {
             self.start_new_block();
             let first_arm_result = self.build_arm_block(
                 first_arm,
-                &self.get_place_ty(&scrutinee_place),
+                &self.ctxt.mlr.get_place_ty(&scrutinee_place),
                 &first_variant_index,
                 &scrutinee_place,
             )?;

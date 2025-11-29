@@ -1,68 +1,16 @@
 use std::collections::HashSet;
 
 use crate::{
-    ctxt::{fns, ty},
+    ctxt::{fns, mlr, ty},
     hlr,
-    mlr::{
-        self,
-        build::{MlrBuilderError, Result, TyError},
-    },
+    hlr2mlr::{Hlr2MlrErr, Result, TyErr},
+    typechecker::Typechecker,
 };
 
-impl<'a> mlr::MlrBuilder<'a> {
-    pub fn get_next_val(&mut self) -> mlr::Val {
-        let val = self.next_val;
-        self.next_val.0 += 1;
-        val
-    }
-
-    pub fn get_next_stmt(&mut self) -> mlr::Stmt {
-        let stmt = self.next_stmt;
-        self.next_stmt.0 += 1;
-        stmt
-    }
-
-    pub fn get_next_loc(&mut self) -> mlr::Loc {
-        let loc = self.next_loc;
-        self.next_loc.0 += 1;
-        loc
-    }
-
-    pub fn get_next_place(&mut self) -> mlr::Place {
-        let place = self.next_place;
-        self.next_place.0 += 1;
-        place
-    }
-
-    pub fn get_next_op(&mut self) -> mlr::Op {
-        let op = self.next_op;
-        self.next_op.0 += 1;
-        op
-    }
-
-    pub fn get_loc_ty(&self, loc: &mlr::Loc) -> ty::Ty {
-        *self.output.loc_tys.get(loc).expect("type of loc should be known")
-    }
-
-    pub fn get_place_ty(&self, place: &mlr::Place) -> ty::Ty {
-        *self.output.place_tys.get(place).expect("type of place should be known")
-    }
-
-    pub fn get_val_ty(&self, val: &mlr::Val) -> ty::Ty {
-        *self.output.val_tys.get(val).expect("type of val should be known")
-    }
-
-    pub fn get_op_ty(&self, op: &mlr::Op) -> ty::Ty {
-        *self.output.op_tys.get(op).expect("type of op should be known")
-    }
-
+impl<'a> super::Hlr2Mlr<'a> {
     pub fn insert_val(&mut self, val_def: mlr::ValDef) -> Result<mlr::Val> {
-        let val = self.get_next_val();
-        self.output.vals.insert(val, val_def);
-
-        let ty = self.infer_val_ty(val)?;
-        self.output.val_tys.insert(val, ty);
-
+        let val = self.ctxt.mlr.insert_val(val_def);
+        Typechecker::new(self.ctxt).infer_val_ty(val)?;
         Ok(val)
     }
 
@@ -91,6 +39,15 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_val(val)
     }
 
+    pub fn insert_stmt(&mut self, stmt_def: mlr::StmtDef) -> Result<mlr::Stmt> {
+        let stmt = self.ctxt.mlr.insert_stmt(stmt_def);
+        self.blocks
+            .back_mut()
+            .expect("self.blocks should not be empty")
+            .push(stmt);
+        Ok(stmt)
+    }
+
     pub fn insert_if_stmt(&mut self, cond: mlr::Op, then_: mlr::Stmt, else_: mlr::Stmt) -> Result<mlr::Stmt> {
         let if_ = mlr::StmtDef::If(mlr::If {
             cond,
@@ -105,16 +62,6 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.insert_stmt(val)
     }
 
-    pub fn insert_stmt(&mut self, stmt_def: mlr::StmtDef) -> Result<mlr::Stmt> {
-        let stmt = self.get_next_stmt();
-        self.output.stmts.insert(stmt, stmt_def);
-        self.blocks
-            .back_mut()
-            .expect("self.blocks should not be empty")
-            .push(stmt);
-        Ok(stmt)
-    }
-
     pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc) -> Result<mlr::Stmt> {
         let stmt = mlr::StmtDef::Alloc { loc };
         self.insert_stmt(stmt)
@@ -126,9 +73,7 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_alloc_with_ty(&mut self, ty: ty::Ty) -> Result<mlr::Loc> {
-        let loc = self.get_next_loc();
-        self.output.loc_tys.insert(loc, ty);
-
+        let loc = self.ctxt.mlr.insert_typed_loc(ty);
         self.insert_alloc_stmt(loc)?;
         Ok(loc)
     }
@@ -139,18 +84,18 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::Val) -> Result<mlr::Stmt> {
-        let place_ty = self.get_place_ty(&place);
-        let value_ty = self.get_val_ty(&value);
+        let place_ty = self.ctxt.mlr.get_place_ty(&place);
+        let value_ty = self.ctxt.mlr.get_val_ty(&value);
 
         self.ctxt
             .tys
             .unify(&place_ty, &value_ty)
-            .map_err(|_| mlr::build::TyError::AssignStmtTyMismatch {
+            .map_err(|_| TyErr::AssignStmtTyMismatch {
                 place,
                 expected: place_ty,
                 actual: value_ty,
             })
-            .map_err(MlrBuilderError::TyError)?;
+            .map_err(Hlr2MlrErr::TyErr)?;
 
         let stmt = mlr::StmtDef::Assign { place, value };
         self.insert_stmt(stmt)
@@ -170,28 +115,24 @@ impl<'a> mlr::MlrBuilder<'a> {
             .expect("return stmt only valid in function")
             .return_ty;
 
-        let val_ty = self.get_val_ty(&value);
+        let val_ty = self.ctxt.mlr.get_val_ty(&value);
 
         self.ctxt
             .tys
             .unify(&return_ty, &val_ty)
-            .map_err(|_| mlr::build::TyError::ReturnTyMismatch {
+            .map_err(|_| TyErr::ReturnTyMismatch {
                 expected: return_ty,
                 actual: val_ty,
             })
-            .map_err(MlrBuilderError::TyError)?;
+            .map_err(Hlr2MlrErr::TyErr)?;
 
         let stmt = mlr::StmtDef::Return { value };
         self.insert_stmt(stmt)
     }
 
     pub fn insert_place(&mut self, place_def: mlr::PlaceDef) -> Result<mlr::Place> {
-        let place = self.get_next_place();
-        self.output.places.insert(place, place_def);
-
-        let ty = self.infer_place_ty(&place)?;
-        self.output.place_tys.insert(place, ty);
-
+        let place = self.ctxt.mlr.insert_place(place_def);
+        Typechecker::new(self.ctxt).infer_place_ty(place)?;
         Ok(place)
     }
 
@@ -221,12 +162,8 @@ impl<'a> mlr::MlrBuilder<'a> {
     }
 
     pub fn insert_op(&mut self, op_def: mlr::OpDef) -> Result<mlr::Op> {
-        let op = self.get_next_op();
-        self.output.ops.insert(op, op_def);
-
-        let ty = self.infer_op_ty(op)?;
-        self.output.op_tys.insert(op, ty);
-
+        let op = self.ctxt.mlr.insert_op(op_def);
+        Typechecker::new(self.ctxt).infer_op_ty(op)?;
         Ok(op)
     }
 
@@ -274,7 +211,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         } else if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
             self.insert_fn_op(fn_)
         } else {
-            Err(MlrBuilderError::UnresolvableSymbol { name: name.to_string() })
+            Err(Hlr2MlrErr::UnresolvableSymbol { name: name.to_string() })
         }
     }
 
@@ -325,14 +262,14 @@ impl<'a> mlr::MlrBuilder<'a> {
     ) -> Result<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
 
-        let struct_def = self.get_struct_def(ty)?;
+        let struct_def = self.ctxt.tys.get_struct_def_by_ty(ty).map_err(Hlr2MlrErr::TyErr)?;
 
         let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
-            return TyError::InitializerMissingFields {
+            return TyErr::InitializerMissingFields {
                 ty: *ty,
                 missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
             }
@@ -341,7 +278,7 @@ impl<'a> mlr::MlrBuilder<'a> {
 
         let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
         if !extra_fields.is_empty() {
-            return TyError::InitializerExtraFields {
+            return TyErr::InitializerExtraFields {
                 ty: *ty,
                 extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
             }
@@ -355,7 +292,7 @@ impl<'a> mlr::MlrBuilder<'a> {
                     .fields
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(MlrBuilderError::TyError(TyError::NotAStructField {
+                    .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAStructField {
                         ty: *ty,
                         field_name: field_name.to_string(),
                     }))
@@ -363,38 +300,6 @@ impl<'a> mlr::MlrBuilder<'a> {
             .collect::<Result<_>>()?;
 
         Ok(field_indices)
-    }
-
-    pub fn get_struct_def(&self, ty: &ty::Ty) -> Result<&ty::StructDef> {
-        let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
-
-        let &ty::TyDef::Named(_, ty::Named::Struct(struct_)) = ty_def else {
-            return TyError::NotAStruct { ty: *ty }.into();
-        };
-
-        let struct_def = self
-            .ctxt
-            .tys
-            .get_struct_def(&struct_)
-            .expect("struct definition should be registered");
-
-        Ok(struct_def)
-    }
-
-    pub fn get_enum_def(&self, ty: &ty::Ty) -> Result<&ty::EnumDef> {
-        let ty_def = self.ctxt.tys.get_ty_def(ty).expect("type should be registered");
-
-        let &ty::TyDef::Named(_, ty::Named::Enum(enum_)) = ty_def else {
-            return TyError::NotAnEnum { ty: *ty }.into();
-        };
-
-        let enum_def = self
-            .ctxt
-            .tys
-            .get_enum_def(&enum_)
-            .expect("enum definition should be registered");
-
-        Ok(enum_def)
     }
 
     pub fn get_signature(&self) -> &fns::FnSig {
@@ -410,7 +315,7 @@ impl<'a> mlr::MlrBuilder<'a> {
             .ctxt
             .tys
             .get_ty_by_hlr_annot(annot, &gen_params)
-            .ok_or(MlrBuilderError::TyError(TyError::UnresolvableTyAnnot))?;
+            .ok_or(Hlr2MlrErr::TyErr(TyErr::UnresolvableTyAnnot))?;
         Ok(ty)
     }
 }

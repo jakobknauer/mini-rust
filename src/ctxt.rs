@@ -1,14 +1,18 @@
 mod fn_reg;
 pub mod fns;
+pub mod mlr;
 pub mod ty;
 mod ty_reg;
 
 pub use fn_reg::FnReg;
 pub use ty_reg::TyReg;
 
+use mlr::*;
+
 pub struct Ctxt {
     pub tys: TyReg,
     pub fns: FnReg,
+    pub mlr: Mlr,
 }
 
 impl Ctxt {
@@ -16,6 +20,7 @@ impl Ctxt {
         Self {
             tys: TyReg::new(),
             fns: FnReg::new(),
+            mlr: Mlr::new(),
         }
     }
 

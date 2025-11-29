@@ -1,10 +1,7 @@
 use crate::{
     ctxt::{fns, ty},
     hlr,
-    mlr::{
-        self,
-        build::{MlrBuilderError, Result, TyError},
-    },
+    hlr2mlr::{self, Hlr2MlrErr, Result},
 };
 
 macro_rules! op_match {
@@ -23,7 +20,7 @@ macro_rules! op_match {
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
             _ => {
-                return TyError::OperatorResolutionFailed {
+                return crate::hlr2mlr::TyErr::OperatorResolutionFailed {
                     operator: format!("{{$operator:?}}"),
                     operand_tys: ($left, $right),
                 }
@@ -33,9 +30,9 @@ macro_rules! op_match {
     }};
 }
 
-impl<'a> mlr::MlrBuilder<'a> {
+impl<'a> hlr2mlr::Hlr2Mlr<'a> {
     pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (ty::Ty, ty::Ty)) -> Result<fns::Fn> {
-        use MlrBuilderError::UnknownPrimitiveTy;
+        use Hlr2MlrErr::UnknownPrimitiveTy;
         use hlr::BinaryOperator::*;
         use ty::Primitive::*;
 
@@ -71,7 +68,7 @@ impl<'a> mlr::MlrBuilder<'a> {
         self.ctxt
             .fns
             .get_fn_by_name(fn_name)
-            .ok_or(MlrBuilderError::MissingOperatorImpl {
+            .ok_or(Hlr2MlrErr::MissingOperatorImpl {
                 name: fn_name.to_string(),
             })
     }

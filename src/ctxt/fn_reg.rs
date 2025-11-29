@@ -1,18 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{
-    ctxt::{
-        fns::{Fn, FnSig, FnSpecialization},
-        ty::Ty,
-    },
-    mlr::Mlr,
+use crate::ctxt::{
+    fns::{Fn, FnMlr, FnSig, FnSpecialization},
+    ty::Ty,
 };
 
 pub struct FnReg {
     fn_names: BTreeMap<String, Fn>,
     sigs: HashMap<Fn, FnSig>,
     next_fn: Fn,
-    defs: HashMap<Fn, Mlr>,
+    defs: HashMap<Fn, FnMlr>,
 
     called_specializations: HashMap<Fn, Vec<FnSpecialization>>,
 }
@@ -51,7 +48,7 @@ impl FnReg {
         self.fn_names.get(name).cloned()
     }
 
-    pub fn add_fn_def(&mut self, name: &str, mlr: Mlr) {
+    pub fn add_fn_def(&mut self, name: &str, mlr: FnMlr) {
         if let Some(&fn_) = self.fn_names.get(name) {
             self.defs.insert(fn_, mlr);
         }
@@ -61,7 +58,7 @@ impl FnReg {
         self.defs.contains_key(fn_)
     }
 
-    pub fn get_fn_def(&self, fn_: &Fn) -> Option<&Mlr> {
+    pub fn get_fn_def(&self, fn_: &Fn) -> Option<&FnMlr> {
         self.defs.get(fn_)
     }
 

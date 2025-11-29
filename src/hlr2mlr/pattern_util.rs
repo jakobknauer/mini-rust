@@ -1,13 +1,10 @@
 use crate::{
-    ctxt::ty,
+    ctxt::{mlr, ty},
     hlr,
-    mlr::{
-        self,
-        build::{MlrBuilderError, Result, TyError, macros::assign_to_new_loc},
-    },
+    hlr2mlr::{Hlr2MlrErr, Result, TyErr, macros::assign_to_new_loc},
 };
 
-impl<'a> super::MlrBuilder<'a> {
+impl<'a> super::Hlr2Mlr<'a> {
     pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &ty::EnumDef, ty: &ty::Ty) -> Result<Vec<usize>> {
         arms.iter()
             .map(|arm| {
@@ -15,7 +12,7 @@ impl<'a> super::MlrBuilder<'a> {
                     .variants
                     .iter()
                     .position(|variant| variant.name == arm.pattern.variant)
-                    .ok_or(MlrBuilderError::TyError(TyError::NotAnEnumVariant {
+                    .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAnEnumVariant {
                         ty: *ty,
                         variant_name: arm.pattern.variant.clone(),
                     }))
@@ -43,12 +40,16 @@ impl<'a> super::MlrBuilder<'a> {
     ) -> Result<mlr::Val> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
-        let enum_def = self.get_enum_def(enum_ty)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(enum_ty).map_err(Hlr2MlrErr::TyErr)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
             .expect("variant index should be valid");
-        let enum_variant_struct_def = self.get_struct_def(&enum_variant.ty)?;
+        let enum_variant_struct_def = self
+            .ctxt
+            .tys
+            .get_struct_def_by_ty(&enum_variant.ty)
+            .map_err(Hlr2MlrErr::TyErr)?;
 
         let field_indices: Vec<usize> = arm
             .pattern
@@ -59,7 +60,7 @@ impl<'a> super::MlrBuilder<'a> {
                     .fields
                     .iter()
                     .position(|f| f.name == *field_name)
-                    .ok_or(MlrBuilderError::TyError(TyError::NotAStructField {
+                    .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAStructField {
                         ty: enum_variant.ty,
                         field_name: field_name.clone(),
                     }))

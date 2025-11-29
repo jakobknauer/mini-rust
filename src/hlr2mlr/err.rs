@@ -1,19 +1,16 @@
-use crate::{
-    ctxt::{fns::Fn, ty::Ty},
-    mlr,
-};
+use crate::ctxt::{fns::Fn, mlr, ty::Ty};
 
 #[derive(Debug)]
-pub enum MlrBuilderError {
+pub enum Hlr2MlrErr {
     MissingOperatorImpl { name: String },
     UnresolvableSymbol { name: String },
     UnknownPrimitiveTy,
     NotAPlace,
-    TyError(TyError),
+    TyErr(TyErr),
 }
 
 #[derive(Debug)]
-pub enum TyError {
+pub enum TyErr {
     AssignStmtTyMismatch {
         place: mlr::Place,
         expected: Ty,
@@ -80,16 +77,16 @@ pub enum TyError {
     },
 }
 
-pub type Result<T> = std::result::Result<T, MlrBuilderError>;
+pub type Result<T> = std::result::Result<T, Hlr2MlrErr>;
 
-impl<T> From<MlrBuilderError> for Result<T> {
-    fn from(val: MlrBuilderError) -> Self {
+impl<T> From<Hlr2MlrErr> for Result<T> {
+    fn from(val: Hlr2MlrErr) -> Self {
         Err(val)
     }
 }
 
-impl<T> From<TyError> for Result<T> {
-    fn from(val: TyError) -> Self {
-        MlrBuilderError::TyError(val).into()
+impl<T> From<TyErr> for Result<T> {
+    fn from(val: TyErr) -> Self {
+        Hlr2MlrErr::TyErr(val).into()
     }
 }

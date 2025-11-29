@@ -8,6 +8,7 @@ use std::{
 use crate::{
     ctxt::{fns::GenParam, ty::*},
     hlr,
+    hlr2mlr::TyErr,
 };
 
 pub struct TyReg {
@@ -335,5 +336,31 @@ impl TyReg {
             }
             _ => ty,
         }
+    }
+
+    pub fn get_struct_def_by_ty(&self, ty: &Ty) -> Result<&StructDef, TyErr> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+
+        let &TyDef::Named(_, Named::Struct(struct_)) = ty_def else {
+            return Err(TyErr::NotAStruct { ty: *ty });
+        };
+
+        let struct_def = self
+            .get_struct_def(&struct_)
+            .expect("struct definition should be registered");
+
+        Ok(struct_def)
+    }
+
+    pub fn get_enum_def_by_ty(&self, ty: &Ty) -> Result<&EnumDef, TyErr> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+
+        let &TyDef::Named(_, Named::Enum(enum_)) = ty_def else {
+            return Err(TyErr::NotAnEnum { ty: *ty });
+        };
+
+        let enum_def = self.get_enum_def(&enum_).expect("enum definition should be registered");
+
+        Ok(enum_def)
     }
 }

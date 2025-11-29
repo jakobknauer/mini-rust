@@ -1,10 +1,8 @@
 use std::io::Write;
 
-use crate::{
-    ctxt::{
-        self,
-        fns::{Fn, FnSig},
-    },
+use crate::ctxt::{
+    self,
+    fns::{Fn, FnMlr, FnSig},
     mlr,
 };
 
@@ -22,7 +20,7 @@ pub fn print_mlr<W: Write>(fn_: &Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Resul
 
 struct MlrPrinter<'a, W: Write> {
     fn_: Fn,
-    mlr: Option<&'a mlr::Mlr>,
+    mlr: Option<&'a FnMlr>,
     signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
     indent_level: usize,
@@ -94,18 +92,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_stmt(&mut self, stmt: &mlr::Stmt) -> Result<(), std::io::Error> {
         use mlr::StmtDef::*;
 
-        let stmt_def = &self.mlr.expect("self.mlr should not be empty").stmts.get(stmt);
+        let stmt_def = &self.ctxt.mlr.try_get_stmt_def(*stmt);
 
         match stmt_def {
             Some(stmt) => match stmt {
                 Alloc { loc } => {
-                    let loc_ty = self
-                        .mlr
-                        .expect("self.mlr should not be empty")
-                        .loc_tys
-                        .get(loc)
-                        .expect("type of place should be known");
-                    let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
+                    let loc_ty = self.ctxt.mlr.get_loc_ty(loc);
+                    let ty_name = self.ctxt.tys.get_string_rep(&loc_ty);
                     self.indent()?;
                     writeln!(self.writer, "alloc {}: {};", loc, ty_name)
                 }
@@ -157,7 +150,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_val(&mut self, val: &mlr::Val) -> Result<(), std::io::Error> {
         use mlr::ValDef::*;
 
-        let val_def = &self.mlr.expect("self.mlr should not be empty").vals.get(val);
+        let val_def = &self.ctxt.mlr.try_get_val_def(val);
 
         match val_def {
             Some(val) => match val {
@@ -194,7 +187,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_place(&mut self, place: &mlr::Place) -> Result<(), std::io::Error> {
         use mlr::PlaceDef::*;
 
-        let place_def = &self.mlr.expect("self.mlr should not be empty").places.get(place);
+        let place_def = &self.ctxt.mlr.try_get_place_def(place);
 
         match place_def {
             Some(place) => match place {
@@ -209,13 +202,8 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, ")")
                 }
                 ProjectToVariant { base, variant_index } => {
-                    let ty = self
-                        .mlr
-                        .expect("self.mlr should not be empty")
-                        .place_tys
-                        .get(base)
-                        .expect("type of base place should be known");
-                    let enum_name = self.ctxt.tys.get_string_rep(ty);
+                    let ty = self.ctxt.mlr.get_place_ty(base);
+                    let enum_name = self.ctxt.tys.get_string_rep(&ty);
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
                     write!(self.writer, " as {}::{})", enum_name, variant_index)
@@ -234,7 +222,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         use mlr::Const::*;
         use mlr::OpDef::*;
 
-        let op_def = &self.mlr.expect("self.mlr should not be empty").ops.get(op);
+        let op_def = &self.ctxt.mlr.try_get_op_def(op);
 
         match op_def {
             Some(operand) => match operand {

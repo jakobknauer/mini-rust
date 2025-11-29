@@ -2,5 +2,6 @@ mod ctxt;
 pub mod driver;
 mod generate;
 mod hlr;
-mod mlr;
+mod hlr2mlr;
+mod typechecker;
 mod util;

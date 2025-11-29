@@ -1,4 +1,4 @@
-use crate::{ctxt, hlr, mlr};
+use crate::{ctxt, hlr, hlr2mlr};
 
 pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     use hlr::ParserError::*;
@@ -12,11 +12,11 @@ pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     }
 }
 
-pub fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &ctxt::Ctxt) -> String {
-    use mlr::MlrBuilderError::*;
+pub fn print_mlr_builder_error(fn_name: &str, err: hlr2mlr::Hlr2MlrErr, ctxt: &ctxt::Ctxt) -> String {
+    use hlr2mlr::Hlr2MlrErr::*;
 
     match err {
-        TyError(err) => print_ty_error(fn_name, err, ctxt),
+        TyErr(err) => print_ty_error(fn_name, err, ctxt),
         MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
         UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
         UnknownPrimitiveTy => "Unknown primitive type".to_string(),
@@ -26,8 +26,8 @@ pub fn print_mlr_builder_error(fn_name: &str, err: mlr::MlrBuilderError, ctxt: &
     }
 }
 
-fn print_ty_error(fn_name: &str, err: mlr::TyError, ctxt: &ctxt::Ctxt) -> String {
-    use mlr::TyError::*;
+fn print_ty_error(fn_name: &str, err: hlr2mlr::TyErr, ctxt: &ctxt::Ctxt) -> String {
+    use hlr2mlr::TyErr::*;
 
     let msg = match err {
         AssignStmtTyMismatch {
