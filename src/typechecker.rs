@@ -30,7 +30,6 @@ impl<'a> Typechecker<'a> {
 
         let ty = match *val_def {
             Call { callable, ref args } => self.infer_ty_of_call(&callable, &args.clone()),
-            Empty { ty } => Ok(ty),
             Use(op) => Ok(self.mlr.get_op_ty(&op)),
             AddrOf(place) => self.infer_ty_of_addr_of_place(&place),
         }?;

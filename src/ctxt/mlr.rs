@@ -45,7 +45,6 @@ pub enum StmtDef {
 #[derive(Debug, Clone)]
 pub enum ValDef {
     Call { callable: Op, args: Vec<Op> },
-    Empty { ty: Ty },
     Use(Op),
     AddrOf(Place),
 }
@@ -205,10 +204,6 @@ impl Mlr {
             .chain(self.val_tys.values_mut())
             .chain(self.place_tys.values_mut())
             .chain(self.op_tys.values_mut())
-            .chain(self.vals.iter_mut().filter_map(|val_def| match val_def {
-                ValDef::Empty { ty } => Some(ty),
-                _ => None,
-            }))
             .chain(
                 self.ops
                     .iter_mut()

@@ -170,10 +170,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     }
                     write!(self.writer, ")")
                 }
-                Empty { ty } => {
-                    let ty_name = self.ctxt.tys.get_string_rep(ty);
-                    write!(self.writer, "empty {}", ty_name)
-                }
                 AddrOf(place) => {
                     write!(self.writer, "AddrOf(")?;
                     self.print_place(place)?;

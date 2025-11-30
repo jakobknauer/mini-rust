@@ -21,11 +21,6 @@ impl<'a> super::H2M<'a> {
         self.insert_val(val)
     }
 
-    pub fn insert_empty_val(&mut self, ty: ty::Ty) -> H2MResult<mlr::Val> {
-        let val = mlr::ValDef::Empty { ty };
-        self.insert_val(val)
-    }
-
     pub fn insert_use_val(&mut self, op: mlr::Op) -> H2MResult<mlr::Val> {
         let val = mlr::ValDef::Use(op);
         self.insert_val(val)

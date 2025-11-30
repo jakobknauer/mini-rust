@@ -200,7 +200,6 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
         match *val {
             Use(place) => self.build_op(&place),
             Call { callable, ref args } => self.build_call(&callable, &args.clone()),
-            Empty { ty } => self.build_empty_val(&ty),
             AddrOf(place) => self.build_place(&place).map(|ptr| ptr.as_basic_value_enum()),
         }
     }
@@ -369,12 +368,6 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
 
         self.builder.position_at_end(after_loop);
         Ok(())
-    }
-
-    fn build_empty_val(&mut self, ty: &mr_ty::Ty) -> Result<BasicValueEnum<'iw>, FnGeneratorError> {
-        let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(FnGeneratorError)?;
-        let struct_value = iw_ty.const_zero(); // create a zero value because that's available for BasicValueEnum
-        Ok(struct_value)
     }
 
     fn get_ty_as_basic_type_enum(&mut self, ty: &mr_ty::Ty) -> Option<BasicTypeEnum<'iw>> {

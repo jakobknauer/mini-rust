@@ -320,7 +320,7 @@ impl<'a> H2M<'a> {
     }
 
     fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
-        let struct_val_place = assign_to_fresh_alloc!(self, self.insert_empty_val(*ty)?);
+        let struct_val_place = self.insert_alloc_with_ty(*ty)?;
         self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
         self.insert_use_place_val(struct_val_place)
     }
@@ -332,7 +332,7 @@ impl<'a> H2M<'a> {
         fields: &[(String, hlr::Expr)],
     ) -> H2MResult<mlr::Val> {
         // Create empty enum value
-        let base_place = assign_to_fresh_alloc!(self, self.insert_empty_val(*ty)?);
+        let base_place = self.insert_alloc_with_ty(*ty)?;
 
         // Fill discriminant
         let discriminant_place = self.insert_enum_discriminant_place(base_place)?;
