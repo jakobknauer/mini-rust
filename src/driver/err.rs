@@ -1,4 +1,4 @@
-use crate::{ctxt, hlr, hlr2mlr, typechecker::TyErr};
+use crate::{ctxt, hlr, h2m, typechecker::TyErr};
 
 pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     use hlr::ParserError::*;
@@ -12,8 +12,8 @@ pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     }
 }
 
-pub fn print_mlr_builder_error(fn_name: &str, err: hlr2mlr::Hlr2MlrErr, ctxt: &ctxt::Ctxt) -> String {
-    use hlr2mlr::Hlr2MlrErr::*;
+pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MErr, ctxt: &ctxt::Ctxt) -> String {
+    use h2m::H2MErr::*;
 
     match err {
         TyErr(err) => print_ty_error(fn_name, err, ctxt),

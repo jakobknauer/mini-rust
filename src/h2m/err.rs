@@ -1,7 +1,7 @@
 use crate::typechecker::TyErr;
 
 #[derive(Debug)]
-pub enum Hlr2MlrErr {
+pub enum H2MErr {
     MissingOperatorImpl { name: String },
     UnresolvableSymbol { name: String },
     UnknownPrimitiveTy,
@@ -9,16 +9,16 @@ pub enum Hlr2MlrErr {
     TyErr(TyErr),
 }
 
-pub type Result<T> = std::result::Result<T, Hlr2MlrErr>;
+pub type Result<T> = std::result::Result<T, H2MErr>;
 
-impl<T> From<Hlr2MlrErr> for Result<T> {
-    fn from(val: Hlr2MlrErr) -> Self {
+impl<T> From<H2MErr> for Result<T> {
+    fn from(val: H2MErr) -> Self {
         Err(val)
     }
 }
 
-impl From<TyErr> for Hlr2MlrErr {
+impl From<TyErr> for H2MErr {
     fn from(val: TyErr) -> Self {
-        Hlr2MlrErr::TyErr(val)
+        H2MErr::TyErr(val)
     }
 }

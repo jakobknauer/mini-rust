@@ -1,11 +1,11 @@
 use crate::{
     ctxt::{mlr, ty},
+    h2m::{H2MErr, Result, macros::assign_to_fresh_alloc},
     hlr,
-    hlr2mlr::{Hlr2MlrErr, Result, macros::assign_to_fresh_alloc},
     typechecker::{TyErr, into_ty_err},
 };
 
-impl<'a> super::Hlr2Mlr<'a> {
+impl<'a> super::H2M<'a> {
     pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &ty::EnumDef, ty: &ty::Ty) -> Result<Vec<usize>> {
         arms.iter()
             .map(|arm| {
@@ -17,7 +17,7 @@ impl<'a> super::Hlr2Mlr<'a> {
                         ty: *ty,
                         variant_name: arm.pattern.variant.clone(),
                     })
-                    .map_err(Hlr2MlrErr::TyErr)
+                    .map_err(H2MErr::TyErr)
             })
             .collect::<Result<_>>()
     }
@@ -48,7 +48,7 @@ impl<'a> super::Hlr2Mlr<'a> {
             .tys
             .get_enum_def_by_ty(enum_ty)
             .map_err(into_ty_err)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
@@ -58,7 +58,7 @@ impl<'a> super::Hlr2Mlr<'a> {
             .tys
             .get_struct_def_by_ty(&enum_variant.ty)
             .map_err(into_ty_err)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
 
         let field_indices: Vec<usize> = arm
             .pattern
@@ -69,7 +69,7 @@ impl<'a> super::Hlr2Mlr<'a> {
                     .fields
                     .iter()
                     .position(|f| f.name == *field_name)
-                    .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAStructField {
+                    .ok_or(H2MErr::TyErr(TyErr::NotAStructField {
                         ty: enum_variant.ty,
                         field_name: field_name.clone(),
                     }))

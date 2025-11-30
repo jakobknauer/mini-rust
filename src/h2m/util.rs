@@ -2,17 +2,17 @@ use std::collections::HashSet;
 
 use crate::{
     ctxt::{fns, mlr, ty},
+    h2m::{H2MErr, Result},
     hlr,
-    hlr2mlr::{Hlr2MlrErr, Result},
     typechecker::{TyErr, Typechecker, into_ty_err},
 };
 
-impl<'a> super::Hlr2Mlr<'a> {
+impl<'a> super::H2M<'a> {
     pub fn insert_val(&mut self, val_def: mlr::ValDef) -> Result<mlr::Val> {
         let val = self.ctxt.mlr.insert_val(val_def);
         Typechecker::new(self.ctxt)
             .infer_val_ty(val)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
         Ok(val)
     }
 
@@ -97,7 +97,7 @@ impl<'a> super::Hlr2Mlr<'a> {
                 expected: place_ty,
                 actual: value_ty,
             })
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
 
         let stmt = mlr::StmtDef::Assign { place, value };
         self.insert_stmt(stmt)
@@ -126,7 +126,7 @@ impl<'a> super::Hlr2Mlr<'a> {
                 expected: return_ty,
                 actual: val_ty,
             })
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
 
         let stmt = mlr::StmtDef::Return { value };
         self.insert_stmt(stmt)
@@ -136,7 +136,7 @@ impl<'a> super::Hlr2Mlr<'a> {
         let place = self.ctxt.mlr.insert_place(place_def);
         Typechecker::new(self.ctxt)
             .infer_place_ty(place)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
         Ok(place)
     }
 
@@ -167,7 +167,7 @@ impl<'a> super::Hlr2Mlr<'a> {
 
     pub fn insert_op(&mut self, op_def: mlr::OpDef) -> Result<mlr::Op> {
         let op = self.ctxt.mlr.insert_op(op_def);
-        Typechecker::new(self.ctxt).infer_op_ty(op).map_err(Hlr2MlrErr::TyErr)?;
+        Typechecker::new(self.ctxt).infer_op_ty(op).map_err(H2MErr::TyErr)?;
         Ok(op)
     }
 
@@ -210,7 +210,7 @@ impl<'a> super::Hlr2Mlr<'a> {
         } else if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
             self.insert_fn_op(fn_)
         } else {
-            Err(Hlr2MlrErr::UnresolvableSymbol { name: name.to_string() })
+            Err(H2MErr::UnresolvableSymbol { name: name.to_string() })
         }
     }
 
@@ -266,14 +266,14 @@ impl<'a> super::Hlr2Mlr<'a> {
             .tys
             .get_struct_def_by_ty(ty)
             .map_err(into_ty_err)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
 
         let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
-            return Hlr2MlrErr::TyErr(TyErr::InitializerMissingFields {
+            return H2MErr::TyErr(TyErr::InitializerMissingFields {
                 ty: *ty,
                 missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
             })
@@ -282,7 +282,7 @@ impl<'a> super::Hlr2Mlr<'a> {
 
         let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
         if !extra_fields.is_empty() {
-            return Hlr2MlrErr::TyErr(TyErr::InitializerExtraFields {
+            return H2MErr::TyErr(TyErr::InitializerExtraFields {
                 ty: *ty,
                 extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
             })
@@ -296,7 +296,7 @@ impl<'a> super::Hlr2Mlr<'a> {
                     .fields
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAStructField {
+                    .ok_or(H2MErr::TyErr(TyErr::NotAStructField {
                         ty: *ty,
                         field_name: field_name.to_string(),
                     }))
@@ -319,7 +319,7 @@ impl<'a> super::Hlr2Mlr<'a> {
             .ctxt
             .tys
             .get_ty_by_hlr_annot(annot, &gen_params)
-            .ok_or(Hlr2MlrErr::TyErr(TyErr::UnresolvableTyAnnot))?;
+            .ok_or(H2MErr::TyErr(TyErr::UnresolvableTyAnnot))?;
         Ok(ty)
     }
 }

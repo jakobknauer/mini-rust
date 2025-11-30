@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ctxt::{self, fns, ty},
-    generate, hlr, hlr2mlr,
+    generate, hlr, h2m,
     util::print,
 };
 
@@ -35,7 +35,7 @@ pub fn compile(
     register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
 
-    hlr2mlr::opt::canonicalize_types(&mut ctxt);
+    h2m::opt::canonicalize_types(&mut ctxt);
 
     if let Some(mlr_path) = output_paths.mlr {
         print_detail(&format!("Saving MLR to {}", mlr_path.display()));
@@ -217,7 +217,7 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     for function in &hlr.fns {
         let fn_ = ctxt.fns.get_fn_by_name(&function.name).unwrap();
 
-        let mlr_builder = hlr2mlr::Hlr2Mlr::new(function, fn_, ctxt);
+        let mlr_builder = h2m::H2M::new(function, fn_, ctxt);
         let mlr = mlr_builder
             .build()
             .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;

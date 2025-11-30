@@ -15,9 +15,9 @@ use crate::{
     typechecker::{TyErr, into_ty_err},
 };
 
-pub use err::{Hlr2MlrErr, Result};
+pub use err::{H2MErr, Result};
 
-pub struct Hlr2Mlr<'a> {
+pub struct H2M<'a> {
     input: &'a hlr::Fn,
 
     target_fn: fns::Fn,
@@ -37,7 +37,7 @@ impl Scope {
     }
 }
 
-impl<'a> Hlr2Mlr<'a> {
+impl<'a> H2M<'a> {
     pub fn new(input: &'a hlr::Fn, target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
             input,
@@ -159,7 +159,7 @@ impl<'a> Hlr2Mlr<'a> {
             Ident(name) => self.lower_ident_to_place(name),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
-            _ => Err(Hlr2MlrErr::NotAPlace),
+            _ => Err(H2MErr::NotAPlace),
         }
     }
 
@@ -199,7 +199,7 @@ impl<'a> Hlr2Mlr<'a> {
             .ctxt
             .fns
             .get_fn_by_name(ident)
-            .ok_or_else(|| Hlr2MlrErr::UnresolvableSymbol {
+            .ok_or_else(|| H2MErr::UnresolvableSymbol {
                 name: ident.to_string(),
             })?;
 
@@ -297,7 +297,7 @@ impl<'a> Hlr2Mlr<'a> {
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&ty, &variant_index, fields)
         } else {
-            Hlr2MlrErr::TyErr(TyErr::UnresolvableTyName {
+            H2MErr::TyErr(TyErr::UnresolvableTyName {
                 ty_name: struct_name.to_string(),
             })
             .into()
@@ -332,7 +332,7 @@ impl<'a> Hlr2Mlr<'a> {
             .tys
             .get_enum_def_by_ty(ty)
             .map_err(into_ty_err)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
         let variant_ty = enum_def
             .variants
             .get(*variant_index)
@@ -363,7 +363,7 @@ impl<'a> Hlr2Mlr<'a> {
             .tys
             .get_enum_def_by_ty(&scrutinee_ty)
             .map_err(into_ty_err)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
         let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
 
         // now build the match statement
@@ -439,7 +439,7 @@ impl<'a> Hlr2Mlr<'a> {
     fn lower_ident_to_place(&mut self, name: &str) -> Result<mlr::Place> {
         let loc = self
             .resolve_name_to_location(name)
-            .ok_or_else(|| Hlr2MlrErr::UnresolvableSymbol { name: name.to_string() })?;
+            .ok_or_else(|| H2MErr::UnresolvableSymbol { name: name.to_string() })?;
 
         self.insert_loc_place(loc)
     }
@@ -456,13 +456,13 @@ impl<'a> Hlr2Mlr<'a> {
             .tys
             .get_struct_def_by_ty(&base_ty)
             .map_err(into_ty_err)
-            .map_err(Hlr2MlrErr::TyErr)?;
+            .map_err(H2MErr::TyErr)?;
 
         let field_index = struct_def
             .fields
             .iter()
             .position(|struct_field| struct_field.name == field_name)
-            .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAStructField {
+            .ok_or(H2MErr::TyErr(TyErr::NotAStructField {
                 ty: base_ty,
                 field_name: field_name.to_string(),
             }))?;
