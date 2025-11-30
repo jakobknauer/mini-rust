@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use crate::ctxt::{fns::FnSpecialization, ty::Ty};
 
 pub struct Mlr {
-    vals: HashMap<Val, ValDef>,
-    stmts: HashMap<Stmt, StmtDef>,
-    places: HashMap<Place, PlaceDef>,
-    ops: HashMap<Op, OpDef>,
+    vals: Vec<ValDef>,
+    stmts: Vec<StmtDef>,
+    places: Vec<PlaceDef>,
+    ops: Vec<OpDef>,
 
     val_tys: HashMap<Val, Ty>,
     place_tys: HashMap<Place, Ty>,
@@ -93,10 +93,10 @@ impl std::fmt::Display for Loc {
 impl Mlr {
     pub fn new() -> Self {
         Self {
-            vals: HashMap::new(),
-            stmts: HashMap::new(),
-            places: HashMap::new(),
-            ops: HashMap::new(),
+            vals: Vec::new(),
+            stmts: Vec::new(),
+            places: Vec::new(),
+            ops: Vec::new(),
 
             loc_tys: HashMap::new(),
             val_tys: HashMap::new(),
@@ -113,25 +113,25 @@ impl Mlr {
 
     pub fn insert_val(&mut self, val_def: ValDef) -> Val {
         let val = self.get_next_val();
-        self.vals.insert(val, val_def);
+        self.vals.insert(val.0, val_def);
         val
     }
 
     pub fn insert_stmt(&mut self, stmt_def: StmtDef) -> Stmt {
         let stmt = self.get_next_stmt();
-        self.stmts.insert(stmt, stmt_def);
+        self.stmts.insert(stmt.0, stmt_def);
         stmt
     }
 
     pub fn insert_place(&mut self, place_def: PlaceDef) -> Place {
         let place = self.get_next_place();
-        self.places.insert(place, place_def);
+        self.places.insert(place.0, place_def);
         place
     }
 
     pub fn insert_op(&mut self, op_def: OpDef) -> Op {
         let op = self.get_next_op();
-        self.ops.insert(op, op_def);
+        self.ops.insert(op.0, op_def);
         op
     }
 
@@ -172,35 +172,35 @@ impl Mlr {
     }
 
     pub fn get_val_def(&self, val: &Val) -> &ValDef {
-        self.vals.get(val).expect("val should be known")
+        self.vals.get(val.0).expect("val should be known")
     }
 
     pub fn try_get_val_def(&self, val: &Val) -> Option<&ValDef> {
-        self.vals.get(val)
+        self.vals.get(val.0)
     }
 
     pub fn get_stmt_def(&self, stmt: &Stmt) -> &StmtDef {
-        self.stmts.get(stmt).expect("stmt should be known")
+        self.stmts.get(stmt.0).expect("stmt should be known")
     }
 
     pub fn try_get_stmt_def(&self, stmt: Stmt) -> Option<&StmtDef> {
-        self.stmts.get(&stmt)
+        self.stmts.get(stmt.0)
     }
 
     pub fn get_place_def(&self, place: Place) -> &PlaceDef {
-        self.places.get(&place).expect("place should be known")
+        self.places.get(place.0).expect("place should be known")
     }
 
     pub fn try_get_place_def(&self, place: &Place) -> Option<&PlaceDef> {
-        self.places.get(place)
+        self.places.get(place.0)
     }
 
     pub fn get_op_def(&self, op: &Op) -> &OpDef {
-        self.ops.get(op).expect("op should be known")
+        self.ops.get(op.0).expect("op should be known")
     }
 
     pub fn try_get_op_def(&self, op: &Op) -> Option<&OpDef> {
-        self.ops.get(op)
+        self.ops.get(op.0)
     }
 
     pub fn get_loc_ty(&self, loc: &Loc) -> Ty {
@@ -225,13 +225,13 @@ impl Mlr {
             .chain(self.val_tys.values_mut())
             .chain(self.place_tys.values_mut())
             .chain(self.op_tys.values_mut())
-            .chain(self.vals.values_mut().filter_map(|val_def| match val_def {
+            .chain(self.vals.iter_mut().filter_map(|val_def| match val_def {
                 ValDef::Empty { ty } => Some(ty),
                 _ => None,
             }))
             .chain(
                 self.ops
-                    .values_mut()
+                    .iter_mut()
                     .filter_map(|op_def| match op_def {
                         OpDef::Fn(FnSpecialization { gen_args, .. }) => Some(gen_args),
                         _ => None,
