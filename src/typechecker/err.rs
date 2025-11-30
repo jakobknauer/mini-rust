@@ -60,6 +60,14 @@ pub enum TyErr {
         expected: usize,
         actual: usize,
     },
+    MissingVariants {
+        ty: Ty,
+        missing_variants: Vec<String>,
+    },
+    ExtraVariants {
+        ty: Ty,
+        extra_variants: Vec<String>,
+    },
 }
 
 impl<T> From<TyErr> for TyResult<T> {

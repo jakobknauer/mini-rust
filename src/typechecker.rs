@@ -243,15 +243,31 @@ impl<'a> Typechecker<'a> {
             })
     }
 
-    pub fn compute_struct_field_indices<'b>(
+    pub fn resolve_struct_field(&mut self, struct_ty: ty::Ty, field_name: &str) -> TyResult<usize> {
+        let struct_def = self.tys.get_struct_def_by_ty(&struct_ty)?;
+
+        let field_index = struct_def
+            .fields
+            .iter()
+            .position(|struct_field| struct_field.name == field_name)
+            .ok_or(TyErr::NotAStructField {
+                ty: struct_ty,
+                field_name: field_name.to_string(),
+            })?;
+
+        Ok(field_index)
+    }
+
+    pub fn resolve_struct_fields<'b>(
         &mut self,
         struct_ty: ty::Ty,
         field_names: impl IntoIterator<Item = &'b str>,
     ) -> TyResult<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
-        let actual: HashSet<&str> = field_names.iter().cloned().collect();
 
         let struct_def = self.tys.get_struct_def_by_ty(&struct_ty)?;
+
+        let actual: HashSet<&str> = field_names.iter().cloned().collect();
         let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
@@ -287,5 +303,52 @@ impl<'a> Typechecker<'a> {
             .collect::<TyResult<_>>()?;
 
         Ok(field_indices)
+    }
+
+    pub fn resolve_enum_variants<'b>(
+        &self,
+        enum_ty: ty::Ty,
+        variant_names: impl IntoIterator<Item = &'b str>,
+    ) -> TyResult<Vec<usize>> {
+        let variant_names: Vec<&str> = variant_names.into_iter().collect();
+
+        let enum_def = self.tys.get_enum_def_by_ty(&enum_ty)?;
+
+        let actual: HashSet<&str> = variant_names.iter().cloned().collect();
+        let expected: HashSet<&str> = enum_def.variants.iter().map(|field| field.name.as_str()).collect();
+
+        let missing_variants: Vec<&str> = expected.difference(&actual).cloned().collect();
+        if !missing_variants.is_empty() {
+            return TyErr::MissingVariants {
+                ty: enum_ty,
+                missing_variants: missing_variants.iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let extra_variants: Vec<&str> = actual.difference(&expected).cloned().collect();
+        if !extra_variants.is_empty() {
+            return TyErr::ExtraVariants {
+                ty: enum_ty,
+                extra_variants: extra_variants.iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let variant_indices = variant_names
+            .iter()
+            .map(|variant_name| {
+                enum_def
+                    .variants
+                    .iter()
+                    .position(|struct_variant| &struct_variant.name == variant_name)
+                    .ok_or(TyErr::NotAnEnumVariant {
+                        ty: enum_ty,
+                        variant_name: variant_name.to_string(),
+                    })
+            })
+            .collect::<TyResult<_>>()?;
+
+        Ok(variant_indices)
     }
 }

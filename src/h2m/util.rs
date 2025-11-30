@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl<'a> super::H2M<'a> {
-    fn typechecker(&mut self) -> Typechecker<'_> {
+    pub(super) fn typechecker(&mut self) -> Typechecker<'_> {
         Typechecker::new(self.ctxt, self.target_fn)
     }
 
@@ -202,31 +202,6 @@ impl<'a> super::H2M<'a> {
             }
         }
         None
-    }
-
-    pub fn build_struct_field_init_stmts(
-        &mut self,
-        ty: &ty::Ty,
-        fields: &[(String, hlr::Expr)],
-        base_place: &mlr::Place,
-    ) -> H2MResult<()> {
-        let field_indices = self
-            .typechecker()
-            .compute_struct_field_indices(*ty, fields.iter().map(|(name, _)| name.as_str()))?;
-
-        for ((_, expr), field_index) in fields.iter().zip(field_indices) {
-            let field_place = self.insert_field_access_place(*base_place, field_index)?;
-            let field_value = self.lower_to_val(expr)?;
-            self.insert_assign_stmt(field_place, field_value)?;
-        }
-        Ok(())
-    }
-
-    pub fn get_signature(&self) -> &fns::FnSig {
-        self.ctxt
-            .fns
-            .get_sig(&self.target_fn)
-            .expect("function signature should be registered")
     }
 
     pub fn resolve_hlr_ty_annot(&mut self, annot: &hlr::TyAnnot) -> H2MResult<ty::Ty> {

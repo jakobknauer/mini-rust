@@ -119,6 +119,16 @@ fn print_ty_error(fn_name: &str, err: TyErr, ctxt: &ctxt::Ctxt) -> String {
             expected,
             actual
         ),
+        MissingVariants { ty, missing_variants } => format!(
+            "Enum type '{}' is missing variants: {}",
+            ctxt.tys.get_string_rep(&ty),
+            missing_variants.join(", ")
+        ),
+        ExtraVariants { ty, extra_variants } => format!(
+            "Enum type '{}' has extra variants: {}",
+            ctxt.tys.get_string_rep(&ty),
+            extra_variants.join(", ")
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

@@ -1,8 +1,8 @@
 pub mod opt;
 
 mod err;
+mod match_util;
 mod ops;
-mod pattern_util;
 mod util;
 #[macro_use]
 mod macros;
@@ -12,7 +12,6 @@ use std::collections::{HashMap, VecDeque};
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
-    typechecker::TyErr,
 };
 
 pub use err::{H2MErr, H2MResult};
@@ -47,6 +46,13 @@ impl<'a> H2M<'a> {
             scopes: VecDeque::new(),
             blocks: VecDeque::new(),
         }
+    }
+
+    fn get_signature(&self) -> &fns::FnSig {
+        self.ctxt
+            .fns
+            .get_sig(&self.target_fn)
+            .expect("function signature should be registered")
     }
 
     fn current_scope(&mut self) -> &mut Scope {
@@ -87,7 +93,16 @@ impl<'a> H2M<'a> {
         self.push_scope();
 
         let mut param_locs = Vec::new();
-        for fns::FnParam { name, ty } in self.get_signature().params.clone() {
+        for fns::FnParam { name, ty } in {
+            let this = &self;
+            this.ctxt
+                .fns
+                .get_sig(&this.target_fn)
+                .expect("function signature should be registered")
+        }
+        .params
+        .clone()
+        {
             let loc = self.ctxt.mlr.insert_typed_loc(ty);
             self.add_to_scope(&name, loc);
             param_locs.push(loc);
@@ -338,6 +353,24 @@ impl<'a> H2M<'a> {
         self.insert_use_place_val(base_place)
     }
 
+    fn build_struct_field_init_stmts(
+        &mut self,
+        ty: &ty::Ty,
+        fields: &[(String, hlr::Expr)],
+        base_place: &mlr::Place,
+    ) -> H2MResult<()> {
+        let field_indices = self
+            .typechecker()
+            .resolve_struct_fields(*ty, fields.iter().map(|(name, _)| name.as_str()))?;
+
+        for ((_, expr), field_index) in fields.iter().zip(field_indices) {
+            let field_place = self.insert_field_access_place(*base_place, field_index)?;
+            let field_value = self.lower_to_val(expr)?;
+            self.insert_assign_stmt(field_place, field_value)?;
+        }
+        Ok(())
+    }
+
     fn build_match_expr(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> H2MResult<mlr::Val> {
         let scrutinee = self.lower_to_op(scrutinee)?;
         let scrutinee_place = assign_to_fresh_alloc!(self, self.insert_use_val(scrutinee)?);
@@ -353,8 +386,9 @@ impl<'a> H2M<'a> {
         };
 
         let scrutinee_ty = self.ctxt.mlr.get_place_ty(&scrutinee_place);
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(&scrutinee_ty)?;
-        let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
+        let arm_indices = self
+            .typechecker()
+            .resolve_enum_variants(scrutinee_ty, arms.iter().map(|arm| arm.pattern.variant.as_str()))?;
 
         // now build the match statement
         let result_loc = self.insert_fresh_alloc()?;
@@ -439,81 +473,13 @@ impl<'a> H2M<'a> {
         // temporary place). This requires some attention to different expressions (temporaries vs.
         // places).
         let base = self.lower_to_place(base)?;
-
         let base_ty = self.ctxt.mlr.get_place_ty(&base);
-        let struct_def = self.ctxt.tys.get_struct_def_by_ty(&base_ty)?;
-
-        let field_index = struct_def
-            .fields
-            .iter()
-            .position(|struct_field| struct_field.name == field_name)
-            .ok_or(TyErr::NotAStructField {
-                ty: base_ty,
-                field_name: field_name.to_string(),
-            })?;
-
+        let field_index = self.typechecker().resolve_struct_field(base_ty, field_name)?;
         self.insert_field_access_place(base, field_index)
     }
 
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {
         let base_op = self.lower_to_op(base)?;
         self.insert_deref_place(base_op)
-    }
-
-    fn build_match_arms(
-        &mut self,
-        arms: &[hlr::MatchArm],
-        arm_indices: &[usize],
-        eq_fn: mlr::Op,
-        discriminant: mlr::Op,
-        scrutinee_place: mlr::Place,
-        result_place: mlr::Place,
-    ) -> H2MResult<()> {
-        if arms.is_empty() {
-            panic!("Match expressions must have at least one arm.");
-        }
-
-        if arms.len() == 1 {
-            let arm = &arms[0];
-            let variant_index = arm_indices[0];
-            let arm_result = self.build_arm_block(
-                arm,
-                &self.ctxt.mlr.get_place_ty(&scrutinee_place),
-                &variant_index,
-                &scrutinee_place,
-            )?;
-            self.insert_assign_stmt(result_place, arm_result)?;
-            return Ok(());
-        } else {
-            let first_arm = &arms[0];
-            let first_variant_index = arm_indices[0];
-
-            let condition = self.build_arm_condition(&first_variant_index, &eq_fn, &discriminant)?;
-
-            self.start_new_block();
-            let first_arm_result = self.build_arm_block(
-                first_arm,
-                &self.ctxt.mlr.get_place_ty(&scrutinee_place),
-                &first_variant_index,
-                &scrutinee_place,
-            )?;
-            self.insert_assign_stmt(result_place, first_arm_result)?;
-            let then_block = self.release_current_block();
-
-            self.start_new_block();
-            self.build_match_arms(
-                &arms[1..],
-                &arm_indices[1..],
-                eq_fn,
-                discriminant,
-                scrutinee_place,
-                result_place,
-            )?;
-            let else_block = self.release_current_block();
-
-            self.insert_if_stmt(condition, then_block, else_block)?;
-        }
-
-        Ok(())
     }
 }
