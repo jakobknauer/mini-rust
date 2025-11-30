@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::ctxt::{fns::FnSpecialization, ty::Ty};
 
 pub struct Mlr {
-    vals: Vec<ValDef>,
     stmts: Vec<StmtDef>,
+    vals: Vec<ValDef>,
     places: Vec<PlaceDef>,
     ops: Vec<OpDef>,
 
@@ -13,10 +13,6 @@ pub struct Mlr {
     op_tys: HashMap<Op, Ty>,
     loc_tys: HashMap<Loc, Ty>,
 
-    next_val: Val,
-    next_stmt: Stmt,
-    next_place: Place,
-    next_op: Op,
     next_loc: Loc,
 }
 
@@ -93,45 +89,41 @@ impl std::fmt::Display for Loc {
 impl Mlr {
     pub fn new() -> Self {
         Self {
-            vals: Vec::new(),
             stmts: Vec::new(),
+            vals: Vec::new(),
             places: Vec::new(),
             ops: Vec::new(),
 
-            loc_tys: HashMap::new(),
             val_tys: HashMap::new(),
             place_tys: HashMap::new(),
             op_tys: HashMap::new(),
+            loc_tys: HashMap::new(),
 
-            next_val: Val(0),
-            next_place: Place(0),
-            next_stmt: Stmt(0),
             next_loc: Loc(0),
-            next_op: Op(0),
         }
     }
 
-    pub fn insert_val(&mut self, val_def: ValDef) -> Val {
-        let val = self.get_next_val();
-        self.vals.insert(val.0, val_def);
-        val
-    }
-
     pub fn insert_stmt(&mut self, stmt_def: StmtDef) -> Stmt {
-        let stmt = self.get_next_stmt();
-        self.stmts.insert(stmt.0, stmt_def);
+        let stmt = Stmt(self.stmts.len());
+        self.stmts.push(stmt_def);
         stmt
     }
 
+    pub fn insert_val(&mut self, val_def: ValDef) -> Val {
+        let val = Val(self.vals.len());
+        self.vals.push(val_def);
+        val
+    }
+
     pub fn insert_place(&mut self, place_def: PlaceDef) -> Place {
-        let place = self.get_next_place();
-        self.places.insert(place.0, place_def);
+        let place = Place(self.places.len());
+        self.places.push(place_def);
         place
     }
 
     pub fn insert_op(&mut self, op_def: OpDef) -> Op {
-        let op = self.get_next_op();
-        self.ops.insert(op.0, op_def);
+        let op = Op(self.ops.len());
+        self.ops.push(op_def);
         op
     }
 
@@ -141,42 +133,22 @@ impl Mlr {
         loc
     }
 
-    fn get_next_val(&mut self) -> Val {
-        let val = self.next_val;
-        self.next_val.0 += 1;
-        val
-    }
-
-    fn get_next_stmt(&mut self) -> Stmt {
-        let stmt = self.next_stmt;
-        self.next_stmt.0 += 1;
-        stmt
-    }
-
     fn get_next_loc(&mut self) -> Loc {
         let loc = self.next_loc;
         self.next_loc.0 += 1;
         loc
     }
 
-    fn get_next_place(&mut self) -> Place {
-        let place = self.next_place;
-        self.next_place.0 += 1;
-        place
+    pub fn set_val_ty(&mut self, val: Val, ty: Ty) {
+        self.val_tys.insert(val, ty);
     }
 
-    fn get_next_op(&mut self) -> Op {
-        let op = self.next_op;
-        self.next_op.0 += 1;
-        op
+    pub fn set_place_ty(&mut self, place: Place, ty: Ty) {
+        self.place_tys.insert(place, ty);
     }
 
-    pub fn get_val_def(&self, val: &Val) -> &ValDef {
-        self.vals.get(val.0).expect("val should be known")
-    }
-
-    pub fn try_get_val_def(&self, val: &Val) -> Option<&ValDef> {
-        self.vals.get(val.0)
+    pub fn set_op_ty(&mut self, op: Op, ty: Ty) {
+        self.op_tys.insert(op, ty);
     }
 
     pub fn get_stmt_def(&self, stmt: &Stmt) -> &StmtDef {
@@ -185,6 +157,14 @@ impl Mlr {
 
     pub fn try_get_stmt_def(&self, stmt: Stmt) -> Option<&StmtDef> {
         self.stmts.get(stmt.0)
+    }
+
+    pub fn get_val_def(&self, val: &Val) -> &ValDef {
+        self.vals.get(val.0).expect("val should be known")
+    }
+
+    pub fn try_get_val_def(&self, val: &Val) -> Option<&ValDef> {
+        self.vals.get(val.0)
     }
 
     pub fn get_place_def(&self, place: Place) -> &PlaceDef {
@@ -203,20 +183,20 @@ impl Mlr {
         self.ops.get(op.0)
     }
 
-    pub fn get_loc_ty(&self, loc: &Loc) -> Ty {
-        *self.loc_tys.get(loc).expect("type of loc should be known")
+    pub fn get_val_ty(&self, val: &Val) -> Ty {
+        *self.val_tys.get(val).expect("type of val should be known")
     }
 
     pub fn get_place_ty(&self, place: &Place) -> Ty {
         *self.place_tys.get(place).expect("type of place should be known")
     }
 
-    pub fn get_val_ty(&self, val: &Val) -> Ty {
-        *self.val_tys.get(val).expect("type of val should be known")
-    }
-
     pub fn get_op_ty(&self, op: &Op) -> Ty {
         *self.op_tys.get(op).expect("type of op should be known")
+    }
+
+    pub fn get_loc_ty(&self, loc: &Loc) -> Ty {
+        *self.loc_tys.get(loc).expect("type of loc should be known")
     }
 
     pub fn get_all_types_mut(&mut self) -> impl Iterator<Item = &mut Ty> {
@@ -238,17 +218,5 @@ impl Mlr {
                     })
                     .flatten(),
             )
-    }
-
-    pub fn set_val_ty(&mut self, val: Val, ty: Ty) {
-        self.val_tys.insert(val, ty);
-    }
-
-    pub fn set_place_ty(&mut self, place: Place, ty: Ty) {
-        self.place_tys.insert(place, ty);
-    }
-
-    pub fn set_op_ty(&mut self, op: Op, ty: Ty) {
-        self.op_tys.insert(op, ty);
     }
 }
