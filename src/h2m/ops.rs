@@ -1,8 +1,7 @@
 use crate::{
     ctxt::{fns, ty},
+    h2m::{self, H2MErr, H2MResult},
     hlr,
-    h2m::{self, H2MErr, Result},
-    typechecker::TyErr,
 };
 
 macro_rules! op_match {
@@ -21,10 +20,10 @@ macro_rules! op_match {
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
             _ => {
-                return H2MErr::TyErr(TyErr::OperatorResolutionFailed {
+                return H2MErr::OperatorResolutionFailed {
                     operator: format!("{{$operator:?}}"),
                     operand_tys: ($left, $right),
-                })
+                }
                 .into();
             }
         }
@@ -32,7 +31,7 @@ macro_rules! op_match {
 }
 
 impl<'a> h2m::H2M<'a> {
-    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (ty::Ty, ty::Ty)) -> Result<fns::Fn> {
+    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (ty::Ty, ty::Ty)) -> H2MResult<fns::Fn> {
         use H2MErr::UnknownPrimitiveTy;
         use hlr::BinaryOperator::*;
         use ty::Primitive::*;

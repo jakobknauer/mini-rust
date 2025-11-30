@@ -11,11 +11,12 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ctxt::{self, fns, mlr, ty},
+    h2m::err::into_h2m_err,
     hlr,
-    typechecker::{TyErr, into_ty_err},
+    typechecker::TyErr,
 };
 
-pub use err::{H2MErr, Result};
+pub use err::{H2MErr, H2MResult};
 
 pub struct H2M<'a> {
     input: &'a hlr::Fn,
@@ -83,7 +84,7 @@ impl<'a> H2M<'a> {
             .push(block_stmt);
     }
 
-    pub fn build(mut self) -> Result<fns::FnMlr> {
+    pub fn build(mut self) -> H2MResult<fns::FnMlr> {
         self.push_scope();
 
         let mut param_locs = Vec::new();
@@ -108,7 +109,7 @@ impl<'a> H2M<'a> {
     /// all while in a new scope.
     ///
     /// This method does not start or end a new MLR block; but it does push and pop a new scope.
-    pub fn build_block(&mut self, block: &hlr::Block) -> Result<mlr::Val> {
+    pub fn build_block(&mut self, block: &hlr::Block) -> H2MResult<mlr::Val> {
         self.push_scope();
 
         for stmt in &block.stmts {
@@ -128,7 +129,7 @@ impl<'a> H2M<'a> {
         Ok(output)
     }
 
-    fn lower_to_val(&mut self, expr: &hlr::Expr) -> Result<mlr::Val> {
+    fn lower_to_val(&mut self, expr: &hlr::Expr) -> H2MResult<mlr::Val> {
         use hlr::Expr::*;
 
         match expr {
@@ -152,7 +153,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn lower_to_place(&mut self, expr: &hlr::Expr) -> Result<mlr::Place> {
+    fn lower_to_place(&mut self, expr: &hlr::Expr) -> H2MResult<mlr::Place> {
         use hlr::Expr::*;
 
         match expr {
@@ -163,7 +164,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn lower_to_op(&mut self, expr: &hlr::Expr) -> Result<mlr::Op> {
+    fn lower_to_op(&mut self, expr: &hlr::Expr) -> H2MResult<mlr::Op> {
         use hlr::Expr::*;
 
         match expr {
@@ -181,7 +182,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_literal(&mut self, lit: &hlr::Lit) -> Result<mlr::Op> {
+    fn build_literal(&mut self, lit: &hlr::Lit) -> H2MResult<mlr::Op> {
         use hlr::Lit::*;
 
         match lit {
@@ -190,11 +191,11 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_ident(&mut self, name: &str) -> Result<mlr::Op> {
+    fn build_ident(&mut self, name: &str) -> H2MResult<mlr::Op> {
         self.resolve_name(name)
     }
 
-    fn build_gen_qual_ident(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> Result<mlr::Op> {
+    fn build_gen_qual_ident(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
         let fn_ = self
             .ctxt
             .fns
@@ -206,7 +207,7 @@ impl<'a> H2M<'a> {
         let gen_arg_tys = gen_args
             .iter()
             .map(|annot| self.resolve_hlr_ty_annot(annot))
-            .collect::<Result<_>>()?;
+            .collect::<H2MResult<_>>()?;
 
         self.insert_gen_fn_op(fn_, gen_arg_tys)
     }
@@ -216,7 +217,7 @@ impl<'a> H2M<'a> {
         left: &hlr::Expr,
         operator: &hlr::BinaryOperator,
         right: &hlr::Expr,
-    ) -> Result<mlr::Val> {
+    ) -> H2MResult<mlr::Val> {
         let left_op = self.lower_to_op(left)?;
         let right_op = self.lower_to_op(right)?;
 
@@ -230,7 +231,7 @@ impl<'a> H2M<'a> {
         self.insert_call_val(op, vec![left_op, right_op])
     }
 
-    fn build_assignment(&mut self, target: &hlr::Expr, value: &hlr::Expr) -> Result<mlr::Val> {
+    fn build_assignment(&mut self, target: &hlr::Expr, value: &hlr::Expr) -> H2MResult<mlr::Val> {
         let loc = self.lower_to_place(target)?;
         let value = self.lower_to_val(value)?;
         self.insert_assign_stmt(loc, value)?;
@@ -239,13 +240,13 @@ impl<'a> H2M<'a> {
         self.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: &hlr::Expr, arguments: &[hlr::Expr]) -> Result<mlr::Val> {
+    fn build_call(&mut self, callee: &hlr::Expr, arguments: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let callee = self.lower_to_op(callee)?;
 
         let args = arguments
             .iter()
             .map(|arg| self.lower_to_op(arg))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<H2MResult<Vec<_>>>()?;
 
         self.insert_call_val(callee, args)
     }
@@ -255,7 +256,7 @@ impl<'a> H2M<'a> {
         condition: &hlr::Expr,
         then_block: &hlr::Block,
         else_block: Option<&hlr::Block>,
-    ) -> Result<mlr::Val> {
+    ) -> H2MResult<mlr::Val> {
         let cond = self.lower_to_op(condition)?;
 
         let result_place = self.insert_fresh_alloc()?;
@@ -281,7 +282,7 @@ impl<'a> H2M<'a> {
         self.insert_use_val(result_op)
     }
 
-    fn build_loop(&mut self, body: &hlr::Block) -> Result<mlr::Val> {
+    fn build_loop(&mut self, body: &hlr::Block) -> H2MResult<mlr::Val> {
         self.start_new_block();
         self.build_block(body)?;
         let body = self.release_current_block();
@@ -291,20 +292,20 @@ impl<'a> H2M<'a> {
         self.insert_use_val(unit)
     }
 
-    fn build_struct_or_enum_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expr)]) -> Result<mlr::Val> {
+    fn build_struct_or_enum_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
         if let Some(ty) = self.ctxt.tys.get_ty_by_name(struct_name) {
             self.build_struct_val(&ty, fields)
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&ty, &variant_index, fields)
         } else {
-            H2MErr::TyErr(TyErr::UnresolvableTyName {
+            H2MErr::UnresolvableStructOrEnum {
                 ty_name: struct_name.to_string(),
-            })
+            }
             .into()
         }
     }
 
-    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expr)]) -> Result<mlr::Val> {
+    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
         let struct_val_place = assign_to_fresh_alloc!(self, self.insert_empty_val(*ty)?);
         self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
         self.insert_use_place_val(struct_val_place)
@@ -315,7 +316,7 @@ impl<'a> H2M<'a> {
         ty: &ty::Ty,
         variant_index: &usize,
         fields: &[(String, hlr::Expr)],
-    ) -> Result<mlr::Val> {
+    ) -> H2MResult<mlr::Val> {
         // Create empty enum value
         let base_place = assign_to_fresh_alloc!(self, self.insert_empty_val(*ty)?);
 
@@ -327,12 +328,7 @@ impl<'a> H2M<'a> {
 
         // Fill fields
         let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
-        let enum_def = self
-            .ctxt
-            .tys
-            .get_enum_def_by_ty(ty)
-            .map_err(into_ty_err)
-            .map_err(H2MErr::TyErr)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(ty).map_err(into_h2m_err)?;
         let variant_ty = enum_def
             .variants
             .get(*variant_index)
@@ -343,7 +339,7 @@ impl<'a> H2M<'a> {
         self.insert_use_place_val(base_place)
     }
 
-    fn build_match_expr(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> Result<mlr::Val> {
+    fn build_match_expr(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> H2MResult<mlr::Val> {
         let scrutinee = self.lower_to_op(scrutinee)?;
         let scrutinee_place = assign_to_fresh_alloc!(self, self.insert_use_val(scrutinee)?);
 
@@ -358,12 +354,7 @@ impl<'a> H2M<'a> {
         };
 
         let scrutinee_ty = self.ctxt.mlr.get_place_ty(&scrutinee_place);
-        let enum_def = self
-            .ctxt
-            .tys
-            .get_enum_def_by_ty(&scrutinee_ty)
-            .map_err(into_ty_err)
-            .map_err(H2MErr::TyErr)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(&scrutinee_ty).map_err(into_h2m_err)?;
         let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
 
         // now build the match statement
@@ -374,12 +365,12 @@ impl<'a> H2M<'a> {
         self.insert_use_val(result_op)
     }
 
-    fn build_addr_of_val(&mut self, base: &hlr::Expr) -> Result<mlr::Val> {
+    fn build_addr_of_val(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Val> {
         let base = self.lower_to_place(base)?;
         self.insert_addr_of_val(base)
     }
 
-    fn build_stmt(&mut self, stmt: &hlr::Stmt) -> Result<()> {
+    fn build_stmt(&mut self, stmt: &hlr::Stmt) -> H2MResult<()> {
         use hlr::Stmt::*;
 
         match stmt {
@@ -390,7 +381,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> Result<()> {
+    fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> H2MResult<()> {
         let annot_ty = match ty_annot {
             Some(ty_annot) => self.resolve_hlr_ty_annot(ty_annot)?,
             None => self.ctxt.tys.new_undefined_ty(),
@@ -409,14 +400,14 @@ impl<'a> H2M<'a> {
         Ok(())
     }
 
-    fn build_expr_stmt(&mut self, expr: &hlr::Expr) -> Result<()> {
+    fn build_expr_stmt(&mut self, expr: &hlr::Expr) -> H2MResult<()> {
         self.start_new_block();
         let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr)?);
         self.end_and_insert_current_block();
         Ok(())
     }
 
-    fn build_return_stmt(&mut self, expr: Option<&hlr::Expr>) -> Result<()> {
+    fn build_return_stmt(&mut self, expr: Option<&hlr::Expr>) -> H2MResult<()> {
         self.start_new_block();
 
         let return_val = match expr {
@@ -432,11 +423,11 @@ impl<'a> H2M<'a> {
         Ok(())
     }
 
-    fn build_break_stmt(&mut self) -> Result<()> {
+    fn build_break_stmt(&mut self) -> H2MResult<()> {
         self.insert_break_stmt().map(|_| ())
     }
 
-    fn lower_ident_to_place(&mut self, name: &str) -> Result<mlr::Place> {
+    fn lower_ident_to_place(&mut self, name: &str) -> H2MResult<mlr::Place> {
         let loc = self
             .resolve_name_to_location(name)
             .ok_or_else(|| H2MErr::UnresolvableSymbol { name: name.to_string() })?;
@@ -444,19 +435,14 @@ impl<'a> H2M<'a> {
         self.insert_loc_place(loc)
     }
 
-    fn lower_field_access_to_place(&mut self, base: &hlr::Expr, field_name: &str) -> Result<mlr::Place> {
+    fn lower_field_access_to_place(&mut self, base: &hlr::Expr, field_name: &str) -> H2MResult<mlr::Place> {
         // TODO allow general expressions as base (by lowering to val and then creating a
         // temporary place). This requires some attention to different expressions (temporaries vs.
         // places).
         let base = self.lower_to_place(base)?;
 
         let base_ty = self.ctxt.mlr.get_place_ty(&base);
-        let struct_def = self
-            .ctxt
-            .tys
-            .get_struct_def_by_ty(&base_ty)
-            .map_err(into_ty_err)
-            .map_err(H2MErr::TyErr)?;
+        let struct_def = self.ctxt.tys.get_struct_def_by_ty(&base_ty).map_err(into_h2m_err)?;
 
         let field_index = struct_def
             .fields
@@ -470,7 +456,7 @@ impl<'a> H2M<'a> {
         self.insert_field_access_place(base, field_index)
     }
 
-    fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> Result<mlr::Place> {
+    fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {
         let base_op = self.lower_to_op(base)?;
         self.insert_deref_place(base_op)
     }
@@ -483,7 +469,7 @@ impl<'a> H2M<'a> {
         discriminant: mlr::Op,
         scrutinee_place: mlr::Place,
         result_place: mlr::Place,
-    ) -> Result<()> {
+    ) -> H2MResult<()> {
         if arms.is_empty() {
             panic!("Match expressions must have at least one arm.");
         }

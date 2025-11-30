@@ -28,13 +28,6 @@ pub enum TyErr {
         expected: Ty,
         actual: Ty,
     },
-    OperatorResolutionFailed {
-        operator: String,
-        operand_tys: (Ty, Ty),
-    },
-    UnresolvableTyName {
-        ty_name: String,
-    },
     NotAStruct {
         ty: Ty,
     },
@@ -57,7 +50,6 @@ pub enum TyErr {
         ty: Ty,
         variant_name: String,
     },
-    UnresolvableTyAnnot,
     DereferenceOfNonRefTy {
         ty: Ty,
     },
@@ -88,7 +80,7 @@ impl From<NotAnEnumErr> for TyErr {
     }
 }
 
-pub fn into_ty_err<E>(err: E) -> TyErr
+pub(super) fn into_ty_err<E>(err: E) -> TyErr
 where
     TyErr: From<E>,
 {

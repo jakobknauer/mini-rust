@@ -1,8 +1,9 @@
 mod err;
 
-use crate::ctxt::{self, fns, mlr::*, ty};
+pub use err::{TyErr, TyResult};
 
-pub use err::{TyErr, TyResult, into_ty_err};
+use crate::ctxt::{self, fns, mlr::*, ty};
+use err::into_ty_err;
 
 pub struct Typechecker<'a> {
     tys: &'a mut ctxt::TyReg,

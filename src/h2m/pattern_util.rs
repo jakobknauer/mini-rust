@@ -1,12 +1,12 @@
 use crate::{
     ctxt::{mlr, ty},
-    h2m::{H2MErr, Result, macros::assign_to_fresh_alloc},
+    h2m::{H2MErr, H2MResult, err::into_h2m_err, macros::assign_to_fresh_alloc},
     hlr,
-    typechecker::{TyErr, into_ty_err},
+    typechecker::TyErr,
 };
 
 impl<'a> super::H2M<'a> {
-    pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &ty::EnumDef, ty: &ty::Ty) -> Result<Vec<usize>> {
+    pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &ty::EnumDef, ty: &ty::Ty) -> H2MResult<Vec<usize>> {
         arms.iter()
             .map(|arm| {
                 enum_def
@@ -19,7 +19,7 @@ impl<'a> super::H2M<'a> {
                     })
                     .map_err(H2MErr::TyErr)
             })
-            .collect::<Result<_>>()
+            .collect::<H2MResult<_>>()
     }
 
     pub fn build_arm_condition(
@@ -27,7 +27,7 @@ impl<'a> super::H2M<'a> {
         variant_index: &usize,
         eq_fn: &mlr::Op,
         discriminant: &mlr::Op,
-    ) -> Result<mlr::Op> {
+    ) -> H2MResult<mlr::Op> {
         let variant_index = self.insert_int_op(*variant_index as i64)?;
         let condition_place =
             assign_to_fresh_alloc!(self, self.insert_call_val(*eq_fn, vec![*discriminant, variant_index])?);
@@ -40,15 +40,10 @@ impl<'a> super::H2M<'a> {
         enum_ty: &ty::Ty,
         variant_index: &usize,
         base_place: &mlr::Place,
-    ) -> Result<mlr::Val> {
+    ) -> H2MResult<mlr::Val> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
-        let enum_def = self
-            .ctxt
-            .tys
-            .get_enum_def_by_ty(enum_ty)
-            .map_err(into_ty_err)
-            .map_err(H2MErr::TyErr)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(enum_ty).map_err(into_h2m_err)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
@@ -57,8 +52,7 @@ impl<'a> super::H2M<'a> {
             .ctxt
             .tys
             .get_struct_def_by_ty(&enum_variant.ty)
-            .map_err(into_ty_err)
-            .map_err(H2MErr::TyErr)?;
+            .map_err(into_h2m_err)?;
 
         let field_indices: Vec<usize> = arm
             .pattern
@@ -74,7 +68,7 @@ impl<'a> super::H2M<'a> {
                         field_name: field_name.clone(),
                     }))
             })
-            .collect::<Result<_>>()?;
+            .collect::<H2MResult<_>>()?;
 
         self.push_scope();
 

@@ -1,4 +1,4 @@
-use crate::{ctxt, hlr, h2m, typechecker::TyErr};
+use crate::{ctxt, h2m, hlr, typechecker::TyErr};
 
 pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     use hlr::ParserError::*;
@@ -23,6 +23,19 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MErr, ctxt: &ctxt::Ctx
         NotAPlace => {
             "Only variables, field access expressions, and derefs of references are supported as places.".to_string()
         }
+        OperatorResolutionFailed {
+            operator,
+            operand_tys: (left, right),
+        } => format!(
+            "Cannot resolve operator '{}' for operand types '{}' and '{}'",
+            operator,
+            ctxt.tys.get_string_rep(&left),
+            ctxt.tys.get_string_rep(&right)
+        ),
+        UnresolvableStructOrEnum { ty_name } => {
+            format!("Cannot find struct or enum with name '{}'", ty_name)
+        }
+        UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
     }
 }
 
@@ -68,18 +81,6 @@ fn print_ty_error(fn_name: &str, err: TyErr, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(&expected),
             ctxt.tys.get_string_rep(&actual)
         ),
-        OperatorResolutionFailed {
-            operator,
-            operand_tys: (left, right),
-        } => format!(
-            "Cannot resolve operator '{}' for operand types '{}' and '{}'",
-            operator,
-            ctxt.tys.get_string_rep(&left),
-            ctxt.tys.get_string_rep(&right)
-        ),
-        UnresolvableTyName { ty_name } => {
-            format!("Cannot find type with name '{}'", ty_name)
-        }
         NotAStruct { ty } => format!("Type '{}' is not a struct type", ctxt.tys.get_string_rep(&ty)),
         InitializerMissingFields { ty, missing_fields } => {
             format!(
@@ -106,7 +107,6 @@ fn print_ty_error(fn_name: &str, err: TyErr, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(&ty),
             variant_name
         ),
-        UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
         DereferenceOfNonRefTy { ty } => format!(
             "Cannot dereference type '{}', which is not a reference type",
             ctxt.tys.get_string_rep(&ty)
