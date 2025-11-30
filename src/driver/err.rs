@@ -1,10 +1,10 @@
 use crate::{ctxt, h2m, hlr, typechecker::TyErr};
 
-pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
-    use hlr::ParserError::*;
+pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
+    use hlr::ParserErr::*;
 
     match err {
-        LexerError(lexer_error) => format!("Lexer error at position {}", lexer_error.position),
+        LexerErr(lexer_err) => format!("Lexer error at position {}", lexer_err.position),
         UnexpectedToken(token) => format!("Parser error: Unexpected token {:?}", token),
         UndelimitedStmt => "Parser error: Undelimited statement".to_string(),
         InvalidLiteral => "Parser error: Invalid literal".to_string(),

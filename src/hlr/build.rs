@@ -3,35 +3,41 @@ mod macros;
 
 use crate::hlr::{defs::*, lexer, token::Keyword};
 
-pub use crate::hlr::{lexer::LexerError, token::Token};
+pub use crate::hlr::{lexer::LexerErr, token::Token};
 
-pub fn build_program(input: &str) -> Result<Program, ParserError> {
-    let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
+pub fn build_program(input: &str) -> Result<Program, ParserErr> {
+    let tokens = lexer::get_tokens(input)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_program()
 }
 
 #[cfg(test)]
-fn build_expr(input: &str) -> Result<Expr, ParserError> {
-    let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
+fn build_expr(input: &str) -> Result<Expr, ParserErr> {
+    let tokens = lexer::get_tokens(input)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_expr(true)
 }
 
 #[cfg(test)]
-fn build_block(input: &str) -> Result<Block, ParserError> {
-    let tokens = lexer::get_tokens(input).map_err(ParserError::LexerError)?;
+fn build_block(input: &str) -> Result<Block, ParserErr> {
+    let tokens = lexer::get_tokens(input)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_block()
 }
 
 #[derive(Debug)]
-pub enum ParserError {
-    LexerError(LexerError),
+pub enum ParserErr {
+    LexerErr(LexerErr),
     UnexpectedToken(Token),
     UndelimitedStmt,
     InvalidLiteral,
     UnexpectedEOF,
+}
+
+impl From<LexerErr> for ParserErr {
+    fn from(err: LexerErr) -> Self {
+        ParserErr::LexerErr(err)
+    }
 }
 
 struct HlrParser<'a> {
@@ -62,36 +68,36 @@ impl<'a> HlrParser<'a> {
         self.input.get(self.position)
     }
 
-    fn expect_keyword(&mut self, keyword: Keyword) -> Result<(), ParserError> {
-        let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
+    fn expect_keyword(&mut self, keyword: Keyword) -> Result<(), ParserErr> {
+        let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
             Token::Keyword(k) if *k == keyword => {
                 self.position += 1;
                 Ok(())
             }
-            token => Err(ParserError::UnexpectedToken(token.clone())),
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }
 
-    fn expect_identifier(&mut self) -> Result<String, ParserError> {
-        let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
+    fn expect_identifier(&mut self) -> Result<String, ParserErr> {
+        let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
             Token::Identifier(name) => {
                 let name = name.to_string();
                 self.position += 1;
                 Ok(name)
             }
-            token => Err(ParserError::UnexpectedToken(token.clone())),
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }
 
-    fn expect_token(&mut self, token: Token) -> Result<(), ParserError> {
-        let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
+    fn expect_token(&mut self, token: Token) -> Result<(), ParserErr> {
+        let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         if *current == token {
             self.position += 1;
             Ok(())
         } else {
-            Err(ParserError::UnexpectedToken(current.clone()))
+            Err(ParserErr::UnexpectedToken(current.clone()))
         }
     }
 
@@ -106,7 +112,7 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_program(&mut self) -> Result<Program, ParserError> {
+    fn parse_program(&mut self) -> Result<Program, ParserErr> {
         let mut program = Program::new();
 
         while let Some(token) = self.current() {
@@ -114,14 +120,14 @@ impl<'a> HlrParser<'a> {
                 Token::Keyword(Keyword::Fn) => program.fns.push(self.parse_function()?),
                 Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
                 Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
-                token => return Err(ParserError::UnexpectedToken(token.clone())),
+                token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
         }
 
         Ok(program)
     }
 
-    fn parse_function(&mut self) -> Result<Fn, ParserError> {
+    fn parse_function(&mut self) -> Result<Fn, ParserErr> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 
@@ -147,7 +153,7 @@ impl<'a> HlrParser<'a> {
         })
     }
 
-    fn parse_fn_generic_params(&mut self) -> Result<Vec<String>, ParserError> {
+    fn parse_fn_generic_params(&mut self) -> Result<Vec<String>, ParserErr> {
         self.expect_token(Token::Smaller)?;
 
         let mut params = Vec::new();
@@ -163,7 +169,7 @@ impl<'a> HlrParser<'a> {
         Ok(params)
     }
 
-    fn parse_fn_params(&mut self) -> Result<Vec<Param>, ParserError> {
+    fn parse_fn_params(&mut self) -> Result<Vec<Param>, ParserErr> {
         let mut params = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             params.push(self.parse_function_param()?);
@@ -175,14 +181,14 @@ impl<'a> HlrParser<'a> {
         Ok(params)
     }
 
-    fn parse_function_param(&mut self) -> Result<Param, ParserError> {
+    fn parse_function_param(&mut self) -> Result<Param, ParserErr> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let ty = self.parse_ty_annot()?;
         Ok(Param { name, ty })
     }
 
-    fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot>, ParserError> {
+    fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot>, ParserErr> {
         if self.advance_if(Token::Arrow) {
             let return_type = self.parse_ty_annot()?;
             Ok(Some(return_type))
@@ -191,7 +197,7 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_struct(&mut self) -> Result<Struct, ParserError> {
+    fn parse_struct(&mut self) -> Result<Struct, ParserErr> {
         self.expect_keyword(Keyword::Struct)?;
         let name = self.expect_identifier()?;
 
@@ -202,7 +208,7 @@ impl<'a> HlrParser<'a> {
         Ok(Struct { name, fields })
     }
 
-    fn parse_struct_fields(&mut self) -> Result<Vec<StructField>, ParserError> {
+    fn parse_struct_fields(&mut self) -> Result<Vec<StructField>, ParserErr> {
         let mut fields = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             fields.push(self.parse_struct_field()?);
@@ -214,14 +220,14 @@ impl<'a> HlrParser<'a> {
         Ok(fields)
     }
 
-    fn parse_struct_field(&mut self) -> Result<StructField, ParserError> {
+    fn parse_struct_field(&mut self) -> Result<StructField, ParserErr> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let ty = self.parse_ty_annot()?;
         Ok(StructField { name, ty })
     }
 
-    fn parse_enum(&mut self) -> Result<Enum, ParserError> {
+    fn parse_enum(&mut self) -> Result<Enum, ParserErr> {
         self.expect_keyword(Keyword::Enum)?;
         let name = self.expect_identifier()?;
 
@@ -232,7 +238,7 @@ impl<'a> HlrParser<'a> {
         Ok(Enum { name, variants })
     }
 
-    fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant>, ParserError> {
+    fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant>, ParserErr> {
         let mut variants = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             variants.push(self.parse_enum_variant()?);
@@ -244,7 +250,7 @@ impl<'a> HlrParser<'a> {
         Ok(variants)
     }
 
-    fn parse_enum_variant(&mut self) -> Result<EnumVariant, ParserError> {
+    fn parse_enum_variant(&mut self) -> Result<EnumVariant, ParserErr> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::LBrace)?;
         let fields = self.parse_struct_fields()?;
@@ -253,7 +259,7 @@ impl<'a> HlrParser<'a> {
     }
 
     /// TODO allow loop/if/block expression statements without delimiting semicolon
-    fn parse_block(&mut self) -> Result<Block, ParserError> {
+    fn parse_block(&mut self) -> Result<Block, ParserErr> {
         let mut stmts = Vec::new();
         let mut return_expr = None;
 
@@ -271,7 +277,7 @@ impl<'a> HlrParser<'a> {
             if stmt_kind == StmtKind::UndelimitedExpr {
                 // expect that we are at the end of the block
                 if self.current() != Some(&Token::RBrace) {
-                    return Err(ParserError::UndelimitedStmt);
+                    return Err(ParserErr::UndelimitedStmt);
                 }
             }
 
@@ -295,7 +301,7 @@ impl<'a> HlrParser<'a> {
         Ok(Block { stmts, return_expr })
     }
 
-    fn parse_stmt(&mut self) -> Result<(Stmt, StmtKind), ParserError> {
+    fn parse_stmt(&mut self) -> Result<(Stmt, StmtKind), ParserErr> {
         match self.current() {
             Some(Token::Keyword(Keyword::Let)) => {
                 let stmt = self.parse_let_stmt()?;
@@ -342,7 +348,7 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_let_stmt(&mut self) -> Result<Stmt, ParserError> {
+    fn parse_let_stmt(&mut self) -> Result<Stmt, ParserErr> {
         self.expect_keyword(Keyword::Let)?;
         let name = self.expect_identifier()?;
         let ty_annot = if self.advance_if(Token::Colon) {
@@ -355,7 +361,7 @@ impl<'a> HlrParser<'a> {
         Ok(Stmt::Let { name, ty_annot, value })
     }
 
-    fn parse_return_stmt(&mut self) -> Result<Stmt, ParserError> {
+    fn parse_return_stmt(&mut self) -> Result<Stmt, ParserErr> {
         self.expect_keyword(Keyword::Return)?;
         if let Some(Token::Semicolon) = self.current() {
             Ok(Stmt::Return(None))
@@ -365,21 +371,21 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_break_stmt(&mut self) -> Result<Stmt, ParserError> {
+    fn parse_break_stmt(&mut self) -> Result<Stmt, ParserErr> {
         self.expect_keyword(Keyword::Break)?;
         Ok(Stmt::Break)
     }
 
-    fn parse_expr_stmt(&mut self) -> Result<Stmt, ParserError> {
+    fn parse_expr_stmt(&mut self) -> Result<Stmt, ParserErr> {
         let expr = self.parse_expr(true)?;
         Ok(Stmt::Expr(expr))
     }
 
-    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
+    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         self.parse_assign_expr(allow_top_level_struct_expr)
     }
 
-    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
+    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let target = self.parse_disjunction(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
             let value = self.parse_disjunction(allow_top_level_struct_expr)?;
@@ -423,7 +429,7 @@ impl<'a> HlrParser<'a> {
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
+    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         if self.advance_if(Token::Asterisk) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
             Ok(Expr::Deref { base: Box::new(base) })
@@ -440,7 +446,7 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
+    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;
 
         loop {
@@ -474,12 +480,12 @@ impl<'a> HlrParser<'a> {
         Ok(acc)
     }
 
-    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserError> {
-        let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
+    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+        let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
 
         match current {
             Token::NumLiteral(value) => {
-                let value = value.parse().map_err(|_| ParserError::InvalidLiteral)?;
+                let value = value.parse().map_err(|_| ParserErr::InvalidLiteral)?;
                 self.position += 1;
                 Ok(Expr::Lit(Lit::Int(value)))
             }
@@ -538,11 +544,11 @@ impl<'a> HlrParser<'a> {
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
             Token::Keyword(Keyword::Match) => self.parse_match(),
 
-            token => Err(ParserError::UnexpectedToken(token.clone())),
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expr, ParserError> {
+    fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::If)?;
         let condition = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
@@ -558,13 +564,13 @@ impl<'a> HlrParser<'a> {
         })
     }
 
-    fn parse_loop(&mut self) -> Result<Expr, ParserError> {
+    fn parse_loop(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
         Ok(Expr::Loop { body })
     }
 
-    fn parse_match(&mut self) -> Result<Expr, ParserError> {
+    fn parse_match(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::Match)?;
         let scrutinee = self.parse_expr(false)?; // Don't allow top-level struct in match scrutinee
 
@@ -594,7 +600,7 @@ impl<'a> HlrParser<'a> {
         })
     }
 
-    fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserError> {
+    fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserErr> {
         let variant = self.expect_identifier()?;
 
         self.expect_token(Token::LBrace)?;
@@ -621,8 +627,8 @@ impl<'a> HlrParser<'a> {
         Ok(StructPattern { variant, fields })
     }
 
-    fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserError> {
-        let current = self.current().ok_or(ParserError::UnexpectedEOF)?;
+    fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
+        let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
             Token::Identifier(ident) => {
                 let ident = ident.clone();
@@ -666,7 +672,7 @@ impl<'a> HlrParser<'a> {
 
                 Ok(TyAnnot::Fn { param_tys, return_ty })
             }
-            token => Err(ParserError::UnexpectedToken(token.clone())),
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }
 }

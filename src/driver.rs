@@ -27,7 +27,7 @@ pub fn compile(
     let mut ctxt = ctxt::Ctxt::new();
 
     print_pretty("Building HLR from source");
-    let hlr = hlr::build_program(source).map_err(|parser_error| err::print_parser_error(&parser_error, source))?;
+    let hlr = hlr::build_program(source).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
 
     print_pretty("Building MLR from HLR");
     register_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error registering types")?;

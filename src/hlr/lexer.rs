@@ -1,11 +1,11 @@
 use crate::hlr::token::{Keyword, Token};
 
-pub fn get_tokens(input: &str) -> Result<Vec<Token>, LexerError> {
+pub fn get_tokens(input: &str) -> Result<Vec<Token>, LexerErr> {
     Lexer::new(input).collect()
 }
 
 #[derive(Debug, Clone)]
-pub struct LexerError {
+pub struct LexerErr {
     pub position: usize,
 }
 
@@ -134,9 +134,9 @@ impl<'a> Lexer<'a> {
 }
 
 impl Iterator for Lexer<'_> {
-    type Item = Result<Token, LexerError>;
+    type Item = Result<Token, LexerErr>;
 
-    fn next(&mut self) -> Option<Result<Token, LexerError>> {
+    fn next(&mut self) -> Option<Result<Token, LexerErr>> {
         self.skip_whitespace();
         if self.position >= self.input.len() {
             return None;
@@ -147,7 +147,7 @@ impl Iterator for Lexer<'_> {
             .or_else(|| self.try_parse_one_char_token())
             .or_else(|| self.try_parse_identifier_or_keyword())
             .or_else(|| self.try_parse_number())
-            .ok_or(LexerError {
+            .ok_or(LexerErr {
                 position: self.position,
             });
 

@@ -4,7 +4,7 @@ macro_rules! parse_left_associative {
         $next_fn:ident,
         [ $( $token:pat => $op:expr ),+ $(,)? ]
     ) => {
-        fn $name(&mut self, allow_struct: bool) -> Result<Expr, ParserError> {
+        fn $name(&mut self, allow_struct: bool) -> Result<Expr, ParserErr> {
             let mut acc = self.$next_fn(allow_struct)?;
 
             while let Some(token) = self.current() {
