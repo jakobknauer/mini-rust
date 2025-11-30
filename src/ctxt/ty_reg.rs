@@ -8,7 +8,6 @@ use std::{
 use crate::{
     ctxt::{fns::GenParam, ty::*},
     hlr,
-    hlr2mlr::TyErr,
 };
 
 pub struct TyReg {
@@ -31,6 +30,12 @@ pub struct TyReg {
 pub enum UnificationError {
     FunctionParamCountMismatch,
     TypeMismatch,
+}
+pub struct NotAStructErr {
+    pub ty: Ty,
+}
+pub struct NotAnEnumErr {
+    pub ty: Ty,
 }
 
 impl TyReg {
@@ -65,7 +70,7 @@ impl TyReg {
         ty
     }
 
-    pub fn get_undef_ty(&mut self) -> Ty {
+    pub fn new_undefined_ty(&mut self) -> Ty {
         let ty = self.next_ty;
         self.next_ty.0 += 1;
         self.tys.insert(ty, None);
@@ -343,11 +348,11 @@ impl TyReg {
         }
     }
 
-    pub fn get_struct_def_by_ty(&self, ty: &Ty) -> Result<&StructDef, TyErr> {
+    pub fn get_struct_def_by_ty(&self, ty: &Ty) -> Result<&StructDef, NotAStructErr> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
 
         let &TyDef::Named(_, Named::Struct(struct_)) = ty_def else {
-            return Err(TyErr::NotAStruct { ty: *ty });
+            return Err(NotAStructErr { ty: *ty });
         };
 
         let struct_def = self
@@ -357,11 +362,11 @@ impl TyReg {
         Ok(struct_def)
     }
 
-    pub fn get_enum_def_by_ty(&self, ty: &Ty) -> Result<&EnumDef, TyErr> {
+    pub fn get_enum_def_by_ty(&self, ty: &Ty) -> Result<&EnumDef, NotAnEnumErr> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
 
         let &TyDef::Named(_, Named::Enum(enum_)) = ty_def else {
-            return Err(TyErr::NotAnEnum { ty: *ty });
+            return Err(NotAnEnumErr { ty: *ty });
         };
 
         let enum_def = self.get_enum_def(&enum_).expect("enum definition should be registered");

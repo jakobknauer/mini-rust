@@ -1,9 +1,8 @@
-use crate::{
-    ctxt::{self, fns, mlr::*, ty},
-    hlr2mlr::{Hlr2MlrErr, TyErr},
-};
+mod err;
 
-type MlrBuilderResult<T> = std::result::Result<T, Hlr2MlrErr>;
+use crate::ctxt::{self, fns, mlr::*, ty};
+
+pub use err::{TyErr, TyResult, into_ty_err};
 
 pub struct Typechecker<'a> {
     tys: &'a mut ctxt::TyReg,
@@ -20,7 +19,7 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    pub fn infer_val_ty(&mut self, val: Val) -> MlrBuilderResult<ty::Ty> {
+    pub fn infer_val_ty(&mut self, val: Val) -> TyResult<ty::Ty> {
         use ValDef::*;
 
         let val_def = self.mlr.get_val_def(&val);
@@ -36,7 +35,7 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn infer_place_ty(&mut self, place: Place) -> MlrBuilderResult<ty::Ty> {
+    pub fn infer_place_ty(&mut self, place: Place) -> TyResult<ty::Ty> {
         use PlaceDef::*;
 
         let place_def = self.mlr.get_place_def(place);
@@ -53,7 +52,7 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn infer_op_ty(&mut self, op: Op) -> MlrBuilderResult<ty::Ty> {
+    pub fn infer_op_ty(&mut self, op: Op) -> TyResult<ty::Ty> {
         use OpDef::*;
 
         let op_def = self.mlr.get_op_def(&op);
@@ -68,7 +67,7 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    fn infer_ty_of_constant(&self, constant: &Const) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_constant(&self, constant: &Const) -> TyResult<ty::Ty> {
         use Const::*;
 
         let ty = match constant {
@@ -77,10 +76,15 @@ impl<'a> Typechecker<'a> {
             Unit => ty::Primitive::Unit,
         };
 
-        self.tys.get_primitive_ty(ty).ok_or(Hlr2MlrErr::UnknownPrimitiveTy)
+        let ty = self
+            .tys
+            .get_primitive_ty(ty)
+            .expect("primitive type should be registered");
+
+        Ok(ty)
     }
 
-    fn infer_ty_of_call(&mut self, callable: &Op, args: &[Op]) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_call(&mut self, callable: &Op, args: &[Op]) -> TyResult<ty::Ty> {
         let ty = self.mlr.get_op_ty(callable);
         let callable_ty_def = self.tys.get_ty_def(&ty).expect("type of callable should be registered");
 
@@ -108,20 +112,19 @@ impl<'a> Typechecker<'a> {
                     index: i,
                     expected: *param_ty,
                     actual: arg_ty,
-                })
-                .map_err(Hlr2MlrErr::TyErr)?;
+                })?;
         }
 
         Ok(return_ty)
     }
 
-    fn infer_ty_of_addr_of_place(&mut self, place: &Place) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_addr_of_place(&mut self, place: &Place) -> TyResult<ty::Ty> {
         let place_ty = self.mlr.get_place_ty(place);
         let ref_ty = self.tys.register_ref_ty(place_ty);
         Ok(ref_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {
         let signature = self
             .fns
             .get_sig(&fn_specialization.fn_)
@@ -145,13 +148,13 @@ impl<'a> Typechecker<'a> {
         Ok(fn_spec_ty)
     }
 
-    fn infer_ty_of_loc(&self, loc: &Loc) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_loc(&self, loc: &Loc) -> TyResult<ty::Ty> {
         Ok(self.mlr.get_loc_ty(loc))
     }
 
-    fn infer_ty_of_field_access_place(&self, base: &Place, field_index: &usize) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_field_access_place(&self, base: &Place, field_index: &usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let struct_def = self.tys.get_struct_def_by_ty(&base_ty).map_err(Hlr2MlrErr::TyErr)?;
+        let struct_def = self.tys.get_struct_def_by_ty(&base_ty).map_err(into_ty_err)?;
 
         let field_ty = struct_def
             .fields
@@ -162,9 +165,9 @@ impl<'a> Typechecker<'a> {
         Ok(field_ty)
     }
 
-    fn infer_ty_of_enum_discriminant(&self, base: &Place) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_enum_discriminant(&self, base: &Place) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let _enum_def = self.tys.get_enum_def_by_ty(&base_ty).map_err(Hlr2MlrErr::TyErr)?;
+        let _enum_def = self.tys.get_enum_def_by_ty(&base_ty).map_err(into_ty_err)?;
 
         // the discriminant is always an integer
         let int_ty = self
@@ -174,21 +177,18 @@ impl<'a> Typechecker<'a> {
         Ok(int_ty)
     }
 
-    fn infer_ty_of_project_to_variant_place(&self, base: &Place, variant_index: &usize) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_project_to_variant_place(&self, base: &Place, variant_index: &usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let enum_def = self.tys.get_enum_def_by_ty(&base_ty).map_err(Hlr2MlrErr::TyErr)?;
-        let variant = enum_def
-            .variants
-            .get(*variant_index)
-            .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAnEnumVariant {
-                ty: base_ty,
-                variant_name: variant_index.to_string(),
-            }))?;
+        let enum_def = self.tys.get_enum_def_by_ty(&base_ty).map_err(into_ty_err)?;
+        let variant = enum_def.variants.get(*variant_index).ok_or(TyErr::NotAnEnumVariant {
+            ty: base_ty,
+            variant_name: variant_index.to_string(),
+        })?;
 
         Ok(variant.ty)
     }
 
-    fn infer_ty_of_deref_place(&mut self, op: &Op) -> MlrBuilderResult<ty::Ty> {
+    fn infer_ty_of_deref_place(&mut self, op: &Op) -> TyResult<ty::Ty> {
         let ref_ty = self.mlr.get_op_ty(op);
         let ty_def = self
             .tys

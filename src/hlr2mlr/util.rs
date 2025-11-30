@@ -3,14 +3,16 @@ use std::collections::HashSet;
 use crate::{
     ctxt::{fns, mlr, ty},
     hlr,
-    hlr2mlr::{Hlr2MlrErr, Result, TyErr},
-    typechecker::Typechecker,
+    hlr2mlr::{Hlr2MlrErr, Result},
+    typechecker::{TyErr, Typechecker, into_ty_err},
 };
 
 impl<'a> super::Hlr2Mlr<'a> {
     pub fn insert_val(&mut self, val_def: mlr::ValDef) -> Result<mlr::Val> {
         let val = self.ctxt.mlr.insert_val(val_def);
-        Typechecker::new(self.ctxt).infer_val_ty(val)?;
+        Typechecker::new(self.ctxt)
+            .infer_val_ty(val)
+            .map_err(Hlr2MlrErr::TyErr)?;
         Ok(val)
     }
 
@@ -68,7 +70,7 @@ impl<'a> super::Hlr2Mlr<'a> {
     }
 
     pub fn insert_fresh_alloc(&mut self) -> Result<mlr::Place> {
-        let undef = self.ctxt.tys.get_undef_ty();
+        let undef = self.ctxt.tys.new_undefined_ty();
         self.insert_alloc_with_ty(undef)
     }
 
@@ -132,7 +134,9 @@ impl<'a> super::Hlr2Mlr<'a> {
 
     pub fn insert_place(&mut self, place_def: mlr::PlaceDef) -> Result<mlr::Place> {
         let place = self.ctxt.mlr.insert_place(place_def);
-        Typechecker::new(self.ctxt).infer_place_ty(place)?;
+        Typechecker::new(self.ctxt)
+            .infer_place_ty(place)
+            .map_err(Hlr2MlrErr::TyErr)?;
         Ok(place)
     }
 
@@ -163,7 +167,7 @@ impl<'a> super::Hlr2Mlr<'a> {
 
     pub fn insert_op(&mut self, op_def: mlr::OpDef) -> Result<mlr::Op> {
         let op = self.ctxt.mlr.insert_op(op_def);
-        Typechecker::new(self.ctxt).infer_op_ty(op)?;
+        Typechecker::new(self.ctxt).infer_op_ty(op).map_err(Hlr2MlrErr::TyErr)?;
         Ok(op)
     }
 
@@ -257,26 +261,31 @@ impl<'a> super::Hlr2Mlr<'a> {
     ) -> Result<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
 
-        let struct_def = self.ctxt.tys.get_struct_def_by_ty(ty).map_err(Hlr2MlrErr::TyErr)?;
+        let struct_def = self
+            .ctxt
+            .tys
+            .get_struct_def_by_ty(ty)
+            .map_err(into_ty_err)
+            .map_err(Hlr2MlrErr::TyErr)?;
 
         let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
-            return TyErr::InitializerMissingFields {
+            return Hlr2MlrErr::TyErr(TyErr::InitializerMissingFields {
                 ty: *ty,
                 missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
-            }
+            })
             .into();
         }
 
         let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
         if !extra_fields.is_empty() {
-            return TyErr::InitializerExtraFields {
+            return Hlr2MlrErr::TyErr(TyErr::InitializerExtraFields {
                 ty: *ty,
                 extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
-            }
+            })
             .into();
         }
 

@@ -1,7 +1,8 @@
 use crate::{
     ctxt::{mlr, ty},
     hlr,
-    hlr2mlr::{Hlr2MlrErr, Result, TyErr, macros::assign_to_fresh_alloc},
+    hlr2mlr::{Hlr2MlrErr, Result, macros::assign_to_fresh_alloc},
+    typechecker::{TyErr, into_ty_err},
 };
 
 impl<'a> super::Hlr2Mlr<'a> {
@@ -12,10 +13,11 @@ impl<'a> super::Hlr2Mlr<'a> {
                     .variants
                     .iter()
                     .position(|variant| variant.name == arm.pattern.variant)
-                    .ok_or(Hlr2MlrErr::TyErr(TyErr::NotAnEnumVariant {
+                    .ok_or(TyErr::NotAnEnumVariant {
                         ty: *ty,
                         variant_name: arm.pattern.variant.clone(),
-                    }))
+                    })
+                    .map_err(Hlr2MlrErr::TyErr)
             })
             .collect::<Result<_>>()
     }
@@ -41,7 +43,12 @@ impl<'a> super::Hlr2Mlr<'a> {
     ) -> Result<mlr::Val> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(enum_ty).map_err(Hlr2MlrErr::TyErr)?;
+        let enum_def = self
+            .ctxt
+            .tys
+            .get_enum_def_by_ty(enum_ty)
+            .map_err(into_ty_err)
+            .map_err(Hlr2MlrErr::TyErr)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
@@ -50,6 +57,7 @@ impl<'a> super::Hlr2Mlr<'a> {
             .ctxt
             .tys
             .get_struct_def_by_ty(&enum_variant.ty)
+            .map_err(into_ty_err)
             .map_err(Hlr2MlrErr::TyErr)?;
 
         let field_indices: Vec<usize> = arm

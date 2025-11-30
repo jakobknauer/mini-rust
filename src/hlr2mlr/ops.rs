@@ -2,6 +2,7 @@ use crate::{
     ctxt::{fns, ty},
     hlr,
     hlr2mlr::{self, Hlr2MlrErr, Result},
+    typechecker::TyErr,
 };
 
 macro_rules! op_match {
@@ -20,10 +21,10 @@ macro_rules! op_match {
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
             _ => {
-                return crate::hlr2mlr::TyErr::OperatorResolutionFailed {
+                return Hlr2MlrErr::TyErr(TyErr::OperatorResolutionFailed {
                     operator: format!("{{$operator:?}}"),
                     operand_tys: ($left, $right),
-                }
+                })
                 .into();
             }
         }

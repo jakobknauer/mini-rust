@@ -1,4 +1,4 @@
-use crate::{ctxt, hlr, hlr2mlr};
+use crate::{ctxt, hlr, hlr2mlr, typechecker::TyErr};
 
 pub fn print_parser_error(err: &hlr::ParserError, _: &str) -> String {
     use hlr::ParserError::*;
@@ -26,8 +26,8 @@ pub fn print_mlr_builder_error(fn_name: &str, err: hlr2mlr::Hlr2MlrErr, ctxt: &c
     }
 }
 
-fn print_ty_error(fn_name: &str, err: hlr2mlr::TyErr, ctxt: &ctxt::Ctxt) -> String {
-    use hlr2mlr::TyErr::*;
+fn print_ty_error(fn_name: &str, err: TyErr, ctxt: &ctxt::Ctxt) -> String {
+    use TyErr::*;
 
     let msg = match err {
         AssignStmtTyMismatch {

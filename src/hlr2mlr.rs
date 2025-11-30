@@ -12,9 +12,10 @@ use std::collections::{HashMap, VecDeque};
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
+    typechecker::{TyErr, into_ty_err},
 };
 
-pub use err::{Hlr2MlrErr, Result, TyErr};
+pub use err::{Hlr2MlrErr, Result};
 
 pub struct Hlr2Mlr<'a> {
     input: &'a hlr::Fn,
@@ -296,9 +297,9 @@ impl<'a> Hlr2Mlr<'a> {
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&ty, &variant_index, fields)
         } else {
-            TyErr::UnresolvableTyName {
+            Hlr2MlrErr::TyErr(TyErr::UnresolvableTyName {
                 ty_name: struct_name.to_string(),
-            }
+            })
             .into()
         }
     }
@@ -326,7 +327,12 @@ impl<'a> Hlr2Mlr<'a> {
 
         // Fill fields
         let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(ty).map_err(Hlr2MlrErr::TyErr)?;
+        let enum_def = self
+            .ctxt
+            .tys
+            .get_enum_def_by_ty(ty)
+            .map_err(into_ty_err)
+            .map_err(Hlr2MlrErr::TyErr)?;
         let variant_ty = enum_def
             .variants
             .get(*variant_index)
@@ -356,6 +362,7 @@ impl<'a> Hlr2Mlr<'a> {
             .ctxt
             .tys
             .get_enum_def_by_ty(&scrutinee_ty)
+            .map_err(into_ty_err)
             .map_err(Hlr2MlrErr::TyErr)?;
         let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
 
@@ -386,7 +393,7 @@ impl<'a> Hlr2Mlr<'a> {
     fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> Result<()> {
         let annot_ty = match ty_annot {
             Some(ty_annot) => self.resolve_hlr_ty_annot(ty_annot)?,
-            None => self.ctxt.tys.get_undef_ty(),
+            None => self.ctxt.tys.new_undefined_ty(),
         };
         let loc = self.ctxt.mlr.insert_typed_loc(annot_ty);
         self.insert_alloc_stmt(loc)?;
@@ -448,6 +455,7 @@ impl<'a> Hlr2Mlr<'a> {
             .ctxt
             .tys
             .get_struct_def_by_ty(&base_ty)
+            .map_err(into_ty_err)
             .map_err(Hlr2MlrErr::TyErr)?;
 
         let field_index = struct_def

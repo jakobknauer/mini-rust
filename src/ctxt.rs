@@ -5,7 +5,7 @@ pub mod ty;
 mod ty_reg;
 
 pub use fn_reg::FnReg;
-pub use ty_reg::TyReg;
+pub use ty_reg::*;
 
 use mlr::*;
 
