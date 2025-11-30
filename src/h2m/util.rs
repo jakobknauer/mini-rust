@@ -188,11 +188,10 @@ impl<'a> super::H2M<'a> {
     }
 
     pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Ty, usize)> {
-        for (enum_, enum_def) in self.ctxt.tys.get_all_enums() {
+        for (ty, enum_def) in self.ctxt.tys.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
-                    let ty = self.ctxt.tys.get_ty_of_enum(enum_).expect("enum type should be known");
-                    return Some((ty, idx));
+                    return Some((*ty, idx));
                 }
             }
         }

@@ -62,7 +62,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
     }
 
     fn get_or_define_ty(&mut self, ty: &mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
-        use mr_tys::{Named::*, Primitive::*, TyDef::*};
+        use mr_tys::{Primitive::*, TyDef::*};
 
         if self.types.contains_key(ty) {
             return self.types.get(ty).cloned();
@@ -71,15 +71,13 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
 
         let inkwell_type = match *type_ {
-            Named(ref name, ref named_type) => match *named_type {
-                Primitve(ref primitive_type) => match primitive_type {
-                    Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
-                    Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
-                    Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
-                },
-                Struct(struct_) => self.define_struct(&name.clone(), ty, &struct_),
-                Enum(enum_) => self.define_enum(&name.clone(), &enum_),
+            Primitve(ref primitive_type) => match primitive_type {
+                Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
+                Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
+                Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             },
+            Struct(struct_) => self.define_struct(ty, &struct_),
+            Enum(enum_) => self.define_enum(&enum_),
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(_) => unreachable!("generic type variables should be substituted before this point"),
@@ -99,11 +97,12 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn define_struct(&mut self, name: &str, ty: &mr_tys::Ty, struct_: &mr_tys::Struct) -> AnyTypeEnum<'iw> {
-        let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(name);
+    fn define_struct(&mut self, ty: &mr_tys::Ty, struct_: &mr_tys::Struct) -> AnyTypeEnum<'iw> {
+        let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap().clone();
+
+        let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(&struct_def.name);
         self.types.insert(*ty, iw_struct.as_any_type_enum());
 
-        let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap().clone();
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
@@ -114,7 +113,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
         iw_struct.as_any_type_enum()
     }
 
-    fn define_enum(&mut self, name: &str, enum_: &mr_tys::Enum) -> AnyTypeEnum<'iw> {
+    fn define_enum(&mut self, enum_: &mr_tys::Enum) -> AnyTypeEnum<'iw> {
         let enum_def = self.mr_ctxt.tys.get_enum_def(enum_).unwrap().clone();
 
         let discrim_bits = 32;
@@ -132,7 +131,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
 
         let data_array_type = self.iw_ctxt.i8_type().array_type(max_variant_size as u32);
 
-        let enum_struct = self.iw_ctxt.opaque_struct_type(name);
+        let enum_struct = self.iw_ctxt.opaque_struct_type(&enum_def.name);
         enum_struct.set_body(
             &[discrim_type.as_basic_type_enum(), data_array_type.as_basic_type_enum()],
             false,

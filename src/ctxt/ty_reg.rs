@@ -1,9 +1,5 @@
 use itertools::Itertools;
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, HashMap},
-    hash::Hash,
-};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash};
 
 use crate::{
     ctxt::{fns::GenParam, ty::*},
@@ -13,14 +9,15 @@ use crate::{
 pub struct TyReg {
     tys: HashMap<Ty, Option<TyDef>>,
     tys_inv: HashMap<TyDef, Ty>,
-    structs: HashMap<Struct, StructDef>,
-    enums: HashMap<Enum, EnumDef>,
 
     i32_ty: Option<Ty>,
     bool_ty: Option<Ty>,
     unit_ty: Option<Ty>,
 
-    named_tys: BTreeMap<String, Ty>,
+    structs: HashMap<Struct, StructDef>,
+    enums: HashMap<Enum, EnumDef>,
+
+    named_tys: HashMap<String, Ty>,
 
     next_ty: Ty,
     next_struct: Struct,
@@ -50,7 +47,7 @@ impl TyReg {
             bool_ty: None,
             unit_ty: None,
 
-            named_tys: BTreeMap::new(),
+            named_tys: HashMap::new(),
 
             next_ty: Ty(0),
             next_struct: Struct(0),
@@ -77,20 +74,20 @@ impl TyReg {
         ty
     }
 
-    fn register_named_ty(&mut self, name: &str, ty_def: Named) -> Result<Ty, ()> {
+    fn register_named_ty(&mut self, name: &str, ty_def: TyDef) -> Result<Ty, ()> {
         if self.named_tys.contains_key(name) {
             Err(())
         } else {
-            let ty = self.register_ty(TyDef::Named(name.to_string(), ty_def));
+            let ty = self.register_ty(ty_def);
             self.named_tys.insert(name.to_string(), ty);
             Ok(ty)
         }
     }
 
     pub fn register_primitive_tys(&mut self) -> Result<(), ()> {
-        self.i32_ty = Some(self.register_named_ty("i32", Named::Primitve(Primitive::Integer32))?);
-        self.bool_ty = Some(self.register_named_ty("bool", Named::Primitve(Primitive::Boolean))?);
-        self.unit_ty = Some(self.register_named_ty("()", Named::Primitve(Primitive::Unit))?);
+        self.i32_ty = Some(self.register_named_ty("i32", TyDef::Primitve(Primitive::Integer32))?);
+        self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitve(Primitive::Boolean))?);
+        self.unit_ty = Some(self.register_named_ty("()", TyDef::Primitve(Primitive::Unit))?);
         Ok(())
     }
 
@@ -98,8 +95,14 @@ impl TyReg {
         let struct_ = self.next_struct;
         self.next_struct.0 += 1;
 
-        let ty = self.register_named_ty(name, Named::Struct(struct_))?;
-        self.structs.insert(struct_, StructDef { fields: vec![] });
+        let ty = self.register_named_ty(name, TyDef::Struct(struct_))?;
+        self.structs.insert(
+            struct_,
+            StructDef {
+                name: name.to_string(),
+                fields: vec![],
+            },
+        );
         Ok(ty)
     }
 
@@ -107,8 +110,14 @@ impl TyReg {
         let enum_ = self.next_enum;
         self.next_enum.0 += 1;
 
-        let ty = self.register_named_ty(name, Named::Enum(enum_))?;
-        self.enums.insert(enum_, EnumDef { variants: vec![] });
+        let ty = self.register_named_ty(name, TyDef::Enum(enum_))?;
+        self.enums.insert(
+            enum_,
+            EnumDef {
+                name: name.to_string(),
+                variants: vec![],
+            },
+        );
         Ok(ty)
     }
 
@@ -182,7 +191,7 @@ impl TyReg {
 
     pub fn get_mut_struct_def_by_name(&mut self, name: &str) -> Option<&mut StructDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
-        if let TyDef::Named(_, Named::Struct(struct_)) = *ty_def {
+        if let TyDef::Struct(struct_) = *ty_def {
             self.structs.get_mut(&struct_)
         } else {
             None
@@ -191,7 +200,7 @@ impl TyReg {
 
     pub fn get_mut_enum_def_by_name(&mut self, name: &str) -> Option<&mut EnumDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
-        if let TyDef::Named(_, Named::Enum(enum_)) = *ty_def {
+        if let TyDef::Enum(enum_) = *ty_def {
             self.enums.get_mut(&enum_)
         } else {
             None
@@ -208,7 +217,6 @@ impl TyReg {
         };
 
         match ty_def {
-            TyDef::Named(name, _) => name.clone(),
             TyDef::Fn { param_tys, return_ty } => {
                 let mut param_names = param_tys.iter().map(|pt| self.get_string_rep(pt));
                 let return_name = self.get_string_rep(return_ty);
@@ -217,6 +225,21 @@ impl TyReg {
             TyDef::Ref(ty) => format!("&{}", self.get_string_rep(ty)),
             TyDef::Alias(ty) => self.get_string_rep(ty),
             TyDef::GenVar(name) => name.clone(),
+            TyDef::Primitve(primitive) => match primitive {
+                Primitive::Integer32 => "i32".to_string(),
+                Primitive::Boolean => "bool".to_string(),
+                Primitive::Unit => "()".to_string(),
+            },
+            TyDef::Struct(struct_) => {
+                let struct_def = self
+                    .get_struct_def(struct_)
+                    .expect("struct definition should be registered");
+                struct_def.name.clone()
+            }
+            TyDef::Enum(enum_) => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                enum_def.name.clone()
+            }
         }
     }
 
@@ -271,7 +294,8 @@ impl TyReg {
 
                 (&Ref(inner1), &Ref(inner2)) => self.unify(&inner1, &inner2),
 
-                (Named(_, n1), Named(_, n2)) if n1 == n2 => Ok(()),
+                (Enum(e1), Enum(e2)) if e1 == e2 => Ok(()),
+                (Struct(s1), Struct(s2)) if s1 == s2 => Ok(()),
 
                 _ => Err(UnificationError::TypeMismatch),
             },
@@ -295,24 +319,14 @@ impl TyReg {
         .expect("primitive type should be registered")
     }
 
-    pub fn get_named_ty(&self, named_ty: Named) -> Option<Ty> {
-        self.tys.iter().find_map(|(ty, ty_def)| {
-            if let Some(TyDef::Named(_, nt)) = ty_def
-                && *nt == named_ty
-            {
-                Some(*ty)
-            } else {
-                None
-            }
+    pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&Ty, &EnumDef)> {
+        self.tys.iter().filter_map(move |(ty, ty_def_opt)| {
+            let TyDef::Enum(enum_) = ty_def_opt.as_ref()? else {
+                return None;
+            };
+            let enum_def = self.enums.get(enum_).expect("enum definition should be registered");
+            Some((ty, enum_def))
         })
-    }
-
-    pub fn get_ty_of_enum(&self, enum_: &Enum) -> Option<Ty> {
-        self.get_named_ty(Named::Enum(*enum_))
-    }
-
-    pub fn get_all_enums(&self) -> impl IntoIterator<Item = (&Enum, &EnumDef)> {
-        self.enums.iter()
     }
 
     pub fn substitute_gen_vars(&mut self, ty: &Ty, substitutions: &HashMap<impl Borrow<str> + Eq + Hash, Ty>) -> Ty {
@@ -352,7 +366,7 @@ impl TyReg {
     pub fn get_struct_def_by_ty(&self, ty: &Ty) -> Result<&StructDef, NotAStructErr> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
 
-        let &TyDef::Named(_, Named::Struct(struct_)) = ty_def else {
+        let &TyDef::Struct(struct_) = ty_def else {
             return Err(NotAStructErr { ty: *ty });
         };
 
@@ -366,7 +380,7 @@ impl TyReg {
     pub fn get_enum_def_by_ty(&self, ty: &Ty) -> Result<&EnumDef, NotAnEnumErr> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
 
-        let &TyDef::Named(_, Named::Enum(enum_)) = ty_def else {
+        let &TyDef::Enum(enum_) = ty_def else {
             return Err(NotAnEnumErr { ty: *ty });
         };
 

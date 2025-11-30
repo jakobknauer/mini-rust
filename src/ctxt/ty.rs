@@ -9,18 +9,13 @@ pub struct Enum(pub usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
-    Named(String, Named),
+    Primitve(Primitive),
+    Struct(Struct),
+    Enum(Enum),
     Fn { param_tys: Vec<Ty>, return_ty: Ty },
     Ref(Ty),
     Alias(Ty),
     GenVar(String),
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Named {
-    Primitve(Primitive),
-    Struct(Struct),
-    Enum(Enum),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -32,6 +27,7 @@ pub enum Primitive {
 
 #[derive(Clone)]
 pub struct StructDef {
+    pub name: String,
     pub fields: Vec<StructField>,
 }
 
@@ -43,6 +39,7 @@ pub struct StructField {
 
 #[derive(Clone)]
 pub struct EnumDef {
+    pub name: String,
     pub variants: Vec<EnumVariant>,
 }
 
