@@ -1,6 +1,6 @@
 use crate::{
     ctxt::{mlr, ty},
-    h2m::{H2MErr, H2MResult, err::into_h2m_err, macros::assign_to_fresh_alloc},
+    h2m::{H2MResult, macros::assign_to_fresh_alloc},
     hlr,
     typechecker::TyErr,
 };
@@ -13,7 +13,7 @@ impl<'a> super::H2M<'a> {
         ty: &ty::Ty,
     ) -> H2MResult<Vec<usize>> {
         arms.iter()
-            .map(|arm| {
+            .map(|arm| -> H2MResult<_> {
                 enum_def
                     .variants
                     .iter()
@@ -22,7 +22,7 @@ impl<'a> super::H2M<'a> {
                         ty: *ty,
                         variant_name: arm.pattern.variant.clone(),
                     })
-                    .map_err(H2MErr::TyErr)
+                    .map_err(Into::into)
             })
             .collect::<H2MResult<_>>()
     }
@@ -48,30 +48,27 @@ impl<'a> super::H2M<'a> {
     ) -> H2MResult<mlr::Val> {
         let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
 
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(enum_ty).map_err(into_h2m_err)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(enum_ty)?;
         let enum_variant = enum_def
             .variants
             .get(*variant_index)
             .expect("variant index should be valid");
-        let enum_variant_struct_def = self
-            .ctxt
-            .tys
-            .get_struct_def_by_ty(&enum_variant.ty)
-            .map_err(into_h2m_err)?;
+        let enum_variant_struct_def = self.ctxt.tys.get_struct_def_by_ty(&enum_variant.ty)?;
 
         let field_indices: Vec<usize> = arm
             .pattern
             .fields
             .iter()
-            .map(|hlr::StructPatternField { field_name, .. }| {
+            .map(|hlr::StructPatternField { field_name, .. }| -> H2MResult<_> {
                 enum_variant_struct_def
                     .fields
                     .iter()
                     .position(|f| f.name == *field_name)
-                    .ok_or(H2MErr::TyErr(TyErr::NotAStructField {
+                    .ok_or(TyErr::NotAStructField {
                         ty: enum_variant.ty,
                         field_name: field_name.clone(),
-                    }))
+                    })
+                    .map_err(Into::into)
             })
             .collect::<H2MResult<_>>()?;
 

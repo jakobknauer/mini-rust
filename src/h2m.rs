@@ -11,7 +11,6 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ctxt::{self, fns, mlr, ty},
-    h2m::err::into_h2m_err,
     hlr,
     typechecker::TyErr,
 };
@@ -328,7 +327,7 @@ impl<'a> H2M<'a> {
 
         // Fill fields
         let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(ty).map_err(into_h2m_err)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(ty)?;
         let variant_ty = enum_def
             .variants
             .get(*variant_index)
@@ -348,13 +347,13 @@ impl<'a> H2M<'a> {
 
         // resolve equality function for discriminant comparisons once
         let eq_fn = {
-            let i32 = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32).unwrap();
+            let i32 = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32);
             let eq_fn = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
             self.insert_fn_op(eq_fn)?
         };
 
         let scrutinee_ty = self.ctxt.mlr.get_place_ty(&scrutinee_place);
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(&scrutinee_ty).map_err(into_h2m_err)?;
+        let enum_def = self.ctxt.tys.get_enum_def_by_ty(&scrutinee_ty)?;
         let arm_indices = self.get_arm_indices(arms, enum_def, &scrutinee_ty)?;
 
         // now build the match statement
@@ -442,16 +441,16 @@ impl<'a> H2M<'a> {
         let base = self.lower_to_place(base)?;
 
         let base_ty = self.ctxt.mlr.get_place_ty(&base);
-        let struct_def = self.ctxt.tys.get_struct_def_by_ty(&base_ty).map_err(into_h2m_err)?;
+        let struct_def = self.ctxt.tys.get_struct_def_by_ty(&base_ty)?;
 
         let field_index = struct_def
             .fields
             .iter()
             .position(|struct_field| struct_field.name == field_name)
-            .ok_or(H2MErr::TyErr(TyErr::NotAStructField {
+            .ok_or(TyErr::NotAStructField {
                 ty: base_ty,
                 field_name: field_name.to_string(),
-            }))?;
+            })?;
 
         self.insert_field_access_place(base, field_index)
     }

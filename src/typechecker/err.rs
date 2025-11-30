@@ -1,5 +1,7 @@
 use crate::ctxt::{NotAStructErr, NotAnEnumErr, fns::Fn, mlr, ty::Ty};
 
+pub type TyResult<T> = Result<T, TyErr>;
+
 #[derive(Debug)]
 pub enum TyErr {
     AssignStmtTyMismatch {
@@ -60,8 +62,6 @@ pub enum TyErr {
     },
 }
 
-pub type TyResult<T> = Result<T, TyErr>;
-
 impl<T> From<TyErr> for TyResult<T> {
     fn from(val: TyErr) -> Self {
         Err(val)
@@ -78,11 +78,4 @@ impl From<NotAnEnumErr> for TyErr {
     fn from(val: NotAnEnumErr) -> Self {
         TyErr::NotAnEnum { ty: val.ty }
     }
-}
-
-pub(super) fn into_ty_err<E>(err: E) -> TyErr
-where
-    TyErr: From<E>,
-{
-    From::from(err)
 }

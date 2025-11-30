@@ -1,22 +1,25 @@
 mod err;
 
+use std::collections::HashSet;
+
 pub use err::{TyErr, TyResult};
 
 use crate::ctxt::{self, fns, mlr::*, ty};
-use err::into_ty_err;
 
 pub struct Typechecker<'a> {
     tys: &'a mut ctxt::TyReg,
     fns: &'a mut ctxt::FnReg,
     mlr: &'a mut ctxt::mlr::Mlr,
+    fn_: fns::Fn,
 }
 
 impl<'a> Typechecker<'a> {
-    pub fn new(ctxt: &'a mut ctxt::Ctxt) -> Self {
+    pub fn new(ctxt: &'a mut ctxt::Ctxt, fn_: fns::Fn) -> Self {
         Typechecker {
             tys: &mut ctxt.tys,
             fns: &mut ctxt.fns,
             mlr: &mut ctxt.mlr,
+            fn_,
         }
     }
 
@@ -68,6 +71,20 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
+    pub fn check_stmt_ty(&mut self, stmt: Stmt) -> TyResult<()> {
+        use StmtDef::*;
+
+        let stmt_def = self.mlr.get_stmt_def(&stmt);
+
+        match *stmt_def {
+            Assign { place, value } => self.check_assign_stmt(place, value)?,
+            Return { value } => self.check_return_stmt(value)?,
+            Alloc { .. } | Block(..) | If(_) | Loop { .. } | Break => (),
+        }
+
+        Ok(())
+    }
+
     fn infer_ty_of_constant(&self, constant: &Const) -> TyResult<ty::Ty> {
         use Const::*;
 
@@ -77,10 +94,7 @@ impl<'a> Typechecker<'a> {
             Unit => ty::Primitive::Unit,
         };
 
-        let ty = self
-            .tys
-            .get_primitive_ty(ty)
-            .expect("primitive type should be registered");
+        let ty = self.tys.get_primitive_ty(ty);
 
         Ok(ty)
     }
@@ -155,7 +169,7 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_field_access_place(&self, base: &Place, field_index: &usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let struct_def = self.tys.get_struct_def_by_ty(&base_ty).map_err(into_ty_err)?;
+        let struct_def = self.tys.get_struct_def_by_ty(&base_ty)?;
 
         let field_ty = struct_def
             .fields
@@ -168,19 +182,16 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_enum_discriminant(&self, base: &Place) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let _enum_def = self.tys.get_enum_def_by_ty(&base_ty).map_err(into_ty_err)?;
+        let _enum_def = self.tys.get_enum_def_by_ty(&base_ty);
 
         // the discriminant is always an integer
-        let int_ty = self
-            .tys
-            .get_primitive_ty(ty::Primitive::Integer32)
-            .expect("integer primitive type should be registered");
+        let int_ty = self.tys.get_primitive_ty(ty::Primitive::Integer32);
         Ok(int_ty)
     }
 
     fn infer_ty_of_project_to_variant_place(&self, base: &Place, variant_index: &usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let enum_def = self.tys.get_enum_def_by_ty(&base_ty).map_err(into_ty_err)?;
+        let enum_def = self.tys.get_enum_def_by_ty(&base_ty)?;
         let variant = enum_def.variants.get(*variant_index).ok_or(TyErr::NotAnEnumVariant {
             ty: base_ty,
             variant_name: variant_index.to_string(),
@@ -200,5 +211,81 @@ impl<'a> Typechecker<'a> {
             ty::TyDef::Ref(referenced_ty) => Ok(referenced_ty),
             _ => TyErr::DereferenceOfNonRefTy { ty: ref_ty }.into(),
         }
+    }
+
+    fn check_assign_stmt(&mut self, place: Place, val: Val) -> TyResult<()> {
+        let place_ty = self.mlr.get_place_ty(&place);
+        let val_ty = self.mlr.get_val_ty(&val);
+
+        self.tys
+            .unify(&place_ty, &val_ty)
+            .map_err(|_| TyErr::AssignStmtTyMismatch {
+                place,
+                expected: place_ty,
+                actual: val_ty,
+            })
+    }
+
+    fn check_return_stmt(&mut self, val: Val) -> TyResult<()> {
+        let return_ty = self
+            .fns
+            .get_sig(&self.fn_)
+            .expect("function signature should be registered")
+            .return_ty;
+
+        let val_ty = self.mlr.get_val_ty(&val);
+
+        self.tys
+            .unify(&return_ty, &val_ty)
+            .map_err(|_| TyErr::ReturnTyMismatch {
+                expected: return_ty,
+                actual: val_ty,
+            })
+    }
+
+    pub fn compute_struct_field_indices<'b>(
+        &mut self,
+        struct_ty: ty::Ty,
+        field_names: impl IntoIterator<Item = &'b str>,
+    ) -> TyResult<Vec<usize>> {
+        let field_names: Vec<&str> = field_names.into_iter().collect();
+        let actual: HashSet<&str> = field_names.iter().cloned().collect();
+
+        let struct_def = self.tys.get_struct_def_by_ty(&struct_ty)?;
+        let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
+
+        let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
+        if !missing_fields.is_empty() {
+            return TyErr::InitializerMissingFields {
+                ty: struct_ty,
+                missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
+        if !extra_fields.is_empty() {
+            return TyErr::InitializerExtraFields {
+                ty: struct_ty,
+                extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
+            }
+            .into();
+        }
+
+        let field_indices = field_names
+            .iter()
+            .map(|field_name| {
+                struct_def
+                    .fields
+                    .iter()
+                    .position(|struct_field| &struct_field.name == field_name)
+                    .ok_or(TyErr::NotAStructField {
+                        ty: struct_ty,
+                        field_name: field_name.to_string(),
+                    })
+            })
+            .collect::<TyResult<_>>()?;
+
+        Ok(field_indices)
     }
 }

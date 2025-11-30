@@ -19,11 +19,9 @@ macro_rules! register_fn {
 }
 
 pub fn register_fns(tys: &ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    use ty::Primitive::*;
-
-    let i32 = tys.get_primitive_ty(Integer32).ok_or(())?;
-    let bool = tys.get_primitive_ty(Boolean).ok_or(())?;
-    let unit = tys.get_primitive_ty(Unit).ok_or(())?;
+    let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
+    let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
+    let unit = tys.get_primitive_ty(ty::Primitive::Unit);
 
     register_fn!(fns, "add::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);

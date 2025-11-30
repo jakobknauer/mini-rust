@@ -132,12 +132,7 @@ impl<'a, 'iw, 'mr> FnGenerator<'a, 'iw, 'mr> {
     }
 
     fn build_unit_value(&mut self) -> FnGeneratorResult<BasicValueEnum<'iw>> {
-        let mr_unit_ty = self
-            .gtor
-            .mr_ctxt
-            .tys
-            .get_primitive_ty(mr_ty::Primitive::Unit)
-            .ok_or(FnGeneratorError)?;
+        let mr_unit_ty = self.gtor.mr_ctxt.tys.get_primitive_ty(mr_ty::Primitive::Unit);
         let iw_ty = self.gtor.get_or_define_ty(&mr_unit_ty).ok_or(FnGeneratorError)?;
         let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| FnGeneratorError)?;
         Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())

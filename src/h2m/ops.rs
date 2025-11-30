@@ -36,15 +36,13 @@ impl<'a> h2m::H2M<'a> {
         operator: &hlr::BinaryOperator,
         (left, right): (ty::Ty, ty::Ty),
     ) -> H2MResult<fns::Fn> {
-        use H2MErr::UnknownPrimitiveTy;
         use hlr::BinaryOperator::*;
-        use ty::Primitive::*;
 
         let tys = &self.ctxt.tys;
 
-        let i32 = tys.get_primitive_ty(Integer32).ok_or(UnknownPrimitiveTy)?;
-        let bool = tys.get_primitive_ty(Boolean).ok_or(UnknownPrimitiveTy)?;
-        let unit = tys.get_primitive_ty(Unit).ok_or(UnknownPrimitiveTy)?;
+        let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
+        let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
+        let unit = tys.get_primitive_ty(ty::Primitive::Unit);
 
         let fn_name = op_match!(tys, operator, left, right,
             (Add,       i32, i32) => "add::<i32>",

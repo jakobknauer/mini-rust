@@ -198,7 +198,7 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
         Some(ty) => tys.get_ty_by_hlr_annot(ty, &gen_params).ok_or(())?,
-        None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit).ok_or(())?,
+        None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
 
     let signature = fns::FnSig {

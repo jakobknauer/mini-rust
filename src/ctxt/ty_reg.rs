@@ -150,7 +150,7 @@ impl TyReg {
             Reference(ty_annot) => self
                 .get_ty_by_hlr_annot(ty_annot, gen_vars)
                 .map(|inner| self.register_ref_ty(inner)),
-            Unit => self.get_primitive_ty(Primitive::Unit),
+            Unit => Some(self.get_primitive_ty(Primitive::Unit)),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys
                     .iter()
@@ -159,7 +159,7 @@ impl TyReg {
 
                 let return_ty = match return_ty {
                     Some(rt) => self.get_ty_by_hlr_annot(rt, gen_vars),
-                    None => self.get_primitive_ty(Primitive::Unit),
+                    None => Some(self.get_primitive_ty(Primitive::Unit)),
                 }?;
 
                 Some(self.register_fn_ty(param_tys, return_ty))
@@ -286,12 +286,13 @@ impl TyReg {
         current_ty
     }
 
-    pub fn get_primitive_ty(&self, primitive: Primitive) -> Option<Ty> {
+    pub fn get_primitive_ty(&self, primitive: Primitive) -> Ty {
         match primitive {
             Primitive::Integer32 => self.i32_ty,
             Primitive::Boolean => self.bool_ty,
             Primitive::Unit => self.unit_ty,
         }
+        .expect("primitive type should be registered")
     }
 
     pub fn get_named_ty(&self, named_ty: Named) -> Option<Ty> {
