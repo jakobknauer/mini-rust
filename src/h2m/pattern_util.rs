@@ -6,7 +6,12 @@ use crate::{
 };
 
 impl<'a> super::H2M<'a> {
-    pub fn get_arm_indices(&self, arms: &[hlr::MatchArm], enum_def: &ty::EnumDef, ty: &ty::Ty) -> H2MResult<Vec<usize>> {
+    pub fn get_arm_indices(
+        &self,
+        arms: &[hlr::MatchArm],
+        enum_def: &ty::EnumDef,
+        ty: &ty::Ty,
+    ) -> H2MResult<Vec<usize>> {
         arms.iter()
             .map(|arm| {
                 enum_def

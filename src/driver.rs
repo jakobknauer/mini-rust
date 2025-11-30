@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ctxt::{self, fns, ty},
-    generate, hlr, h2m,
+    generate, h2m, hlr,
     util::print,
 };
 

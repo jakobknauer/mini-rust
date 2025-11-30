@@ -31,7 +31,11 @@ macro_rules! op_match {
 }
 
 impl<'a> h2m::H2M<'a> {
-    pub fn resolve_operator(&self, operator: &hlr::BinaryOperator, (left, right): (ty::Ty, ty::Ty)) -> H2MResult<fns::Fn> {
+    pub fn resolve_operator(
+        &self,
+        operator: &hlr::BinaryOperator,
+        (left, right): (ty::Ty, ty::Ty),
+    ) -> H2MResult<fns::Fn> {
         use H2MErr::UnknownPrimitiveTy;
         use hlr::BinaryOperator::*;
         use ty::Primitive::*;
