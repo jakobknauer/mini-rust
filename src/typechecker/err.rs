@@ -1,9 +1,9 @@
-use crate::ctxt::{NotAStructErr, NotAnEnumErr, fns::Fn, mlr, ty::Ty};
+use crate::ctxt::{NotAStruct, NotAnEnum, fns::Fn, mlr, ty::Ty};
 
-pub type TyResult<T> = Result<T, TyErr>;
+pub type TyResult<T> = Result<T, TyError>;
 
 #[derive(Debug)]
-pub enum TyErr {
+pub enum TyError {
     AssignStmtTyMismatch {
         place: mlr::Place,
         expected: Ty,
@@ -70,20 +70,20 @@ pub enum TyErr {
     },
 }
 
-impl<T> From<TyErr> for TyResult<T> {
-    fn from(val: TyErr) -> Self {
+impl<T> From<TyError> for TyResult<T> {
+    fn from(val: TyError) -> Self {
         Err(val)
     }
 }
 
-impl From<NotAStructErr> for TyErr {
-    fn from(val: NotAStructErr) -> Self {
-        TyErr::NotAStruct { ty: val.ty }
+impl From<NotAStruct> for TyError {
+    fn from(NotAStruct(ty): NotAStruct) -> Self {
+        TyError::NotAStruct { ty }
     }
 }
 
-impl From<NotAnEnumErr> for TyErr {
-    fn from(val: NotAnEnumErr) -> Self {
-        TyErr::NotAnEnum { ty: val.ty }
+impl From<NotAnEnum> for TyError {
+    fn from(NotAnEnum(ty): NotAnEnum) -> Self {
+        TyError::NotAnEnum { ty }
     }
 }

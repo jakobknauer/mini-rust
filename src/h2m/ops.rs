@@ -1,6 +1,6 @@
 use crate::{
     ctxt::{fns, ty},
-    h2m::{self, H2MErr, H2MResult},
+    h2m::{self, H2MError, H2MResult},
     hlr,
 };
 
@@ -20,7 +20,7 @@ macro_rules! op_match {
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
             _ => {
-                return H2MErr::OperatorResolutionFailed {
+                return H2MError::OperatorResolutionFailed {
                     operator: format!("{{$operator:?}}"),
                     operand_tys: ($left, $right),
                 }
@@ -70,7 +70,7 @@ impl<'a> h2m::H2M<'a> {
         self.ctxt
             .fns
             .get_fn_by_name(fn_name)
-            .ok_or(H2MErr::MissingOperatorImpl {
+            .ok_or(H2MError::MissingOperatorImpl {
                 name: fn_name.to_string(),
             })
     }

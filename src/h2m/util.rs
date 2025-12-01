@@ -1,15 +1,10 @@
 use crate::{
     ctxt::{fns, mlr, ty},
-    h2m::{H2MErr, H2MResult},
+    h2m::{H2MError, H2MResult},
     hlr,
-    typechecker::Typechecker,
 };
 
 impl<'a> super::H2M<'a> {
-    pub(super) fn typechecker(&mut self) -> Typechecker<'_> {
-        Typechecker::new(self.ctxt, self.target_fn)
-    }
-
     fn insert_val(&mut self, val_def: mlr::ValDef) -> H2MResult<mlr::Val> {
         let val = self.ctxt.mlr.insert_val(val_def);
         self.typechecker().infer_val_ty(val)?;
@@ -174,7 +169,7 @@ impl<'a> super::H2M<'a> {
         } else if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
             self.insert_fn_op(fn_)
         } else {
-            Err(H2MErr::UnresolvableSymbol { name: name.to_string() })
+            Err(H2MError::UnresolvableSymbol { name: name.to_string() })
         }
     }
 
@@ -204,7 +199,7 @@ impl<'a> super::H2M<'a> {
             .ctxt
             .tys
             .get_ty_by_hlr_annot(annot, &gen_params)
-            .ok_or(H2MErr::UnresolvableTyAnnot)?;
+            .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }
 }

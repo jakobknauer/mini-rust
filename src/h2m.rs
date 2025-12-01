@@ -11,10 +11,10 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ctxt::{self, fns, mlr, ty},
-    hlr,
+    hlr, typechecker::Typechecker,
 };
 
-pub use err::{H2MErr, H2MResult};
+pub use err::{H2MError, H2MResult};
 
 pub struct H2M<'a> {
     input: &'a hlr::Fn,
@@ -89,20 +89,16 @@ impl<'a> H2M<'a> {
             .push(block_stmt);
     }
 
+    fn typechecker(&mut self) -> Typechecker<'_> {
+        Typechecker::new(self.ctxt, self.target_fn)
+    }
+
     pub fn build(mut self) -> H2MResult<fns::FnMlr> {
         self.push_scope();
 
         let mut param_locs = Vec::new();
-        for fns::FnParam { name, ty } in {
-            let this = &self;
-            this.ctxt
-                .fns
-                .get_sig(&this.target_fn)
-                .expect("function signature should be registered")
-        }
-        .params
-        .clone()
-        {
+        let params = self.get_signature().params.clone();
+        for fns::FnParam { name, ty } in params {
             let loc = self.ctxt.mlr.insert_typed_loc(ty);
             self.add_to_scope(&name, loc);
             param_locs.push(loc);
@@ -174,7 +170,7 @@ impl<'a> H2M<'a> {
             Ident(name) => self.lower_ident_to_place(name),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
-            _ => Err(H2MErr::NotAPlace),
+            _ => Err(H2MError::NotAPlace),
         }
     }
 
@@ -214,7 +210,7 @@ impl<'a> H2M<'a> {
             .ctxt
             .fns
             .get_fn_by_name(ident)
-            .ok_or_else(|| H2MErr::UnresolvableSymbol {
+            .ok_or_else(|| H2MError::UnresolvableSymbol {
                 name: ident.to_string(),
             })?;
 
@@ -312,7 +308,7 @@ impl<'a> H2M<'a> {
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
             self.build_enum_val(&ty, &variant_index, fields)
         } else {
-            H2MErr::UnresolvableStructOrEnum {
+            H2MError::UnresolvableStructOrEnum {
                 ty_name: struct_name.to_string(),
             }
             .into()
@@ -463,7 +459,7 @@ impl<'a> H2M<'a> {
     fn lower_ident_to_place(&mut self, name: &str) -> H2MResult<mlr::Place> {
         let loc = self
             .resolve_name_to_location(name)
-            .ok_or_else(|| H2MErr::UnresolvableSymbol { name: name.to_string() })?;
+            .ok_or_else(|| H2MError::UnresolvableSymbol { name: name.to_string() })?;
 
         self.insert_loc_place(loc)
     }

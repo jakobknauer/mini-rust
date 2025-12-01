@@ -1,4 +1,4 @@
-use crate::{ctxt, h2m, hlr, typechecker::TyErr};
+use crate::{ctxt, h2m, hlr, typechecker::TyError};
 
 pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
     use hlr::ParserErr::*;
@@ -12,8 +12,8 @@ pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
     }
 }
 
-pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MErr, ctxt: &ctxt::Ctxt) -> String {
-    use h2m::H2MErr::*;
+pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::Ctxt) -> String {
+    use h2m::H2MError::*;
 
     match err {
         TyErr(err) => print_ty_error(fn_name, err, ctxt),
@@ -38,8 +38,8 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MErr, ctxt: &ctxt::Ctx
     }
 }
 
-fn print_ty_error(fn_name: &str, err: TyErr, ctxt: &ctxt::Ctxt) -> String {
-    use TyErr::*;
+fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
+    use TyError::*;
 
     let msg = match err {
         AssignStmtTyMismatch {

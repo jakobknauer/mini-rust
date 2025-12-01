@@ -2,7 +2,7 @@ mod err;
 
 use std::collections::HashSet;
 
-pub use err::{TyErr, TyResult};
+pub use err::{TyError, TyResult};
 
 use crate::ctxt::{self, fns, mlr::*, ty};
 
@@ -103,7 +103,7 @@ impl<'a> Typechecker<'a> {
         let callable_ty_def = self.tys.get_ty_def(&ty).expect("type of callable should be registered");
 
         let ty::TyDef::Fn { param_tys, return_ty } = callable_ty_def.clone() else {
-            return TyErr::ValNotCallable.into();
+            return TyError::ValNotCallable.into();
         };
 
         let arg_tys = args
@@ -112,7 +112,7 @@ impl<'a> Typechecker<'a> {
             .collect::<Vec<_>>();
 
         if param_tys.len() != arg_tys.len() {
-            return TyErr::CallArgumentCountMismatch {
+            return TyError::CallArgumentCountMismatch {
                 expected: param_tys.len(),
                 actual: arg_tys.len(),
             }
@@ -122,7 +122,7 @@ impl<'a> Typechecker<'a> {
         for (i, (param_ty, arg_ty)) in param_tys.iter().zip(arg_tys).enumerate() {
             self.tys
                 .unify(param_ty, &arg_ty)
-                .map_err(|_| TyErr::CallArgumentTyMismatch {
+                .map_err(|_| TyError::CallArgumentTyMismatch {
                     index: i,
                     expected: *param_ty,
                     actual: arg_ty,
@@ -145,7 +145,7 @@ impl<'a> Typechecker<'a> {
             .expect("function signature should be registered");
 
         if signature.gen_params.len() != fn_specialization.gen_args.len() {
-            return TyErr::GenericArgCountMismatch {
+            return TyError::GenericArgCountMismatch {
                 fn_: fn_specialization.fn_,
                 expected: signature.gen_params.len(),
                 actual: fn_specialization.gen_args.len(),
@@ -191,7 +191,7 @@ impl<'a> Typechecker<'a> {
     fn infer_ty_of_project_to_variant_place(&self, base: &Place, variant_index: &usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
         let enum_def = self.tys.get_enum_def_by_ty(&base_ty)?;
-        let variant = enum_def.variants.get(*variant_index).ok_or(TyErr::NotAnEnumVariant {
+        let variant = enum_def.variants.get(*variant_index).ok_or(TyError::NotAnEnumVariant {
             ty: base_ty,
             variant_name: variant_index.to_string(),
         })?;
@@ -208,7 +208,7 @@ impl<'a> Typechecker<'a> {
 
         match *ty_def {
             ty::TyDef::Ref(referenced_ty) => Ok(referenced_ty),
-            _ => TyErr::DereferenceOfNonRefTy { ty: ref_ty }.into(),
+            _ => TyError::DereferenceOfNonRefTy { ty: ref_ty }.into(),
         }
     }
 
@@ -218,7 +218,7 @@ impl<'a> Typechecker<'a> {
 
         self.tys
             .unify(&place_ty, &val_ty)
-            .map_err(|_| TyErr::AssignStmtTyMismatch {
+            .map_err(|_| TyError::AssignStmtTyMismatch {
                 place,
                 expected: place_ty,
                 actual: val_ty,
@@ -236,7 +236,7 @@ impl<'a> Typechecker<'a> {
 
         self.tys
             .unify(&return_ty, &val_ty)
-            .map_err(|_| TyErr::ReturnTyMismatch {
+            .map_err(|_| TyError::ReturnTyMismatch {
                 expected: return_ty,
                 actual: val_ty,
             })
@@ -249,7 +249,7 @@ impl<'a> Typechecker<'a> {
             .fields
             .iter()
             .position(|struct_field| struct_field.name == field_name)
-            .ok_or(TyErr::NotAStructField {
+            .ok_or(TyError::NotAStructField {
                 ty: struct_ty,
                 field_name: field_name.to_string(),
             })?;
@@ -271,7 +271,7 @@ impl<'a> Typechecker<'a> {
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
-            return TyErr::InitializerMissingFields {
+            return TyError::InitializerMissingFields {
                 ty: struct_ty,
                 missing_fields: missing_fields.iter().map(|s| s.to_string()).collect(),
             }
@@ -280,7 +280,7 @@ impl<'a> Typechecker<'a> {
 
         let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
         if !extra_fields.is_empty() {
-            return TyErr::InitializerExtraFields {
+            return TyError::InitializerExtraFields {
                 ty: struct_ty,
                 extra_fields: extra_fields.iter().map(|s| s.to_string()).collect(),
             }
@@ -294,7 +294,7 @@ impl<'a> Typechecker<'a> {
                     .fields
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(TyErr::NotAStructField {
+                    .ok_or(TyError::NotAStructField {
                         ty: struct_ty,
                         field_name: field_name.to_string(),
                     })
@@ -318,7 +318,7 @@ impl<'a> Typechecker<'a> {
 
         let missing_variants: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_variants.is_empty() {
-            return TyErr::MissingVariants {
+            return TyError::MissingVariants {
                 ty: enum_ty,
                 missing_variants: missing_variants.iter().map(|s| s.to_string()).collect(),
             }
@@ -327,7 +327,7 @@ impl<'a> Typechecker<'a> {
 
         let extra_variants: Vec<&str> = actual.difference(&expected).cloned().collect();
         if !extra_variants.is_empty() {
-            return TyErr::ExtraVariants {
+            return TyError::ExtraVariants {
                 ty: enum_ty,
                 extra_variants: extra_variants.iter().map(|s| s.to_string()).collect(),
             }
@@ -341,7 +341,7 @@ impl<'a> Typechecker<'a> {
                     .variants
                     .iter()
                     .position(|struct_variant| &struct_variant.name == variant_name)
-                    .ok_or(TyErr::NotAnEnumVariant {
+                    .ok_or(TyError::NotAnEnumVariant {
                         ty: enum_ty,
                         variant_name: variant_name.to_string(),
                     })
