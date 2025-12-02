@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ctxt::{self, fns, ty},
-    m2inkwell, h2m, hlr,
+    h2m, hlr, m2inkwell,
     util::print,
 };
 

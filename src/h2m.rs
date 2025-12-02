@@ -11,7 +11,8 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ctxt::{self, fns, mlr, ty},
-    hlr, typechecker::Typechecker,
+    hlr,
+    typechecker::Typechecker,
 };
 
 pub use err::{H2MError, H2MResult};
