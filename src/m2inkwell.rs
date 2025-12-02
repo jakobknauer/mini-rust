@@ -13,12 +13,12 @@ use inkwell::{
 
 use crate::{
     ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_tys},
-    generate::fns::FnGenerator,
+    m2inkwell::fns::M2InkwellFn,
 };
 
-pub fn generate_llvm_ir(ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> String {
+pub fn mlr_to_llvm_ir(ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = Generator::new(&iw_ctxt, ctxt, fn_specs);
+    let mut generator = M2Inkwell::new(&iw_ctxt, ctxt, fn_specs);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -27,7 +27,7 @@ pub fn generate_llvm_ir(ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecia
     generator.iw_module.print_to_string().to_string()
 }
 
-struct Generator<'iw, 'mr> {
+struct M2Inkwell<'iw, 'mr> {
     iw_ctxt: &'iw IwContext,
     iw_module: Module<'iw>,
 
@@ -39,14 +39,14 @@ struct Generator<'iw, 'mr> {
     functions: HashMap<mr_fns::FnSpecialization, FunctionValue<'iw>>,
 }
 
-impl<'iw, 'mr> Generator<'iw, 'mr> {
+impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
     pub fn new(
         iw_ctxt: &'iw IwContext,
         mr_ctxt: &'mr mut mr_ctxt::Ctxt,
         fn_specs: Vec<mr_fns::FnSpecialization>,
     ) -> Self {
         let iw_module = iw_ctxt.create_module("test");
-        Generator {
+        M2Inkwell {
             iw_ctxt,
             iw_module,
             fn_specs,
@@ -159,7 +159,7 @@ impl<'iw, 'mr> Generator<'iw, 'mr> {
 
     pub fn define_functions(&mut self) {
         for fn_spec in self.fn_specs.clone() {
-            let Some(mut fn_gen) = FnGenerator::new(self, fn_spec.clone()) else {
+            let Some(mut fn_gen) = M2InkwellFn::new(self, fn_spec.clone()) else {
                 continue;
             };
             if fn_gen.define_fn().is_err() {

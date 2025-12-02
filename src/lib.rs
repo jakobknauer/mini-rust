@@ -1,6 +1,6 @@
 mod ctxt;
 pub mod driver;
-mod generate;
+mod m2inkwell;
 mod h2m;
 mod hlr;
 mod typechecker;

@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ctxt::{self, fns, ty},
-    generate, h2m, hlr,
+    m2inkwell, h2m, hlr,
     util::print,
 };
 
@@ -46,7 +46,7 @@ pub fn compile(
     let fn_specs = monomorphize_functions(&mut ctxt).map_err(|_| "Error determining concrete specializations")?;
 
     print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = generate::generate_llvm_ir(&mut ctxt, fn_specs.into_iter().collect());
+    let llvm_ir = m2inkwell::mlr_to_llvm_ir(&mut ctxt, fn_specs.into_iter().collect());
 
     if let Some(llvm_ir_path) = output_paths.llvm_ir {
         print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
