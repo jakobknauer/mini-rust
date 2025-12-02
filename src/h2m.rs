@@ -17,7 +17,12 @@ use crate::{
 
 pub use err::{H2MError, H2MResult};
 
-pub struct H2M<'a> {
+pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_fn: &hlr::Fn, target_fn: fns::Fn) -> H2MResult<fns::FnMlr> {
+    let h2m = H2M::new(hlr_fn, target_fn, ctxt);
+    h2m.build()
+}
+
+struct H2M<'a> {
     input: &'a hlr::Fn,
 
     target_fn: fns::Fn,

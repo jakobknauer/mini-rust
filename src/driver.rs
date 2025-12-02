@@ -214,17 +214,13 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
 }
 
 fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
-    for function in &hlr.fns {
-        let fn_ = ctxt.fns.get_fn_by_name(&function.name).unwrap();
+    for hlr_fn in &hlr.fns {
+        let target_fn = ctxt.fns.get_fn_by_name(&hlr_fn.name).unwrap();
 
-        let mlr_builder = h2m::H2M::new(function, fn_, ctxt);
-        let mlr = mlr_builder
-            .build()
-            .map_err(|err| err::print_mlr_builder_error(&function.name, err, ctxt))?;
+        let mlr = h2m::hlr_to_mlr(ctxt, hlr_fn, target_fn)
+            .map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
 
-        // mlr::opt::canonicalize_types(&mut mlr, ctxt);
-
-        ctxt.fns.add_fn_def(&function.name, mlr);
+        ctxt.fns.add_fn_def(&hlr_fn.name, mlr);
     }
 
     Ok(())
