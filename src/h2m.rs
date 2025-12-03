@@ -186,7 +186,7 @@ impl<'a> H2M<'a> {
         match expr {
             Lit(lit) => self.build_literal(lit),
             Ident(name) => self.build_ident(name),
-            GenQualIdent { ident, gen_args } => self.build_gen_qual_ident(ident, gen_args),
+            GenQualIdent(hlr::GenQualIdent { ident, gen_args }) => self.build_gen_qual_ident(ident, gen_args),
             FieldAccess { .. } | Deref { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)

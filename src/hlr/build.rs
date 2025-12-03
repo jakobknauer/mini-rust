@@ -525,7 +525,7 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::Greater)?;
-                    Ok(Expr::GenQualIdent { ident, gen_args })
+                    Ok(Expr::GenQualIdent(GenQualIdent { ident, gen_args }))
                 } else {
                     Ok(Expr::Ident(ident))
                 }

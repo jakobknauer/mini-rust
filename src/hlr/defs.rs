@@ -76,10 +76,7 @@ pub enum Stmt {
 pub enum Expr {
     Lit(Lit),
     Ident(String),
-    GenQualIdent {
-        ident: String,
-        gen_args: Vec<TyAnnot>,
-    },
+    GenQualIdent(GenQualIdent),
     BinaryOp {
         left: Box<Expr>,
         operator: BinaryOperator,
@@ -120,6 +117,12 @@ pub enum Expr {
     AddrOf {
         base: Box<Expr>,
     },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct GenQualIdent {
+    pub ident: String,
+    pub gen_args: Vec<TyAnnot>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
