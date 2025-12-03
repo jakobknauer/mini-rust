@@ -262,9 +262,13 @@ impl<'a> HlrParser<'a> {
 
     fn parse_enum_variant(&mut self) -> Result<EnumVariant, ParserErr> {
         let name = self.expect_identifier()?;
-        self.expect_token(Token::LBrace)?;
-        let fields = self.parse_struct_fields()?;
-        self.expect_token(Token::RBrace)?;
+        let fields = if self.advance_if(Token::LBrace) {
+            let fields = self.parse_struct_fields()?;
+            self.expect_token(Token::RBrace)?;
+            fields
+        } else {
+            vec![]
+        };
         Ok(EnumVariant { name, fields })
     }
 
@@ -847,7 +851,7 @@ mod tests {
                 enum State {
                     Off {},
                     On {},
-                    Unknown {},
+                    Unknown,
                 }"#;
 
             let expected = Program {
