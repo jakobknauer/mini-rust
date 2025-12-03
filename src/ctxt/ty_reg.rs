@@ -169,6 +169,7 @@ impl TyReg {
 
                 Some(self.register_fn_ty(param_tys, return_ty))
             }
+            Generic(..) => todo!(),
         }
     }
 

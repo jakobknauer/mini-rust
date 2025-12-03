@@ -33,6 +33,7 @@ pub struct Param {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Struct {
     pub name: String,
+    pub gen_params: Vec<String>,
     pub fields: Vec<StructField>,
 }
 
@@ -45,6 +46,7 @@ pub struct StructField {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Enum {
     pub name: String,
+    pub gen_params: Vec<String>,
     pub variants: Vec<EnumVariant>,
 }
 
@@ -171,6 +173,7 @@ pub struct StructPatternField {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TyAnnot {
     Named(String),
+    Generic(GenQualIdent),
     Reference(Box<TyAnnot>),
     Unit,
     Fn {

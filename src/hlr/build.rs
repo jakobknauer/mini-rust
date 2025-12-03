@@ -200,12 +200,17 @@ impl<'a> HlrParser<'a> {
     fn parse_struct(&mut self) -> Result<Struct, ParserErr> {
         self.expect_keyword(Keyword::Struct)?;
         let name = self.expect_identifier()?;
+        let gen_params = self.parse_gen_params()?;
 
         self.expect_token(Token::LBrace)?;
         let fields = self.parse_struct_fields()?;
         self.expect_token(Token::RBrace)?;
 
-        Ok(Struct { name, fields })
+        Ok(Struct {
+            name,
+            gen_params,
+            fields,
+        })
     }
 
     fn parse_struct_fields(&mut self) -> Result<Vec<StructField>, ParserErr> {
@@ -230,12 +235,17 @@ impl<'a> HlrParser<'a> {
     fn parse_enum(&mut self) -> Result<Enum, ParserErr> {
         self.expect_keyword(Keyword::Enum)?;
         let name = self.expect_identifier()?;
+        let gen_params = self.parse_gen_params()?;
 
         self.expect_token(Token::LBrace)?;
         let variants = self.parse_enum_variants()?;
         self.expect_token(Token::RBrace)?;
 
-        Ok(Enum { name, variants })
+        Ok(Enum {
+            name,
+            gen_params,
+            variants,
+        })
     }
 
     fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant>, ParserErr> {
@@ -256,6 +266,25 @@ impl<'a> HlrParser<'a> {
         let fields = self.parse_struct_fields()?;
         self.expect_token(Token::RBrace)?;
         Ok(EnumVariant { name, fields })
+    }
+
+    fn parse_gen_params(&mut self) -> Result<Vec<String>, ParserErr> {
+        if self.current() != Some(&Token::Smaller) {
+            return Ok(Vec::new());
+        }
+        self.expect_token(Token::Smaller)?;
+
+        let mut params = Vec::new();
+        while let Some(Token::Identifier(_)) = self.current() {
+            let arg = self.expect_identifier()?;
+            params.push(arg);
+
+            if !self.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        self.expect_token(Token::Greater)?;
+        Ok(params)
     }
 
     /// TODO allow loop/if/block expression statements without delimiting semicolon
@@ -633,7 +662,22 @@ impl<'a> HlrParser<'a> {
             Token::Identifier(ident) => {
                 let ident = ident.clone();
                 self.position += 1;
-                Ok(TyAnnot::Named(ident))
+                if self.advance_if(Token::ColonColon) {
+                    // parse generic qualified ident
+                    let mut gen_args = Vec::new();
+                    self.expect_token(Token::Smaller)?;
+                    while self.current() != Some(&Token::Greater) {
+                        let gen_arg = self.parse_ty_annot()?;
+                        gen_args.push(gen_arg);
+                        if !self.advance_if(Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(Token::Greater)?;
+                    Ok(TyAnnot::Generic(GenQualIdent { ident, gen_args }))
+                } else {
+                    Ok(TyAnnot::Named(ident))
+                }
             }
             Token::Ampersand => {
                 self.position += 1;
@@ -715,10 +759,12 @@ mod tests {
                 }],
                 structs: vec![Struct {
                     name: "Empty".to_string(),
+                    gen_params: vec![],
                     fields: vec![],
                 }],
                 enums: vec![Enum {
                     name: "Empty".to_string(),
+                    gen_params: vec![],
                     variants: vec![],
                 }],
             };
@@ -777,6 +823,7 @@ mod tests {
                 fns: vec![],
                 structs: vec![Struct {
                     name: "Point".to_string(),
+                    gen_params: vec![],
                     fields: vec![
                         StructField {
                             name: "x".to_string(),
@@ -808,6 +855,7 @@ mod tests {
                 structs: vec![],
                 enums: vec![Enum {
                     name: "State".to_string(),
+                    gen_params: vec![],
                     variants: vec![
                         EnumVariant {
                             name: "Off".to_string(),
