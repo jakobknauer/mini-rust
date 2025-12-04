@@ -99,14 +99,14 @@ fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()>
     tys.register_primitive_tys()?;
 
     for struct_ in &program.structs {
-        tys.register_struct(&struct_.name)?;
+        tys.register_struct(&struct_.name, &struct_.gen_params)?;
     }
 
     for enum_ in &program.enums {
         tys.register_enum(&enum_.name)?;
         for variant in &enum_.variants {
             let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-            tys.register_struct(&variant_struct_name)?;
+            tys.register_struct(&variant_struct_name, &[])?;
         }
     }
 
@@ -149,12 +149,14 @@ fn set_struct_fields<'a>(
     struct_name: &str,
     fields: impl IntoIterator<Item = &'a hlr::StructField>,
 ) -> Result<(), ()> {
+    let gen_params = tys.get_struct_def_by_name(struct_name).ok_or(())?.gen_params.clone();
+
     let fields = fields
         .into_iter()
         .map(|field| {
             Ok(ty::StructField {
                 name: field.name.clone(),
-                ty: tys.get_ty_by_hlr_annot(&field.ty, &Vec::new()).ok_or(())?,
+                ty: tys.get_ty_by_hlr_annot(&field.ty, &gen_params).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
@@ -179,7 +181,7 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
     let gen_params = hlr_fn
         .gen_params
         .iter()
-        .map(|gp| fns::GenParam {
+        .map(|gp| ty::GenParam {
             name: gp.clone(),
             ty: tys.register_gen_var_ty(gp),
         })

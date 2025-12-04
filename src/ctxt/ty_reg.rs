@@ -1,10 +1,7 @@
 use itertools::Itertools;
 use std::{borrow::Borrow, collections::HashMap, hash::Hash};
 
-use crate::{
-    ctxt::{fns::GenParam, ty::*},
-    hlr,
-};
+use crate::{ctxt::ty::*, hlr};
 
 pub struct TyReg {
     tys: HashMap<Ty, Option<TyDef>>,
@@ -87,15 +84,24 @@ impl TyReg {
         Ok(())
     }
 
-    pub fn register_struct(&mut self, name: &str) -> Result<Ty, ()> {
+    pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Ty, ()> {
         let struct_ = self.next_struct;
         self.next_struct.0 += 1;
 
         let ty = self.register_named_ty(name, TyDef::Struct(struct_))?;
+        let gen_params = gen_param_names
+            .iter()
+            .map(|gp_name| GenParam {
+                name: gp_name.clone(),
+                ty: self.register_gen_var_ty(gp_name),
+            })
+            .collect();
+
         self.structs.insert(
             struct_,
             StructDef {
                 name: name.to_string(),
+                gen_params,
                 fields: vec![],
             },
         );
@@ -186,6 +192,15 @@ impl TyReg {
         self.enums.get(enum_)
     }
 
+    pub fn get_struct_def_by_name(&self, name: &str) -> Option<&StructDef> {
+        let ty_def = self.get_ty_def_by_name(name)?;
+        if let TyDef::Struct(struct_) = *ty_def {
+            self.structs.get(&struct_)
+        } else {
+            None
+        }
+    }
+
     pub fn get_mut_struct_def_by_name(&mut self, name: &str) -> Option<&mut StructDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
         if let TyDef::Struct(struct_) = *ty_def {
@@ -231,7 +246,17 @@ impl TyReg {
                 let struct_def = self
                     .get_struct_def(struct_)
                     .expect("struct definition should be registered");
-                struct_def.name.clone()
+                if struct_def.gen_params.is_empty() {
+                    struct_def.name.clone()
+                } else {
+                    let gen_param_names = struct_def
+                        .gen_params
+                        .iter()
+                        .map(|gp| gp.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{}<{}>", struct_def.name, gen_param_names)
+                }
             }
             TyDef::Enum(enum_) => {
                 let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");

@@ -28,6 +28,7 @@ pub enum Primitive {
 #[derive(Clone)]
 pub struct StructDef {
     pub name: String,
+    pub gen_params: Vec<GenParam>,
     pub fields: Vec<StructField>,
 }
 
@@ -45,6 +46,12 @@ pub struct EnumDef {
 
 #[derive(Clone)]
 pub struct EnumVariant {
+    pub name: String,
+    pub ty: Ty,
+}
+
+#[derive(Clone)]
+pub struct GenParam {
     pub name: String,
     pub ty: Ty,
 }

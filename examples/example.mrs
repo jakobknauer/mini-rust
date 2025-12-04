@@ -64,3 +64,7 @@ fn select<T>(switch: bool, a: T, b: T) -> T {
 fn concat<A, B, C>(f: fn(A) -> B, g: fn(B) -> C, a: A) -> C {
     g(f(a))
 }
+
+struct Wrapper<T> {
+    item: T
+}
