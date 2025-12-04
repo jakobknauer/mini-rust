@@ -70,4 +70,4 @@ struct Wrapper<T> {
     item: T
 }
 
-fn bla<T>(x: Wrapper::<T>) -> Wrapper::<T> { x }
+fn bla<T>(x: Wrapper<T>) -> Wrapper<T> { x }

@@ -666,10 +666,8 @@ impl<'a> HlrParser<'a> {
             Token::Identifier(ident) => {
                 let ident = ident.clone();
                 self.position += 1;
-                if self.advance_if(Token::ColonColon) {
-                    // parse generic qualified ident
+                if self.advance_if(Token::Smaller) {
                     let mut gen_args = Vec::new();
-                    self.expect_token(Token::Smaller)?;
                     while self.current() != Some(&Token::Greater) {
                         let gen_arg = self.parse_ty_annot()?;
                         gen_args.push(gen_arg);
