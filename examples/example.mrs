@@ -1,4 +1,5 @@
 fn main() -> i32 {
+    let f = bla::<i32>;
     eval(Constant { c: 1 })
         + eval(Add { left: 2, right: 3})
         + eval(Mul { left: 4, right: 5 })
@@ -68,3 +69,5 @@ fn concat<A, B, C>(f: fn(A) -> B, g: fn(B) -> C, a: A) -> C {
 struct Wrapper<T> {
     item: T
 }
+
+fn bla<T>(x: Wrapper::<T>) -> Wrapper::<T> { x }

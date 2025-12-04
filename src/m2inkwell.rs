@@ -81,6 +81,9 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(_) => unreachable!("generic type variables should be substituted before this point"),
+            InstantiatedStruct { struct_, ref gen_args } => {
+                self.define_instantiated_struct(*ty, &struct_, &gen_args.clone())
+            }
         };
 
         if !self.types.contains_key(ty) {
@@ -107,6 +110,41 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             .fields
             .iter()
             .map(|field| self.get_ty_as_basic_type_enum(&field.ty).unwrap())
+            .collect();
+
+        iw_struct.set_body(&field_types, false);
+        iw_struct.as_any_type_enum()
+    }
+
+    fn define_instantiated_struct(
+        &mut self,
+        ty: mr_tys::Ty,
+        struct_: &mr_tys::Struct,
+        gen_args: &[mr_tys::Ty],
+    ) -> AnyTypeEnum<'iw> {
+        let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap().clone();
+
+        let instantiated_name = format!(
+            "{}<{}>",
+            struct_def.name,
+            gen_args
+                .iter()
+                .map(|arg| self.mr_ctxt.tys.get_string_rep(arg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
+        let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(&instantiated_name);
+        self.types.insert(ty, iw_struct.as_any_type_enum());
+
+        let field_types = self
+            .mr_ctxt
+            .tys
+            .get_instantiated_struct_field_tys(struct_, gen_args)
+            .unwrap();
+        let field_types: Vec<BasicTypeEnum> = field_types
+            .iter()
+            .map(|field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);

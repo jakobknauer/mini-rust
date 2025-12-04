@@ -175,7 +175,26 @@ impl TyReg {
 
                 Some(self.register_fn_ty(param_tys, return_ty))
             }
-            Generic(..) => todo!(),
+            Generic(ident) => {
+                let base_ty_def = gen_vars
+                    .iter()
+                    .find_map(|gp| (gp.name == ident.ident).then_some(gp.ty))
+                    .or_else(|| self.get_ty_by_name(&ident.ident))
+                    .and_then(|ty| self.tys.get(&ty))?
+                    .clone()?;
+
+                let TyDef::Struct(struct_) = base_ty_def else {
+                    return None;
+                };
+
+                let gen_args: Vec<Ty> = ident
+                    .gen_args
+                    .iter()
+                    .map(|arg_annot| self.get_ty_by_hlr_annot(arg_annot, gen_vars))
+                    .collect::<Option<Vec<_>>>()?;
+
+                Some(self.register_ty(TyDef::InstantiatedStruct { struct_, gen_args }))
+            }
         }
     }
 
@@ -261,6 +280,17 @@ impl TyReg {
             TyDef::Enum(enum_) => {
                 let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
                 enum_def.name.clone()
+            }
+            TyDef::InstantiatedStruct { struct_, gen_args } => {
+                let struct_def = self
+                    .get_struct_def(struct_)
+                    .expect("struct definition should be registered");
+                let gen_arg_names = gen_args
+                    .iter()
+                    .map(|ga| self.get_string_rep(ga))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}<{}>", struct_def.name, gen_arg_names)
             }
         }
     }
@@ -381,6 +411,17 @@ impl TyReg {
                 let new_inner_ty = self.substitute_gen_vars(&inner_ty, substitutions);
                 self.register_ref_ty(new_inner_ty)
             }
+            TyDef::InstantiatedStruct { struct_, ref gen_args } => {
+                let new_gen_args = gen_args
+                    .clone()
+                    .iter()
+                    .map(|ga| self.substitute_gen_vars(ga, substitutions))
+                    .collect::<Vec<_>>();
+                self.register_ty(TyDef::InstantiatedStruct {
+                    struct_,
+                    gen_args: new_gen_args,
+                })
+            }
             _ => ty,
         }
     }
@@ -409,5 +450,29 @@ impl TyReg {
         let enum_def = self.get_enum_def(&enum_).expect("enum definition should be registered");
 
         Ok(enum_def)
+    }
+
+    pub fn get_instantiated_struct_field_tys(&mut self, struct_: &Struct, gen_args: &[Ty]) -> Result<Vec<Ty>, ()> {
+        let struct_def = self.get_struct_def(struct_).ok_or(())?.clone();
+
+        if struct_def.gen_params.len() != gen_args.len() {
+            return Err(());
+        }
+
+        let substitutions: HashMap<String, Ty> = struct_def
+            .gen_params
+            .iter()
+            .map(|gp| gp.name.clone())
+            .zip(gen_args.iter().cloned())
+            .collect();
+
+        let struct_field_tys: Vec<Ty> = struct_def.fields.iter().map(|field| field.ty).collect();
+        // This should reuse the struct_field_tys vector to avoid an extra allocation
+        let instantiated_fields: Vec<Ty> = struct_field_tys
+            .into_iter()
+            .map(|field| self.substitute_gen_vars(&field, &substitutions))
+            .collect();
+
+        Ok(instantiated_fields)
     }
 }
