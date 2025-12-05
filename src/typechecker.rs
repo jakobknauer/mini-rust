@@ -45,7 +45,7 @@ impl<'a> Typechecker<'a> {
 
         let ty = match place_def {
             Loc(loc) => self.infer_ty_of_loc(loc),
-            FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index),
+            &FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index),
             EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(base),
             ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
             &Deref(op) => self.infer_ty_of_deref_place(&op),
@@ -166,16 +166,9 @@ impl<'a> Typechecker<'a> {
         Ok(self.mlr.get_loc_ty(loc))
     }
 
-    fn infer_ty_of_field_access_place(&self, base: &Place, field_index: &usize) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(base);
-        let struct_def = self.tys.get_struct_def_by_ty(&base_ty)?;
-
-        let field_ty = struct_def
-            .fields
-            .get(*field_index)
-            .expect("field index should be valid")
-            .ty;
-
+    fn infer_ty_of_field_access_place(&mut self, base: Place, field_index: usize) -> TyResult<ty::Ty> {
+        let base_ty = self.mlr.get_place_ty(&base);
+        let field_ty = self.tys.get_struct_field_ty_by_ty_and_index(&base_ty, field_index)?;
         Ok(field_ty)
     }
 
@@ -264,10 +257,10 @@ impl<'a> Typechecker<'a> {
     ) -> TyResult<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
 
-        let struct_def = self.tys.get_struct_def_by_ty(&struct_ty)?;
+        let struct_fields = self.tys.get_struct_fields_by_ty(&struct_ty)?;
 
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
-        let expected: HashSet<&str> = struct_def.fields.iter().map(|field| field.name.as_str()).collect();
+        let expected: HashSet<&str> = struct_fields.iter().map(|field| field.name.as_str()).collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
@@ -290,8 +283,7 @@ impl<'a> Typechecker<'a> {
         let field_indices = field_names
             .iter()
             .map(|field_name| {
-                struct_def
-                    .fields
+                struct_fields
                     .iter()
                     .position(|struct_field| &struct_field.name == field_name)
                     .ok_or(TyError::NotAStructField {

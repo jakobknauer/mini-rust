@@ -141,6 +141,18 @@ impl TyReg {
         self.register_ty(gen_param_ty)
     }
 
+    pub fn instantiate_struct_ty(&mut self, ty: Ty, gen_args: impl Into<Vec<Ty>>) -> Ty {
+        let ty_def = self.get_ty_def(&ty).expect("struct type should be registered");
+        let TyDef::Struct(struct_) = ty_def else {
+            panic!("expected struct type");
+        };
+        let instantiated_ty = TyDef::InstantiatedStruct {
+            struct_: *struct_,
+            gen_args: gen_args.into(),
+        };
+        self.register_ty(instantiated_ty)
+    }
+
     pub fn get_ty_def(&self, id: &Ty) -> Option<&TyDef> {
         let id = self.canonicalize(id);
         self.tys.get(&id).and_then(|inner| inner.as_ref())
@@ -148,6 +160,13 @@ impl TyReg {
 
     pub fn get_ty_by_name(&self, name: &str) -> Option<Ty> {
         self.named_tys.get(name).cloned()
+    }
+
+    pub fn get_struct_ty_by_name(&self, name: &str) -> Option<Ty> {
+        let ty = self.get_ty_by_name(name)?;
+        let ty_def = self.get_ty_def(&ty)?;
+
+        if let TyDef::Struct(..) = ty_def { Some(ty) } else { None }
     }
 
     pub fn get_ty_by_hlr_annot(&mut self, annot: &hlr::TyAnnot, gen_vars: &Vec<GenParam>) -> Option<Ty> {
@@ -438,6 +457,45 @@ impl TyReg {
             .expect("struct definition should be registered");
 
         Ok(struct_def)
+    }
+
+    pub fn get_struct_field_ty_by_ty_and_index(&mut self, ty: &Ty, index: usize) -> Result<Ty, NotAStruct> {
+        let fields = self.get_struct_fields_by_ty(ty)?;
+        if index >= fields.len() {
+            return Err(NotAStruct(*ty));
+        }
+        Ok(fields[index].ty)
+    }
+
+    pub fn get_struct_fields_by_ty(&mut self, ty: &Ty) -> Result<Vec<StructField>, NotAStruct> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        match *ty_def {
+            TyDef::Struct(struct_) => {
+                let struct_def = self
+                    .get_struct_def(&struct_)
+                    .expect("struct definition should be registered");
+                Ok(struct_def.fields.clone())
+            }
+            TyDef::InstantiatedStruct { struct_, ref gen_args } => {
+                // Instantiate struct_def field types with the provided generic arguments
+                let gen_args: Vec<Ty> = gen_args.to_vec();
+                let instantiated_tys = self.get_instantiated_struct_field_tys(&struct_, &gen_args).unwrap();
+                let struct_def = self
+                    .get_struct_def(&struct_)
+                    .expect("struct definition should be registered");
+                let instantiated_fields = struct_def
+                    .fields
+                    .iter()
+                    .zip(instantiated_tys)
+                    .map(|(field, ty)| StructField {
+                        name: field.name.clone(),
+                        ty,
+                    })
+                    .collect();
+                Ok(instantiated_fields)
+            }
+            _ => Err(NotAStruct(*ty)),
+        }
     }
 
     pub fn get_enum_def_by_ty(&self, ty: &Ty) -> Result<&EnumDef, NotAnEnum> {
