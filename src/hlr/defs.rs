@@ -77,8 +77,7 @@ pub enum Stmt {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Lit(Lit),
-    Ident(String),
-    GenQualIdent(GenQualIdent),
+    Ident(Ident),
     BinaryOp {
         left: Box<Expr>,
         operator: BinaryOperator,
@@ -93,7 +92,7 @@ pub enum Expr {
         arguments: Vec<Expr>,
     },
     Struct {
-        name: String,
+        name: Ident,
         fields: Vec<(String, Expr)>,
     },
     If {
@@ -122,7 +121,7 @@ pub enum Expr {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct GenQualIdent {
+pub struct Ident {
     pub ident: String,
     pub gen_args: Vec<TyAnnot>,
 }
@@ -173,7 +172,7 @@ pub struct StructPatternField {
 #[derive(Debug, PartialEq, Eq)]
 pub enum TyAnnot {
     Named(String),
-    Generic(GenQualIdent),
+    Generic(Ident),
     Reference(Box<TyAnnot>),
     Unit,
     Fn {

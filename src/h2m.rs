@@ -149,7 +149,7 @@ impl<'a> H2M<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(..) | Ident(..) | GenQualIdent { .. } | FieldAccess { .. } | Deref { .. } => {
+            Lit(..) | Ident { .. } | FieldAccess { .. } | Deref { .. } => {
                 let op = self.lower_to_op(expr)?;
                 self.insert_use_val(op)
             }
@@ -173,7 +173,7 @@ impl<'a> H2M<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Ident(name) => self.lower_ident_to_place(name),
+            Ident(ident) if ident.gen_args.is_empty() => self.lower_ident_to_place(&ident.ident),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
             _ => Err(H2MError::NotAPlace),
@@ -185,8 +185,7 @@ impl<'a> H2M<'a> {
 
         match expr {
             Lit(lit) => self.build_literal(lit),
-            Ident(name) => self.build_ident(name),
-            GenQualIdent(hlr::GenQualIdent { ident, gen_args }) => self.build_gen_qual_ident(ident, gen_args),
+            Ident(hlr::Ident { ident, gen_args }) => self.build_gen_qual_ident(ident, gen_args),
             FieldAccess { .. } | Deref { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)
@@ -207,11 +206,11 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_ident(&mut self, name: &str) -> H2MResult<mlr::Op> {
-        self.resolve_name(name)
-    }
-
     fn build_gen_qual_ident(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
+        if gen_args.is_empty() {
+            return self.resolve_name(ident);
+        }
+
         let fn_ = self
             .ctxt
             .fns
@@ -308,14 +307,14 @@ impl<'a> H2M<'a> {
         self.insert_use_val(unit)
     }
 
-    fn build_struct_or_enum_val(&mut self, struct_name: &str, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
-        if let Some(ty) = self.ctxt.tys.get_ty_by_name(struct_name) {
+    fn build_struct_or_enum_val(&mut self, ident: &hlr::Ident, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
+        if let Some(ty) = self.ctxt.tys.get_ty_by_name(&ident.ident) {
             self.build_struct_val(&ty, fields)
-        } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(struct_name) {
+        } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(&ident.ident) {
             self.build_enum_val(&ty, &variant_index, fields)
         } else {
             H2MError::UnresolvableStructOrEnum {
-                ty_name: struct_name.to_string(),
+                ty_name: ident.ident.to_string(),
             }
             .into()
         }

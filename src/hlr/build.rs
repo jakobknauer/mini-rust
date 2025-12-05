@@ -531,6 +531,24 @@ impl<'a> HlrParser<'a> {
                 let ident = ident.clone();
                 self.position += 1;
 
+                let gen_args = if self.advance_if(Token::ColonColon) {
+                    let mut gen_args = Vec::new();
+                    self.expect_token(Token::Smaller)?;
+                    while self.current() != Some(&Token::Greater) {
+                        let gen_arg = self.parse_ty_annot()?;
+                        gen_args.push(gen_arg);
+                        if !self.advance_if(Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(Token::Greater)?;
+                    gen_args
+                } else {
+                    vec![]
+                };
+
+                let ident = Ident { ident, gen_args };
+
                 if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
                     // parse struct expr
                     let mut fields = Vec::new();
@@ -546,19 +564,6 @@ impl<'a> HlrParser<'a> {
                     }
                     self.expect_token(Token::RBrace)?;
                     Ok(Expr::Struct { name: ident, fields })
-                } else if self.advance_if(Token::ColonColon) {
-                    // parse generic qualified ident
-                    let mut gen_args = Vec::new();
-                    self.expect_token(Token::Smaller)?;
-                    while self.current() != Some(&Token::Greater) {
-                        let gen_arg = self.parse_ty_annot()?;
-                        gen_args.push(gen_arg);
-                        if !self.advance_if(Token::Comma) {
-                            break;
-                        }
-                    }
-                    self.expect_token(Token::Greater)?;
-                    Ok(Expr::GenQualIdent(GenQualIdent { ident, gen_args }))
                 } else {
                     Ok(Expr::Ident(ident))
                 }
@@ -676,7 +681,7 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::Greater)?;
-                    Ok(TyAnnot::Generic(GenQualIdent { ident, gen_args }))
+                    Ok(TyAnnot::Generic(Ident { ident, gen_args }))
                 } else {
                     Ok(TyAnnot::Named(ident))
                 }
@@ -726,6 +731,13 @@ impl<'a> HlrParser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn make_ident(name: &str) -> Expr {
+        Expr::Ident(Ident {
+            ident: name.to_string(),
+            gen_args: vec![],
+        })
+    }
 
     mod program {
         use super::*;
@@ -799,9 +811,9 @@ mod tests {
                     return_ty: Some(TyAnnot::Named("int".to_string())),
                     body: Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
-                            left: Box::new(Expr::Ident("a".to_string())),
+                            left: Box::new(make_ident("a")),
                             operator: BinaryOperator::Add,
-                            right: Box::new(Expr::Ident("b".to_string())),
+                            right: Box::new(make_ident("b")),
                         }))],
                         return_expr: None,
                     },
@@ -925,7 +937,7 @@ mod tests {
                             stmts: vec![
                                 Stmt::Expr(Expr::If {
                                     condition: Box::new(Expr::BinaryOp {
-                                        left: Box::new(Expr::Ident("n".to_string())),
+                                        left: Box::new(make_ident("n")),
                                         operator: BinaryOperator::Equal,
                                         right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
@@ -936,17 +948,17 @@ mod tests {
                                     else_block: None,
                                 }),
                                 Stmt::Expr(Expr::Assign {
-                                    target: Box::new(Expr::Ident("result".to_string())),
+                                    target: Box::new(make_ident("result")),
                                     value: Box::new(Expr::BinaryOp {
-                                        left: Box::new(Expr::Ident("result".to_string())),
+                                        left: Box::new(make_ident("result")),
                                         operator: BinaryOperator::Multiply,
-                                        right: Box::new(Expr::Ident("n".to_string())),
+                                        right: Box::new(make_ident("n")),
                                     }),
                                 }),
                                 Stmt::Expr(Expr::Assign {
-                                    target: Box::new(Expr::Ident("n".to_string())),
+                                    target: Box::new(make_ident("n")),
                                     value: Box::new(Expr::BinaryOp {
-                                        left: Box::new(Expr::Ident("n".to_string())),
+                                        left: Box::new(make_ident("n")),
                                         operator: BinaryOperator::Subtract,
                                         right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
@@ -956,7 +968,7 @@ mod tests {
                         },
                     }),
                 ],
-                return_expr: Some(Box::new(Expr::Ident("result".to_string()))),
+                return_expr: Some(Box::new(make_ident("result"))),
             };
 
             parse_and_compare(input, expected);
@@ -982,13 +994,13 @@ mod tests {
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::Lit(Lit::Int(2))),
                         operator: BinaryOperator::Multiply {},
-                        right: Box::new(Expr::Ident("a".to_string())),
+                        right: Box::new(make_ident("a")),
                     }),
                 }),
                 operator: BinaryOperator::Subtract,
                 right: Box::new(Expr::Call {
-                    callee: Box::new(Expr::Ident("arctan2".to_string())),
-                    arguments: vec![Expr::Ident("x".to_string()), Expr::Ident("y".to_string())],
+                    callee: Box::new(make_ident("arctan2")),
+                    arguments: vec![make_ident("x"), make_ident("y")],
                 }),
             };
             parse_and_compare(input, expected);
@@ -1003,12 +1015,18 @@ mod tests {
                 }"#;
 
             let expected = Expr::Struct {
-                name: "Circle".to_string(),
+                name: Ident {
+                    ident: "Circle".to_string(),
+                    gen_args: vec![],
+                },
                 fields: vec![
                     (
                         "center".to_string(),
                         Expr::Struct {
-                            name: "Point".to_string(),
+                            name: Ident {
+                                ident: "Point".to_string(),
+                                gen_args: vec![],
+                            },
                             fields: vec![
                                 ("x".to_string(), Expr::Lit(Lit::Int(1))),
                                 ("y".to_string(), Expr::Lit(Lit::Int(2))),
@@ -1038,7 +1056,7 @@ mod tests {
             }"#;
 
             let expected = Expr::If {
-                condition: Box::new(Expr::Ident("condition".to_string())),
+                condition: Box::new(make_ident("condition")),
                 then_block: Block {
                     stmts: vec![],
                     return_expr: Some(Box::new(Expr::Lit(Lit::Int(42)))),
@@ -1058,10 +1076,10 @@ mod tests {
             let expected = Expr::FieldAccess {
                 base: Box::new(Expr::Call {
                     callee: Box::new(Expr::FieldAccess {
-                        base: Box::new(Expr::Ident("obj".to_string())),
+                        base: Box::new(make_ident("obj")),
                         name: "method".to_string(),
                     }),
-                    arguments: vec![Expr::Ident("arg1".to_string()), Expr::Ident("arg2".to_string())],
+                    arguments: vec![make_ident("arg1"), make_ident("arg2")],
                 }),
                 name: "field".to_string(),
             };
@@ -1076,7 +1094,7 @@ mod tests {
             }"#;
 
             let expected = Expr::Match {
-                scrutinee: Box::new(Expr::Ident("value".to_string())),
+                scrutinee: Box::new(make_ident("value")),
                 arms: vec![
                     MatchArm {
                         pattern: StructPattern {
@@ -1086,7 +1104,7 @@ mod tests {
                                 binding_name: "a".to_string(),
                             }],
                         },
-                        value: Box::new(Expr::Ident("a".to_string())),
+                        value: Box::new(make_ident("a")),
                     },
                     MatchArm {
                         pattern: StructPattern {
