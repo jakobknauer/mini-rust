@@ -1,8 +1,6 @@
 fn main() -> i32 {
     let w = Wrapper::<i32> { item: 5 };
-    eval(Constant { c: 1 })
-        + eval(Add { left: 2, right: 3})
-        + eval(Mul { left: 4, right: 5 })
+    unwrap::<i32>(w)
 }
 
 fn noop<T>() {}
@@ -68,4 +66,8 @@ fn concat<A, B, C>(f: fn(A) -> B, g: fn(B) -> C, a: A) -> C {
 
 struct Wrapper<S> {
     item: S
+}
+
+fn unwrap<T>(wrapped: Wrapper<T>) -> T {
+    wrapped.item
 }

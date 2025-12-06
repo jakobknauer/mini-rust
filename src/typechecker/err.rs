@@ -1,4 +1,4 @@
-use crate::ctxt::{NotAStruct, NotAnEnum, fns::Fn, mlr, ty::Ty};
+use crate::ctxt::{NotAStruct, NotAStructField, NotAnEnum, fns::Fn, mlr, ty::Ty};
 
 pub type TyResult<T> = Result<T, TyError>;
 
@@ -85,5 +85,14 @@ impl From<NotAStruct> for TyError {
 impl From<NotAnEnum> for TyError {
     fn from(NotAnEnum(ty): NotAnEnum) -> Self {
         TyError::NotAnEnum { ty }
+    }
+}
+
+impl From<NotAStructField> for TyError {
+    fn from(err: NotAStructField) -> Self {
+        match err {
+            NotAStructField::NotAStruct(ty) => TyError::NotAStruct { ty },
+            NotAStructField::NotAFieldName(ty, field_name) => TyError::NotAStructField { ty, field_name },
+        }
     }
 }

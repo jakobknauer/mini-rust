@@ -168,7 +168,7 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_field_access_place(&mut self, base: Place, field_index: usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(&base);
-        let field_ty = self.tys.get_struct_field_ty_by_ty_and_index(&base_ty, field_index)?;
+        let field_ty = self.tys.get_struct_field_ty(&base_ty, field_index)?;
         Ok(field_ty)
     }
 
@@ -236,17 +236,7 @@ impl<'a> Typechecker<'a> {
     }
 
     pub fn resolve_struct_field(&mut self, struct_ty: ty::Ty, field_name: &str) -> TyResult<usize> {
-        let struct_def = self.tys.get_struct_def_by_ty(&struct_ty)?;
-
-        let field_index = struct_def
-            .fields
-            .iter()
-            .position(|struct_field| struct_field.name == field_name)
-            .ok_or(TyError::NotAStructField {
-                ty: struct_ty,
-                field_name: field_name.to_string(),
-            })?;
-
+        let field_index = self.tys.get_struct_field_index_by_name(struct_ty, field_name)?;
         Ok(field_index)
     }
 

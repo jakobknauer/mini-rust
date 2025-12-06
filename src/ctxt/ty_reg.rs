@@ -27,6 +27,10 @@ pub enum UnificationError {
 }
 pub struct NotAStruct(pub Ty);
 pub struct NotAnEnum(pub Ty);
+pub enum NotAStructField {
+    NotAStruct(Ty),
+    NotAFieldName(Ty, String),
+}
 
 impl TyReg {
     pub fn new() -> TyReg {
@@ -445,26 +449,30 @@ impl TyReg {
         }
     }
 
-    pub fn get_struct_def_by_ty(&self, ty: &Ty) -> Result<&StructDef, NotAStruct> {
+    pub fn get_struct_field_ty(&mut self, ty: &Ty, index: usize) -> Result<Ty, NotAStruct> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
-
-        let &TyDef::Struct(struct_) = ty_def else {
-            return Err(NotAStruct(*ty));
-        };
-
-        let struct_def = self
-            .get_struct_def(&struct_)
-            .expect("struct definition should be registered");
-
-        Ok(struct_def)
-    }
-
-    pub fn get_struct_field_ty_by_ty_and_index(&mut self, ty: &Ty, index: usize) -> Result<Ty, NotAStruct> {
-        let fields = self.get_struct_fields_by_ty(ty)?;
-        if index >= fields.len() {
-            return Err(NotAStruct(*ty));
+        match *ty_def {
+            TyDef::Struct(struct_) => {
+                let struct_def = self
+                    .get_struct_def(&struct_)
+                    .expect("struct definition should be registered");
+                Ok(struct_def.fields[index].ty)
+            }
+            TyDef::InstantiatedStruct { struct_, ref gen_args } => {
+                let struct_def = self
+                    .get_struct_def(&struct_)
+                    .expect("struct definition should be registered");
+                let ty = struct_def.fields[index].ty;
+                let substitutions: HashMap<String, Ty> = struct_def
+                    .gen_params
+                    .iter()
+                    .map(|gp| gp.name.clone())
+                    .zip(gen_args.iter().cloned())
+                    .collect();
+                Ok(self.substitute_gen_vars(&ty, &substitutions))
+            }
+            _ => Err(NotAStruct(*ty)),
         }
-        Ok(fields[index].ty)
     }
 
     pub fn get_struct_fields_by_ty(&mut self, ty: &Ty) -> Result<Vec<StructField>, NotAStruct> {
@@ -532,5 +540,23 @@ impl TyReg {
             .collect();
 
         Ok(instantiated_fields)
+    }
+
+    pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
+        let ty_def = self.get_ty_def(&struct_ty).expect("type should be registered");
+
+        match ty_def {
+            TyDef::Struct(struct_) | TyDef::InstantiatedStruct { struct_, .. } => {
+                let struct_def = self
+                    .get_struct_def(struct_)
+                    .expect("struct definition should be registered");
+                struct_def
+                    .fields
+                    .iter()
+                    .position(|field| field.name == field_name)
+                    .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
+            }
+            _ => Err(NotAStructField::NotAStruct(struct_ty)),
+        }
     }
 }
