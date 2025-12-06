@@ -306,9 +306,19 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn build_global_function(&mut self, fn_spec: &mr_fns::FnSpecialization) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+        let substituted_gen_args = fn_spec
+            .gen_args
+            .iter()
+            .map(|arg| self.gtor.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
+            .collect::<Vec<_>>();
+        let substituted_fn_spec = mr_fns::FnSpecialization {
+            fn_: fn_spec.fn_,
+            gen_args: substituted_gen_args,
+        };
+
         self.gtor
             .functions
-            .get(fn_spec)
+            .get(&substituted_fn_spec)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
             .ok_or(M2InkwellFnError)
     }

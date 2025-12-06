@@ -69,5 +69,9 @@ struct Wrapper<S> {
 }
 
 fn unwrap<T>(wrapped: Wrapper<T>) -> T {
+    unwrap_internal::<T>(wrapped)
+}
+
+fn unwrap_internal<U>(wrapped: Wrapper<U>) -> U {
     wrapped.item
 }

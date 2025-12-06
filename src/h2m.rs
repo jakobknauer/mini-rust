@@ -185,7 +185,7 @@ impl<'a> H2M<'a> {
 
         match expr {
             Lit(lit) => self.build_literal(lit),
-            Ident(hlr::Ident { ident, gen_args }) => self.build_gen_qual_ident(ident, gen_args),
+            Ident(hlr::Ident { ident, gen_args }) => self.lower_ident_to_op(ident, gen_args),
             FieldAccess { .. } | Deref { .. } => {
                 let place = self.lower_to_place(expr)?;
                 self.insert_copy_op(place)
@@ -206,7 +206,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_gen_qual_ident(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
+    fn lower_ident_to_op(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
         if gen_args.is_empty() {
             return self.resolve_name(ident);
         }
