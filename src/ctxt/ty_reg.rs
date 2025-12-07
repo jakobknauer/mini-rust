@@ -4,7 +4,7 @@ use std::{borrow::Borrow, collections::HashMap, hash::Hash};
 use crate::{ctxt::ty::*, hlr};
 
 pub struct TyReg {
-    tys: HashMap<Ty, Option<TyDef>>,
+    tys: Vec<Option<TyDef>>,
     tys_inv: HashMap<TyDef, Ty>,
 
     i32_ty: Option<Ty>,
@@ -16,7 +16,6 @@ pub struct TyReg {
 
     named_tys: HashMap<String, Ty>,
 
-    next_ty: Ty,
     next_struct: Struct,
     next_enum: Enum,
 }
@@ -39,7 +38,7 @@ pub enum InstantiationError {
 impl TyReg {
     pub fn new() -> TyReg {
         TyReg {
-            tys: HashMap::new(),
+            tys: Vec::new(),
             tys_inv: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
@@ -50,7 +49,6 @@ impl TyReg {
 
             named_tys: HashMap::new(),
 
-            next_ty: Ty(0),
             next_struct: Struct(0),
             next_enum: Enum(0),
         }
@@ -61,17 +59,15 @@ impl TyReg {
             return *existing_ty;
         }
 
-        let ty = self.next_ty;
-        self.next_ty.0 += 1;
-        self.tys.insert(ty, Some(ty_def.clone()));
+        let ty = Ty(self.tys.len());
+        self.tys.push(Some(ty_def.clone()));
         self.tys_inv.insert(ty_def, ty);
         ty
     }
 
     pub fn new_undefined_ty(&mut self) -> Ty {
-        let ty = self.next_ty;
-        self.next_ty.0 += 1;
-        self.tys.insert(ty, None);
+        let ty = Ty(self.tys.len());
+        self.tys.push(None);
         ty
     }
 
@@ -180,7 +176,7 @@ impl TyReg {
 
     pub fn get_ty_def(&self, id: Ty) -> Option<&TyDef> {
         let id = self.canonicalize(id);
-        self.tys.get(&id).and_then(|inner| inner.as_ref())
+        self.tys.get(id.0).and_then(|inner| inner.as_ref())
     }
 
     pub fn get_ty_by_name(&self, name: &str) -> Option<Ty> {
@@ -276,7 +272,7 @@ impl TyReg {
                     .iter()
                     .find_map(|gp| (gp.name == ident.ident).then_some(gp.ty))
                     .or_else(|| self.get_ty_by_name(&ident.ident))
-                    .and_then(|ty| self.tys.get(&ty))?
+                    .and_then(|ty| self.tys.get(ty.0))?
                     .as_ref()?;
 
                 let &TyDef::Struct(struct_) = base_ty_def else {
@@ -296,7 +292,7 @@ impl TyReg {
     }
 
     pub fn get_string_rep(&self, ty: Ty) -> String {
-        if !self.tys.contains_key(&ty) {
+        if ty.0 >= self.tys.len() {
             return format!("<unknown type id {}>", ty.0).to_string();
         }
 
@@ -365,16 +361,16 @@ impl TyReg {
             return Ok(());
         }
 
-        let def1 = self.tys.get(&ty1).expect("ty1 should be registered");
-        let def2 = self.tys.get(&ty2).expect("ty2 should be registered");
+        let def1 = self.tys.get(ty1.0).expect("ty1 should be registered");
+        let def2 = self.tys.get(ty2.0).expect("ty2 should be registered");
 
         match (def1, def2) {
             (None, _) => {
-                self.tys.insert(ty1, Some(Alias(ty2)));
+                *self.tys.get_mut(ty1.0).unwrap() = Some(Alias(ty2));
                 Ok(())
             }
             (_, None) => {
-                self.tys.insert(ty2, Some(Alias(ty1)));
+                *self.tys.get_mut(ty2.0).unwrap() = Some(Alias(ty1));
                 Ok(())
             }
 
@@ -415,7 +411,7 @@ impl TyReg {
     }
 
     pub fn canonicalize(&self, mut ty: Ty) -> Ty {
-        while let Some(TyDef::Alias(next_ty)) = self.tys.get(&ty).expect("current_ty should be registered") {
+        while let Some(TyDef::Alias(next_ty)) = self.tys.get(ty.0).expect("current_ty should be registered") {
             ty = *next_ty;
         }
         ty
@@ -431,18 +427,18 @@ impl TyReg {
     }
 
     pub fn get_all_enums(&self) -> impl IntoIterator<Item = (Ty, &EnumDef)> {
-        self.tys.iter().filter_map(move |(ty, ty_def_opt)| {
+        self.tys.iter().enumerate().filter_map(move |(ty, ty_def_opt)| {
             let TyDef::Enum(enum_) = ty_def_opt.as_ref()? else {
                 return None;
             };
             let enum_def = self.enums.get(enum_).expect("enum definition should be registered");
-            Some((*ty, enum_def))
+            Some((Ty(ty), enum_def))
         })
     }
 
     pub fn substitute_gen_vars(&mut self, ty: Ty, substitutions: &HashMap<impl Borrow<str> + Eq + Hash, Ty>) -> Ty {
         let ty = self.canonicalize(ty);
-        let Some(ty_def) = self.tys.get(&ty).expect("ty should be registered") else {
+        let Some(ty_def) = self.tys.get(ty.0).expect("ty should be registered") else {
             return ty;
         };
 
