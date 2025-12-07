@@ -19,7 +19,7 @@ pub enum TyDef {
     GenVar(String),
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Primitive {
     Integer32,
     Boolean,

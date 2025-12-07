@@ -73,29 +73,29 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
     fn get_iw_ty_of_loc(&mut self, loc: &mlr::Loc) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
         let mr_ty = self.gtor.mr_ctxt.mlr.get_loc_ty(loc);
-        let iw_ty = self.get_ty_as_basic_type_enum(&mr_ty).ok_or(M2InkwellFnError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(M2InkwellFnError)?;
         Ok(iw_ty)
     }
 
     fn get_iw_ty_of_place(&mut self, place: &mlr::Place) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
         let mr_ty = self.gtor.mr_ctxt.mlr.get_place_ty(place);
-        let iw_ty = self.get_ty_as_basic_type_enum(&mr_ty).ok_or(M2InkwellFnError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(M2InkwellFnError)?;
         Ok(iw_ty)
     }
 
     fn get_fn_ty_of_loc(&mut self, op: &mlr::Op) -> M2InkwellFnResult<FunctionType<'iw>> {
         let mr_ty = self.gtor.mr_ctxt.mlr.get_op_ty(op);
-        let mr_ty_def = self.gtor.mr_ctxt.tys.get_ty_def(&mr_ty).ok_or(M2InkwellFnError)?;
+        let mr_ty_def = self.gtor.mr_ctxt.tys.get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
 
         let mr_ty::TyDef::Fn { return_ty, param_tys } = mr_ty_def.clone() else {
             return Err(M2InkwellFnError);
         };
 
-        let return_ty = self.get_ty_as_basic_type_enum(&return_ty).ok_or(M2InkwellFnError)?;
+        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(M2InkwellFnError)?;
 
         let param_tys: Vec<_> = param_tys
             .iter()
-            .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(M2InkwellFnError))
+            .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(M2InkwellFnError))
             .collect::<M2InkwellFnResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, false))
@@ -133,7 +133,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
     fn build_unit_value(&mut self) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         let mr_unit_ty = self.gtor.mr_ctxt.tys.get_primitive_ty(mr_ty::Primitive::Unit);
-        let iw_ty = self.gtor.get_or_define_ty(&mr_unit_ty).ok_or(M2InkwellFnError)?;
+        let iw_ty = self.gtor.get_or_define_ty(mr_unit_ty).ok_or(M2InkwellFnError)?;
         let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| M2InkwellFnError)?;
         Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())
     }
@@ -309,7 +309,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let substituted_gen_args = fn_spec
             .gen_args
             .iter()
-            .map(|arg| self.gtor.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
+            .map(|&arg| self.gtor.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
             .collect::<Vec<_>>();
         let substituted_fn_spec = mr_fns::FnSpecialization {
             fn_: fn_spec.fn_,
@@ -380,13 +380,13 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn get_ty_as_basic_type_enum(&mut self, ty: &mr_ty::Ty) -> Option<BasicTypeEnum<'iw>> {
+    fn get_ty_as_basic_type_enum(&mut self, ty: mr_ty::Ty) -> Option<BasicTypeEnum<'iw>> {
         let ty = self.gtor.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions);
-        self.gtor.get_ty_as_basic_type_enum(&ty)
+        self.gtor.get_ty_as_basic_type_enum(ty)
     }
 
-    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: &mr_ty::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
+    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_ty::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
         let ty = self.gtor.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions);
-        self.gtor.get_ty_as_basic_metadata_type_enum(&ty)
+        self.gtor.get_ty_as_basic_metadata_type_enum(ty)
     }
 }

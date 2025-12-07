@@ -35,7 +35,7 @@ impl Ctxt {
                 fn_spec
                     .gen_args
                     .iter()
-                    .map(|ty| self.tys.get_string_rep(ty))
+                    .map(|&ty| self.tys.get_string_rep(ty))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -51,11 +51,11 @@ impl Ctxt {
             .iter()
             .map(|param| fns::FnParam {
                 name: param.name.clone(),
-                ty: self.tys.substitute_gen_vars(&param.ty, &substitutions),
+                ty: self.tys.substitute_gen_vars(param.ty, &substitutions),
             })
             .collect();
 
-        let specialized_return_ty = self.tys.substitute_gen_vars(&signature.return_ty, &substitutions);
+        let specialized_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &substitutions);
 
         fns::FnSig {
             name: self.get_fn_spec_name(fn_spec),

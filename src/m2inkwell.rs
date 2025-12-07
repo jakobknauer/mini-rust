@@ -61,11 +61,11 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
         self.iw_module.set_triple(&target_triple);
     }
 
-    fn get_or_define_ty(&mut self, ty: &mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
+    fn get_or_define_ty(&mut self, ty: mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Primitive::*, TyDef::*};
 
-        if self.types.contains_key(ty) {
-            return self.types.get(ty).cloned();
+        if self.types.contains_key(&ty) {
+            return self.types.get(&ty).cloned();
         }
 
         let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
@@ -76,40 +76,37 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                 Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             },
-            Struct(struct_) => self.define_struct(ty, &struct_),
-            Enum(enum_) => self.define_enum(&enum_),
+            Struct(struct_) => self.define_struct(ty, struct_),
+            Enum(enum_) => self.define_enum(enum_),
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(_) => unreachable!("generic type variables should be substituted before this point"),
             InstantiatedStruct { struct_, ref gen_args } => {
-                self.define_instantiated_struct(*ty, &struct_, &gen_args.clone())
+                self.define_instantiated_struct(ty, struct_, &gen_args.clone())
             }
         };
 
-        if !self.types.contains_key(ty) {
-            self.types.insert(*ty, inkwell_type);
-        }
-        self.types.get(ty).cloned()
+        Some(*self.types.entry(ty).or_insert(inkwell_type))
     }
 
-    fn get_ty_as_basic_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicTypeEnum<'iw>> {
+    fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty) -> Option<BasicTypeEnum<'iw>> {
         self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: &mr_tys::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
+    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_tys::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
         self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn define_struct(&mut self, ty: &mr_tys::Ty, struct_: &mr_tys::Struct) -> AnyTypeEnum<'iw> {
+    fn define_struct(&mut self, ty: mr_tys::Ty, struct_: mr_tys::Struct) -> AnyTypeEnum<'iw> {
         let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap().clone();
 
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(&struct_def.name);
-        self.types.insert(*ty, iw_struct.as_any_type_enum());
+        self.types.insert(ty, iw_struct.as_any_type_enum());
 
         let field_types: Vec<BasicTypeEnum> = struct_def
             .fields
             .iter()
-            .map(|field| self.get_ty_as_basic_type_enum(&field.ty).unwrap())
+            .map(|field| self.get_ty_as_basic_type_enum(field.ty).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);
@@ -119,7 +116,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
     fn define_instantiated_struct(
         &mut self,
         ty: mr_tys::Ty,
-        struct_: &mr_tys::Struct,
+        struct_: mr_tys::Struct,
         gen_args: &[mr_tys::Ty],
     ) -> AnyTypeEnum<'iw> {
         let struct_def = self.mr_ctxt.tys.get_struct_def(struct_).unwrap().clone();
@@ -129,7 +126,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             struct_def.name,
             gen_args
                 .iter()
-                .map(|arg| self.mr_ctxt.tys.get_string_rep(arg))
+                .map(|&arg| self.mr_ctxt.tys.get_string_rep(arg))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -144,14 +141,14 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             .unwrap();
         let field_types: Vec<BasicTypeEnum> = field_types
             .iter()
-            .map(|field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())
+            .map(|&field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())
             .collect();
 
         iw_struct.set_body(&field_types, false);
         iw_struct.as_any_type_enum()
     }
 
-    fn define_enum(&mut self, enum_: &mr_tys::Enum) -> AnyTypeEnum<'iw> {
+    fn define_enum(&mut self, enum_: mr_tys::Enum) -> AnyTypeEnum<'iw> {
         let enum_def = self.mr_ctxt.tys.get_enum_def(enum_).unwrap().clone();
 
         let discrim_bits = 32;
@@ -161,7 +158,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             .variants
             .iter()
             .map(|variant| {
-                let variant_type: StructType = self.get_ty_as_basic_type_enum(&variant.ty).unwrap().try_into().unwrap();
+                let variant_type: StructType = self.get_ty_as_basic_type_enum(variant.ty).unwrap().try_into().unwrap();
                 TargetData::create("").get_store_size(&variant_type)
             })
             .max()
@@ -184,9 +181,9 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             let param_types: Vec<_> = sig
                 .params
                 .iter()
-                .map(|param| self.get_ty_as_basic_metadata_type_enum(&param.ty).unwrap())
+                .map(|param| self.get_ty_as_basic_metadata_type_enum(param.ty).unwrap())
                 .collect();
-            let return_type = self.get_ty_as_basic_type_enum(&sig.return_ty).unwrap();
+            let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
             let iw_fn_type = return_type.fn_type(&param_types, false);
 
             let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);

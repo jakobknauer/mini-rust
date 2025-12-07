@@ -1,4 +1,4 @@
-use crate::ctxt::{NotAStruct, NotAStructField, NotAnEnum, fns::Fn, mlr, ty::Ty};
+use crate::ctxt::{InstantiationError, NotAStruct, NotAStructField, NotAnEnum, fns::Fn, mlr, ty::Ty};
 
 pub type TyResult<T> = Result<T, TyError>;
 
@@ -55,8 +55,13 @@ pub enum TyError {
     DereferenceOfNonRefTy {
         ty: Ty,
     },
-    GenericArgCountMismatch {
+    FnGenericArgCountMismatch {
         fn_: Fn,
+        expected: usize,
+        actual: usize,
+    },
+    TyGenericArgCountMismatch {
+        ty: Ty,
         expected: usize,
         actual: usize,
     },
@@ -93,6 +98,17 @@ impl From<NotAStructField> for TyError {
         match err {
             NotAStructField::NotAStruct(ty) => TyError::NotAStruct { ty },
             NotAStructField::NotAFieldName(ty, field_name) => TyError::NotAStructField { ty, field_name },
+        }
+    }
+}
+
+impl From<InstantiationError> for TyError {
+    fn from(err: InstantiationError) -> Self {
+        match err {
+            InstantiationError::NotAStruct(ty) => TyError::NotAStruct { ty },
+            InstantiationError::GenericArgCountMismatch { ty, expected, actual } => {
+                TyError::TyGenericArgCountMismatch { ty, expected, actual }
+            }
         }
     }
 }

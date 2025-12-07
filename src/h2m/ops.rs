@@ -12,8 +12,8 @@ macro_rules! op_match {
         ),* $(,)?
     ) => {{
         let ty_reg = $ty_reg;
-        let left = ty_reg.canonicalize(&$left);
-        let right = ty_reg.canonicalize(&$right);
+        let left = ty_reg.canonicalize($left);
+        let right = ty_reg.canonicalize($right);
 
         match ($operator, left, right) {
             $(

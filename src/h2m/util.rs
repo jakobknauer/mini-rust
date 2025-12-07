@@ -186,7 +186,7 @@ impl<'a> super::H2M<'a> {
         for (ty, enum_def) in self.ctxt.tys.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
-                    return Some((*ty, idx));
+                    return Some((ty, idx));
                 }
             }
         }
@@ -198,7 +198,7 @@ impl<'a> super::H2M<'a> {
         let ty = self
             .ctxt
             .tys
-            .get_ty_by_hlr_annot(annot, &gen_params)
+            .try_resolve_hlr_annot(annot, &gen_params)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }

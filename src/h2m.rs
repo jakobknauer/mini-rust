@@ -317,11 +317,11 @@ impl<'a> H2M<'a> {
                     .iter()
                     .map(|annot| self.resolve_hlr_ty_annot(annot))
                     .collect::<H2MResult<Vec<_>>>()?;
-                self.ctxt.tys.instantiate_struct_ty(ty, gen_arg_tys)
+                self.ctxt.tys.instantiate_struct_ty(ty, gen_arg_tys)?
             };
             self.build_struct_val(&ty, fields)
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(&ident.ident) {
-            self.build_enum_val(&ty, &variant_index, fields)
+            self.build_enum_val(ty, &variant_index, fields)
         } else {
             H2MError::UnresolvableStructOrEnum {
                 ty_name: ident.ident.to_string(),
@@ -338,12 +338,12 @@ impl<'a> H2M<'a> {
 
     fn build_enum_val(
         &mut self,
-        ty: &ty::Ty,
+        ty: ty::Ty,
         variant_index: &usize,
         fields: &[(String, hlr::Expr)],
     ) -> H2MResult<mlr::Val> {
         // Create empty enum value
-        let base_place = self.insert_alloc_with_ty(*ty)?;
+        let base_place = self.insert_alloc_with_ty(ty)?;
 
         // Fill discriminant
         let discriminant_place = self.insert_enum_discriminant_place(base_place)?;

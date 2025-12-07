@@ -25,9 +25,9 @@ impl<'a> super::H2M<'a> {
             ([arm], [variant_index]) => {
                 let arm_result = self.build_arm_block(
                     arm,
-                    &self.ctxt.mlr.get_place_ty(&scrutinee_place),
-                    variant_index,
-                    &scrutinee_place,
+                    self.ctxt.mlr.get_place_ty(&scrutinee_place),
+                    *variant_index,
+                    scrutinee_place,
                 )?;
                 self.insert_assign_stmt(result_place, arm_result)?;
                 Ok(())
@@ -39,9 +39,9 @@ impl<'a> super::H2M<'a> {
                 self.start_new_block();
                 let first_arm_result = self.build_arm_block(
                     first_arm,
-                    &self.ctxt.mlr.get_place_ty(&scrutinee_place),
-                    first_variant_index,
-                    &scrutinee_place,
+                    self.ctxt.mlr.get_place_ty(&scrutinee_place),
+                    *first_variant_index,
+                    scrutinee_place,
                 )?;
                 self.insert_assign_stmt(result_place, first_arm_result)?;
                 let then_block = self.release_current_block();
@@ -80,11 +80,11 @@ impl<'a> super::H2M<'a> {
     fn build_arm_block(
         &mut self,
         arm: &hlr::MatchArm,
-        enum_ty: &ty::Ty,
-        variant_index: &usize,
-        base_place: &mlr::Place,
+        enum_ty: ty::Ty,
+        variant_index: usize,
+        base_place: mlr::Place,
     ) -> H2MResult<mlr::Val> {
-        let enum_variant_ty = self.ctxt.tys.get_enum_def_by_ty(enum_ty)?.variants[*variant_index].ty;
+        let enum_variant_ty = self.ctxt.tys.get_enum_def_by_ty(enum_ty)?.variants[variant_index].ty;
         let field_indices = self.typechecker().resolve_struct_fields(
             enum_variant_ty,
             arm.pattern.fields.iter().map(|f| f.field_name.as_str()),
@@ -93,7 +93,7 @@ impl<'a> super::H2M<'a> {
         self.push_scope();
 
         // bind pattern variables to fresh locations
-        let variant_place = self.insert_project_to_variant_place(*base_place, *variant_index)?;
+        let variant_place = self.insert_project_to_variant_place(base_place, variant_index)?;
         for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
         {
             let field_place = self.insert_field_access_place(variant_place, field_index)?;

@@ -100,7 +100,7 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_call(&mut self, callable: &Op, args: &[Op]) -> TyResult<ty::Ty> {
         let ty = self.mlr.get_op_ty(callable);
-        let callable_ty_def = self.tys.get_ty_def(&ty).expect("type of callable should be registered");
+        let callable_ty_def = self.tys.get_ty_def(ty).expect("type of callable should be registered");
 
         let ty::TyDef::Fn { param_tys, return_ty } = callable_ty_def.clone() else {
             return TyError::ValNotCallable.into();
@@ -119,12 +119,12 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
-        for (i, (param_ty, arg_ty)) in param_tys.iter().zip(arg_tys).enumerate() {
+        for (i, (&param_ty, arg_ty)) in param_tys.iter().zip(arg_tys).enumerate() {
             self.tys
-                .unify(param_ty, &arg_ty)
+                .unify(param_ty, arg_ty)
                 .map_err(|_| TyError::CallArgumentTyMismatch {
                     index: i,
-                    expected: *param_ty,
+                    expected: param_ty,
                     actual: arg_ty,
                 })?;
         }
@@ -145,7 +145,7 @@ impl<'a> Typechecker<'a> {
             .expect("function signature should be registered");
 
         if signature.gen_params.len() != fn_specialization.gen_args.len() {
-            return TyError::GenericArgCountMismatch {
+            return TyError::FnGenericArgCountMismatch {
                 fn_: fn_specialization.fn_,
                 expected: signature.gen_params.len(),
                 actual: fn_specialization.gen_args.len(),
@@ -157,7 +157,7 @@ impl<'a> Typechecker<'a> {
         let fn_ty = self.tys.register_fn_ty(param_tys, signature.return_ty);
 
         let substitutions = self.fns.get_substitutions_for_specialization(fn_specialization);
-        let fn_spec_ty = self.tys.substitute_gen_vars(&fn_ty, &substitutions);
+        let fn_spec_ty = self.tys.substitute_gen_vars(fn_ty, &substitutions);
 
         Ok(fn_spec_ty)
     }
@@ -168,13 +168,13 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_field_access_place(&mut self, base: Place, field_index: usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(&base);
-        let field_ty = self.tys.get_struct_field_ty(&base_ty, field_index)?;
+        let field_ty = self.tys.get_struct_field_ty(base_ty, field_index)?;
         Ok(field_ty)
     }
 
     fn infer_ty_of_enum_discriminant(&self, base: &Place) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let _enum_def = self.tys.get_enum_def_by_ty(&base_ty);
+        let _enum_def = self.tys.get_enum_def_by_ty(base_ty);
 
         // the discriminant is always an integer
         let int_ty = self.tys.get_primitive_ty(ty::Primitive::Integer32);
@@ -183,7 +183,7 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_project_to_variant_place(&self, base: &Place, variant_index: &usize) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let enum_def = self.tys.get_enum_def_by_ty(&base_ty)?;
+        let enum_def = self.tys.get_enum_def_by_ty(base_ty)?;
         let variant = enum_def.variants.get(*variant_index).ok_or(TyError::NotAnEnumVariant {
             ty: base_ty,
             variant_name: variant_index.to_string(),
@@ -196,7 +196,7 @@ impl<'a> Typechecker<'a> {
         let ref_ty = self.mlr.get_op_ty(op);
         let ty_def = self
             .tys
-            .get_ty_def(&ref_ty)
+            .get_ty_def(ref_ty)
             .expect("type of dereferenced op should be registered");
 
         match *ty_def {
@@ -210,7 +210,7 @@ impl<'a> Typechecker<'a> {
         let val_ty = self.mlr.get_val_ty(&val);
 
         self.tys
-            .unify(&place_ty, &val_ty)
+            .unify(place_ty, val_ty)
             .map_err(|_| TyError::AssignStmtTyMismatch {
                 place,
                 expected: place_ty,
@@ -228,7 +228,7 @@ impl<'a> Typechecker<'a> {
         let val_ty = self.mlr.get_val_ty(&val);
 
         self.tys
-            .unify(&return_ty, &val_ty)
+            .unify(return_ty, val_ty)
             .map_err(|_| TyError::ReturnTyMismatch {
                 expected: return_ty,
                 actual: val_ty,
@@ -247,10 +247,10 @@ impl<'a> Typechecker<'a> {
     ) -> TyResult<Vec<usize>> {
         let field_names: Vec<&str> = field_names.into_iter().collect();
 
-        let struct_fields = self.tys.get_struct_fields_by_ty(&struct_ty)?;
+        let struct_field_names = self.tys.get_struct_field_names(struct_ty)?;
 
         let actual: HashSet<&str> = field_names.iter().cloned().collect();
-        let expected: HashSet<&str> = struct_fields.iter().map(|field| field.name.as_str()).collect();
+        let expected: HashSet<&str> = struct_field_names.into_iter().collect();
 
         let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
         if !missing_fields.is_empty() {
@@ -272,16 +272,8 @@ impl<'a> Typechecker<'a> {
 
         let field_indices = field_names
             .iter()
-            .map(|field_name| {
-                struct_fields
-                    .iter()
-                    .position(|struct_field| &struct_field.name == field_name)
-                    .ok_or(TyError::NotAStructField {
-                        ty: struct_ty,
-                        field_name: field_name.to_string(),
-                    })
-            })
-            .collect::<TyResult<_>>()?;
+            .map(|field_name| self.tys.get_struct_field_index_by_name(struct_ty, field_name))
+            .collect::<Result<_, _>>()?;
 
         Ok(field_indices)
     }
@@ -293,7 +285,7 @@ impl<'a> Typechecker<'a> {
     ) -> TyResult<Vec<usize>> {
         let variant_names: Vec<&str> = variant_names.into_iter().collect();
 
-        let enum_def = self.tys.get_enum_def_by_ty(&enum_ty)?;
+        let enum_def = self.tys.get_enum_def_by_ty(enum_ty)?;
 
         let actual: HashSet<&str> = variant_names.iter().cloned().collect();
         let expected: HashSet<&str> = enum_def.variants.iter().map(|field| field.name.as_str()).collect();

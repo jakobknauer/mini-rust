@@ -67,12 +67,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let param_ty = self.ctxt.tys.get_string_rep(&param.ty);
+            let param_ty = self.ctxt.tys.get_string_rep(param.ty);
             write!(self.writer, "{}: {}", param_loc, param_ty)?;
         }
         write!(self.writer, ") -> ")?;
 
-        let return_ty = self.ctxt.tys.get_string_rep(&signature.return_ty);
+        let return_ty = self.ctxt.tys.get_string_rep(signature.return_ty);
         write!(self.writer, "{}", return_ty)
     }
 
@@ -98,7 +98,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             Some(stmt) => match stmt {
                 Alloc { loc } => {
                     let loc_ty = self.ctxt.mlr.get_loc_ty(loc);
-                    let ty_name = self.ctxt.tys.get_string_rep(&loc_ty);
+                    let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
                     self.indent()?;
                     writeln!(self.writer, "alloc {}: {};", loc, ty_name)
                 }
@@ -199,7 +199,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
                 ProjectToVariant { base, variant_index } => {
                     let ty = self.ctxt.mlr.get_place_ty(base);
-                    let enum_name = self.ctxt.tys.get_string_rep(&ty);
+                    let enum_name = self.ctxt.tys.get_string_rep(ty);
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
                     write!(self.writer, " as {}::{})", enum_name, variant_index)
