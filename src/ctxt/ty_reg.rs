@@ -11,13 +11,10 @@ pub struct TyReg {
     bool_ty: Option<Ty>,
     unit_ty: Option<Ty>,
 
-    structs: HashMap<Struct, StructDef>,
-    enums: HashMap<Enum, EnumDef>,
+    structs: Vec<StructDef>,
+    enums: Vec<EnumDef>,
 
     named_tys: HashMap<String, Ty>,
-
-    next_struct: Struct,
-    next_enum: Enum,
 }
 
 pub enum UnificationError {
@@ -40,17 +37,15 @@ impl TyReg {
         TyReg {
             tys: Vec::new(),
             tys_inv: HashMap::new(),
-            structs: HashMap::new(),
-            enums: HashMap::new(),
 
             i32_ty: None,
             bool_ty: None,
             unit_ty: None,
 
-            named_tys: HashMap::new(),
+            structs: Vec::new(),
+            enums: Vec::new(),
 
-            next_struct: Struct(0),
-            next_enum: Enum(0),
+            named_tys: HashMap::new(),
         }
     }
 
@@ -89,8 +84,7 @@ impl TyReg {
     }
 
     pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Ty, ()> {
-        let struct_ = self.next_struct;
-        self.next_struct.0 += 1;
+        let struct_ = Struct(self.structs.len());
 
         let ty = self.register_named_ty(name, TyDef::Struct(struct_))?;
         let gen_params = gen_param_names
@@ -106,23 +100,19 @@ impl TyReg {
             gen_params,
             fields: vec![],
         };
-        self.structs.insert(struct_, struct_def);
+        self.structs.push(struct_def);
 
         Ok(ty)
     }
 
     pub fn register_enum(&mut self, name: &str) -> Result<Ty, ()> {
-        let enum_ = self.next_enum;
-        self.next_enum.0 += 1;
+        let enum_ = Enum(self.enums.len());
 
         let ty = self.register_named_ty(name, TyDef::Enum(enum_))?;
-        self.enums.insert(
-            enum_,
-            EnumDef {
-                name: name.to_string(),
-                variants: vec![],
-            },
-        );
+        self.enums.push(EnumDef {
+            name: name.to_string(),
+            variants: vec![],
+        });
         Ok(ty)
     }
 
@@ -156,7 +146,7 @@ impl TyReg {
 
         let struct_def = self
             .structs
-            .get(&struct_)
+            .get(struct_.0)
             .expect("struct definition should be registered");
 
         let gen_args = gen_args.into();
@@ -196,13 +186,13 @@ impl TyReg {
     }
 
     pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
-        self.structs.get(&struct_)
+        self.structs.get(struct_.0)
     }
 
     pub fn get_struct_def_by_name(&self, name: &str) -> Option<&StructDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
         if let TyDef::Struct(struct_) = *ty_def {
-            self.structs.get(&struct_)
+            self.structs.get(struct_.0)
         } else {
             None
         }
@@ -211,14 +201,14 @@ impl TyReg {
     pub fn get_mut_struct_def_by_name(&mut self, name: &str) -> Option<&mut StructDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
         if let TyDef::Struct(struct_) = *ty_def {
-            self.structs.get_mut(&struct_)
+            self.structs.get_mut(struct_.0)
         } else {
             None
         }
     }
 
     pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
-        self.enums.get(&enum_)
+        self.enums.get(enum_.0)
     }
 
     pub fn get_enum_def_by_ty(&self, ty: Ty) -> Result<&EnumDef, NotAnEnum> {
@@ -236,7 +226,7 @@ impl TyReg {
     pub fn get_mut_enum_def_by_name(&mut self, name: &str) -> Option<&mut EnumDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
         if let TyDef::Enum(enum_) = *ty_def {
-            self.enums.get_mut(&enum_)
+            self.enums.get_mut(enum_.0)
         } else {
             None
         }
@@ -427,11 +417,11 @@ impl TyReg {
     }
 
     pub fn get_all_enums(&self) -> impl IntoIterator<Item = (Ty, &EnumDef)> {
-        self.tys.iter().enumerate().filter_map(move |(ty, ty_def_opt)| {
+        self.tys.iter().enumerate().filter_map(|(ty, ty_def_opt)| {
             let TyDef::Enum(enum_) = ty_def_opt.as_ref()? else {
                 return None;
             };
-            let enum_def = self.enums.get(enum_).expect("enum definition should be registered");
+            let enum_def = self.enums.get(enum_.0).expect("enum definition should be registered");
             Some((Ty(ty), enum_def))
         })
     }
