@@ -3,9 +3,9 @@ use std::{borrow::Borrow, collections::HashMap, hash::Hash};
 
 use crate::{ctxt::ty::*, hlr};
 
+#[derive(Default)]
 pub struct TyReg {
     tys: Vec<Option<TyDef>>,
-    tys_inv: HashMap<TyDef, Ty>,
 
     i32_ty: Option<Ty>,
     bool_ty: Option<Ty>,
@@ -14,6 +14,7 @@ pub struct TyReg {
     structs: Vec<StructDef>,
     enums: Vec<EnumDef>,
 
+    tys_inv: HashMap<TyDef, Ty>,
     named_tys: HashMap<String, Ty>,
 }
 
@@ -33,22 +34,6 @@ pub enum InstantiationError {
 }
 
 impl TyReg {
-    pub fn new() -> TyReg {
-        TyReg {
-            tys: Vec::new(),
-            tys_inv: HashMap::new(),
-
-            i32_ty: None,
-            bool_ty: None,
-            unit_ty: None,
-
-            structs: Vec::new(),
-            enums: Vec::new(),
-
-            named_tys: HashMap::new(),
-        }
-    }
-
     fn register_ty(&mut self, ty_def: TyDef) -> Ty {
         if let Some(existing_ty) = self.tys_inv.get(&ty_def) {
             return *existing_ty;

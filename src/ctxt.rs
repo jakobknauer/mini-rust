@@ -18,7 +18,7 @@ pub struct Ctxt {
 impl Ctxt {
     pub fn new() -> Self {
         Self {
-            tys: TyReg::new(),
+            tys: Default::default(),
             fns: FnReg::new(),
             mlr: Mlr::new(),
         }
