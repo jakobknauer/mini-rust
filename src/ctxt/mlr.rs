@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{fns::FnSpecialization, ty::Ty};
 
+#[derive(Default)]
 pub struct Mlr {
     stmts: Vec<StmtDef>,
     vals: Vec<ValDef>,
@@ -25,7 +26,7 @@ pub struct Val(pub usize);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Place(pub usize);
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Loc(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -86,22 +87,6 @@ impl std::fmt::Display for Loc {
 }
 
 impl Mlr {
-    pub fn new() -> Self {
-        Self {
-            stmts: Vec::new(),
-            vals: Vec::new(),
-            places: Vec::new(),
-            ops: Vec::new(),
-
-            val_tys: HashMap::new(),
-            place_tys: HashMap::new(),
-            op_tys: HashMap::new(),
-            loc_tys: HashMap::new(),
-
-            next_loc: Loc(0),
-        }
-    }
-
     pub fn insert_stmt(&mut self, stmt_def: StmtDef) -> Stmt {
         let stmt = Stmt(self.stmts.len());
         self.stmts.push(stmt_def);

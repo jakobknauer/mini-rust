@@ -24,7 +24,7 @@ pub fn compile(
     print_detail: impl Fn(&str),
     output_paths: &OutputPaths,
 ) -> Result<(), String> {
-    let mut ctxt = ctxt::Ctxt::new();
+    let mut ctxt = ctxt::Ctxt::default();
 
     print_pretty("Building HLR from source");
     let hlr = hlr::build_program(source).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;

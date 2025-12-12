@@ -9,6 +9,7 @@ pub use ty_reg::*;
 
 use mlr::*;
 
+#[derive(Default)]
 pub struct Ctxt {
     pub tys: TyReg,
     pub fns: FnReg,
@@ -16,14 +17,6 @@ pub struct Ctxt {
 }
 
 impl Ctxt {
-    pub fn new() -> Self {
-        Self {
-            tys: Default::default(),
-            fns: Default::default(),
-            mlr: Mlr::new(),
-        }
-    }
-
     pub fn get_fn_spec_name(&self, fn_spec: &fns::FnSpecialization) -> String {
         let signature = self.fns.get_sig(&fn_spec.fn_).unwrap();
         if signature.gen_params.is_empty() {
