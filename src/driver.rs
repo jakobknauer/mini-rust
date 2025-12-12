@@ -99,14 +99,30 @@ fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()>
     tys.register_primitive_tys()?;
 
     for struct_ in &program.structs {
-        tys.register_struct(&struct_.name, &struct_.gen_params)?;
+        let gen_params: Vec<_> = struct_
+            .gen_params
+            .iter()
+            .map(|gp| ty::GenParam {
+                name: gp.clone(),
+                ty: tys.register_gen_var_ty(gp),
+            })
+            .collect();
+        tys.register_struct(&struct_.name, gen_params)?;
     }
 
     for enum_ in &program.enums {
-        tys.register_enum(&enum_.name)?;
+        let gen_params: Vec<_> = enum_
+            .gen_params
+            .iter()
+            .map(|gp| ty::GenParam {
+                name: gp.clone(),
+                ty: tys.register_gen_var_ty(gp),
+            })
+            .collect();
+        tys.register_enum(&enum_.name, gen_params.clone())?;
         for variant in &enum_.variants {
             let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-            tys.register_struct(&variant_struct_name, &[])?;
+            tys.register_struct(&variant_struct_name, gen_params.clone())?;
         }
     }
 

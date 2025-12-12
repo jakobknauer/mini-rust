@@ -75,3 +75,8 @@ fn unwrap<T>(wrapped: Wrapper<T>) -> T {
 fn unwrap_internal<U>(wrapped: Wrapper<U>) -> U {
     wrapped.item
 }
+
+enum Option<T> {
+    Some { item: T },
+    None
+}

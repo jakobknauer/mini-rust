@@ -68,21 +68,14 @@ impl TyReg {
         Ok(())
     }
 
-    pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Ty, ()> {
+    pub fn register_struct(&mut self, name: &str, gen_params: impl Into<Vec<GenParam>>) -> Result<Ty, ()> {
         let struct_ = Struct(self.structs.len());
 
         let ty = self.register_named_ty(name, TyDef::Struct(struct_))?;
-        let gen_params = gen_param_names
-            .iter()
-            .map(|gp_name| GenParam {
-                name: gp_name.clone(),
-                ty: self.register_gen_var_ty(gp_name),
-            })
-            .collect();
 
         let struct_def = StructDef {
             name: name.to_string(),
-            gen_params,
+            gen_params: gen_params.into(),
             fields: vec![],
         };
         self.structs.push(struct_def);
@@ -90,14 +83,18 @@ impl TyReg {
         Ok(ty)
     }
 
-    pub fn register_enum(&mut self, name: &str) -> Result<Ty, ()> {
+    pub fn register_enum(&mut self, name: &str, gen_params: impl Into<Vec<GenParam>>) -> Result<Ty, ()> {
         let enum_ = Enum(self.enums.len());
 
         let ty = self.register_named_ty(name, TyDef::Enum(enum_))?;
-        self.enums.push(EnumDef {
+
+        let enum_def = EnumDef {
             name: name.to_string(),
+            gen_params: gen_params.into(),
             variants: vec![],
-        });
+        };
+
+        self.enums.push(enum_def);
         Ok(ty)
     }
 

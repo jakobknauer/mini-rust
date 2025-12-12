@@ -42,6 +42,7 @@ pub struct StructField {
 #[derive(Clone)]
 pub struct EnumDef {
     pub name: String,
+    pub gen_params: Vec<GenParam>,
     pub variants: Vec<EnumVariant>,
 }
 
