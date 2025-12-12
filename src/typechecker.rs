@@ -241,14 +241,13 @@ impl<'a> Typechecker<'a> {
         struct_ty: ty::Ty,
         field_names: impl IntoIterator<Item = &'b str>,
     ) -> TyResult<Vec<usize>> {
-        let field_names: Vec<&str> = field_names.into_iter().collect();
+        let provided_names: Vec<&str> = field_names.into_iter().collect();
+        let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
 
-        let struct_field_names = self.tys.get_struct_field_names(struct_ty)?;
+        let expected_names: Vec<&str> = self.tys.get_struct_field_names(struct_ty)?.into_iter().collect();
+        let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
 
-        let actual: HashSet<&str> = field_names.iter().cloned().collect();
-        let expected: HashSet<&str> = struct_field_names.into_iter().collect();
-
-        let missing_fields: Vec<&str> = expected.difference(&actual).cloned().collect();
+        let missing_fields: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();
         if !missing_fields.is_empty() {
             return TyError::InitializerMissingFields {
                 ty: struct_ty,
@@ -257,7 +256,7 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
-        let extra_fields: Vec<&str> = actual.difference(&expected).cloned().collect();
+        let extra_fields: Vec<&str> = provided_names_set.difference(&expected_names_set).cloned().collect();
         if !extra_fields.is_empty() {
             return TyError::InitializerExtraFields {
                 ty: struct_ty,
@@ -266,9 +265,17 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
-        let field_indices = field_names
+        let field_indices = provided_names
             .iter()
-            .map(|field_name| self.tys.get_struct_field_index_by_name(struct_ty, field_name))
+            .map(|field_name| {
+                expected_names
+                    .iter()
+                    .position(|name| name == field_name)
+                    .ok_or_else(|| TyError::NotAStructField {
+                        ty: struct_ty,
+                        field_name: field_name.to_string(),
+                    })
+            })
             .collect::<Result<_, _>>()?;
 
         Ok(field_indices)
@@ -279,14 +286,13 @@ impl<'a> Typechecker<'a> {
         enum_ty: ty::Ty,
         variant_names: impl IntoIterator<Item = &'b str>,
     ) -> TyResult<Vec<usize>> {
-        let variant_names: Vec<&str> = variant_names.into_iter().collect();
+        let provided_names: Vec<&str> = variant_names.into_iter().collect();
+        let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
 
-        let enum_def = self.tys.get_enum_def_by_ty(enum_ty)?;
+        let expected_names: Vec<&str> = self.tys.get_enum_variant_names(enum_ty)?.into_iter().collect();
+        let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
 
-        let actual: HashSet<&str> = variant_names.iter().cloned().collect();
-        let expected: HashSet<&str> = enum_def.variants.iter().map(|field| field.name.as_str()).collect();
-
-        let missing_variants: Vec<&str> = expected.difference(&actual).cloned().collect();
+        let missing_variants: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();
         if !missing_variants.is_empty() {
             return TyError::MissingVariants {
                 ty: enum_ty,
@@ -295,7 +301,7 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
-        let extra_variants: Vec<&str> = actual.difference(&expected).cloned().collect();
+        let extra_variants: Vec<&str> = provided_names_set.difference(&expected_names_set).cloned().collect();
         if !extra_variants.is_empty() {
             return TyError::ExtraVariants {
                 ty: enum_ty,
@@ -304,14 +310,13 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
-        let variant_indices = variant_names
+        let variant_indices = provided_names
             .iter()
             .map(|variant_name| {
-                enum_def
-                    .variants
+                expected_names
                     .iter()
-                    .position(|struct_variant| &struct_variant.name == variant_name)
-                    .ok_or(TyError::NotAnEnumVariant {
+                    .position(|name| name == variant_name)
+                    .ok_or_else(|| TyError::NotAnEnumVariant {
                         ty: enum_ty,
                         variant_name: variant_name.to_string(),
                     })

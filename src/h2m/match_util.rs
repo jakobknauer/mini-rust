@@ -84,7 +84,7 @@ impl<'a> super::H2M<'a> {
         variant_index: usize,
         base_place: mlr::Place,
     ) -> H2MResult<mlr::Val> {
-        let enum_variant_ty = self.ctxt.tys.get_enum_def_by_ty(enum_ty)?.variants[variant_index].ty;
+        let enum_variant_ty = self.ctxt.tys.get_enum_variant_ty(enum_ty, variant_index)?;
         let field_indices = self.typechecker().resolve_struct_fields(
             enum_variant_ty,
             arm.pattern.fields.iter().map(|f| f.field_name.as_str()),

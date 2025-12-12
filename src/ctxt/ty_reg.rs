@@ -222,18 +222,6 @@ impl TyReg {
         self.enums.get(enum_.0)
     }
 
-    pub fn get_enum_def_by_ty(&self, ty: Ty) -> Result<&EnumDef, NotAnEnum> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
-
-        let &TyDef::Enum(enum_) = ty_def else {
-            return Err(NotAnEnum(ty));
-        };
-
-        let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
-
-        Ok(enum_def)
-    }
-
     pub fn is_enum_ty(&self, base_ty: Ty) -> bool {
         let ty_def = self.get_ty_def(base_ty);
         matches!(ty_def, Some(TyDef::Enum(_)) | Some(TyDef::InstantiatedEnum { .. }))
@@ -565,6 +553,17 @@ impl TyReg {
                 Ok(struct_def.fields.iter().map(|field| field.name.as_str()))
             }
             _ => Err(NotAStruct(ty)),
+        }
+    }
+
+    pub fn get_enum_variant_names(&self, ty: Ty) -> Result<impl IntoIterator<Item = &str>, NotAnEnum> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        match *ty_def {
+            TyDef::Enum(enum_) | TyDef::InstantiatedEnum { enum_, .. } => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                Ok(enum_def.variants.iter().map(|variant| variant.name.as_str()))
+            }
+            _ => Err(NotAnEnum(ty)),
         }
     }
 
