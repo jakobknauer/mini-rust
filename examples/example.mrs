@@ -1,6 +1,6 @@
 fn main() -> i32 {
-    let w = Wrapper::<i32> { item: 5 };
-    unwrap::<i32>(w)
+    let opt = make_option::<i32>(3);
+    3
 }
 
 fn noop<T>() {}

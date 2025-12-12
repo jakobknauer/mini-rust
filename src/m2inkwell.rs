@@ -80,13 +80,11 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             Enum(enum_) => self.define_enum(enum_),
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
-            GenVar(_) => unreachable!("generic type variables should be substituted before this point"),
+            GenVar(ref name) => unreachable!("generic type variable '{name}' should be substituted before this point"),
             InstantiatedStruct { struct_, ref gen_args } => {
                 self.define_instantiated_struct(ty, struct_, &gen_args.clone())
             }
-            InstantiatedEnum { .. } => {
-                unimplemented!("instantiated enums are not yet supported in Inkwell backend")
-            }
+            InstantiatedEnum { enum_, ref gen_args } => self.define_instantiated_enum(enum_, &gen_args.clone()),
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))
@@ -193,6 +191,45 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
             self.functions.insert(fn_spec, fn_value);
         }
+    }
+
+    fn define_instantiated_enum(&mut self, enum_: mr_tys::Enum, gen_args: &[mr_tys::Ty]) -> AnyTypeEnum<'iw> {
+        let enum_def = self.mr_ctxt.tys.get_enum_def(enum_).unwrap().clone();
+        let instantiated_name = format!(
+            "{}<{}>",
+            enum_def.name,
+            gen_args
+                .iter()
+                .map(|&arg| self.mr_ctxt.tys.get_string_rep(arg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
+        let discrim_bits = 32;
+        let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits);
+
+        let instantiated_variant_tys = self
+            .mr_ctxt
+            .tys
+            .get_instantiated_enum_variant_tys(enum_, gen_args)
+            .unwrap();
+        let max_variant_size = instantiated_variant_tys
+            .iter()
+            .map(|&variant_ty| {
+                let variant_type: StructType = self.get_ty_as_basic_type_enum(variant_ty).unwrap().try_into().unwrap();
+                TargetData::create("").get_store_size(&variant_type)
+            })
+            .max()
+            .unwrap_or(0);
+
+        let data_array_type = self.iw_ctxt.i8_type().array_type(max_variant_size as u32);
+
+        let enum_struct = self.iw_ctxt.opaque_struct_type(&instantiated_name);
+        enum_struct.set_body(
+            &[discrim_type.as_basic_type_enum(), data_array_type.as_basic_type_enum()],
+            false,
+        );
+        enum_struct.as_any_type_enum()
     }
 
     pub fn define_functions(&mut self) {

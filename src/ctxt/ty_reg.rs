@@ -493,6 +493,17 @@ impl TyReg {
                     gen_args: new_gen_args,
                 })
             }
+            TyDef::InstantiatedEnum { enum_, ref gen_args } => {
+                let new_gen_args = gen_args
+                    .clone()
+                    .iter()
+                    .map(|&ga| self.substitute_gen_vars(ga, substitutions))
+                    .collect::<Vec<_>>();
+                self.register_ty(TyDef::InstantiatedEnum {
+                    enum_,
+                    gen_args: new_gen_args,
+                })
+            }
             _ => ty,
         }
     }
@@ -573,12 +584,29 @@ impl TyReg {
 
         let struct_field_tys: Vec<Ty> = struct_def.fields.iter().map(|field| field.ty).collect();
         // This should reuse the struct_field_tys vector to avoid an extra allocation
-        let instantiated_fields: Vec<Ty> = struct_field_tys
+        let instantiated_field_tys: Vec<Ty> = struct_field_tys
             .into_iter()
             .map(|field| self.substitute_gen_vars(field, &substitutions))
             .collect();
 
-        Ok(instantiated_fields)
+        Ok(instantiated_field_tys)
+    }
+
+    pub fn get_instantiated_enum_variant_tys(&mut self, enum_: Enum, gen_args: &[Ty]) -> Result<Vec<Ty>, ()> {
+        let enum_def = self.get_enum_def(enum_).ok_or(())?.clone();
+
+        if enum_def.gen_params.len() != gen_args.len() {
+            return Err(());
+        }
+
+        let enum_variant_tys: Vec<Ty> = enum_def.variants.iter().map(|variant| variant.ty).collect();
+        // This should reuse the enum_variant_struct_tys vector to avoid an extra allocation
+        let instantiated_variant_tys: Vec<Ty> = enum_variant_tys
+            .into_iter()
+            .map(|variant_ty| self.instantiate_struct_ty(variant_ty, gen_args.to_vec()).unwrap())
+            .collect();
+
+        Ok(instantiated_variant_tys)
     }
 
     pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
