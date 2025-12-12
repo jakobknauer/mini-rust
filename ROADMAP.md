@@ -28,7 +28,7 @@
 - Generic (without trait bounds)
     - ~~functions~~
     - ~~structs~~
-    - enums
+    - ~~enums~~
 
 ## Version 3
 - Traits and trait bounds
