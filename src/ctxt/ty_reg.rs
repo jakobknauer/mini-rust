@@ -22,7 +22,9 @@ pub enum UnificationError {
     FunctionParamCountMismatch,
     TypeMismatch,
 }
+#[derive(Debug)]
 pub struct NotAStruct(pub Ty);
+#[derive(Debug)]
 pub struct NotAnEnum(pub Ty);
 pub enum NotAStructField {
     NotAStruct(Ty),
@@ -196,7 +198,7 @@ impl TyReg {
         if let TyDef::Struct(..) = ty_def { Some(ty) } else { None }
     }
 
-    pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
+    fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
         self.structs.get(struct_.0)
     }
 
@@ -218,7 +220,7 @@ impl TyReg {
         }
     }
 
-    pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
+    fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
         self.enums.get(enum_.0)
     }
 
@@ -522,6 +524,36 @@ impl TyReg {
         }
     }
 
+    pub fn get_struct_field_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAStruct> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        match *ty_def {
+            TyDef::Struct(struct_) => {
+                let struct_def = self
+                    .get_struct_def(struct_)
+                    .expect("struct definition should be registered");
+                Ok(struct_def.fields.iter().map(|field| field.ty).collect())
+            }
+            TyDef::InstantiatedStruct { struct_, ref gen_args } => {
+                let struct_def = self
+                    .get_struct_def(struct_)
+                    .expect("struct definition should be registered");
+                let substitutions: HashMap<String, Ty> = struct_def
+                    .gen_params
+                    .iter()
+                    .map(|gp| gp.name.clone())
+                    .zip(gen_args.iter().cloned())
+                    .collect();
+                let fields = struct_def.fields.clone();
+                let instantiated_field_tys: Vec<Ty> = fields
+                    .iter()
+                    .map(|field| self.substitute_gen_vars(field.ty, &substitutions))
+                    .collect();
+                Ok(instantiated_field_tys)
+            }
+            _ => Err(NotAStruct(ty)),
+        }
+    }
+
     pub fn get_enum_variant_ty(&mut self, ty: Ty, variant_index: usize) -> Result<Ty, NotAnEnum> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
         match *ty_def {
@@ -538,6 +570,31 @@ impl TyReg {
                     .unwrap();
 
                 Ok(instantiated_variant_struct_ty)
+            }
+            _ => Err(NotAnEnum(ty)),
+        }
+    }
+
+    pub fn get_enum_variant_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAnEnum> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        match *ty_def {
+            TyDef::Enum(enum_) => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                let variant_struct_tys: Vec<Ty> = enum_def.variants.iter().map(|variant| variant.ty).collect();
+                Ok(variant_struct_tys)
+            }
+            TyDef::InstantiatedEnum { enum_, ref gen_args } => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                let base_variant_struct_tys: Vec<Ty> = enum_def.variants.iter().map(|variant| variant.ty).collect();
+                let gen_args = gen_args.clone();
+                let instantiated_variant_struct_tys: Vec<Ty> = base_variant_struct_tys
+                    .into_iter()
+                    .map(|variant_ty| {
+                        let gen_args = gen_args.clone();
+                        self.instantiate_struct_ty(variant_ty, gen_args).unwrap()
+                    })
+                    .collect();
+                Ok(instantiated_variant_struct_tys)
             }
             _ => Err(NotAnEnum(ty)),
         }
@@ -565,47 +622,6 @@ impl TyReg {
             }
             _ => Err(NotAnEnum(ty)),
         }
-    }
-
-    pub fn get_instantiated_struct_field_tys(&mut self, struct_: Struct, gen_args: &[Ty]) -> Result<Vec<Ty>, ()> {
-        let struct_def = self.get_struct_def(struct_).ok_or(())?.clone();
-
-        if struct_def.gen_params.len() != gen_args.len() {
-            return Err(());
-        }
-
-        let substitutions: HashMap<String, Ty> = struct_def
-            .gen_params
-            .iter()
-            .map(|gp| gp.name.clone())
-            .zip(gen_args.iter().cloned())
-            .collect();
-
-        let struct_field_tys: Vec<Ty> = struct_def.fields.iter().map(|field| field.ty).collect();
-        // This should reuse the struct_field_tys vector to avoid an extra allocation
-        let instantiated_field_tys: Vec<Ty> = struct_field_tys
-            .into_iter()
-            .map(|field| self.substitute_gen_vars(field, &substitutions))
-            .collect();
-
-        Ok(instantiated_field_tys)
-    }
-
-    pub fn get_instantiated_enum_variant_tys(&mut self, enum_: Enum, gen_args: &[Ty]) -> Result<Vec<Ty>, ()> {
-        let enum_def = self.get_enum_def(enum_).ok_or(())?.clone();
-
-        if enum_def.gen_params.len() != gen_args.len() {
-            return Err(());
-        }
-
-        let enum_variant_tys: Vec<Ty> = enum_def.variants.iter().map(|variant| variant.ty).collect();
-        // This should reuse the enum_variant_struct_tys vector to avoid an extra allocation
-        let instantiated_variant_tys: Vec<Ty> = enum_variant_tys
-            .into_iter()
-            .map(|variant_ty| self.instantiate_struct_ty(variant_ty, gen_args.to_vec()).unwrap())
-            .collect();
-
-        Ok(instantiated_variant_tys)
     }
 
     pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
