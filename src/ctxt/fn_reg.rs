@@ -1,47 +1,36 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{Fn, FnMlr, FnSig, FnSpecialization},
     ty::Ty,
 };
 
+#[derive(Default)]
 pub struct FnReg {
-    fn_names: BTreeMap<String, Fn>,
-    sigs: HashMap<Fn, FnSig>,
-    next_fn: Fn,
+    sigs: Vec<FnSig>,
+    fn_names: HashMap<String, Fn>,
     defs: HashMap<Fn, FnMlr>,
 
     called_specializations: HashMap<Fn, Vec<FnSpecialization>>,
 }
 
 impl FnReg {
-    pub fn new() -> FnReg {
-        FnReg {
-            fn_names: BTreeMap::new(),
-            sigs: HashMap::new(),
-            next_fn: Fn(0),
-            defs: HashMap::new(),
-            called_specializations: HashMap::new(),
-        }
-    }
-
     pub fn register_fn(&mut self, signature: FnSig) -> Result<Fn, ()> {
         if self.fn_names.contains_key(&signature.name) {
             return Err(());
         }
 
-        let fn_ = self.next_fn;
-        self.next_fn.0 += 1;
+        let fn_ = Fn(self.sigs.len());
 
         self.fn_names.insert(signature.name.to_string(), fn_);
-        self.sigs.insert(fn_, signature);
+        self.sigs.push(signature);
         self.called_specializations.insert(fn_, Vec::new());
 
         Ok(fn_)
     }
 
     pub fn get_sig(&self, fn_: &Fn) -> Option<&FnSig> {
-        self.sigs.get(fn_)
+        self.sigs.get(fn_.0)
     }
 
     pub fn get_fn_by_name(&self, name: &str) -> Option<Fn> {

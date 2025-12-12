@@ -19,7 +19,7 @@ impl Ctxt {
     pub fn new() -> Self {
         Self {
             tys: Default::default(),
-            fns: FnReg::new(),
+            fns: Default::default(),
             mlr: Mlr::new(),
         }
     }
