@@ -321,6 +321,16 @@ impl<'a> H2M<'a> {
             };
             self.build_struct_val(&ty, fields)
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(&ident.ident) {
+            let ty = if ident.gen_args.is_empty() {
+                ty
+            } else {
+                let gen_arg_tys = ident
+                    .gen_args
+                    .iter()
+                    .map(|annot| self.resolve_hlr_ty_annot(annot))
+                    .collect::<H2MResult<Vec<_>>>()?;
+                self.ctxt.tys.instantiate_enum_ty(ty, gen_arg_tys)?
+            };
             self.build_enum_val(ty, &variant_index, fields)
         } else {
             H2MError::UnresolvableStructOrEnum {
@@ -353,12 +363,7 @@ impl<'a> H2M<'a> {
 
         // Fill fields
         let variant_place = self.insert_project_to_variant_place(base_place, *variant_index)?;
-        let enum_def = self.ctxt.tys.get_enum_def_by_ty(ty)?;
-        let variant_ty = enum_def
-            .variants
-            .get(*variant_index)
-            .expect("variant index should be valid")
-            .ty;
+        let variant_ty = self.typechecker().get_enum_variant_ty(ty, *variant_index)?;
         self.build_struct_field_init_stmts(&variant_ty, fields, &variant_place)?;
 
         self.insert_use_place_val(base_place)

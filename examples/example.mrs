@@ -80,3 +80,7 @@ enum Option<T> {
     Some { item: T },
     None
 }
+
+fn make_option<T>(item: T) -> Option<T> {
+    Some::<T> { item: item }
+}

@@ -47,7 +47,7 @@ impl<'a> Typechecker<'a> {
             Loc(loc) => self.infer_ty_of_loc(loc),
             &FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index),
             EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(base),
-            ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
+            &ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
             &Deref(op) => self.infer_ty_of_deref_place(&op),
         }?;
 
@@ -174,22 +174,18 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_enum_discriminant(&self, base: &Place) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
-        let _enum_def = self.tys.get_enum_def_by_ty(base_ty);
+        if !self.tys.is_enum_ty(base_ty) {
+            return TyError::NotAnEnum { ty: base_ty }.into();
+        }
 
         // the discriminant is always an integer
         let int_ty = self.tys.get_primitive_ty(ty::Primitive::Integer32);
         Ok(int_ty)
     }
 
-    fn infer_ty_of_project_to_variant_place(&self, base: &Place, variant_index: &usize) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(base);
-        let enum_def = self.tys.get_enum_def_by_ty(base_ty)?;
-        let variant = enum_def.variants.get(*variant_index).ok_or(TyError::NotAnEnumVariant {
-            ty: base_ty,
-            variant_name: variant_index.to_string(),
-        })?;
-
-        Ok(variant.ty)
+    fn infer_ty_of_project_to_variant_place(&mut self, base: Place, variant_index: usize) -> TyResult<ty::Ty> {
+        let base_ty = self.mlr.get_place_ty(&base);
+        self.get_enum_variant_ty(base_ty, variant_index)
     }
 
     fn infer_ty_of_deref_place(&mut self, op: &Op) -> TyResult<ty::Ty> {
@@ -323,5 +319,10 @@ impl<'a> Typechecker<'a> {
             .collect::<TyResult<_>>()?;
 
         Ok(variant_indices)
+    }
+
+    pub fn get_enum_variant_ty(&mut self, ty: ty::Ty, variant_index: usize) -> TyResult<ty::Ty> {
+        let ty = self.tys.get_enum_variant_ty(ty, variant_index)?;
+        Ok(ty)
     }
 }

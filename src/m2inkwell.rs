@@ -84,6 +84,9 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             InstantiatedStruct { struct_, ref gen_args } => {
                 self.define_instantiated_struct(ty, struct_, &gen_args.clone())
             }
+            InstantiatedEnum { .. } => {
+                unimplemented!("instantiated enums are not yet supported in Inkwell backend")
+            }
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

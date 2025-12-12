@@ -28,8 +28,10 @@ pub enum NotAStructField {
     NotAStruct(Ty),
     NotAFieldName(Ty, String),
 }
-pub enum InstantiationError {
+#[derive(Debug)]
+pub enum TyInstantiationError {
     NotAStruct(Ty),
+    NotAnEnum(Ty),
     GenericArgCountMismatch { ty: Ty, expected: usize, actual: usize },
 }
 
@@ -120,10 +122,10 @@ impl TyReg {
         &mut self,
         struct_ty: Ty,
         gen_args: impl Into<Vec<Ty>>,
-    ) -> Result<Ty, InstantiationError> {
+    ) -> Result<Ty, TyInstantiationError> {
         let ty_def = self.get_ty_def(struct_ty).expect("struct type should be registered");
         let &TyDef::Struct(struct_) = ty_def else {
-            return Err(InstantiationError::NotAStruct(struct_ty));
+            return Err(TyInstantiationError::NotAStruct(struct_ty));
         };
 
         let struct_def = self
@@ -134,7 +136,7 @@ impl TyReg {
         let gen_args = gen_args.into();
 
         if struct_def.gen_params.len() != gen_args.len() {
-            return Err(InstantiationError::GenericArgCountMismatch {
+            return Err(TyInstantiationError::GenericArgCountMismatch {
                 ty: struct_ty,
                 expected: struct_def.gen_params.len(),
                 actual: gen_args.len(),
@@ -142,6 +144,33 @@ impl TyReg {
         }
 
         let instantiated_ty = TyDef::InstantiatedStruct { struct_, gen_args };
+
+        Ok(self.register_ty(instantiated_ty))
+    }
+
+    pub fn instantiate_enum_ty(
+        &mut self,
+        enum_ty: Ty,
+        gen_args: impl Into<Vec<Ty>>,
+    ) -> Result<Ty, TyInstantiationError> {
+        let ty_def = self.get_ty_def(enum_ty).expect("enum type should be registered");
+        let &TyDef::Enum(enum_) = ty_def else {
+            return Err(TyInstantiationError::NotAnEnum(enum_ty));
+        };
+
+        let enum_def = self.enums.get(enum_.0).expect("enum definition should be registered");
+
+        let gen_args = gen_args.into();
+
+        if enum_def.gen_params.len() != gen_args.len() {
+            return Err(TyInstantiationError::GenericArgCountMismatch {
+                ty: enum_ty,
+                expected: enum_def.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+
+        let instantiated_ty = TyDef::InstantiatedEnum { enum_, gen_args };
 
         Ok(self.register_ty(instantiated_ty))
     }
@@ -205,6 +234,11 @@ impl TyReg {
         Ok(enum_def)
     }
 
+    pub fn is_enum_ty(&self, base_ty: Ty) -> bool {
+        let ty_def = self.get_ty_def(base_ty);
+        matches!(ty_def, Some(TyDef::Enum(_)) | Some(TyDef::InstantiatedEnum { .. }))
+    }
+
     pub fn get_mut_enum_def_by_name(&mut self, name: &str) -> Option<&mut EnumDef> {
         let ty_def = self.get_ty_def_by_name(name)?;
         if let TyDef::Enum(enum_) = *ty_def {
@@ -240,6 +274,12 @@ impl TyReg {
                 Some(self.register_fn_ty(param_tys, return_ty))
             }
             Generic(ident) => {
+                let gen_args: Vec<Ty> = ident
+                    .gen_args
+                    .iter()
+                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars))
+                    .collect::<Option<Vec<_>>>()?;
+
                 let base_ty_def = gen_vars
                     .iter()
                     .find_map(|gp| (gp.name == ident.ident).then_some(gp.ty))
@@ -247,18 +287,13 @@ impl TyReg {
                     .and_then(|ty| self.tys.get(ty.0))?
                     .as_ref()?;
 
-                let &TyDef::Struct(struct_) = base_ty_def else {
-                    // Cannot instantiate non-struct types
-                    return None;
-                };
-
-                let gen_args: Vec<Ty> = ident
-                    .gen_args
-                    .iter()
-                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars))
-                    .collect::<Option<Vec<_>>>()?;
-
-                Some(self.register_ty(TyDef::InstantiatedStruct { struct_, gen_args }))
+                if let &TyDef::Struct(struct_) = base_ty_def {
+                    Some(self.register_ty(TyDef::InstantiatedStruct { struct_, gen_args }))
+                } else if let &TyDef::Enum(enum_) = base_ty_def {
+                    Some(self.register_ty(TyDef::InstantiatedEnum { enum_, gen_args }))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -319,6 +354,15 @@ impl TyReg {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", struct_def.name, gen_arg_names)
+            }
+            TyDef::InstantiatedEnum { enum_, ref gen_args } => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                let gen_arg_names = gen_args
+                    .iter()
+                    .map(|&ga| self.get_string_rep(ga))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}<{}>", enum_def.name, gen_arg_names)
             }
         }
     }
@@ -476,6 +520,27 @@ impl TyReg {
                 Ok(self.substitute_gen_vars(ty, &substitutions))
             }
             _ => Err(NotAStruct(ty)),
+        }
+    }
+
+    pub fn get_enum_variant_ty(&mut self, ty: Ty, variant_index: usize) -> Result<Ty, NotAnEnum> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        match *ty_def {
+            TyDef::Enum(enum_) => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                let variant_struct_ty = enum_def.variants[variant_index].ty;
+                Ok(variant_struct_ty)
+            }
+            TyDef::InstantiatedEnum { enum_, ref gen_args } => {
+                let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
+                let base_variant_struct_ty = enum_def.variants[variant_index].ty;
+                let instantiated_variant_struct_ty = self
+                    .instantiate_struct_ty(base_variant_struct_ty, gen_args.clone())
+                    .unwrap();
+
+                Ok(instantiated_variant_struct_ty)
+            }
+            _ => Err(NotAnEnum(ty)),
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::ctxt::{InstantiationError, NotAStruct, NotAStructField, NotAnEnum, fns::Fn, mlr, ty::Ty};
+use crate::ctxt::{NotAStruct, NotAStructField, NotAnEnum, TyInstantiationError, fns::Fn, mlr, ty::Ty};
 
 pub type TyResult<T> = Result<T, TyError>;
 
@@ -102,11 +102,12 @@ impl From<NotAStructField> for TyError {
     }
 }
 
-impl From<InstantiationError> for TyError {
-    fn from(err: InstantiationError) -> Self {
+impl From<TyInstantiationError> for TyError {
+    fn from(err: TyInstantiationError) -> Self {
         match err {
-            InstantiationError::NotAStruct(ty) => TyError::NotAStruct { ty },
-            InstantiationError::GenericArgCountMismatch { ty, expected, actual } => {
+            TyInstantiationError::NotAStruct(ty) => TyError::NotAStruct { ty },
+            TyInstantiationError::NotAnEnum(ty) => TyError::NotAnEnum { ty },
+            TyInstantiationError::GenericArgCountMismatch { ty, expected, actual } => {
                 TyError::TyGenericArgCountMismatch { ty, expected, actual }
             }
         }
