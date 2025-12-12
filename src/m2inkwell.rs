@@ -16,9 +16,9 @@ use crate::{
     m2inkwell::fns::M2InkwellFn,
 };
 
-pub fn mlr_to_llvm_ir(ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> String {
+pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = M2Inkwell::new(&iw_ctxt, ctxt, fn_specs);
+    let mut generator = M2Inkwell::new(&iw_ctxt, mr_ctxt, fn_specs);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -40,11 +40,7 @@ struct M2Inkwell<'iw, 'mr> {
 }
 
 impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
-    pub fn new(
-        iw_ctxt: &'iw IwContext,
-        mr_ctxt: &'mr mut mr_ctxt::Ctxt,
-        fn_specs: Vec<mr_fns::FnSpecialization>,
-    ) -> Self {
+    fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         M2Inkwell {
             iw_ctxt,
@@ -59,6 +55,36 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
     fn set_target_triple(&self) {
         let target_triple = inkwell::targets::TargetTriple::create("x86_64-pc-linux-gnu");
         self.iw_module.set_triple(&target_triple);
+    }
+
+    fn declare_functions(&mut self) {
+        for fn_spec in self.fn_specs.clone() {
+            let sig = self.mr_ctxt.get_specialized_fn_sig(&fn_spec);
+
+            let param_types: Vec<_> = sig
+                .params
+                .iter()
+                .map(|param| self.get_ty_as_basic_metadata_type_enum(param.ty).unwrap())
+                .collect();
+            let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
+            let iw_fn_type = return_type.fn_type(&param_types, false);
+
+            let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
+            let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
+            self.functions.insert(fn_spec, fn_value);
+        }
+    }
+
+    fn define_functions(&mut self) {
+        for fn_spec in self.fn_specs.clone() {
+            let Some(mut fn_gen) = M2InkwellFn::new(self, fn_spec.clone()) else {
+                continue;
+            };
+            if fn_gen.build_fn().is_err() {
+                let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
+                eprintln!("Failed to define function {fn_name}");
+            }
+        }
     }
 
     fn get_or_define_ty(&mut self, ty: mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
@@ -129,35 +155,5 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
 
         iw_enum_struct.set_body(&[discrim_type, data_array_type], false);
         iw_enum_struct.as_any_type_enum()
-    }
-
-    fn declare_functions(&mut self) {
-        for fn_spec in self.fn_specs.clone() {
-            let sig = self.mr_ctxt.get_specialized_fn_sig(&fn_spec);
-
-            let param_types: Vec<_> = sig
-                .params
-                .iter()
-                .map(|param| self.get_ty_as_basic_metadata_type_enum(param.ty).unwrap())
-                .collect();
-            let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
-            let iw_fn_type = return_type.fn_type(&param_types, false);
-
-            let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
-            let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
-            self.functions.insert(fn_spec, fn_value);
-        }
-    }
-
-    pub fn define_functions(&mut self) {
-        for fn_spec in self.fn_specs.clone() {
-            let Some(mut fn_gen) = M2InkwellFn::new(self, fn_spec.clone()) else {
-                continue;
-            };
-            if fn_gen.define_fn().is_err() {
-                let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
-                eprintln!("Failed to define function {fn_name}");
-            }
-        }
     }
 }
