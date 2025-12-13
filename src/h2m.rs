@@ -316,17 +316,13 @@ impl<'a> H2M<'a> {
                 .collect::<H2MResult<Vec<_>>>()?;
             let ty = self.ctxt.tys.instantiate_struct(struct_, gen_arg_tys)?;
             self.build_struct_val(&ty, fields)
-        } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(&ident.ident) {
-            let ty = if ident.gen_args.is_empty() {
-                ty
-            } else {
-                let gen_arg_tys = ident
-                    .gen_args
-                    .iter()
-                    .map(|annot| self.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<Vec<_>>>()?;
-                self.ctxt.tys.instantiate_enum_ty(ty, gen_arg_tys)?
-            };
+        } else if let Some((enum_, variant_index)) = self.try_resolve_enum_variant(&ident.ident) {
+            let gen_arg_tys = ident
+                .gen_args
+                .iter()
+                .map(|annot| self.resolve_hlr_ty_annot(annot))
+                .collect::<H2MResult<Vec<_>>>()?;
+            let ty = self.ctxt.tys.instantiate_enum_ty(enum_, gen_arg_tys)?;
             self.build_enum_val(ty, &variant_index, fields)
         } else {
             H2MError::UnresolvableStructOrEnum {

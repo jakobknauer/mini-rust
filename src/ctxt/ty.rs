@@ -11,8 +11,7 @@ pub struct Enum(pub usize);
 pub enum TyDef {
     Primitve(Primitive),
     Struct { struct_: Struct, gen_args: Vec<Ty> },
-    Enum(Enum),
-    InstantiatedEnum { enum_: Enum, gen_args: Vec<Ty> },
+    Enum { enum_: Enum, gen_args: Vec<Ty> },
     Fn { param_tys: Vec<Ty>, return_ty: Ty },
     Ref(Ty),
     Alias(Ty),

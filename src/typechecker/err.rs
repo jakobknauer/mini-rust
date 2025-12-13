@@ -115,6 +115,11 @@ impl From<TyInstantiationError> for TyError {
                 expected: _,
                 actual: _,
             } => todo!(),
+            TyInstantiationError::EnumGenericArgCountMismatch {
+                enum_: _,
+                expected: _,
+                actual: _,
+            } => todo!(),
         }
     }
 }

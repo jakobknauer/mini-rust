@@ -182,11 +182,11 @@ impl<'a> super::H2M<'a> {
             .cloned()
     }
 
-    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Ty, usize)> {
-        for (ty, enum_def) in self.ctxt.tys.get_all_enums() {
+    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Enum, usize)> {
+        for (enum_, enum_def) in self.ctxt.tys.get_all_enums() {
             for (idx, variant) in enum_def.variants.iter().enumerate() {
                 if variant.name == variant_name {
-                    return Some((ty, idx));
+                    return Some((enum_, idx));
                 }
             }
         }
