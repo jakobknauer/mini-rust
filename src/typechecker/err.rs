@@ -110,6 +110,11 @@ impl From<TyInstantiationError> for TyError {
             TyInstantiationError::GenericArgCountMismatch { ty, expected, actual } => {
                 TyError::TyGenericArgCountMismatch { ty, expected, actual }
             }
+            TyInstantiationError::StructGenericArgCountMismatch {
+                struct_: _,
+                expected: _,
+                actual: _,
+            } => todo!(),
         }
     }
 }

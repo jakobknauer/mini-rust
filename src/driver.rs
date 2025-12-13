@@ -140,13 +140,13 @@ fn define_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
             .iter()
             .map(|variant| {
                 let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-                let ty = tys.get_ty_by_name(&variant_struct_name).ok_or(())?;
+                let struct_ = tys.get_struct_by_name(&variant_struct_name).ok_or(())?;
 
                 set_struct_fields(tys, &variant_struct_name, &variant.fields)?;
 
                 let variant = ty::EnumVariant {
                     name: variant.name.clone(),
-                    ty,
+                    struct_,
                 };
 
                 Ok(variant)

@@ -102,7 +102,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                 Unit => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             },
-            Struct(..) | InstantiatedStruct { .. } => self.define_struct(ty),
+            Struct { .. } => self.define_struct(ty),
             Enum(..) | InstantiatedEnum { .. } => self.define_enum(ty),
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),

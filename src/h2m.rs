@@ -308,17 +308,13 @@ impl<'a> H2M<'a> {
     }
 
     fn build_struct_or_enum_val(&mut self, ident: &hlr::Ident, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
-        if let Some(ty) = self.ctxt.tys.get_struct_ty_by_name(&ident.ident) {
-            let ty = if ident.gen_args.is_empty() {
-                ty
-            } else {
-                let gen_arg_tys = ident
-                    .gen_args
-                    .iter()
-                    .map(|annot| self.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<Vec<_>>>()?;
-                self.ctxt.tys.instantiate_struct_ty(ty, gen_arg_tys)?
-            };
+        if let Some(struct_) = self.ctxt.tys.get_struct_by_name(&ident.ident) {
+            let gen_arg_tys = ident
+                .gen_args
+                .iter()
+                .map(|annot| self.resolve_hlr_ty_annot(annot))
+                .collect::<H2MResult<Vec<_>>>()?;
+            let ty = self.ctxt.tys.instantiate_struct(struct_, gen_arg_tys)?;
             self.build_struct_val(&ty, fields)
         } else if let Some((ty, variant_index)) = self.try_resolve_enum_variant(&ident.ident) {
             let ty = if ident.gen_args.is_empty() {
