@@ -1,6 +1,6 @@
 use crate::ctxt::{
     mlr,
-    ty::{GenParam, Ty},
+    ty::{GenVar, Ty},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -9,7 +9,7 @@ pub struct Fn(pub usize);
 #[derive(Clone)]
 pub struct FnSig {
     pub name: String,
-    pub gen_params: Vec<GenParam>,
+    pub gen_params: Vec<GenVar>,
     pub params: Vec<FnParam>,
     pub return_ty: Ty,
 }

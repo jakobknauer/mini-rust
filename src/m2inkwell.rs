@@ -106,7 +106,10 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             Enum { .. } => self.define_enum(ty),
             Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
-            GenVar(ref name) => unreachable!("generic type variable '{name}' should be substituted before this point"),
+            GenVar(gen_var) => unreachable!(
+                "generic type variable '{}' should be substituted before this point",
+                gen_var.0
+            ),
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

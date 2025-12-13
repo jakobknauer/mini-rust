@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{Fn, FnMlr, FnSig, FnSpecialization},
-    ty::Ty,
+    ty::{GenVar, Ty},
 };
 
 #[derive(Default)]
@@ -69,12 +69,12 @@ impl FnReg {
         self.called_specializations.get(caller).unwrap()
     }
 
-    pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<&str, Ty> {
+    pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<GenVar, Ty> {
         let sig = self.get_sig(&fn_specialization.fn_).unwrap();
         sig.gen_params
             .iter()
             .zip(&fn_specialization.gen_args)
-            .map(|(gen_param, gen_arg)| (gen_param.name.as_str(), *gen_arg))
+            .map(|(&gen_param, &gen_arg)| (gen_param, gen_arg))
             .collect()
     }
 }

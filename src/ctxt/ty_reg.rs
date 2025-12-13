@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::{borrow::Borrow, collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use crate::{ctxt::ty::*, hlr};
 
@@ -13,6 +13,7 @@ pub struct TyReg {
 
     structs: Vec<StructDef>,
     enums: Vec<EnumDef>,
+    gen_var_names: Vec<String>,
 
     tys_inv: HashMap<TyDef, Ty>,
     named_tys: HashMap<String, Named>,
@@ -88,12 +89,17 @@ impl TyReg {
         Ok(())
     }
 
-    pub fn register_struct(&mut self, name: &str, gen_params: impl Into<Vec<GenParam>>) -> Result<Struct, ()> {
+    pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
         let struct_ = Struct(self.structs.len());
+
+        let gen_params = gen_param_names
+            .iter()
+            .map(|gp_name| self.register_gen_var(gp_name))
+            .collect();
 
         let struct_def = StructDef {
             name: name.to_string(),
-            gen_params: gen_params.into(),
+            gen_params,
             fields: vec![],
         };
         self.structs.push(struct_def);
@@ -103,12 +109,17 @@ impl TyReg {
         Ok(struct_)
     }
 
-    pub fn register_enum(&mut self, name: &str, gen_params: impl Into<Vec<GenParam>>) -> Result<Enum, ()> {
+    pub fn register_enum(&mut self, name: &str, gen_params: &[String]) -> Result<Enum, ()> {
         let enum_ = Enum(self.enums.len());
+
+        let gen_params = gen_params
+            .iter()
+            .map(|gp_name| self.register_gen_var(gp_name))
+            .collect();
 
         let enum_def = EnumDef {
             name: name.to_string(),
-            gen_params: gen_params.into(),
+            gen_params,
             variants: vec![],
         };
         self.enums.push(enum_def);
@@ -131,9 +142,15 @@ impl TyReg {
         self.register_ty(ref_ty)
     }
 
-    pub fn register_gen_var_ty(&mut self, name: &str) -> Ty {
-        let gen_param_ty = TyDef::GenVar(name.to_string());
-        self.register_ty(gen_param_ty)
+    pub fn register_gen_var_ty(&mut self, gen_var: GenVar) -> Ty {
+        let gen_var_ty = TyDef::GenVar(gen_var);
+        self.register_ty(gen_var_ty)
+    }
+
+    pub fn register_gen_var(&mut self, name: &str) -> GenVar {
+        let gen_var = GenVar(self.gen_var_names.len());
+        self.gen_var_names.push(name.to_string());
+        gen_var
     }
 
     pub fn instantiate_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
@@ -215,13 +232,14 @@ impl TyReg {
         self.enums.get_mut(enum_.0)
     }
 
-    pub fn try_resolve_hlr_annot(&mut self, annot: &hlr::TyAnnot, gen_vars: &Vec<GenParam>) -> Option<Ty> {
+    pub fn try_resolve_hlr_annot(&mut self, annot: &hlr::TyAnnot, gen_vars: &Vec<GenVar>) -> Option<Ty> {
         use hlr::TyAnnot::*;
 
         match annot {
             Named(name) => {
-                if let Some(gp) = gen_vars.iter().find(|gp| &gp.name == name) {
-                    return Some(gp.ty);
+                if let Some(gv) = gen_vars.iter().find(|&&GenVar(gv)| self.gen_var_names[gv] == *name) {
+                    let ty = self.register_gen_var_ty(*gv);
+                    return Some(ty);
                 }
 
                 match *self.named_tys.get(name)? {
@@ -283,7 +301,7 @@ impl TyReg {
             }
             TyDef::Ref(ty) => format!("&{}", self.get_string_rep(ty)),
             TyDef::Alias(ty) => self.get_string_rep(ty),
-            TyDef::GenVar(ref name) => name.clone(),
+            TyDef::GenVar(gen_var) => self.gen_var_names[gen_var.0].clone(),
             TyDef::Primitve(primitive) => match primitive {
                 Primitive::Integer32 => "i32".to_string(),
                 Primitive::Boolean => "bool".to_string(),
@@ -320,6 +338,10 @@ impl TyReg {
         self.get_enum_def(enum_)
             .map(|ed| ed.name.clone())
             .unwrap_or_else(|| format!("<unknown enum {}>", enum_.0))
+    }
+
+    pub fn get_gen_var_name(&self, gen_param: GenVar) -> &str {
+        &self.gen_var_names[gen_param.0]
     }
 
     pub fn unify(&mut self, ty1: Ty, ty2: Ty) -> Result<(), UnificationError> {
@@ -402,15 +424,15 @@ impl TyReg {
             .map(|(enum_, enum_def)| (Enum(enum_), enum_def))
     }
 
-    pub fn substitute_gen_vars(&mut self, ty: Ty, substitutions: &HashMap<impl Borrow<str> + Eq + Hash, Ty>) -> Ty {
+    pub fn substitute_gen_vars(&mut self, ty: Ty, substitutions: &HashMap<GenVar, Ty>) -> Ty {
         let ty = self.canonicalize(ty);
         let Some(ty_def) = self.tys.get(ty.0).expect("ty should be registered") else {
             return ty;
         };
 
         match ty_def {
-            TyDef::GenVar(name) => {
-                if let Some(replacement_ty) = substitutions.get(name) {
+            TyDef::GenVar(gen_var) => {
+                if let Some(replacement_ty) = substitutions.get(gen_var) {
                     *replacement_ty
                 } else {
                     ty
@@ -463,10 +485,10 @@ impl TyReg {
             .expect("struct definition should be registered");
         let field_ty = struct_def.fields[index].ty;
 
-        let substitutions: HashMap<String, Ty> = struct_def
+        let substitutions = struct_def
             .gen_params
             .iter()
-            .map(|gp| gp.name.clone())
+            .cloned()
             .zip(gen_args.iter().cloned())
             .collect();
         let instantiated_field_ty = self.substitute_gen_vars(field_ty, &substitutions);
@@ -483,10 +505,10 @@ impl TyReg {
         let struct_def = self
             .get_struct_def(struct_)
             .expect("struct definition should be registered");
-        let substitutions: HashMap<String, Ty> = struct_def
+        let substitutions = struct_def
             .gen_params
             .iter()
-            .map(|gp| gp.name.clone())
+            .cloned()
             .zip(gen_args.iter().cloned())
             .collect();
         let fields = struct_def.fields.clone();

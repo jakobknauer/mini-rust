@@ -50,13 +50,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         write!(self.writer, "fn {}", signature.name)?;
 
-        for (i, gen_param) in signature.gen_params.iter().enumerate() {
+        for (i, &gen_param) in signature.gen_params.iter().enumerate() {
             if i == 0 {
                 write!(self.writer, "<")?;
             } else {
                 write!(self.writer, ", ")?;
             }
-            write!(self.writer, "{}", gen_param.name)?;
+            let gen_param_name = self.ctxt.tys.get_gen_var_name(gen_param);
+            write!(self.writer, "{}", gen_param_name)?;
         }
         if !signature.gen_params.is_empty() {
             write!(self.writer, ">")?;

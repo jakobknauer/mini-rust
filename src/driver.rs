@@ -99,30 +99,14 @@ fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()>
     tys.register_primitive_tys()?;
 
     for struct_ in &program.structs {
-        let gen_params: Vec<_> = struct_
-            .gen_params
-            .iter()
-            .map(|gp| ty::GenParam {
-                name: gp.clone(),
-                ty: tys.register_gen_var_ty(gp),
-            })
-            .collect();
-        tys.register_struct(&struct_.name, gen_params)?;
+        tys.register_struct(&struct_.name, &struct_.gen_params)?;
     }
 
     for enum_ in &program.enums {
-        let gen_params: Vec<_> = enum_
-            .gen_params
-            .iter()
-            .map(|gp| ty::GenParam {
-                name: gp.clone(),
-                ty: tys.register_gen_var_ty(gp),
-            })
-            .collect();
-        tys.register_enum(&enum_.name, gen_params.clone())?;
+        tys.register_enum(&enum_.name, &enum_.gen_params)?;
         for variant in &enum_.variants {
             let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-            tys.register_struct(&variant_struct_name, gen_params.clone())?;
+            tys.register_struct(&variant_struct_name, &enum_.gen_params)?;
         }
     }
 
@@ -194,14 +178,7 @@ fn register_functions(hlr: &hlr::Program, tys: &mut ctxt::TyReg, fns: &mut ctxt:
 }
 
 fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    let gen_params = hlr_fn
-        .gen_params
-        .iter()
-        .map(|gp| ty::GenParam {
-            name: gp.clone(),
-            ty: tys.register_gen_var_ty(gp),
-        })
-        .collect();
+    let gen_params = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
 
     let params = hlr_fn
         .params

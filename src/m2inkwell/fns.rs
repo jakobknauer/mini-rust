@@ -17,7 +17,7 @@ pub struct M2InkwellFn<'a, 'iw, 'mr> {
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
     entry_block: Option<BasicBlock<'iw>>,
     after_loop_blocks: VecDeque<BasicBlock<'iw>>,
-    substitutions: HashMap<String, mr_ty::Ty>,
+    substitutions: HashMap<mr_ty::GenVar, mr_ty::Ty>,
 }
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             .fns
             .get_substitutions_for_specialization(&specialization)
             .iter()
-            .map(|(k, v)| (k.to_string(), *v))
+            .map(|(&k, &v)| (k, v))
             .collect();
 
         Some(Self {
