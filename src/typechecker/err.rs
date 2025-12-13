@@ -1,4 +1,9 @@
-use crate::ctxt::{NotAStruct, NotAStructField, NotAnEnum, TyInstantiationError, fns::Fn, mlr, ty::Ty};
+use crate::ctxt::{
+    NotAStruct, NotAStructField, NotAnEnum, TyInstError,
+    fns::Fn,
+    mlr,
+    ty::{Enum, Struct, Ty},
+};
 
 pub type TyResult<T> = Result<T, TyError>;
 
@@ -60,8 +65,13 @@ pub enum TyError {
         expected: usize,
         actual: usize,
     },
-    TyGenericArgCountMismatch {
-        ty: Ty,
+    StructGenericArgCountMismatch {
+        struct_: Struct,
+        expected: usize,
+        actual: usize,
+    },
+    EnumGenericArgCountMismatch {
+        enum_: Enum,
         expected: usize,
         actual: usize,
     },
@@ -102,24 +112,27 @@ impl From<NotAStructField> for TyError {
     }
 }
 
-impl From<TyInstantiationError> for TyError {
-    fn from(err: TyInstantiationError) -> Self {
+impl From<TyInstError> for TyError {
+    fn from(err: TyInstError) -> Self {
         match err {
-            TyInstantiationError::NotAStruct(ty) => TyError::NotAStruct { ty },
-            TyInstantiationError::NotAnEnum(ty) => TyError::NotAnEnum { ty },
-            TyInstantiationError::GenericArgCountMismatch { ty, expected, actual } => {
-                TyError::TyGenericArgCountMismatch { ty, expected, actual }
-            }
-            TyInstantiationError::StructGenericArgCountMismatch {
-                struct_: _,
-                expected: _,
-                actual: _,
-            } => todo!(),
-            TyInstantiationError::EnumGenericArgCountMismatch {
-                enum_: _,
-                expected: _,
-                actual: _,
-            } => todo!(),
+            TyInstError::StructGenericArgCountMismatch {
+                struct_,
+                expected,
+                actual,
+            } => TyError::StructGenericArgCountMismatch {
+                struct_,
+                expected,
+                actual,
+            },
+            TyInstError::EnumGenericArgCountMismatch {
+                enum_,
+                expected,
+                actual,
+            } => TyError::EnumGenericArgCountMismatch {
+                enum_,
+                expected,
+                actual,
+            },
         }
     }
 }

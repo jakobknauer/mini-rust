@@ -129,9 +129,23 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(ty),
             extra_variants.join(", ")
         ),
-        TyGenericArgCountMismatch { ty, expected, actual } => format!(
-            "Generic argument count mismatch in type '{}': expected {}, got {}",
-            ctxt.tys.get_string_rep(ty),
+        StructGenericArgCountMismatch {
+            struct_,
+            expected,
+            actual,
+        } => format!(
+            "Generic argument count mismatch for struct '{}': expected {}, got {}",
+            ctxt.tys.get_struct_name(struct_),
+            expected,
+            actual
+        ),
+        EnumGenericArgCountMismatch {
+            enum_,
+            expected,
+            actual,
+        } => format!(
+            "Generic argument count mismatch for enum '{}': expected {}, got {}",
+            ctxt.tys.get_enum_name(enum_),
             expected,
             actual
         ),

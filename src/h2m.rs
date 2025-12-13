@@ -322,7 +322,7 @@ impl<'a> H2M<'a> {
                 .iter()
                 .map(|annot| self.resolve_hlr_ty_annot(annot))
                 .collect::<H2MResult<Vec<_>>>()?;
-            let ty = self.ctxt.tys.instantiate_enum_ty(enum_, gen_arg_tys)?;
+            let ty = self.ctxt.tys.instantiate_enum(enum_, gen_arg_tys)?;
             self.build_enum_val(ty, &variant_index, fields)
         } else {
             H2MError::UnresolvableStructOrEnum {
