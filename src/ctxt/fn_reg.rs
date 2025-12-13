@@ -73,8 +73,8 @@ impl FnReg {
         let sig = self.get_sig(&fn_specialization.fn_).unwrap();
         sig.gen_params
             .iter()
-            .zip(&fn_specialization.gen_args)
-            .map(|(&gen_param, &gen_arg)| (gen_param, gen_arg))
+            .cloned()
+            .zip(fn_specialization.gen_args.iter().cloned())
             .collect()
     }
 }

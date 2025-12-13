@@ -22,9 +22,7 @@ pub struct TyReg {
 #[derive(Clone, Copy)]
 pub enum Named {
     Ty(Ty),
-    #[allow(unused)]
     Struct(Struct),
-    #[allow(unused)]
     Enum(Enum),
 }
 
@@ -282,6 +280,9 @@ impl TyReg {
     }
 
     pub fn get_string_rep(&self, ty: Ty) -> String {
+        use Primitive::*;
+        use TyDef::*;
+
         if ty.0 >= self.tys.len() {
             return format!("<unknown type id {}>", ty.0).to_string();
         }
@@ -291,7 +292,7 @@ impl TyReg {
         };
 
         match *ty_def {
-            TyDef::Fn {
+            Fn {
                 ref param_tys,
                 return_ty,
             } => {
@@ -299,15 +300,15 @@ impl TyReg {
                 let return_name = self.get_string_rep(return_ty);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
-            TyDef::Ref(ty) => format!("&{}", self.get_string_rep(ty)),
-            TyDef::Alias(ty) => self.get_string_rep(ty),
-            TyDef::GenVar(gen_var) => self.gen_var_names[gen_var.0].clone(),
-            TyDef::Primitve(primitive) => match primitive {
-                Primitive::Integer32 => "i32".to_string(),
-                Primitive::Boolean => "bool".to_string(),
-                Primitive::Unit => "()".to_string(),
+            Ref(ty) => format!("&{}", self.get_string_rep(ty)),
+            Alias(ty) => self.get_string_rep(ty),
+            GenVar(gen_var) => self.gen_var_names[gen_var.0].clone(),
+            Primitve(primitive) => match primitive {
+                Integer32 => "i32".to_string(),
+                Boolean => "bool".to_string(),
+                Unit => "()".to_string(),
             },
-            TyDef::Struct { struct_, ref gen_args } => {
+            Struct { struct_, ref gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
                 let gen_arg_names = gen_args
                     .iter()
@@ -316,7 +317,7 @@ impl TyReg {
                     .join(", ");
                 format!("{}<{}>", struct_name, gen_arg_names)
             }
-            TyDef::Enum { enum_, ref gen_args } => {
+            Enum { enum_, ref gen_args } => {
                 let enum_name = self.get_enum_name(enum_);
                 let gen_arg_names = gen_args
                     .iter()
@@ -395,7 +396,48 @@ impl TyReg {
 
                 (&Ref(inner1), &Ref(inner2)) => self.unify(inner1, inner2),
 
-                // TODO instantiated structs/enums unification
+                (
+                    &Struct {
+                        struct_: struct_1,
+                        gen_args: ref gen_args_1,
+                    },
+                    &Struct {
+                        struct_: struct_2,
+                        gen_args: ref gen_args_2,
+                    },
+                ) => {
+                    if struct_1 != struct_2 || gen_args_1.len() != gen_args_2.len() {
+                        return Err(UnificationError::TypeMismatch);
+                    }
+
+                    let pairs = gen_args_1.clone().into_iter().zip(gen_args_2.clone());
+                    for (arg1, arg2) in pairs {
+                        self.unify(arg1, arg2)?;
+                    }
+                    Ok(())
+                }
+
+                (
+                    &Enum {
+                        enum_: enum_1,
+                        gen_args: ref gen_args_1,
+                    },
+                    &Enum {
+                        enum_: enum_2,
+                        gen_args: ref gen_args_2,
+                    },
+                ) => {
+                    if enum_1 != enum_2 || gen_args_1.len() != gen_args_2.len() {
+                        return Err(UnificationError::TypeMismatch);
+                    }
+
+                    let pairs = gen_args_1.clone().into_iter().zip(gen_args_2.clone());
+                    for (arg1, arg2) in pairs {
+                        self.unify(arg1, arg2)?;
+                    }
+                    Ok(())
+                }
+
                 _ => Err(UnificationError::TypeMismatch),
             },
         }
@@ -425,20 +467,22 @@ impl TyReg {
     }
 
     pub fn substitute_gen_vars(&mut self, ty: Ty, substitutions: &HashMap<GenVar, Ty>) -> Ty {
+        use TyDef::*;
+
         let ty = self.canonicalize(ty);
         let Some(ty_def) = self.tys.get(ty.0).expect("ty should be registered") else {
             return ty;
         };
 
-        match ty_def {
-            TyDef::GenVar(gen_var) => {
-                if let Some(replacement_ty) = substitutions.get(gen_var) {
+        match *ty_def {
+            GenVar(gen_var) => {
+                if let Some(replacement_ty) = substitutions.get(&gen_var) {
                     *replacement_ty
                 } else {
                     ty
                 }
             }
-            &TyDef::Fn {
+            Fn {
                 ref param_tys,
                 return_ty,
             } => {
@@ -450,11 +494,11 @@ impl TyReg {
                 let new_return_ty = self.substitute_gen_vars(return_ty, substitutions);
                 self.register_fn_ty(new_param_tys, new_return_ty)
             }
-            &TyDef::Ref(inner_ty) => {
+            Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, substitutions);
                 self.register_ref_ty(new_inner_ty)
             }
-            &TyDef::Struct { struct_, ref gen_args } => {
+            Struct { struct_, ref gen_args } => {
                 let new_gen_args = gen_args
                     .clone()
                     .iter()
@@ -462,7 +506,7 @@ impl TyReg {
                     .collect::<Vec<_>>();
                 self.instantiate_struct(struct_, new_gen_args).unwrap()
             }
-            &TyDef::Enum { enum_, ref gen_args } => {
+            Enum { enum_, ref gen_args } => {
                 let new_gen_args = gen_args
                     .clone()
                     .iter()
@@ -470,7 +514,8 @@ impl TyReg {
                     .collect::<Vec<_>>();
                 self.instantiate_enum(enum_, new_gen_args).unwrap()
             }
-            _ => ty,
+            Primitve(..) => ty,
+            Alias(..) => unreachable!("ty should have been canonicalized"),
         }
     }
 
