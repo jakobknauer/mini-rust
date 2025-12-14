@@ -31,7 +31,7 @@
     - ~~enums~~
 
 ## Version 2.1
-- Raw pointers
+- ~~Raw pointers~~
 - `as` conversion from ref to raw ptr
 - `c_void` type
 - dereferencing raw ptr for creating ref
