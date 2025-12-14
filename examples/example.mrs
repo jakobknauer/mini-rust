@@ -91,3 +91,8 @@ fn unwrap_or<T>(opt: Option<T>, default: T) -> T {
         None {} => default
     }
 }
+
+fn uncalled(arg: *i32) -> *i32 {
+    let opt = make_option::<*i32>(arg);
+    unwrap_or::<*i32>(opt, arg)
+}

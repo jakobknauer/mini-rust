@@ -173,7 +173,8 @@ pub struct StructPatternField {
 pub enum TyAnnot {
     Named(String),
     Generic(Ident),
-    Reference(Box<TyAnnot>),
+    Ref(Box<TyAnnot>),
+    Ptr(Box<TyAnnot>),
     Unit,
     Fn {
         param_tys: Vec<TyAnnot>,

@@ -251,9 +251,12 @@ impl TyReg {
                     self::Named::Enum(enum_) => self.instantiate_enum(enum_, []).ok(),
                 }
             }
-            Reference(ty_annot) => self
+            Ref(ty_annot) => self
                 .try_resolve_hlr_annot(ty_annot, gen_vars)
                 .map(|inner| self.register_ref_ty(inner)),
+            Ptr(ty_annot) => self
+                .try_resolve_hlr_annot(ty_annot, gen_vars)
+                .map(|inner| self.register_ptr_ty(inner)),
             Unit => Some(self.get_primitive_ty(Primitive::Unit)),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys

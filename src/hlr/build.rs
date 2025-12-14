@@ -689,13 +689,18 @@ impl<'a> HlrParser<'a> {
             Token::Ampersand => {
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                Ok(TyAnnot::Reference(Box::new(inner_ty)))
+                Ok(TyAnnot::Ref(Box::new(inner_ty)))
             }
             Token::AmpersandAmpersand => {
                 // Two levels of reference
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                Ok(TyAnnot::Reference(Box::new(TyAnnot::Reference(Box::new(inner_ty)))))
+                Ok(TyAnnot::Ref(Box::new(TyAnnot::Ref(Box::new(inner_ty)))))
+            }
+            Token::Asterisk => {
+                self.position += 1;
+                let inner_ty = self.parse_ty_annot()?;
+                Ok(TyAnnot::Ptr(Box::new(inner_ty)))
             }
             Token::LParen => {
                 self.position += 1;
