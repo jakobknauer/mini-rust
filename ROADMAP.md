@@ -30,6 +30,17 @@
     - ~~structs~~
     - ~~enums~~
 
+## Version 2.1
+- Raw pointers
+- `as` conversion from ref to raw ptr
+- `c_void` type
+- dereferencing raw ptr for creating ref
+- Allow extern functions calls
+    - Test with `malloc` and `free`
+- `c_char` type
+- String literals for constructing `*c_char`
+    - Test with `printf`
+
 ## Version 3
 - Traits and trait bounds
 - Closures
