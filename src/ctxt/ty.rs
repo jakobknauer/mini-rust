@@ -17,6 +17,7 @@ pub enum TyDef {
     Enum { enum_: Enum, gen_args: Vec<Ty> },
     Fn { param_tys: Vec<Ty>, return_ty: Ty },
     Ref(Ty),
+    Ptr(Ty),
     Alias(Ty),
     GenVar(GenVar),
 }

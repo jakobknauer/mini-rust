@@ -140,6 +140,11 @@ impl TyReg {
         self.register_ty(ref_ty)
     }
 
+    pub fn register_ptr_ty(&mut self, inner_ty: Ty) -> Ty {
+        let ptr_ty = TyDef::Ptr(inner_ty);
+        self.register_ty(ptr_ty)
+    }
+
     pub fn register_gen_var_ty(&mut self, gen_var: GenVar) -> Ty {
         let gen_var_ty = TyDef::GenVar(gen_var);
         self.register_ty(gen_var_ty)
@@ -301,6 +306,7 @@ impl TyReg {
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
             Ref(ty) => format!("&{}", self.get_string_rep(ty)),
+            Ptr(ty) => format!("*{}", self.get_string_rep(ty)),
             Alias(ty) => self.get_string_rep(ty),
             GenVar(gen_var) => self.gen_var_names[gen_var.0].clone(),
             Primitve(primitive) => match primitive {
@@ -394,7 +400,7 @@ impl TyReg {
                     self.unify(ret1, ret2)
                 }
 
-                (&Ref(inner1), &Ref(inner2)) => self.unify(inner1, inner2),
+                (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.unify(inner1, inner2),
 
                 (
                     &Struct {
@@ -497,6 +503,10 @@ impl TyReg {
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, substitutions);
                 self.register_ref_ty(new_inner_ty)
+            }
+            Ptr(inner_ty) => {
+                let new_inner_ty = self.substitute_gen_vars(inner_ty, substitutions);
+                self.register_ptr_ty(new_inner_ty)
             }
             Struct { struct_, ref gen_args } => {
                 let new_gen_args = gen_args

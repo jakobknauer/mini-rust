@@ -104,7 +104,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             },
             Struct { .. } => self.define_struct(ty),
             Enum { .. } => self.define_enum(ty),
-            Fn { .. } | Ref(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Fn { .. } | Ref(..) | Ptr(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(gen_var) => unreachable!(
                 "generic type variable '{}' should be substituted before this point",
