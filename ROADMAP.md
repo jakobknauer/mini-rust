@@ -32,7 +32,7 @@
 
 ## Version 2.1
 - ~~Raw pointers~~
-- `as` conversion from ref to raw ptr
+- ~~`as` conversion from ref to raw ptr~~
 - `c_void` type
 - dereferencing raw ptr for creating ref
 - Allow extern functions calls
