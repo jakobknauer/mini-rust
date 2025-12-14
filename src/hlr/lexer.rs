@@ -157,18 +157,19 @@ impl Iterator for Lexer<'_> {
 
 fn try_into_keyword_token(keyword: &str) -> Option<Token> {
     match keyword {
-        "let" => Some(Token::Keyword(Keyword::Let)),
-        "fn" => Some(Token::Keyword(Keyword::Fn)),
-        "struct" => Some(Token::Keyword(Keyword::Struct)),
-        "return" => Some(Token::Keyword(Keyword::Return)),
+        "as" => Some(Token::Keyword(Keyword::As)),
         "break" => Some(Token::Keyword(Keyword::Break)),
-        "true" => Some(Token::BoolLiteral(true)),
-        "false" => Some(Token::BoolLiteral(false)),
-        "if" => Some(Token::Keyword(Keyword::If)),
         "else" => Some(Token::Keyword(Keyword::Else)),
-        "loop" => Some(Token::Keyword(Keyword::Loop)),
         "enum" => Some(Token::Keyword(Keyword::Enum)),
+        "false" => Some(Token::BoolLiteral(false)),
+        "fn" => Some(Token::Keyword(Keyword::Fn)),
+        "if" => Some(Token::Keyword(Keyword::If)),
+        "let" => Some(Token::Keyword(Keyword::Let)),
+        "loop" => Some(Token::Keyword(Keyword::Loop)),
         "match" => Some(Token::Keyword(Keyword::Match)),
+        "return" => Some(Token::Keyword(Keyword::Return)),
+        "struct" => Some(Token::Keyword(Keyword::Struct)),
+        "true" => Some(Token::BoolLiteral(true)),
         _ => None,
     }
 }

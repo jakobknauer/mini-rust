@@ -176,6 +176,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_place(place)?;
                     write!(self.writer, ")")
                 }
+                As { op, target_ty } => {
+                    write!(self.writer, "(")?;
+                    self.print_op(op)?;
+                    let ty_name = self.ctxt.tys.get_string_rep(*target_ty);
+                    write!(self.writer, " as {})", ty_name)
+                }
             },
             None => write!(self.writer, "<val id {}>", val.0),
         }

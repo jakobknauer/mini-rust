@@ -419,9 +419,9 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
-        let target = self.parse_disjunction(allow_top_level_struct_expr)?;
+        let target = self.parse_conversion_expr(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
-            let value = self.parse_disjunction(allow_top_level_struct_expr)?;
+            let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
             Ok(Expr::Assign {
                 target: Box::new(target),
                 value: Box::new(value),
@@ -429,6 +429,18 @@ impl<'a> HlrParser<'a> {
         } else {
             Ok(target)
         }
+    }
+
+    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+        let mut expr = self.parse_disjunction(allow_top_level_struct_expr)?;
+        while self.advance_if(Token::Keyword(Keyword::As)) {
+            let ty_annot = self.parse_ty_annot()?;
+            expr = Expr::As {
+                expr: Box::new(expr),
+                target_ty: ty_annot,
+            };
+        }
+        Ok(expr)
     }
 
     parse_left_associative!(parse_disjunction, parse_conjunction, [

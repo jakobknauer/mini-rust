@@ -201,6 +201,11 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             Use(place) => self.build_op(&place),
             Call { callable, ref args } => self.build_call(&callable, &args.clone()),
             AddrOf(place) => self.build_place(&place).map(|ptr| ptr.as_basic_value_enum()),
+            As { op, .. } => {
+                // since the only valid conversion atm is from ref to ptr of the same base type,
+                // we can just build the op and return it
+                self.build_op(&op)
+            }
         }
     }
 

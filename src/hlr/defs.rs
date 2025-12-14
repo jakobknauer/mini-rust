@@ -118,6 +118,10 @@ pub enum Expr {
     AddrOf {
         base: Box<Expr>,
     },
+    As {
+        expr: Box<Expr>,
+        target_ty: TyAnnot,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]

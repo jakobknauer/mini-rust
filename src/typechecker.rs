@@ -32,6 +32,7 @@ impl<'a> Typechecker<'a> {
             Call { callable, ref args } => self.infer_ty_of_call(&callable, &args.clone()),
             Use(op) => Ok(self.mlr.get_op_ty(&op)),
             AddrOf(place) => self.infer_ty_of_addr_of_place(&place),
+            As { op, target_ty } => self.infer_ty_of_as_expr(op, target_ty),
         }?;
 
         self.mlr.set_val_ty(val, ty);
@@ -136,6 +137,31 @@ impl<'a> Typechecker<'a> {
         let place_ty = self.mlr.get_place_ty(place);
         let ref_ty = self.tys.register_ref_ty(place_ty);
         Ok(ref_ty)
+    }
+
+    fn infer_ty_of_as_expr(&mut self, op: Op, target_ty: ty::Ty) -> Result<ty::Ty, TyError> {
+        let op_ty = self.mlr.get_op_ty(&op);
+        let op_ty_def = self
+            .tys
+            .get_ty_def(op_ty)
+            .expect("type of as-expr operand should be registered");
+        let &ty::TyDef::Ref(op_base_ty) = op_ty_def else {
+            return TyError::AsExprOpOfNonRefTy { op_ty }.into();
+        };
+
+        let ty_def = self
+            .tys
+            .get_ty_def(target_ty)
+            .expect("type of as-expr target type should be registered");
+        let &ty::TyDef::Ptr(target_base_ty) = ty_def else {
+            return TyError::AsExprTargetNonPtrTy { target_ty }.into();
+        };
+
+        self.tys
+            .unify(op_base_ty, target_base_ty)
+            .map_err(|_| TyError::AsExprTyMismatch { op_ty, target_ty })?;
+
+        Ok(target_ty)
     }
 
     fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {

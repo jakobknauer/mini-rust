@@ -166,6 +166,7 @@ impl<'a> H2M<'a> {
             Block(block) => self.build_block(block),
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms),
             AddrOf { base } => self.build_addr_of_val(base),
+            As { expr, target_ty } => self.build_as_expr(expr, target_ty),
         }
     }
 
@@ -409,6 +410,12 @@ impl<'a> H2M<'a> {
     fn build_addr_of_val(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Val> {
         let base = self.lower_to_place(base)?;
         self.insert_addr_of_val(base)
+    }
+
+    fn build_as_expr(&mut self, expr: &hlr::Expr, target_ty: &hlr::TyAnnot) -> Result<mlr::Val, H2MError> {
+        let expr_op = self.lower_to_op(expr)?;
+        let target_ty = self.resolve_hlr_ty_annot(target_ty)?;
+        self.insert_as_val(expr_op, target_ty)
     }
 
     fn build_stmt(&mut self, stmt: &hlr::Stmt) -> H2MResult<()> {

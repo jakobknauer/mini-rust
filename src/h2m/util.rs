@@ -31,6 +31,11 @@ impl<'a> super::H2M<'a> {
         self.insert_val(val)
     }
 
+    pub fn insert_as_val(&mut self, op: mlr::Op, target_ty: ty::Ty) -> H2MResult<mlr::Val> {
+        let val_def = mlr::ValDef::As { op, target_ty };
+        self.insert_val(val_def)
+    }
+
     fn insert_stmt(&mut self, stmt_def: mlr::StmtDef) -> H2MResult<mlr::Stmt> {
         let stmt = self.ctxt.mlr.insert_stmt(stmt_def);
         self.typechecker().check_stmt_ty(stmt)?;

@@ -48,6 +48,7 @@ pub enum ValDef {
     Call { callable: Op, args: Vec<Op> },
     Use(Op),
     AddrOf(Place),
+    As { op: Op, target_ty: Ty },
 }
 
 #[derive(Debug, Clone)]

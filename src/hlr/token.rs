@@ -36,6 +36,7 @@ pub enum Token {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
+    As,
     Break,
     Else,
     Enum,
