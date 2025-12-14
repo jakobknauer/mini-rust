@@ -222,8 +222,8 @@ impl<'a> Typechecker<'a> {
             .expect("type of dereferenced op should be registered");
 
         match *ty_def {
-            ty::TyDef::Ref(referenced_ty) => Ok(referenced_ty),
-            _ => TyError::DereferenceOfNonRefTy { ty: ref_ty }.into(),
+            ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty) => Ok(base_ty),
+            _ => TyError::InvalidDereference { ty: ref_ty }.into(),
         }
     }
 

@@ -57,7 +57,7 @@ pub enum TyError {
         ty: Ty,
         variant_name: String,
     },
-    DereferenceOfNonRefTy {
+    InvalidDereference {
         ty: Ty,
     },
     FnGenericArgCountMismatch {

@@ -106,8 +106,8 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(ty),
             variant_name
         ),
-        DereferenceOfNonRefTy { ty } => format!(
-            "Cannot dereference type '{}', which is not a reference type",
+        InvalidDereference { ty } => format!(
+            "Cannot dereference type '{}', which is not a reference or pointer type",
             ctxt.tys.get_string_rep(ty)
         ),
         FnGenericArgCountMismatch { fn_, expected, actual } => format!(
