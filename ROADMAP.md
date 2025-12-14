@@ -34,7 +34,7 @@
 - ~~Raw pointers~~
 - ~~`as` conversion from ref to raw ptr~~
 - `c_void` type
-- dereferencing raw ptr for creating ref
+- ~~dereferencing raw ptr for creating ref~~
 - Allow extern functions calls
     - Test with `malloc` and `free`
 - `c_char` type
