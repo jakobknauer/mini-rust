@@ -36,10 +36,11 @@
 - ~~`c_void` type~~
 - ~~dereferencing raw ptr for creating ref~~
 - ~~Allow `as` conversion between all raw pointers~~
-- Allow extern functions calls
-    - Test with `malloc` and `free`
+- ~~Allow extern functions calls~~
+    - ~~Test with `malloc` and `free`~~
 - `c_char` type
 - String literals for constructing `*c_char`
+- Allow varargs fns
     - Test with `printf`
 
 ## Version 3
