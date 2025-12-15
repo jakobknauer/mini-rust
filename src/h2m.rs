@@ -3,7 +3,6 @@ pub mod opt;
 mod err;
 mod match_util;
 mod ops;
-mod util;
 #[macro_use]
 mod macros;
 mod mlr_builder;
@@ -16,21 +15,40 @@ use crate::{
 pub use err::{H2MError, H2MResult};
 
 pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_fn: &hlr::Fn, target_fn: fns::Fn) -> H2MResult<fns::FnMlr> {
-    let h2m = H2M::new(hlr_fn, target_fn, ctxt);
-    h2m.build()
+    let h2m = H2M::new(target_fn, ctxt);
+    h2m.build(hlr_fn)
 }
 
 struct H2M<'a> {
-    input: &'a hlr::Fn,
     builder: mlr_builder::MlrBuilder<'a>,
 }
 
 impl<'a> H2M<'a> {
-    pub fn new(input: &'a hlr::Fn, target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
+    pub fn new(target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
-            input,
             builder: mlr_builder::MlrBuilder::new(target_fn, ctxt),
         }
+    }
+
+    pub fn build(mut self, input: &'a hlr::Fn) -> H2MResult<fns::FnMlr> {
+        self.builder.push_scope();
+
+        let mut param_locs = Vec::new();
+        let params = self.builder.get_signature().params.clone();
+        for fns::FnParam { name, ty } in params {
+            let loc = self.builder.insert_typed_loc(ty)?;
+            self.builder.add_binding(&name, loc);
+            param_locs.push(loc);
+        }
+
+        self.builder.start_new_block();
+
+        let return_val = self.build_block(input.body.as_ref().unwrap())?;
+        self.builder.insert_return_stmt(return_val)?;
+
+        let body = self.builder.release_current_block();
+
+        Ok(fns::FnMlr { body, param_locs })
     }
 
     fn typechecker(&mut self) -> typechecker::Typechecker<'_> {
@@ -47,27 +65,6 @@ impl<'a> H2M<'a> {
 
     fn fns(&mut self) -> &mut ctxt::FnReg {
         self.builder.fns()
-    }
-
-    pub fn build(mut self) -> H2MResult<fns::FnMlr> {
-        self.builder.push_scope();
-
-        let mut param_locs = Vec::new();
-        let params = self.builder.get_signature().params.clone();
-        for fns::FnParam { name, ty } in params {
-            let loc = self.builder.insert_typed_loc(ty)?;
-            self.builder.add_to_scope(&name, loc);
-            param_locs.push(loc);
-        }
-
-        self.builder.start_new_block();
-
-        let return_val = self.build_block(self.input.body.as_ref().unwrap())?;
-        self.builder.insert_return_stmt(return_val)?;
-
-        let body = self.builder.release_current_block();
-
-        Ok(fns::FnMlr { body, param_locs })
     }
 
     /// Build an HLR block by inserting the statements into the current MLR block
@@ -392,7 +389,7 @@ impl<'a> H2M<'a> {
 
         self.builder.end_and_insert_current_block();
 
-        self.builder.add_to_scope(name, loc);
+        self.builder.add_binding(name, loc);
         Ok(())
     }
 

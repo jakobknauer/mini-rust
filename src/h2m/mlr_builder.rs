@@ -1,15 +1,5 @@
 use std::collections::{HashMap, VecDeque};
 
-struct Scope {
-    vars: HashMap<String, mlr::Loc>,
-}
-
-impl Scope {
-    fn new() -> Self {
-        Self { vars: HashMap::new() }
-    }
-}
-
 use crate::{
     ctxt::{
         self, fns,
@@ -27,6 +17,18 @@ pub struct MlrBuilder<'a> {
 
     scopes: VecDeque<Scope>,
     blocks: VecDeque<Vec<mlr::Stmt>>,
+}
+
+struct Scope {
+    bindings: HashMap<String, mlr::Loc>,
+}
+
+impl Scope {
+    fn new() -> Self {
+        Self {
+            bindings: HashMap::new(),
+        }
+    }
 }
 
 impl<'a> MlrBuilder<'a> {
@@ -59,8 +61,8 @@ impl<'a> MlrBuilder<'a> {
         self.scopes.pop_back();
     }
 
-    pub fn add_to_scope(&mut self, name: &str, loc: mlr::Loc) {
-        self.current_scope().vars.insert(name.to_string(), loc);
+    pub fn add_binding(&mut self, name: &str, loc: mlr::Loc) {
+        self.current_scope().bindings.insert(name.to_string(), loc);
     }
 
     pub fn start_new_block(&mut self) {
@@ -267,7 +269,7 @@ impl<'a> MlrBuilder<'a> {
         self.scopes
             .iter()
             .rev()
-            .filter_map(|scope| scope.vars.get(name))
+            .filter_map(|scope| scope.bindings.get(name))
             .next()
             .cloned()
     }

@@ -102,7 +102,7 @@ impl<'a> super::H2M<'a> {
             self.builder.insert_alloc_stmt(assign_loc)?;
 
             self.builder.insert_assign_to_loc_stmt(assign_loc, field_val)?;
-            self.builder.add_to_scope(binding_name, assign_loc);
+            self.builder.add_binding(binding_name, assign_loc);
         }
 
         // build actual arm block
