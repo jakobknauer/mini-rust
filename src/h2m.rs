@@ -75,7 +75,7 @@ impl<'a> H2M<'a> {
     /// all while in a new scope.
     ///
     /// This method does not start or end a new MLR block; but it does push and pop a new scope.
-    pub fn build_block(&mut self, block: &hlr::Block) -> H2MResult<mlr::Val> {
+    fn build_block(&mut self, block: &hlr::Block) -> H2MResult<mlr::Val> {
         self.builder.push_scope();
 
         for stmt in &block.stmts {

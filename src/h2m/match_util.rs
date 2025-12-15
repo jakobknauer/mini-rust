@@ -34,12 +34,8 @@ impl<'a> super::H2M<'a> {
                 let condition = self.build_arm_condition(first_variant_index, &eq_fn, &discriminant)?;
 
                 self.builder.start_new_block();
-                let first_arm_result = self.build_arm_block(
-                    first_arm,
-                    enum_ty,
-                    *first_variant_index,
-                    scrutinee_place,
-                )?;
+                let first_arm_result =
+                    self.build_arm_block(first_arm, enum_ty, *first_variant_index, scrutinee_place)?;
                 self.builder.insert_assign_stmt(result_place, first_arm_result)?;
                 let then_block = self.builder.release_current_block();
 
@@ -69,8 +65,11 @@ impl<'a> super::H2M<'a> {
         discriminant: &mlr::Op,
     ) -> H2MResult<mlr::Op> {
         let variant_index = self.builder.insert_int_op(*variant_index as i64)?;
-        let condition_place =
-            assign_to_fresh_alloc!(self, self.builder.insert_call_val(*eq_fn, vec![*discriminant, variant_index])?);
+        let condition_place = assign_to_fresh_alloc!(
+            self,
+            self.builder
+                .insert_call_val(*eq_fn, vec![*discriminant, variant_index])?
+        );
         self.builder.insert_copy_op(condition_place)
     }
 
