@@ -21,7 +21,7 @@ pub struct Fn {
     pub gen_params: Vec<String>,
     pub params: Vec<Param>,
     pub return_ty: Option<TyAnnot>,
-    pub body: Block,
+    pub body: Option<Block>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

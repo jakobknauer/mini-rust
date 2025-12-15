@@ -142,7 +142,12 @@ impl<'a> HlrParser<'a> {
         self.expect_token(Token::RParen)?;
 
         let return_ty = self.parse_function_return_type()?;
-        let body = self.parse_block()?;
+        let body = if self.current() == Some(&Token::LBrace) {
+            Some(self.parse_block()?)
+        } else {
+            self.expect_token(Token::Semicolon)?;
+            None
+        };
 
         Ok(Fn {
             name,
@@ -783,10 +788,10 @@ mod tests {
                     gen_params: vec![],
                     params: vec![],
                     return_ty: None,
-                    body: Block {
+                    body: Some(Block {
                         stmts: vec![],
                         return_expr: None,
-                    },
+                    }),
                 }],
                 structs: vec![Struct {
                     name: "Empty".to_string(),
@@ -826,14 +831,14 @@ mod tests {
                         },
                     ],
                     return_ty: Some(TyAnnot::Named("int".to_string())),
-                    body: Block {
+                    body: Some(Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
                             left: Box::new(make_ident("a")),
                             operator: BinaryOperator::Add,
                             right: Box::new(make_ident("b")),
                         }))],
                         return_expr: None,
-                    },
+                    }),
                 }],
                 structs: vec![],
                 enums: vec![],

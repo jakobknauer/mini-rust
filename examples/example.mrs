@@ -1,14 +1,15 @@
 fn main() -> i32 {
-    let x: i32 = 10;
-    let rx = &x;
-    let px = rx as *i32;
-    let rx2 = &*px;
-    *rx2
+    let alloc: &i32 = &*(malloc(4) as *i32);
+    free(alloc as *i32 as *c_void);
+    4
 }
 
 fn as_ref<T>(x: *c_void) -> &T {
     &*(x as *T)
 }
+
+fn malloc(size: i32) -> *c_void;
+fn free(alloc: *c_void);
 
 fn noop<T>() {}
 

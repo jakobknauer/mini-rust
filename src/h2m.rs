@@ -112,7 +112,7 @@ impl<'a> H2M<'a> {
 
         self.start_new_block();
 
-        let return_val = self.build_block(&self.input.body)?;
+        let return_val = self.build_block(self.input.body.as_ref().unwrap())?;
         self.insert_return_stmt(return_val)?;
 
         let body = self.release_current_block();

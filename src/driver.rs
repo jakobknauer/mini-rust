@@ -210,6 +210,10 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
 
 fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
     for hlr_fn in &hlr.fns {
+        if hlr_fn.body.is_none() {
+            continue;
+        }
+
         let target_fn = ctxt.fns.get_fn_by_name(&hlr_fn.name).unwrap();
 
         let mlr = h2m::hlr_to_mlr(ctxt, hlr_fn, target_fn)
