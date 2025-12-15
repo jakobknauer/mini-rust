@@ -10,6 +10,7 @@ pub struct TyReg {
     i32_ty: Option<Ty>,
     bool_ty: Option<Ty>,
     unit_ty: Option<Ty>,
+    c_void_ty: Option<Ty>,
 
     structs: Vec<StructDef>,
     enums: Vec<EnumDef>,
@@ -84,6 +85,7 @@ impl TyReg {
         self.i32_ty = Some(self.register_named_ty("i32", TyDef::Primitve(Primitive::Integer32))?);
         self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitve(Primitive::Boolean))?);
         self.unit_ty = Some(self.register_named_ty("()", TyDef::Primitve(Primitive::Unit))?);
+        self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitve(Primitive::CVoid))?);
         Ok(())
     }
 
@@ -230,6 +232,11 @@ impl TyReg {
         matches!(ty_def, Some(TyDef::Enum { .. }))
     }
 
+    pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
+        let ty_def = self.get_ty_def(base_ty);
+        matches!(ty_def, Some(TyDef::Primitve(Primitive::CVoid)))
+    }
+
     pub fn get_mut_enum_def_by_name(&mut self, name: &str) -> Option<&mut EnumDef> {
         let enum_ = self.get_enum_by_name(name)?;
         self.enums.get_mut(enum_.0)
@@ -316,6 +323,7 @@ impl TyReg {
                 Integer32 => "i32".to_string(),
                 Boolean => "bool".to_string(),
                 Unit => "()".to_string(),
+                CVoid => "c_void".to_string(),
             },
             Struct { struct_, ref gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
@@ -464,6 +472,7 @@ impl TyReg {
             Primitive::Integer32 => self.i32_ty,
             Primitive::Boolean => self.bool_ty,
             Primitive::Unit => self.unit_ty,
+            Primitive::CVoid => self.c_void_ty,
         }
         .expect("primitive type should be registered")
     }

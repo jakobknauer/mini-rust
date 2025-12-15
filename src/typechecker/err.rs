@@ -93,6 +93,9 @@ pub enum TyError {
         op_ty: Ty,
         target_ty: Ty,
     },
+    DereferenceOfCVoidPtr {
+        ty: Ty,
+    },
 }
 
 impl<T> From<TyError> for TyResult<T> {

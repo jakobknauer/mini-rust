@@ -162,6 +162,10 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(op_ty),
             ctxt.tys.get_string_rep(target_ty)
         ),
+        DereferenceOfCVoidPtr { ty } => format!(
+            "Cannot dereference pointer or reference of type '{}', which points to 'c_void'",
+            ctxt.tys.get_string_rep(ty)
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

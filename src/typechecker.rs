@@ -222,7 +222,13 @@ impl<'a> Typechecker<'a> {
             .expect("type of dereferenced op should be registered");
 
         match *ty_def {
-            ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty) => Ok(base_ty),
+            ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty) => {
+                if self.tys.is_c_void_ty(base_ty) {
+                    Err(TyError::DereferenceOfCVoidPtr { ty: ref_ty })
+                } else {
+                    Ok(base_ty)
+                }
+            }
             _ => TyError::InvalidDereference { ty: ref_ty }.into(),
         }
     }
