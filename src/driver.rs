@@ -222,6 +222,8 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
         ctxt.fns.add_fn_def(&hlr_fn.name, mlr);
     }
 
+    stdlib::define_size_of(ctxt)?;
+
     Ok(())
 }
 

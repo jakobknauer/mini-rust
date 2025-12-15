@@ -49,6 +49,7 @@ pub enum ValDef {
     Use(Op),
     AddrOf(Place),
     As { op: Op, target_ty: Ty },
+    SizeOf(Ty),
 }
 
 #[derive(Debug, Clone)]

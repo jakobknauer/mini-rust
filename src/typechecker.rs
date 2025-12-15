@@ -33,6 +33,7 @@ impl<'a> Typechecker<'a> {
             Use(op) => Ok(self.mlr.get_op_ty(&op)),
             AddrOf(place) => self.infer_ty_of_addr_of_place(&place),
             As { op, target_ty } => self.infer_ty_of_as_expr(op, target_ty),
+            SizeOf(..) => self.infer_ty_of_size_of_expr(),
         }?;
 
         self.mlr.set_val_ty(val, ty);
@@ -166,6 +167,11 @@ impl<'a> Typechecker<'a> {
 
             _ => Err(TyError::InvalidAsExpr { op_ty, target_ty }),
         }
+    }
+
+    fn infer_ty_of_size_of_expr(&self) -> Result<ty::Ty, TyError> {
+        let int_ty = self.tys.get_primitive_ty(ty::Primitive::Integer32);
+        Ok(int_ty)
     }
 
     fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {

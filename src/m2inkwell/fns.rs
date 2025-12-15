@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
+    targets::TargetData,
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
@@ -205,6 +206,12 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 // since the only valid conversion atm is from ref to ptr of the same base type,
                 // we can just build the op and return it
                 self.build_op(&op)
+            }
+            SizeOf(ty) => {
+                let ty = self.get_ty_as_basic_type_enum(ty).unwrap();
+                let size = TargetData::create("").get_store_size(&ty) as u32;
+                let int_ty = self.m2iw.iw_ctxt.i32_type();
+                Ok(int_ty.const_int(size as u64, false).as_basic_value_enum())
             }
         }
     }

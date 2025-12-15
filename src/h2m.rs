@@ -5,7 +5,7 @@ mod match_util;
 mod ops;
 #[macro_use]
 mod macros;
-mod mlr_builder;
+pub mod mlr_builder;
 
 use crate::{
     ctxt::{self, fns, mlr, ty},

@@ -1,6 +1,6 @@
 fn main() -> i32 {
-    let alloc: &i32 = &*(malloc(4) as *i32);
-    free(alloc as *i32 as *c_void);
+    let alloc: &i32 = &* new::<i32>();
+    delete::<i32>(alloc);
     4
 }
 
@@ -10,6 +10,13 @@ fn as_ref<T>(x: *c_void) -> &T {
 
 fn malloc(size: i32) -> *c_void;
 fn free(alloc: *c_void);
+
+fn new<T>() -> *T {
+    malloc(size_of::<T>()) as *T
+}
+fn delete<T>(ref: &T) {
+    free(ref as *T as *c_void)
+}
 
 fn noop<T>() {}
 
