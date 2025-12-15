@@ -32,13 +32,13 @@ macro_rules! op_match {
 
 impl<'a> h2m::H2M<'a> {
     pub fn resolve_operator(
-        &self,
+        &mut self,
         operator: &hlr::BinaryOperator,
         (left, right): (ty::Ty, ty::Ty),
     ) -> H2MResult<fns::Fn> {
         use hlr::BinaryOperator::*;
 
-        let tys = &self.ctxt.tys;
+        let tys = &self.tys();
 
         let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
         let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
@@ -67,11 +67,8 @@ impl<'a> h2m::H2M<'a> {
             (GreaterThanOrEqual, i32, i32) => "ge::<i32>",
         );
 
-        self.ctxt
-            .fns
-            .get_fn_by_name(fn_name)
-            .ok_or(H2MError::MissingOperatorImpl {
-                name: fn_name.to_string(),
-            })
+        self.fns().get_fn_by_name(fn_name).ok_or(H2MError::MissingOperatorImpl {
+            name: fn_name.to_string(),
+        })
     }
 }
