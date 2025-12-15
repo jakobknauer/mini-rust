@@ -83,13 +83,7 @@ pub enum TyError {
         ty: Ty,
         extra_variants: Vec<String>,
     },
-    AsExprOpOfNonRefTy {
-        op_ty: Ty,
-    },
-    AsExprTargetNonPtrTy {
-        target_ty: Ty,
-    },
-    AsExprTyMismatch {
+    InvalidAsExpr {
         op_ty: Ty,
         target_ty: Ty,
     },

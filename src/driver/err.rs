@@ -149,22 +149,14 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             expected,
             actual
         ),
-        AsExprOpOfNonRefTy { op_ty } => format!(
-            "Cannot perform 'as' expression on type '{}', which is not a reference type",
-            ctxt.tys.get_string_rep(op_ty)
-        ),
-        AsExprTargetNonPtrTy { target_ty } => format!(
-            "Cannot cast to type '{}' in 'as' expression, which is not a pointer type",
-            ctxt.tys.get_string_rep(target_ty)
-        ),
-        AsExprTyMismatch { op_ty, target_ty } => format!(
-            "Type mismatch in 'as' expression: cannot cast from '{}' to '{}'",
-            ctxt.tys.get_string_rep(op_ty),
-            ctxt.tys.get_string_rep(target_ty)
-        ),
         DereferenceOfCVoidPtr { ty } => format!(
             "Cannot dereference pointer or reference of type '{}', which points to 'c_void'",
             ctxt.tys.get_string_rep(ty)
+        ),
+        InvalidAsExpr { op_ty, target_ty } => format!(
+            "Cannot cast from type '{}' to type '{}' using 'as' expression",
+            ctxt.tys.get_string_rep(op_ty),
+            ctxt.tys.get_string_rep(target_ty)
         ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)

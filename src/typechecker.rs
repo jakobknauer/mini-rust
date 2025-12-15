@@ -145,23 +145,27 @@ impl<'a> Typechecker<'a> {
             .tys
             .get_ty_def(op_ty)
             .expect("type of as-expr operand should be registered");
-        let &ty::TyDef::Ref(op_base_ty) = op_ty_def else {
-            return TyError::AsExprOpOfNonRefTy { op_ty }.into();
-        };
 
-        let ty_def = self
+        let target_ty_def = self
             .tys
             .get_ty_def(target_ty)
             .expect("type of as-expr target type should be registered");
-        let &ty::TyDef::Ptr(target_base_ty) = ty_def else {
-            return TyError::AsExprTargetNonPtrTy { target_ty }.into();
-        };
 
-        self.tys
-            .unify(op_base_ty, target_base_ty)
-            .map_err(|_| TyError::AsExprTyMismatch { op_ty, target_ty })?;
+        match (op_ty_def, target_ty_def) {
+            // Allow arbitrary casts between Ptr
+            (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => Ok(target_ty),
 
-        Ok(target_ty)
+            // Allow casts from Ref to Ptr with same base type
+            (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty)) => {
+                self.tys
+                    .unify(op_base_ty, target_base_ty)
+                    .map_err(|_| TyError::InvalidAsExpr { op_ty, target_ty })?;
+
+                Ok(target_ty)
+            }
+
+            _ => Err(TyError::InvalidAsExpr { op_ty, target_ty }),
+        }
     }
 
     fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {

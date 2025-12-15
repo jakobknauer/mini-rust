@@ -6,6 +6,10 @@ fn main() -> i32 {
     *rx2
 }
 
+fn as_ref<T>(x: *c_void) -> &T {
+    &*(x as *T)
+}
+
 fn noop<T>() {}
 
 fn fac(n: i32) -> i32 {
