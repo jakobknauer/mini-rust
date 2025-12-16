@@ -236,10 +236,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let fn_name = self.ctxt.get_fn_spec_name(fn_spec);
                     write!(self.writer, "fn {}", fn_name)
                 }
-                Const(constant) => match constant {
+                Const(constant) => match *constant {
                     Int(i) => write!(self.writer, "const {}", i),
                     Bool(b) => write!(self.writer, "const {}", b),
                     Unit => write!(self.writer, "const ()"),
+                    CChar(c) => write!(self.writer, "const '{}'", c as char),
                 },
                 Copy(place) => {
                     write!(self.writer, "copy ")?;

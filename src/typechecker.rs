@@ -93,6 +93,7 @@ impl<'a> Typechecker<'a> {
             Int(_) => ty::Primitive::Integer32,
             Bool(_) => ty::Primitive::Boolean,
             Unit => ty::Primitive::Unit,
+            CChar(_) => ty::Primitive::CChar,
         };
 
         let ty = self.tys.get_primitive_ty(ty);

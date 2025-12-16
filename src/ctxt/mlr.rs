@@ -73,6 +73,7 @@ pub enum Const {
     Int(i64),
     Bool(bool),
     Unit,
+    CChar(u8),
 }
 
 #[derive(Debug, Clone, Copy)]

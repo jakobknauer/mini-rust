@@ -148,9 +148,10 @@ impl<'a> H2M<'a> {
     fn build_literal(&mut self, lit: &hlr::Lit) -> H2MResult<mlr::Op> {
         use hlr::Lit::*;
 
-        match lit {
-            Int(n) => self.builder.insert_int_op(*n),
-            Bool(b) => self.builder.insert_bool_op(*b),
+        match *lit {
+            Int(n) => self.builder.insert_int_op(n),
+            Bool(b) => self.builder.insert_bool_op(b),
+            CChar(c) => self.builder.insert_c_char_op(c),
         }
     }
 

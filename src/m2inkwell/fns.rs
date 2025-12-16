@@ -295,6 +295,10 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 bool_ty.const_int(b as u64, false).as_basic_value_enum()
             }
             Unit => self.build_unit_value()?,
+            CChar(c) => {
+                let char_ty = self.m2iw.iw_ctxt.i8_type();
+                char_ty.const_int(c as u64, false).as_basic_value_enum()
+            }
         };
 
         Ok(value)

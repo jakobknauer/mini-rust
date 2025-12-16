@@ -134,6 +134,7 @@ pub struct Ident {
 pub enum Lit {
     Int(i64),
     Bool(bool),
+    CChar(u8),
 }
 
 #[derive(Debug, PartialEq, Eq)]

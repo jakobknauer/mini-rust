@@ -4,6 +4,7 @@ pub enum Token {
     Identifier(String),
     NumLiteral(String),
     BoolLiteral(bool),
+    CCharLiteral(u8),
 
     LBrace,             // {
     RBrace,             // }

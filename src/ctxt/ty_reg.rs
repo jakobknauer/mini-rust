@@ -11,6 +11,7 @@ pub struct TyReg {
     bool_ty: Option<Ty>,
     unit_ty: Option<Ty>,
     c_void_ty: Option<Ty>,
+    c_char_ty: Option<Ty>,
 
     structs: Vec<StructDef>,
     enums: Vec<EnumDef>,
@@ -86,6 +87,7 @@ impl TyReg {
         self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitve(Primitive::Boolean))?);
         self.unit_ty = Some(self.register_named_ty("()", TyDef::Primitve(Primitive::Unit))?);
         self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitve(Primitive::CVoid))?);
+        self.c_char_ty = Some(self.register_named_ty("c_char", TyDef::Primitve(Primitive::CChar))?);
         Ok(())
     }
 
@@ -324,6 +326,7 @@ impl TyReg {
                 Boolean => "bool".to_string(),
                 Unit => "()".to_string(),
                 CVoid => "c_void".to_string(),
+                CChar => "c_char".to_string(),
             },
             Struct { struct_, ref gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
@@ -473,6 +476,7 @@ impl TyReg {
             Primitive::Boolean => self.bool_ty,
             Primitive::Unit => self.unit_ty,
             Primitive::CVoid => self.c_void_ty,
+            Primitive::CChar => self.c_char_ty,
         }
         .expect("primitive type should be registered")
     }

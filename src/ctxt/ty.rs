@@ -28,6 +28,7 @@ pub enum Primitive {
     Boolean,
     Unit,
     CVoid,
+    CChar,
 }
 
 #[derive(Clone)]

@@ -1,4 +1,6 @@
 fn main() -> i32 {
+    let c1 = 'a';
+    let c2: c_char = 'b';
     let alloc: &i32 = &* new::<i32>();
     delete::<i32>(alloc);
     4
