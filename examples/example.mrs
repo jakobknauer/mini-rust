@@ -1,16 +1,18 @@
 fn main() -> i32 {
-    printf("Hi %i %s\n", 5, "hello");
-    4
-}
+    printf("Please enter a number: ");
+    let n: i32 = 0;
+    scanf("%d", &n);
 
-fn as_ref<T>(x: *c_void) -> &T {
-    &*(x as *T)
+    let result = fac(n);
+    printf("The factorial of %d is %d\n", n, result);
+    result
 }
 
 fn malloc(size: i32) -> *c_void;
 fn free(alloc: *c_void);
 
 fn printf(format: *c_char, ...) -> i32;
+fn scanf(format: *c_char, ...) -> i32;
 
 fn new<T>() -> *T {
     malloc(size_of::<T>()) as *T
@@ -18,8 +20,6 @@ fn new<T>() -> *T {
 fn delete<T>(ref: &T) {
     free(ref as *T as *c_void)
 }
-
-fn noop<T>() {}
 
 fn fac(n: i32) -> i32 {
     let result: i32 = 1;
@@ -31,84 +31,4 @@ fn fac(n: i32) -> i32 {
         n = n - 1
     }
     result
-}
-
-struct Point {
-    x: i32,
-    y: i32,
-}
-
-fn scalar_product(p: Point, q: Point) -> i32 {
-    p.x * q.x + p.y * q.y
-}
-
-fn is_origin(p: Point) -> bool {
-    p.x == 0 & p.y == 0
-}
-
-fn diag_point(c: i32) -> Point {
-    Point { x: c, y: c }
-}
-
-enum Expr {
-    Constant { c: i32 },
-    Add { left: i32, right: i32 },
-    Mul { left: i32, right: i32 },
-}
-
-fn eval(expr: Expr) -> i32 {
-    match expr {
-        Constant { c: c } => c,
-        Add { left: left, right: right } => left + right,
-        Mul { left: a, right: b } => a * b,
-    }
-}
-
-fn identity<T>(x: T) -> T { 
-    x 
-}
-
-fn invoke<A, B>(f: fn(A) -> B, x: A) -> B {
-    f(x)
-}
-
-fn select<T>(switch: bool, a: T, b: T) -> T {
-    if switch { a } else { b }
-}
-
-fn concat<A, B, C>(f: fn(A) -> B, g: fn(B) -> C, a: A) -> C {
-    g(f(a))
-}
-
-struct Wrapper<S> {
-    item: S
-}
-
-fn unwrap<T>(wrapped: Wrapper<T>) -> T {
-    unwrap_internal::<T>(wrapped)
-}
-
-fn unwrap_internal<U>(wrapped: Wrapper<U>) -> U {
-    wrapped.item
-}
-
-enum Option<T> {
-    Some { item: T },
-    None
-}
-
-fn make_option<T>(item: T) -> Option<T> {
-    Some::<T> { item: item }
-}
-
-fn unwrap_or<T>(opt: Option<T>, default: T) -> T {
-    match opt {
-        Some { item: item } => item,
-        None {} => default
-    }
-}
-
-fn uncalled(arg: *i32) -> *i32 {
-    let opt = make_option::<*i32>(arg);
-    unwrap_or::<*i32>(opt, arg)
 }
