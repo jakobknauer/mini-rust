@@ -38,7 +38,7 @@
 - ~~Allow `as` conversion between all raw pointers~~
 - ~~Allow extern functions calls~~
     - ~~Test with `malloc` and `free`~~
-- `c_char` type
+- ~~`c_char` type~~
 - String literals for constructing `*c_char`
 - Allow varargs fns
     - Test with `printf`
