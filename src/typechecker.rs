@@ -128,7 +128,7 @@ impl<'a> Typechecker<'a> {
             return TyError::CallArgumentCountMismatch {
                 expected: param_tys.len(),
                 actual: arg_tys.len(),
-                var_args
+                var_args,
             }
             .into();
         }

@@ -88,7 +88,12 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let mr_ty = self.m2iw.mr_ctxt.mlr.get_op_ty(op);
         let mr_ty_def = self.m2iw.mr_ctxt.tys.get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
 
-        let mr_ty::TyDef::Fn { return_ty, param_tys, var_args } = mr_ty_def.clone() else {
+        let mr_ty::TyDef::Fn {
+            return_ty,
+            param_tys,
+            var_args,
+        } = mr_ty_def.clone()
+        else {
             return Err(M2InkwellFnError);
         };
 
