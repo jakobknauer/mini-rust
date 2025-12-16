@@ -147,6 +147,23 @@ impl<'a> Lexer<'a> {
             None
         }
     }
+
+    fn try_parse_c_string_literal(&mut self) -> Option<Token> {
+        if self.get_current_char() == Some('"') {
+            self.position += 1;
+            let string: Vec<u8> = self
+                .input
+                .chars()
+                .skip(self.position)
+                .take_while(|c| *c != '"')
+                .map(|c| c as u8)
+                .collect();
+            self.position += string.len() + 1;
+            Some(Token::CStringLiteral(string))
+        } else {
+            None
+        }
+    }
 }
 
 impl Iterator for Lexer<'_> {
@@ -164,6 +181,7 @@ impl Iterator for Lexer<'_> {
             .or_else(|| self.try_parse_identifier_or_keyword())
             .or_else(|| self.try_parse_number())
             .or_else(|| self.try_parse_c_char_literal())
+            .or_else(|| self.try_parse_c_string_literal())
             .ok_or(LexerErr {
                 position: self.position,
             });

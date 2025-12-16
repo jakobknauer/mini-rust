@@ -152,6 +152,7 @@ impl<'a> H2M<'a> {
             Int(n) => self.builder.insert_int_op(n),
             Bool(b) => self.builder.insert_bool_op(b),
             CChar(c) => self.builder.insert_c_char_op(c),
+            CString(ref s) => self.builder.insert_c_string_op(s),
         }
     }
 

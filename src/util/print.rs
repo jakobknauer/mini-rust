@@ -241,6 +241,10 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     Bool(b) => write!(self.writer, "const {}", b),
                     Unit => write!(self.writer, "const ()"),
                     CChar(c) => write!(self.writer, "const '{}'", c as char),
+                    CString(ref s) => {
+                        let s = std::str::from_utf8(s).unwrap();
+                        write!(self.writer, "const \"{}\"", s)
+                    }
                 },
                 Copy(place) => {
                     write!(self.writer, "copy ")?;

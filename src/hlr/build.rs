@@ -549,6 +549,11 @@ impl<'a> HlrParser<'a> {
                 self.position += 1;
                 Ok(Expr::Lit(Lit::CChar(value)))
             }
+            Token::CStringLiteral(s) => {
+                let value = s.clone();
+                self.position += 1;
+                Ok(Expr::Lit(Lit::CString(value)))
+            }
             Token::Identifier(ident) => {
                 let ident = ident.clone();
                 self.position += 1;

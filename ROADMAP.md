@@ -39,7 +39,7 @@
 - ~~Allow extern functions calls~~
     - ~~Test with `malloc` and `free`~~
 - ~~`c_char` type~~
-- String literals for constructing `*c_char`
+- ~~String literals for constructing `*c_char`~~
 - Allow varargs fns
     - Test with `printf`
 

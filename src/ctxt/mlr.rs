@@ -74,6 +74,7 @@ pub enum Const {
     Bool(bool),
     Unit,
     CChar(u8),
+    CString(Vec<u8>),
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1,8 +1,6 @@
 fn main() -> i32 {
-    let c1 = 'a';
-    let c2: c_char = 'b';
-    let alloc: &i32 = &* new::<i32>();
-    delete::<i32>(alloc);
+    printf("hello ");
+    printf("world");
     4
 }
 
@@ -12,6 +10,8 @@ fn as_ref<T>(x: *c_void) -> &T {
 
 fn malloc(size: i32) -> *c_void;
 fn free(alloc: *c_void);
+
+fn printf(format: *c_char) -> i32;
 
 fn new<T>() -> *T {
     malloc(size_of::<T>()) as *T

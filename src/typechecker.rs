@@ -64,7 +64,7 @@ impl<'a> Typechecker<'a> {
 
         let ty = match *op_def {
             Fn(ref fn_spec) => self.infer_ty_of_fn(&fn_spec.clone()),
-            Const(ref constant) => self.infer_ty_of_constant(constant),
+            Const(ref constant) => self.infer_ty_of_constant(&constant.clone()),
             Copy(place) => self.infer_place_ty(place),
         }?;
 
@@ -86,7 +86,7 @@ impl<'a> Typechecker<'a> {
         Ok(())
     }
 
-    fn infer_ty_of_constant(&self, constant: &Const) -> TyResult<ty::Ty> {
+    fn infer_ty_of_constant(&mut self, constant: &Const) -> TyResult<ty::Ty> {
         use Const::*;
 
         let ty = match constant {
@@ -94,6 +94,11 @@ impl<'a> Typechecker<'a> {
             Bool(_) => ty::Primitive::Boolean,
             Unit => ty::Primitive::Unit,
             CChar(_) => ty::Primitive::CChar,
+            CString(..) => {
+                let c_char_ty = self.tys.get_primitive_ty(ty::Primitive::CChar);
+                let ptr_to_c_char_ty = self.tys.register_ptr_ty(c_char_ty);
+                return Ok(ptr_to_c_char_ty);
+            }
         };
 
         let ty = self.tys.get_primitive_ty(ty);

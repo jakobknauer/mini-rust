@@ -299,6 +299,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 let char_ty = self.m2iw.iw_ctxt.i8_type();
                 char_ty.const_int(c as u64, false).as_basic_value_enum()
             }
+            CString(ref c_string) => self.build_c_string(c_string.clone()),
         };
 
         Ok(value)
@@ -394,6 +395,16 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         self.iw_builder.position_at_end(after_loop);
         Ok(())
+    }
+
+    fn build_c_string(&self, c_string: Vec<u8>) -> BasicValueEnum<'iw> {
+        let c_string = String::from_utf8(c_string).unwrap();
+        unsafe {
+            self.iw_builder
+                .build_global_string(&c_string, "c_string_lit")
+                .unwrap()
+                .as_basic_value_enum()
+        }
     }
 
     fn get_ty_as_basic_type_enum(&mut self, ty: mr_ty::Ty) -> Option<BasicTypeEnum<'iw>> {
