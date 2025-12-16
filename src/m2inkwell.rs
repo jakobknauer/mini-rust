@@ -67,7 +67,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
                 .map(|param| self.get_ty_as_basic_metadata_type_enum(param.ty).unwrap())
                 .collect();
             let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
-            let iw_fn_type = return_type.fn_type(&param_types, false);
+            let iw_fn_type = return_type.fn_type(&param_types, sig.var_args);
 
             let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);

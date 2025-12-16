@@ -35,6 +35,7 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::C
             format!("Cannot find struct or enum with name '{}'", ty_name)
         }
         UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
+        VarArgsNotSupported => "Cannot build MLR for variadic function".to_string(),
     }
 }
 
@@ -63,8 +64,17 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(expected),
             ctxt.tys.get_string_rep(actual)
         ),
-        CallArgumentCountMismatch { expected, actual } => {
-            format!("Argument count mismatch: expected {}, got {}", expected, actual)
+        CallArgumentCountMismatch {
+            expected,
+            actual,
+            var_args,
+        } => {
+            format!(
+                "Argument count mismatch: expected {}, got {} in {} call",
+                expected,
+                actual,
+                if var_args { "variadic" } else { "non-variadic" }
+            )
         }
         IfConditionNotBoolean { actual } => format!(
             "If condition must be of type 'bool', got '{}'",

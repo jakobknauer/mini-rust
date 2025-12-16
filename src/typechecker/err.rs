@@ -23,6 +23,7 @@ pub enum TyError {
     CallArgumentCountMismatch {
         expected: usize,
         actual: usize,
+        var_args: bool,
     },
     IfConditionNotBoolean {
         actual: Ty,

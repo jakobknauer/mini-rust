@@ -54,6 +54,7 @@ impl Ctxt {
             name: self.get_fn_spec_name(fn_spec),
             gen_params: Vec::new(),
             params: specialized_params,
+            var_args: signature.var_args,
             return_ty: specialized_return_ty,
         }
     }

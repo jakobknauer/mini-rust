@@ -40,8 +40,8 @@
     - ~~Test with `malloc` and `free`~~
 - ~~`c_char` type~~
 - ~~String literals for constructing `*c_char`~~
-- Allow varargs fns
-    - Test with `printf`
+- ~~Allow varargs fns~~
+    - ~~Test with `printf`~~
 
 ## Version 3
 - Traits and trait bounds

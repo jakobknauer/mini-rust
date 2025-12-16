@@ -31,10 +31,15 @@ impl<'a> H2M<'a> {
     }
 
     pub fn build(mut self, input: &'a hlr::Fn) -> H2MResult<fns::FnMlr> {
-        self.builder.push_scope();
+        let signature = self.builder.get_signature();
+        if signature.var_args {
+            return Err(H2MError::VarArgsNotSupported);
+        }
 
+        let params = signature.params.clone();
         let mut param_locs = Vec::new();
-        let params = self.builder.get_signature().params.clone();
+
+        self.builder.push_scope();
         for fns::FnParam { name, ty } in params {
             let loc = self.builder.insert_typed_loc(ty)?;
             self.builder.add_binding(&name, loc);

@@ -20,6 +20,7 @@ pub struct Fn {
     pub name: String,
     pub gen_params: Vec<String>,
     pub params: Vec<Param>,
+    pub var_args: bool,
     pub return_ty: Option<TyAnnot>,
     pub body: Option<Block>,
 }

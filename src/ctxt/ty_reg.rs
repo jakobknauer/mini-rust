@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::{ctxt::ty::*, hlr};
@@ -131,9 +130,10 @@ impl TyReg {
         Ok(enum_)
     }
 
-    pub fn register_fn_ty(&mut self, param_tys: impl Into<Vec<Ty>>, return_ty: Ty) -> Ty {
+    pub fn register_fn_ty(&mut self, param_tys: impl Into<Vec<Ty>>, return_ty: Ty, var_args: bool) -> Ty {
         let fn_ty = TyDef::Fn {
             param_tys: param_tys.into(),
+            var_args,
             return_ty,
         };
         self.register_ty(fn_ty)
@@ -278,7 +278,7 @@ impl TyReg {
                     None => Some(self.get_primitive_ty(Primitive::Unit)),
                 }?;
 
-                Some(self.register_fn_ty(param_tys, return_ty))
+                Some(self.register_fn_ty(param_tys, return_ty, false))
             }
             Generic(ident) => {
                 let gen_args: Vec<Ty> = ident
@@ -312,8 +312,12 @@ impl TyReg {
             Fn {
                 ref param_tys,
                 return_ty,
+                var_args,
             } => {
-                let mut param_names = param_tys.iter().map(|&pt| self.get_string_rep(pt));
+                let mut param_names: Vec<_> = param_tys.iter().map(|&pt| self.get_string_rep(pt)).collect();
+                if var_args {
+                    param_names.push("...".to_string());
+                }
                 let return_name = self.get_string_rep(return_ty);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
@@ -397,14 +401,20 @@ impl TyReg {
                     &Fn {
                         param_tys: ref params1,
                         return_ty: ret1,
+                        var_args: var_args1,
                     },
                     &Fn {
                         param_tys: ref params2,
                         return_ty: ret2,
+                        var_args: var_args2,
                     },
                 ) => {
                     if params1.len() != params2.len() {
                         return Err(UnificationError::FunctionParamCountMismatch);
+                    }
+
+                    if var_args1 != var_args2 {
+                        return Err(UnificationError::TypeMismatch);
                     }
 
                     let pairs = params1.clone().into_iter().zip(params2.clone());
@@ -507,6 +517,7 @@ impl TyReg {
             Fn {
                 ref param_tys,
                 return_ty,
+                var_args,
             } => {
                 let new_param_tys = param_tys
                     .clone()
@@ -514,7 +525,7 @@ impl TyReg {
                     .map(|pt| self.substitute_gen_vars(pt, substitutions))
                     .collect::<Vec<_>>();
                 let new_return_ty = self.substitute_gen_vars(return_ty, substitutions);
-                self.register_fn_ty(new_param_tys, new_return_ty)
+                self.register_fn_ty(new_param_tys, new_return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, substitutions);

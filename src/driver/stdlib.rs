@@ -20,6 +20,7 @@ macro_rules! register_fn {
                     },
                 )*
             ],
+            var_args: false,
             return_ty: $return_ty,
         })?;
     };
@@ -61,6 +62,7 @@ fn register_size_of(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
         name: "size_of".to_string(),
         gen_params: vec![tys.register_gen_var("T")],
         params: vec![],
+        var_args: false,
         return_ty: tys.get_primitive_ty(ty::Primitive::Integer32),
     })?;
     Ok(())

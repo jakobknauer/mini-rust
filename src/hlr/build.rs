@@ -138,7 +138,7 @@ impl<'a> HlrParser<'a> {
         };
 
         self.expect_token(Token::LParen)?;
-        let params = self.parse_fn_params()?;
+        let (params, var_args) = self.parse_fn_params()?;
         self.expect_token(Token::RParen)?;
 
         let return_ty = self.parse_function_return_type()?;
@@ -153,6 +153,7 @@ impl<'a> HlrParser<'a> {
             name,
             gen_params,
             params,
+            var_args,
             return_ty,
             body,
         })
@@ -174,16 +175,18 @@ impl<'a> HlrParser<'a> {
         Ok(params)
     }
 
-    fn parse_fn_params(&mut self) -> Result<Vec<Param>, ParserErr> {
+    fn parse_fn_params(&mut self) -> Result<(Vec<Param>, bool), ParserErr> {
         let mut params = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             params.push(self.parse_function_param()?);
 
             if !self.advance_if(Token::Comma) {
-                break;
+                return Ok((params, false));
             }
         }
-        Ok(params)
+
+        let var_args = self.advance_if(Token::Dots);
+        Ok((params, var_args))
     }
 
     fn parse_function_param(&mut self) -> Result<Param, ParserErr> {
@@ -797,6 +800,7 @@ mod tests {
                     name: "empty".to_string(),
                     gen_params: vec![],
                     params: vec![],
+                    var_args: false,
                     return_ty: None,
                     body: Some(Block {
                         stmts: vec![],
@@ -840,6 +844,7 @@ mod tests {
                             ty: TyAnnot::Named("int".to_string()),
                         },
                     ],
+                    var_args: false,
                     return_ty: Some(TyAnnot::Named("int".to_string())),
                     body: Some(Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {

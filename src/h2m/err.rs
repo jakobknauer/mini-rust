@@ -11,6 +11,7 @@ pub enum H2MError {
     OperatorResolutionFailed { operator: String, operand_tys: (Ty, Ty) },
     UnresolvableStructOrEnum { ty_name: String },
     UnresolvableTyAnnot,
+    VarArgsNotSupported,
 }
 
 impl<T> From<H2MError> for H2MResult<T> {

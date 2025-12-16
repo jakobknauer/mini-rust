@@ -199,8 +199,9 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
     let signature = fns::FnSig {
         name: hlr_fn.name.clone(),
         gen_params,
-        return_ty,
         params,
+        var_args: hlr_fn.var_args,
+        return_ty,
     };
 
     fns.register_fn(signature)?;

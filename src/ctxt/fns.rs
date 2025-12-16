@@ -11,6 +11,7 @@ pub struct FnSig {
     pub name: String,
     pub gen_params: Vec<GenVar>,
     pub params: Vec<FnParam>,
+    pub var_args: bool,
     pub return_ty: Ty,
 }
 

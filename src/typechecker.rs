@@ -110,7 +110,12 @@ impl<'a> Typechecker<'a> {
         let ty = self.mlr.get_op_ty(callable);
         let callable_ty_def = self.tys.get_ty_def(ty).expect("type of callable should be registered");
 
-        let ty::TyDef::Fn { param_tys, return_ty } = callable_ty_def.clone() else {
+        let ty::TyDef::Fn {
+            param_tys,
+            return_ty,
+            var_args,
+        } = callable_ty_def.clone()
+        else {
             return TyError::ValNotCallable.into();
         };
 
@@ -119,10 +124,11 @@ impl<'a> Typechecker<'a> {
             .map(|arg_loc| self.mlr.get_op_ty(arg_loc))
             .collect::<Vec<_>>();
 
-        if param_tys.len() != arg_tys.len() {
+        if (var_args && arg_tys.len() < param_tys.len()) || (!var_args && arg_tys.len() != param_tys.len()) {
             return TyError::CallArgumentCountMismatch {
                 expected: param_tys.len(),
                 actual: arg_tys.len(),
+                var_args
             }
             .into();
         }
@@ -196,7 +202,9 @@ impl<'a> Typechecker<'a> {
         }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let fn_ty = self.tys.register_fn_ty(param_tys, signature.return_ty);
+        let fn_ty = self
+            .tys
+            .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
         let substitutions = self.fns.get_substitutions_for_specialization(fn_specialization);
         let fn_spec_ty = self.tys.substitute_gen_vars(fn_ty, &substitutions);

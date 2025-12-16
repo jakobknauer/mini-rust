@@ -47,6 +47,8 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
     (':', ':', Token::ColonColon),
 ];
 
+const THREE_CHAR_TOKENS: &[(char, char, char, Token)] = &[('.', '.', '.', Token::Dots)];
+
 impl<'a> Lexer<'a> {
     fn new(input: &'a str) -> Self {
         Lexer { input, position: 0 }
@@ -108,6 +110,20 @@ impl<'a> Lexer<'a> {
             .collect::<String>();
 
         Some(Token::NumLiteral(number_str.to_string()))
+    }
+
+    fn try_parse_three_char_token(&mut self) -> Option<Token> {
+        THREE_CHAR_TOKENS.iter().find_map(|&(s1, s2, s3, ref token)| {
+            if self.get_current_char() == Some(s1)
+                && self.input.chars().nth(self.position + 1) == Some(s2)
+                && self.input.chars().nth(self.position + 2) == Some(s3)
+            {
+                self.position += 3;
+                Some(token.clone())
+            } else {
+                None
+            }
+        })
     }
 
     fn try_parse_two_char_token(&mut self) -> Option<Token> {
@@ -176,7 +192,8 @@ impl Iterator for Lexer<'_> {
         }
 
         let result = self
-            .try_parse_two_char_token()
+            .try_parse_three_char_token()
+            .or_else(|| self.try_parse_two_char_token())
             .or_else(|| self.try_parse_one_char_token())
             .or_else(|| self.try_parse_identifier_or_keyword())
             .or_else(|| self.try_parse_number())
