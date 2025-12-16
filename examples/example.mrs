@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    printf("Hi %i %s ", 5, "hello");
+    printf("Hi %i %s\n", 5, "hello");
     4
 }
 

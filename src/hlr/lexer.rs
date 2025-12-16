@@ -151,14 +151,13 @@ impl<'a> Lexer<'a> {
     fn try_parse_c_char_literal(&mut self) -> Option<Token> {
         if self.get_current_char() == Some('\'') {
             self.position += 1;
-            let c: u8 = self.get_current_char()?.try_into().unwrap();
-            self.position += 1;
+            let literal = self.parse_escaped_char()?;
             if self.get_current_char() != Some('\'') {
                 return None;
             }
             self.position += 1;
 
-            Some(Token::CCharLiteral(c))
+            Some(Token::CCharLiteral(literal))
         } else {
             None
         }
@@ -167,17 +166,40 @@ impl<'a> Lexer<'a> {
     fn try_parse_c_string_literal(&mut self) -> Option<Token> {
         if self.get_current_char() == Some('"') {
             self.position += 1;
-            let string: Vec<u8> = self
-                .input
-                .chars()
-                .skip(self.position)
-                .take_while(|c| *c != '"')
-                .map(|c| c as u8)
-                .collect();
-            self.position += string.len() + 1;
-            Some(Token::CStringLiteral(string))
+
+            let mut chars: Vec<u8> = Vec::new();
+            while self.get_current_char() != Some('"') {
+                let c = self.parse_escaped_char()?;
+                chars.push(c);
+            }
+
+            self.position += 1;
+            Some(Token::CStringLiteral(chars))
         } else {
             None
+        }
+    }
+
+    fn parse_escaped_char(&mut self) -> Option<u8> {
+        let c = self.get_current_char()?;
+        if c == '\\' {
+            self.position += 1;
+            let c: u8 = self.get_current_char()?.try_into().unwrap();
+            self.position += 1;
+            match c {
+                b'n' => Some(b'\n'),
+                b't' => Some(b'\t'),
+                b'r' => Some(b'\r'),
+                b'0' => Some(b'\0'),
+                b'\\' => Some(b'\\'),
+                b'\'' => Some(b'\''),
+                b'\"' => Some(b'\"'),
+                _ => panic!("invalid escape sequence"),
+            }
+        } else {
+            let c: u8 = c.try_into().unwrap();
+            self.position += 1;
+            Some(c)
         }
     }
 }
