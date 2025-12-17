@@ -108,6 +108,7 @@ impl<'a> H2M<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
+            MethodCall { .. } => todo!("lowering of method calls"),
             Struct { name, fields } => self.build_struct_or_enum_val(name, fields),
             If {
                 condition,

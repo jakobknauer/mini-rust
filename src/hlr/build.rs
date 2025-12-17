@@ -519,12 +519,32 @@ impl<'a> HlrParser<'a> {
                     arguments,
                 };
             } else if self.advance_if(Token::Dot) {
-                // field access
+                // field access or method call
                 let field_name = self.expect_identifier()?;
-                acc = Expr::FieldAccess {
-                    base: Box::new(acc),
-                    name: field_name,
-                };
+
+                if self.advance_if(Token::LParen) {
+                    // method call
+                    let mut arguments = Vec::new();
+                    while self.current() != Some(&Token::RParen) {
+                        let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
+                        arguments.push(argument);
+                        if !self.advance_if(Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(Token::RParen)?;
+                    acc = Expr::MethodCall {
+                        base: Box::new(acc),
+                        name: field_name,
+                        arguments,
+                    };
+                } else {
+                    // field access
+                    acc = Expr::FieldAccess {
+                        base: Box::new(acc),
+                        name: field_name,
+                    };
+                }
             } else {
                 break;
             }

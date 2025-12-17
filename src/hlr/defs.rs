@@ -92,6 +92,11 @@ pub enum Expr {
         callee: Box<Expr>,
         arguments: Vec<Expr>,
     },
+    MethodCall {
+        base: Box<Expr>,
+        name: String,
+        arguments: Vec<Expr>,
+    },
     Struct {
         name: Ident,
         fields: Vec<(String, Expr)>,
