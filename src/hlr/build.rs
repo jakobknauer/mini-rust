@@ -1128,17 +1128,21 @@ mod tests {
         }
 
         #[test]
-        fn test_parse_function_call_and_field_access() {
-            let input = "obj.method(arg1, arg2).field";
-            let expected = Expr::FieldAccess {
-                base: Box::new(Expr::Call {
-                    callee: Box::new(Expr::FieldAccess {
-                        base: Box::new(make_ident("obj")),
+        fn test_parse_calls_and_field_access() {
+            let input = "(obj(arg0).method(arg1, arg2).field)(arg3)";
+            let expected = Expr::Call {
+                callee: Box::new(Expr::FieldAccess {
+                    base: Box::new(Expr::MethodCall {
+                        base: Box::new(Expr::Call {
+                            callee: Box::new(make_ident("obj")),
+                            arguments: vec![make_ident("arg0")],
+                        }),
                         name: "method".to_string(),
+                        arguments: vec![make_ident("arg1"), make_ident("arg2")],
                     }),
-                    arguments: vec![make_ident("arg1"), make_ident("arg2")],
+                    name: "field".to_string(),
                 }),
-                name: "field".to_string(),
+                arguments: vec![make_ident("arg3")],
             };
             parse_and_compare(input, expected);
         }
