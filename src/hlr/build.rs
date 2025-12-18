@@ -1129,12 +1129,12 @@ mod tests {
 
         #[test]
         fn test_parse_calls_and_field_access() {
-            let input = "(obj(arg0).method(arg1, arg2).field)(arg3)";
+            let input = "(function(arg0).method(arg1, arg2).field)(arg3)";
             let expected = Expr::Call {
                 callee: Box::new(Expr::FieldAccess {
                     base: Box::new(Expr::MethodCall {
                         base: Box::new(Expr::Call {
-                            callee: Box::new(make_ident("obj")),
+                            callee: Box::new(make_ident("function")),
                             arguments: vec![make_ident("arg0")],
                         }),
                         name: "method".to_string(),
