@@ -242,6 +242,7 @@ fn try_into_keyword_token(keyword: &str) -> Option<Token> {
         "loop" => Some(Token::Keyword(Keyword::Loop)),
         "match" => Some(Token::Keyword(Keyword::Match)),
         "return" => Some(Token::Keyword(Keyword::Return)),
+        "self" => Some(Token::Keyword(Keyword::Self_)),
         "struct" => Some(Token::Keyword(Keyword::Struct)),
         "true" => Some(Token::BoolLiteral(true)),
         _ => None,

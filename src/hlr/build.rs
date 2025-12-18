@@ -117,7 +117,7 @@ impl<'a> HlrParser<'a> {
 
         while let Some(token) = self.current() {
             match token {
-                Token::Keyword(Keyword::Fn) => program.fns.push(self.parse_function()?),
+                Token::Keyword(Keyword::Fn) => program.fns.push(self.parse_function(false)?),
                 Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
                 Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
@@ -127,7 +127,7 @@ impl<'a> HlrParser<'a> {
         Ok(program)
     }
 
-    fn parse_function(&mut self) -> Result<Fn, ParserErr> {
+    fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn, ParserErr> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 
@@ -138,7 +138,7 @@ impl<'a> HlrParser<'a> {
         };
 
         self.expect_token(Token::LParen)?;
-        let (params, var_args) = self.parse_fn_params()?;
+        let (params, var_args) = self.parse_fn_params(allow_receiver_param)?;
         self.expect_token(Token::RParen)?;
 
         let return_ty = self.parse_function_return_type()?;
@@ -175,10 +175,12 @@ impl<'a> HlrParser<'a> {
         Ok(params)
     }
 
-    fn parse_fn_params(&mut self) -> Result<(Vec<Param>, bool), ParserErr> {
+    fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param>, bool), ParserErr> {
         let mut params = Vec::new();
+        let mut first = true;
         while let Some(Token::Identifier(_)) = self.current() {
-            params.push(self.parse_function_param()?);
+            params.push(self.parse_function_param(first && allow_receiver)?);
+            first = false;
 
             if !self.advance_if(Token::Comma) {
                 return Ok((params, false));
@@ -189,11 +191,24 @@ impl<'a> HlrParser<'a> {
         Ok((params, var_args))
     }
 
-    fn parse_function_param(&mut self) -> Result<Param, ParserErr> {
-        let name = self.expect_identifier()?;
-        self.expect_token(Token::Colon)?;
-        let ty = self.parse_ty_annot()?;
-        Ok(Param { name, ty })
+    fn parse_function_param(&mut self, allow_receiver: bool) -> Result<Param, ParserErr> {
+        if allow_receiver && self.current() == Some(&Token::Keyword(Keyword::Self_)) {
+            self.position += 1;
+            Ok(Param {
+                name: "self".to_string(),
+                ty: TyAnnot::Self_,
+                is_receiver: true,
+            })
+        } else {
+            let name = self.expect_identifier()?;
+            self.expect_token(Token::Colon)?;
+            let ty = self.parse_ty_annot()?;
+            Ok(Param {
+                name,
+                ty,
+                is_receiver: false,
+            })
+        }
     }
 
     fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot>, ParserErr> {
@@ -858,10 +873,12 @@ mod tests {
                         Param {
                             name: "a".to_string(),
                             ty: TyAnnot::Named("int".to_string()),
+                            is_receiver: false,
                         },
                         Param {
                             name: "b".to_string(),
                             ty: TyAnnot::Named("int".to_string()),
+                            is_receiver: false,
                         },
                     ],
                     var_args: false,
@@ -875,8 +892,7 @@ mod tests {
                         return_expr: None,
                     }),
                 }],
-                structs: vec![],
-                enums: vec![],
+                ..Default::default()
             };
 
             parse_and_compare(input, expected);
@@ -891,7 +907,6 @@ mod tests {
                 }"#;
 
             let expected = Program {
-                fns: vec![],
                 structs: vec![Struct {
                     name: "Point".to_string(),
                     gen_params: vec![],
@@ -906,7 +921,7 @@ mod tests {
                         },
                     ],
                 }],
-                enums: vec![],
+                ..Default::default()
             };
 
             parse_and_compare(input, expected);
@@ -922,8 +937,6 @@ mod tests {
                 }"#;
 
             let expected = Program {
-                fns: vec![],
-                structs: vec![],
                 enums: vec![Enum {
                     name: "State".to_string(),
                     gen_params: vec![],
@@ -942,6 +955,7 @@ mod tests {
                         },
                     ],
                 }],
+                ..Default::default()
             };
 
             parse_and_compare(input, expected);

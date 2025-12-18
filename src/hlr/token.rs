@@ -50,4 +50,5 @@ pub enum Keyword {
     Match,
     Return,
     Struct,
+    Self_,
 }

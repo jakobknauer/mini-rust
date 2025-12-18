@@ -19,6 +19,7 @@ pub struct Fn {
 pub struct Param {
     pub name: String,
     pub ty: TyAnnot,
+    pub is_receiver: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -182,4 +183,5 @@ pub enum TyAnnot {
         param_tys: Vec<TyAnnot>,
         return_ty: Option<Box<TyAnnot>>,
     },
+    Self_,
 }

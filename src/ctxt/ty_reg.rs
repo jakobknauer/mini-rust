@@ -293,6 +293,7 @@ impl TyReg {
                     self::Named::Ty(..) => None,
                 }
             }
+            Self_ => todo!("Resolving self type"),
         }
     }
 
