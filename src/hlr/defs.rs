@@ -1,18 +1,8 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Program {
     pub fns: Vec<Fn>,
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
-}
-
-impl Program {
-    pub fn new() -> Self {
-        Self {
-            fns: Vec::new(),
-            structs: Vec::new(),
-            enums: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

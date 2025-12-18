@@ -113,7 +113,7 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_program(&mut self) -> Result<Program, ParserErr> {
-        let mut program = Program::new();
+        let mut program = Program::default();
 
         while let Some(token) = self.current() {
             match token {
