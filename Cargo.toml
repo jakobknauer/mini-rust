@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bimap = "0.6.3"
 colored = "3.0.0"
 inkwell = { version = "0.6.0", features = ["llvm18-1"] }
 itertools = "0.14.0"
