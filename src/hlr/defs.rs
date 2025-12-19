@@ -3,6 +3,7 @@ pub struct Program {
     pub fns: Vec<Fn>,
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
+    pub impls: Vec<Impl>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -46,6 +47,12 @@ pub struct Enum {
 pub struct EnumVariant {
     pub name: String,
     pub fields: Vec<StructField>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Impl {
+    pub ty: TyAnnot,
+    pub methods: Vec<Fn>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -119,6 +126,7 @@ pub enum Expr {
         expr: Box<Expr>,
         target_ty: TyAnnot,
     },
+    Self_,
 }
 
 #[derive(Debug, PartialEq, Eq)]

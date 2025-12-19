@@ -1,5 +1,5 @@
-#[macro_use]
 mod macros;
+use macros::parse_left_associative;
 
 use crate::hlr::{defs::*, lexer, token::Keyword};
 
@@ -120,6 +120,7 @@ impl<'a> HlrParser<'a> {
                 Token::Keyword(Keyword::Fn) => program.fns.push(self.parse_function(false)?),
                 Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
                 Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
+                Token::Keyword(Keyword::Impl) => program.impls.push(self.parse_impl()?),
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
         }
@@ -178,7 +179,7 @@ impl<'a> HlrParser<'a> {
     fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param>, bool), ParserErr> {
         let mut params = Vec::new();
         let mut first = true;
-        while let Some(Token::Identifier(_)) = self.current() {
+        while let Some(Token::Identifier(_) | Token::Keyword(Keyword::Self_)) = self.current() {
             params.push(self.parse_function_param(first && allow_receiver)?);
             first = false;
 
@@ -293,6 +294,20 @@ impl<'a> HlrParser<'a> {
             vec![]
         };
         Ok(EnumVariant { name, fields })
+    }
+
+    fn parse_impl(&mut self) -> Result<Impl, ParserErr> {
+        self.expect_keyword(Keyword::Impl)?;
+        let ty = self.parse_ty_annot()?;
+        self.expect_token(Token::LBrace)?;
+
+        let mut methods = Vec::new();
+        while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
+            methods.push(self.parse_function(true)?);
+        }
+
+        self.expect_token(Token::RBrace)?;
+        Ok(Impl { ty, methods })
     }
 
     fn parse_gen_params(&mut self) -> Result<Vec<String>, ParserErr> {
@@ -646,6 +661,10 @@ impl<'a> HlrParser<'a> {
             Token::Keyword(Keyword::If) => self.parse_if_expr(),
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
             Token::Keyword(Keyword::Match) => self.parse_match(),
+            Token::Keyword(Keyword::Self_) => {
+                self.position += 1;
+                Ok(Expr::Self_)
+            }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
@@ -814,7 +833,7 @@ mod tests {
 
         fn parse_and_compare(input: &str, expected: Program) {
             let parsed = build_program(input).expect("Failed to parse HLR");
-            assert_eq!(parsed, expected);
+            pretty_assertions::assert_eq!(parsed, expected);
         }
 
         #[test]
@@ -827,6 +846,9 @@ mod tests {
                 }
 
                 enum Empty {
+                }
+
+                impl Empty {
                 }
                 "#;
 
@@ -851,6 +873,10 @@ mod tests {
                     name: "Empty".to_string(),
                     gen_params: vec![],
                     variants: vec![],
+                }],
+                impls: vec![Impl {
+                    ty: TyAnnot::Named("Empty".to_string()),
+                    methods: vec![],
                 }],
             };
 
@@ -960,6 +986,43 @@ mod tests {
 
             parse_and_compare(input, expected);
         }
+
+        #[test]
+        fn test_parse_simple_impl() {
+            let input = r#"
+                impl A {
+                    fn get_b(self) -> B {
+                        self.b
+                    }
+                }"#;
+
+            let expected = Program {
+                impls: vec![Impl {
+                    ty: TyAnnot::Named("A".to_string()),
+                    methods: vec![Fn {
+                        name: "get_b".to_string(),
+                        gen_params: vec![],
+                        params: vec![Param {
+                            name: "self".to_string(),
+                            ty: TyAnnot::Self_,
+                            is_receiver: true,
+                        }],
+                        var_args: false,
+                        return_ty: Some(TyAnnot::Named("B".to_string())),
+                        body: Some(Block {
+                            stmts: vec![],
+                            return_expr: Some(Box::new(Expr::FieldAccess {
+                                base: Box::new(Expr::Self_),
+                                name: "b".to_string(),
+                            })),
+                        }),
+                    }],
+                }],
+                ..Default::default()
+            };
+
+            parse_and_compare(input, expected);
+        }
     }
 
     mod block {
@@ -967,7 +1030,7 @@ mod tests {
 
         fn parse_and_compare(input: &str, expected: Block) {
             let parsed = build_block(input).expect("Failed to parse HLR");
-            assert_eq!(parsed, expected);
+            pretty_assertions::assert_eq!(parsed, expected);
         }
 
         #[test]
@@ -1051,7 +1114,7 @@ mod tests {
 
         fn parse_and_compare(input: &str, expected: Expr) {
             let parsed = build_expr(input).expect("Failed to parse HLR");
-            assert_eq!(parsed, expected);
+            pretty_assertions::assert_eq!(parsed, expected);
         }
 
         #[test]

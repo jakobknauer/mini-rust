@@ -45,10 +45,11 @@ pub enum Keyword {
     Enum,
     Fn,
     If,
+    Impl,
     Let,
     Loop,
     Match,
     Return,
-    Struct,
     Self_,
+    Struct,
 }

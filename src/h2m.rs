@@ -120,6 +120,7 @@ impl<'a> H2M<'a> {
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms),
             AddrOf { base } => self.build_addr_of_val(base),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty),
+            Self_ => todo!("lowering of self"),
         }
     }
 

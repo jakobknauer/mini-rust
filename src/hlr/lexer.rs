@@ -238,6 +238,7 @@ fn try_into_keyword_token(keyword: &str) -> Option<Token> {
         "false" => Some(Token::BoolLiteral(false)),
         "fn" => Some(Token::Keyword(Keyword::Fn)),
         "if" => Some(Token::Keyword(Keyword::If)),
+        "impl" => Some(Token::Keyword(Keyword::Impl)),
         "let" => Some(Token::Keyword(Keyword::Let)),
         "loop" => Some(Token::Keyword(Keyword::Loop)),
         "match" => Some(Token::Keyword(Keyword::Match)),

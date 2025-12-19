@@ -27,3 +27,5 @@ macro_rules! parse_left_associative {
         }
     };
 }
+
+pub(crate) use parse_left_associative;
