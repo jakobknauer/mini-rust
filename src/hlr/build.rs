@@ -1,5 +1,5 @@
+#[macro_use]
 mod macros;
-use macros::parse_left_associative;
 
 use crate::hlr::{defs::*, lexer, token::Keyword};
 
@@ -830,10 +830,11 @@ mod tests {
 
     mod program {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Program) {
             let parsed = build_program(input).expect("Failed to parse HLR");
-            pretty_assertions::assert_eq!(parsed, expected);
+            assert_eq!(parsed, expected);
         }
 
         #[test]
@@ -1027,10 +1028,11 @@ mod tests {
 
     mod block {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Block) {
             let parsed = build_block(input).expect("Failed to parse HLR");
-            pretty_assertions::assert_eq!(parsed, expected);
+            assert_eq!(parsed, expected);
         }
 
         #[test]
@@ -1111,10 +1113,11 @@ mod tests {
 
     mod expr {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Expr) {
             let parsed = build_expr(input).expect("Failed to parse HLR");
-            pretty_assertions::assert_eq!(parsed, expected);
+            assert_eq!(parsed, expected);
         }
 
         #[test]
