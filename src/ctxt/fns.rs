@@ -13,6 +13,7 @@ pub struct FnSig {
     pub params: Vec<FnParam>,
     pub var_args: bool,
     pub return_ty: Ty,
+    pub has_receiver: bool,
 }
 
 #[derive(Clone)]

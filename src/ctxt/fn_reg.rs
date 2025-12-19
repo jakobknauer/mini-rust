@@ -37,10 +37,8 @@ impl FnReg {
         self.fn_names.get(name).cloned()
     }
 
-    pub fn add_fn_def(&mut self, name: &str, mlr: FnMlr) {
-        if let Some(&fn_) = self.fn_names.get(name) {
-            self.defs.insert(fn_, mlr);
-        }
+    pub fn add_fn_def(&mut self, fn_: Fn, mlr: FnMlr) {
+        self.defs.insert(fn_, mlr);
     }
 
     pub fn is_fn_defined(&self, fn_: &Fn) -> bool {

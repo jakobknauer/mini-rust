@@ -17,6 +17,7 @@ pub struct MlrBuilder<'a> {
 
     scopes: VecDeque<Scope>,
     blocks: VecDeque<Vec<mlr::Stmt>>,
+    receiver_loc: Option<mlr::Loc>,
 }
 
 struct Scope {
@@ -39,6 +40,7 @@ impl<'a> MlrBuilder<'a> {
 
             scopes: VecDeque::new(),
             blocks: VecDeque::new(),
+            receiver_loc: None,
         }
     }
 
@@ -305,7 +307,7 @@ impl<'a> MlrBuilder<'a> {
         let ty = self
             .ctxt
             .tys
-            .try_resolve_hlr_annot(annot, &gen_params)
+            .try_resolve_hlr_annot(annot, &gen_params, None)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }
@@ -328,5 +330,13 @@ impl<'a> MlrBuilder<'a> {
 
     pub fn mlr(&mut self) -> &mut Mlr {
         &mut self.ctxt.mlr
+    }
+
+    pub fn register_receiver_loc(&mut self, receiver_loc: mlr::Loc) {
+        self.receiver_loc = Some(receiver_loc);
+    }
+
+    pub fn get_receiver_loc(&self) -> Option<mlr::Loc> {
+        self.receiver_loc
     }
 }

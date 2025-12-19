@@ -32,3 +32,14 @@ fn fac(n: i32) -> i32 {
     }
     result
 }
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Point {
+    fn is_origin(self) -> bool {
+        self.x == 0 & self.y == 0
+    }
+}

@@ -1,19 +1,24 @@
-mod fn_reg;
 pub mod fns;
+pub mod impls;
 pub mod mlr;
 pub mod ty;
+
+mod fn_reg;
+mod impl_reg;
 mod ty_reg;
 
 pub use fn_reg::FnReg;
+pub use impl_reg::ImplReg;
 pub use ty_reg::*;
 
-use mlr::*;
+use mlr::Mlr;
 
 #[derive(Default)]
 pub struct Ctxt {
     pub tys: TyReg,
     pub fns: FnReg,
     pub mlr: Mlr,
+    pub impls: ImplReg,
 }
 
 impl Ctxt {
@@ -56,6 +61,7 @@ impl Ctxt {
             params: specialized_params,
             var_args: signature.var_args,
             return_ty: specialized_return_ty,
+            has_receiver: signature.has_receiver,
         }
     }
 }

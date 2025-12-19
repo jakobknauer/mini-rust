@@ -22,6 +22,7 @@ macro_rules! register_fn {
             ],
             var_args: false,
             return_ty: $return_ty,
+            has_receiver: false,
         })?;
     };
 }
@@ -64,6 +65,7 @@ fn register_size_of(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
         params: vec![],
         var_args: false,
         return_ty: tys.get_primitive_ty(ty::Primitive::Integer32),
+        has_receiver: false,
     })?;
     Ok(())
 }
@@ -90,6 +92,6 @@ pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
         param_locs: vec![],
     };
 
-    ctxt.fns.add_fn_def("size_of", mlr);
+    ctxt.fns.add_fn_def(size_of_fn, mlr);
     Ok(())
 }

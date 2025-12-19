@@ -37,6 +37,7 @@ impl<'a> H2M<'a> {
         }
 
         let params = signature.params.clone();
+        let has_receiver = signature.has_receiver;
         let mut param_locs = Vec::new();
 
         self.builder.push_scope();
@@ -44,6 +45,10 @@ impl<'a> H2M<'a> {
             let loc = self.builder.insert_typed_loc(ty)?;
             self.builder.add_binding(&name, loc);
             param_locs.push(loc);
+        }
+
+        if has_receiver {
+            self.builder.register_receiver_loc(param_locs[0]);
         }
 
         self.builder.start_new_block();
@@ -101,7 +106,7 @@ impl<'a> H2M<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(..) | Ident { .. } | FieldAccess { .. } | Deref { .. } => {
+            Lit(..) | Ident { .. } | FieldAccess { .. } | Deref { .. } | Self_ => {
                 let op = self.lower_to_op(expr)?;
                 self.builder.insert_use_val(op)
             }
@@ -120,7 +125,6 @@ impl<'a> H2M<'a> {
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms),
             AddrOf { base } => self.build_addr_of_val(base),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty),
-            Self_ => todo!("lowering of self"),
         }
     }
 
@@ -131,6 +135,10 @@ impl<'a> H2M<'a> {
             Ident(ident) if ident.gen_args.is_empty() => self.lower_ident_to_place(&ident.ident),
             FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
             Deref { base } => self.lower_deref_to_place(base),
+            Self_ => {
+                let loc = self.builder.get_receiver_loc().unwrap();
+                self.builder.insert_loc_place(loc)
+            }
             _ => Err(H2MError::NotAPlace),
         }
     }
@@ -141,7 +149,7 @@ impl<'a> H2M<'a> {
         match expr {
             Lit(lit) => self.build_literal(lit),
             Ident(hlr::Ident { ident, gen_args }) => self.lower_ident_to_op(ident, gen_args),
-            FieldAccess { .. } | Deref { .. } => {
+            FieldAccess { .. } | Deref { .. } | Self_ => {
                 let place = self.lower_to_place(expr)?;
                 self.builder.insert_copy_op(place)
             }

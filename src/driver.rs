@@ -33,7 +33,9 @@ pub fn compile(
     register_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error registering types")?;
     define_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
+    register_impls(&hlr, &mut ctxt).map_err(|_| "Error registering impls")?;
     build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
+    build_impl_fn_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR for impls: {err}"))?;
 
     h2m::opt::canonicalize_types(&mut ctxt);
 
@@ -54,45 +56,6 @@ pub fn compile(
     }
 
     Ok(())
-}
-
-fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecialization>, ()> {
-    let mut open = VecDeque::new();
-    open.push_back(fns::FnSpecialization {
-        fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
-        gen_args: Vec::new(),
-    });
-
-    let mut closed = HashSet::new();
-
-    while let Some(current) = open.pop_front() {
-        if closed.contains(&current) {
-            continue;
-        }
-
-        let subst = ctxt.fns.get_substitutions_for_specialization(&current);
-
-        let fn_specs =
-            ctxt.fns
-                .get_called_specializations(&current.fn_)
-                .iter()
-                .map(|fns::FnSpecialization { fn_, gen_args }| {
-                    let new_gen_args = gen_args
-                        .iter()
-                        .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
-                        .collect();
-
-                    fns::FnSpecialization {
-                        fn_: *fn_,
-                        gen_args: new_gen_args,
-                    }
-                });
-
-        open.extend(fn_specs);
-        closed.insert(current);
-    }
-
-    Ok(closed)
 }
 
 fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
@@ -156,7 +119,7 @@ fn set_struct_fields<'a>(
         .map(|field| {
             Ok(ty::StructField {
                 name: field.name.clone(),
-                ty: tys.try_resolve_hlr_annot(&field.ty, &gen_params).ok_or(())?,
+                ty: tys.try_resolve_hlr_annot(&field.ty, &gen_params, None).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
@@ -171,14 +134,19 @@ fn register_functions(hlr: &hlr::Program, tys: &mut ctxt::TyReg, fns: &mut ctxt:
     stdlib::register_fns(tys, fns)?;
 
     for function in &hlr.fns {
-        register_function(function, tys, fns)?;
+        register_function(function, tys, fns, None)?;
     }
 
     Ok(())
 }
 
-fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    let gen_params = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
+fn register_function(
+    hlr_fn: &hlr::Fn,
+    tys: &mut ctxt::TyReg,
+    fns: &mut ctxt::FnReg,
+    self_ty: Option<ty::Ty>,
+) -> Result<fns::Fn, ()> {
+    let gen_params: Vec<_> = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
 
     let params = hlr_fn
         .params
@@ -186,25 +154,46 @@ fn register_function(hlr_fn: &hlr::Fn, tys: &mut ctxt::TyReg, fns: &mut ctxt::Fn
         .map(|parameter| {
             Ok(fns::FnParam {
                 name: parameter.name.clone(),
-                ty: tys.try_resolve_hlr_annot(&parameter.ty, &gen_params).ok_or(())?,
+                ty: tys
+                    .try_resolve_hlr_annot(&parameter.ty, &gen_params, self_ty)
+                    .ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
-        Some(ty) => tys.try_resolve_hlr_annot(ty, &gen_params).ok_or(())?,
+        Some(ty) => tys.try_resolve_hlr_annot(ty, &gen_params, self_ty).ok_or(())?,
         None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
 
+    let name = if let Some(self_ty) = self_ty {
+        format!("{}::{}", tys.get_string_rep(self_ty), hlr_fn.name)
+    } else {
+        hlr_fn.name.clone()
+    };
+
     let signature = fns::FnSig {
-        name: hlr_fn.name.clone(),
+        name,
         gen_params,
         params,
         var_args: hlr_fn.var_args,
         return_ty,
+        has_receiver: hlr_fn.params.first().map(|p| p.is_receiver).unwrap_or(false),
     };
 
-    fns.register_fn(signature)?;
+    fns.register_fn(signature)
+}
+
+fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+    for hlr_impl in &hlr.impls {
+        let ty = ctxt.tys.try_resolve_hlr_annot(&hlr_impl.ty, &[], None).ok_or(())?;
+        let impl_ = ctxt.impls.register_impl(ty);
+
+        for method in &hlr_impl.methods {
+            let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty))?;
+            ctxt.impls.register_method(impl_, fn_);
+        }
+    }
 
     Ok(())
 }
@@ -220,10 +209,29 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
         let mlr = h2m::hlr_to_mlr(ctxt, hlr_fn, target_fn)
             .map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
 
-        ctxt.fns.add_fn_def(&hlr_fn.name, mlr);
+        ctxt.fns.add_fn_def(target_fn, mlr);
     }
 
     stdlib::define_size_of(ctxt)?;
+
+    Ok(())
+}
+
+fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
+    for hlr_impl in &hlr.impls {
+        let ty = ctxt.tys.try_resolve_hlr_annot(&hlr_impl.ty, &[], None).unwrap();
+        let ty_name = ctxt.tys.get_string_rep(ty);
+
+        for hlr_method in &hlr_impl.methods {
+            let name = format!("{}::{}", ty_name, hlr_method.name);
+            let target_fn = ctxt.fns.get_fn_by_name(&name).unwrap();
+
+            let mlr = h2m::hlr_to_mlr(ctxt, hlr_method, target_fn)
+                .map_err(|err| err::print_mlr_builder_error(&hlr_method.name, err, ctxt))?;
+
+            ctxt.fns.add_fn_def(target_fn, mlr);
+        }
+    }
 
     Ok(())
 }
@@ -238,4 +246,43 @@ fn print_functions(ctxt: &ctxt::Ctxt, path: &Path) -> Result<(), ()> {
     }
 
     Ok(())
+}
+
+fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecialization>, ()> {
+    let mut open = VecDeque::new();
+    open.push_back(fns::FnSpecialization {
+        fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
+        gen_args: Vec::new(),
+    });
+
+    let mut closed = HashSet::new();
+
+    while let Some(current) = open.pop_front() {
+        if closed.contains(&current) {
+            continue;
+        }
+
+        let subst = ctxt.fns.get_substitutions_for_specialization(&current);
+
+        let fn_specs =
+            ctxt.fns
+                .get_called_specializations(&current.fn_)
+                .iter()
+                .map(|fns::FnSpecialization { fn_, gen_args }| {
+                    let new_gen_args = gen_args
+                        .iter()
+                        .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
+                        .collect();
+
+                    fns::FnSpecialization {
+                        fn_: *fn_,
+                        gen_args: new_gen_args,
+                    }
+                });
+
+        open.extend(fn_specs);
+        closed.insert(current);
+    }
+
+    Ok(closed)
 }

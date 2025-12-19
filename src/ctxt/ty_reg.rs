@@ -244,7 +244,12 @@ impl TyReg {
         self.enums.get_mut(enum_.0)
     }
 
-    pub fn try_resolve_hlr_annot(&mut self, annot: &hlr::TyAnnot, gen_vars: &Vec<GenVar>) -> Option<Ty> {
+    pub fn try_resolve_hlr_annot(
+        &mut self,
+        annot: &hlr::TyAnnot,
+        gen_vars: &[GenVar],
+        self_ty: Option<Ty>,
+    ) -> Option<Ty> {
         use hlr::TyAnnot::*;
 
         match annot {
@@ -261,20 +266,20 @@ impl TyReg {
                 }
             }
             Ref(ty_annot) => self
-                .try_resolve_hlr_annot(ty_annot, gen_vars)
+                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty)
                 .map(|inner| self.register_ref_ty(inner)),
             Ptr(ty_annot) => self
-                .try_resolve_hlr_annot(ty_annot, gen_vars)
+                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty)
                 .map(|inner| self.register_ptr_ty(inner)),
             Unit => Some(self.get_primitive_ty(Primitive::Unit)),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys
                     .iter()
-                    .map(|pt| self.try_resolve_hlr_annot(pt, gen_vars))
+                    .map(|pt| self.try_resolve_hlr_annot(pt, gen_vars, self_ty))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars),
+                    Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars, self_ty),
                     None => Some(self.get_primitive_ty(Primitive::Unit)),
                 }?;
 
@@ -284,7 +289,7 @@ impl TyReg {
                 let gen_args: Vec<Ty> = ident
                     .gen_args
                     .iter()
-                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars))
+                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty))
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.named_tys.get(&ident.ident)? {
@@ -293,7 +298,7 @@ impl TyReg {
                     self::Named::Ty(..) => None,
                 }
             }
-            Self_ => todo!("Resolving self type"),
+            Self_ => Some(self_ty.expect("self type not available")),
         }
     }
 
@@ -335,6 +340,9 @@ impl TyReg {
             },
             Struct { struct_, ref gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
+                if gen_args.is_empty() {
+                    return struct_name;
+                }
                 let gen_arg_names = gen_args
                     .iter()
                     .map(|&ga| self.get_string_rep(ga))
@@ -344,6 +352,9 @@ impl TyReg {
             }
             Enum { enum_, ref gen_args } => {
                 let enum_name = self.get_enum_name(enum_);
+                if gen_args.is_empty() {
+                    return enum_name;
+                }
                 let gen_arg_names = gen_args
                     .iter()
                     .map(|&ga| self.get_string_rep(ga))
