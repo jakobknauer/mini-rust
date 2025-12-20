@@ -298,6 +298,7 @@ impl<'a> HlrParser<'a> {
 
     fn parse_impl(&mut self) -> Result<Impl, ParserErr> {
         self.expect_keyword(Keyword::Impl)?;
+        let gen_params = self.parse_gen_params()?;
         let ty = self.parse_ty_annot()?;
         self.expect_token(Token::LBrace)?;
 
@@ -307,7 +308,11 @@ impl<'a> HlrParser<'a> {
         }
 
         self.expect_token(Token::RBrace)?;
-        Ok(Impl { ty, methods })
+        Ok(Impl {
+            gen_params,
+            ty,
+            methods,
+        })
     }
 
     fn parse_gen_params(&mut self) -> Result<Vec<String>, ParserErr> {
@@ -876,6 +881,7 @@ mod tests {
                     variants: vec![],
                 }],
                 impls: vec![Impl {
+                    gen_params: vec![],
                     ty: TyAnnot::Named("Empty".to_string()),
                     methods: vec![],
                 }],
@@ -999,6 +1005,7 @@ mod tests {
 
             let expected = Program {
                 impls: vec![Impl {
+                    gen_params: vec![],
                     ty: TyAnnot::Named("A".to_string()),
                     methods: vec![Fn {
                         name: "get_b".to_string(),

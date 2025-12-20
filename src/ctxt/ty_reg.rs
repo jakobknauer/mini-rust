@@ -204,29 +204,20 @@ impl TyReg {
         }
     }
 
-    fn get_enum_by_name(&self, name: &str) -> Option<Enum> {
-        match self.named_tys.get(name) {
-            Some(&Named::Enum(enum_)) => Some(enum_),
-            _ => None,
-        }
-    }
-
-    fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
+    pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
         self.structs.get(struct_.0)
     }
 
-    pub fn get_struct_def_by_name(&self, name: &str) -> Option<&StructDef> {
-        let struct_ = self.get_struct_by_name(name)?;
-        self.get_struct_def(struct_)
-    }
-
-    pub fn get_mut_struct_def_by_name(&mut self, name: &str) -> Option<&mut StructDef> {
-        let struct_ = self.get_struct_by_name(name)?;
+    pub fn get_mut_struct_def(&mut self, struct_: Struct) -> Option<&mut StructDef> {
         self.structs.get_mut(struct_.0)
     }
 
-    fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
+    pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
         self.enums.get(enum_.0)
+    }
+
+    pub fn get_mut_enum_def(&mut self, enum_: Enum) -> Option<&mut EnumDef> {
+        self.enums.get_mut(enum_.0)
     }
 
     pub fn is_enum_ty(&self, base_ty: Ty) -> bool {
@@ -237,11 +228,6 @@ impl TyReg {
     pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
         let ty_def = self.get_ty_def(base_ty);
         matches!(ty_def, Some(TyDef::Primitve(Primitive::CVoid)))
-    }
-
-    pub fn get_mut_enum_def_by_name(&mut self, name: &str) -> Option<&mut EnumDef> {
-        let enum_ = self.get_enum_by_name(name)?;
-        self.enums.get_mut(enum_.0)
     }
 
     pub fn try_resolve_hlr_annot(

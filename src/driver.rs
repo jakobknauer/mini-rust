@@ -2,12 +2,12 @@ mod err;
 mod stdlib;
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::Path,
 };
 
 use crate::{
-    ctxt::{self, fns, ty},
+    ctxt::{self, fns, impls, ty},
     h2m, hlr, m2inkwell,
     util::print,
 };
@@ -16,6 +16,14 @@ use crate::{
 pub struct OutputPaths<'a> {
     pub mlr: Option<&'a Path>,
     pub llvm_ir: Option<&'a Path>,
+}
+
+#[derive(Default)]
+struct HlrMetadata {
+    pub fn_ids: HashMap<usize, fns::Fn>,
+    pub struct_ids: HashMap<usize, ty::Struct>,
+    pub enum_ids: HashMap<usize, ty::Enum>,
+    pub impl_ids: HashMap<usize, impls::Impl>,
 }
 
 pub fn compile(
@@ -29,13 +37,15 @@ pub fn compile(
     print_pretty("Building HLR from source");
     let hlr = hlr::build_program(source).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
 
+    let mut hlr_meta = HlrMetadata::default();
+
     print_pretty("Building MLR from HLR");
-    register_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error registering types")?;
-    define_tys(&hlr, &mut ctxt.tys).map_err(|_| "Error defining types")?;
-    register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns).map_err(|_| "Error registering functions")?;
-    register_impls(&hlr, &mut ctxt).map_err(|_| "Error registering impls")?;
-    build_function_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR: {err}"))?;
-    build_impl_fn_mlrs(&hlr, &mut ctxt).map_err(|err| format!("Error building MLR for impls: {err}"))?;
+    register_tys(&hlr, &mut ctxt.tys, &mut hlr_meta).map_err(|_| "Error registering types")?;
+    define_tys(&hlr, &mut ctxt.tys, &hlr_meta).map_err(|_| "Error defining types")?;
+    register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns, &mut hlr_meta).map_err(|_| "Error registering functions")?;
+    register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
+    build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
+    build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
 
     h2m::opt::canonicalize_types(&mut ctxt);
 
@@ -58,50 +68,46 @@ pub fn compile(
     Ok(())
 }
 
-fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
+fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
     tys.register_primitive_tys()?;
 
-    for struct_ in &program.structs {
-        tys.register_struct(&struct_.name, &struct_.gen_params)?;
+    for (idx, struct_) in program.structs.iter().enumerate() {
+        let ty = tys.register_struct(&struct_.name, &struct_.gen_params)?;
+        hlr_meta.struct_ids.insert(idx, ty);
     }
 
-    for enum_ in &program.enums {
-        tys.register_enum(&enum_.name, &enum_.gen_params)?;
+    for (idx, enum_) in program.enums.iter().enumerate() {
+        let ty = tys.register_enum(&enum_.name, &enum_.gen_params)?;
+        hlr_meta.enum_ids.insert(idx, ty);
+
         for variant in &enum_.variants {
             let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-            tys.register_struct(&variant_struct_name, &enum_.gen_params)?;
+            let variant_ty = tys.register_struct(&variant_struct_name, &enum_.gen_params)?;
+
+            let enum_def = tys.get_mut_enum_def(ty).ok_or(())?;
+
+            enum_def.variants.push(ty::EnumVariant {
+                name: variant.name.clone(),
+                struct_: variant_ty,
+            });
         }
     }
 
     Ok(())
 }
 
-fn define_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
-    for struct_ in &program.structs {
-        set_struct_fields(tys, &struct_.name, &struct_.fields)?
+fn define_tys(program: &hlr::Program, tys: &mut ctxt::TyReg, hlr_meta: &HlrMetadata) -> Result<(), ()> {
+    for (idx, struct_) in program.structs.iter().enumerate() {
+        set_struct_fields(tys, hlr_meta.struct_ids[&idx], &struct_.fields)?
     }
 
-    for enum_ in &program.enums {
-        let variants = enum_
-            .variants
-            .iter()
-            .map(|variant| {
-                let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-                let struct_ = tys.get_struct_by_name(&variant_struct_name).ok_or(())?;
+    for (idx, hlr_enum) in program.enums.iter().enumerate() {
+        let enum_ = hlr_meta.enum_ids[&idx];
+        let variants = tys.get_enum_def(enum_).ok_or(())?.variants.clone();
 
-                set_struct_fields(tys, &variant_struct_name, &variant.fields)?;
-
-                let variant = ty::EnumVariant {
-                    name: variant.name.clone(),
-                    struct_,
-                };
-
-                Ok(variant)
-            })
-            .collect::<Result<_, _>>()?;
-
-        let enum_def = tys.get_mut_enum_def_by_name(&enum_.name).ok_or(())?;
-        enum_def.variants = variants;
+        for (hlr_variant, variant) in hlr_enum.variants.iter().zip(variants) {
+            set_struct_fields(tys, variant.struct_, &hlr_variant.fields)?;
+        }
     }
 
     Ok(())
@@ -109,10 +115,10 @@ fn define_tys(program: &hlr::Program, tys: &mut ctxt::TyReg) -> Result<(), ()> {
 
 fn set_struct_fields<'a>(
     tys: &mut ctxt::TyReg,
-    struct_name: &str,
+    struct_: ty::Struct,
     fields: impl IntoIterator<Item = &'a hlr::StructField>,
 ) -> Result<(), ()> {
-    let gen_params = tys.get_struct_def_by_name(struct_name).ok_or(())?.gen_params.clone();
+    let gen_params = tys.get_struct_def(struct_).ok_or(())?.gen_params.clone();
 
     let fields = fields
         .into_iter()
@@ -124,17 +130,23 @@ fn set_struct_fields<'a>(
         })
         .collect::<Result<_, _>>()?;
 
-    let struct_def = tys.get_mut_struct_def_by_name(struct_name).ok_or(())?;
+    let struct_def = tys.get_mut_struct_def(struct_).ok_or(())?;
     struct_def.fields = fields;
 
     Ok(())
 }
 
-fn register_functions(hlr: &hlr::Program, tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+fn register_functions(
+    hlr: &hlr::Program,
+    tys: &mut ctxt::TyReg,
+    fns: &mut ctxt::FnReg,
+    hlr_meta: &mut HlrMetadata,
+) -> Result<(), ()> {
     stdlib::register_fns(tys, fns)?;
 
-    for function in &hlr.fns {
-        register_function(function, tys, fns, None)?;
+    for (idx, function) in hlr.fns.iter().enumerate() {
+        let fn_ = register_function(function, tys, fns, None)?;
+        hlr_meta.fn_ids.insert(idx, fn_);
     }
 
     Ok(())
@@ -184,10 +196,21 @@ fn register_function(
     fns.register_fn(signature)
 }
 
-fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
-    for hlr_impl in &hlr.impls {
-        let ty = ctxt.tys.try_resolve_hlr_annot(&hlr_impl.ty, &[], None).ok_or(())?;
-        let impl_ = ctxt.impls.register_impl(ty);
+fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+    for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
+        let gen_params: Vec<_> = hlr_impl
+            .gen_params
+            .iter()
+            .map(|gp| ctxt.tys.register_gen_var(gp))
+            .collect();
+
+        let ty = ctxt
+            .tys
+            .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None)
+            .ok_or(())?;
+
+        let impl_ = ctxt.impls.register_impl(ty, gen_params);
+        hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {
             let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty))?;
@@ -198,13 +221,13 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     Ok(())
 }
 
-fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
-    for hlr_fn in &hlr.fns {
+fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
+    for (idx, hlr_fn) in hlr.fns.iter().enumerate() {
         if hlr_fn.body.is_none() {
             continue;
         }
 
-        let target_fn = ctxt.fns.get_fn_by_name(&hlr_fn.name).unwrap();
+        let target_fn = hlr_meta.fn_ids[&idx];
 
         let mlr = h2m::hlr_to_mlr(ctxt, hlr_fn, target_fn)
             .map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
@@ -217,15 +240,13 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), 
     Ok(())
 }
 
-fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
-    for hlr_impl in &hlr.impls {
-        let ty = ctxt.tys.try_resolve_hlr_annot(&hlr_impl.ty, &[], None).unwrap();
-        let ty_name = ctxt.tys.get_string_rep(ty);
+fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
+    for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
+        let impl_ = hlr_meta.impl_ids[&idx];
+        let impl_def = ctxt.impls.get_impl_def(impl_).unwrap();
+        let impl_methods = impl_def.methods.clone();
 
-        for hlr_method in &hlr_impl.methods {
-            let name = format!("{}::{}", ty_name, hlr_method.name);
-            let target_fn = ctxt.fns.get_fn_by_name(&name).unwrap();
-
+        for (hlr_method, target_fn) in hlr_impl.methods.iter().zip(impl_methods) {
             let mlr = h2m::hlr_to_mlr(ctxt, hlr_method, target_fn)
                 .map_err(|err| err::print_mlr_builder_error(&hlr_method.name, err, ctxt))?;
 

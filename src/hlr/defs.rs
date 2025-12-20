@@ -51,6 +51,7 @@ pub struct EnumVariant {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Impl {
+    pub gen_params: Vec<String>,
     pub ty: TyAnnot,
     pub methods: Vec<Fn>,
 }

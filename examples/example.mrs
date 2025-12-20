@@ -45,3 +45,17 @@ impl Point {
         self.x == 0 & self.y == 0
     }
 }
+
+enum Option<T> {
+    None,
+    Some { item: T },
+}
+
+impl<T> Option<T> {
+    fn is_none(self) -> bool {
+        match self {
+            None {} => true,
+            Some { item: item } => false
+        }
+    }
+}
