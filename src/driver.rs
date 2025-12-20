@@ -191,7 +191,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
 
         for method in &hlr_impl.methods {
             let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty))?;
-            ctxt.impls.register_method(impl_, fn_);
+            ctxt.impls.register_method(impl_, fn_, &method.name);
         }
     }
 

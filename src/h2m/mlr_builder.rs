@@ -229,8 +229,13 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_gen_fn_op(&mut self, fn_: fns::Fn, gen_args: Vec<ty::Ty>) -> H2MResult<mlr::Op> {
-        self.ctxt.fns.specialize_fn(&self.target_fn, &fn_, gen_args.clone());
-        let op = mlr::OpDef::Fn(fns::FnSpecialization { fn_, gen_args });
+        let fn_spec = fns::FnSpecialization { fn_, gen_args };
+        self.insert_fn_spec_op(fn_spec)
+    }
+
+    pub fn insert_fn_spec_op(&mut self, fn_spec: fns::FnSpecialization) -> H2MResult<mlr::Op> {
+        self.ctxt.fns.specialize_fn(&self.target_fn, &fn_spec.fn_, fn_spec.gen_args.clone());
+        let op = mlr::OpDef::Fn(fn_spec);
         self.insert_op(op)
     }
 

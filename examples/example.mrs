@@ -1,11 +1,13 @@
 fn main() -> i32 {
-    printf("Please enter a number: ");
-    let n: i32 = 0;
-    scanf("%d", &n);
+    let point = Point { x: 0, y: 2 };
 
-    let result = fac(n);
-    printf("The factorial of %d is %d\n", n, result);
-    result
+    if point.is_origin() {
+        printf("Point is at origin\n");
+        0
+    } else {
+        printf("Point is not at origin\n");
+        1
+    }
 }
 
 fn malloc(size: i32) -> *c_void;

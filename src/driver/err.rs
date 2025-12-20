@@ -168,6 +168,16 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(op_ty),
             ctxt.tys.get_string_rep(target_ty)
         ),
+        NoSuchMethod { base_ty, method_name } => format!(
+            "Cannot resolve method '{}' for type '{}'",
+            method_name,
+            ctxt.tys.get_string_rep(base_ty),
+        ),
+        AmbiguousMethod { base_ty, method_name } => format!(
+            "Ambiguous method name '{}' for type '{}'",
+            method_name,
+            ctxt.tys.get_string_rep(base_ty),
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

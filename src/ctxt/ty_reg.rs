@@ -683,4 +683,85 @@ impl TyReg {
             .position(|field| field.name == field_name)
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
     }
+
+    pub fn tys_eq(&self, ty1: Ty, ty2: Ty) -> bool {
+        use TyDef::*;
+
+        let ty1 = self.canonicalize(ty1);
+        let ty2 = self.canonicalize(ty2);
+
+        if ty1 == ty2 {
+            return true;
+        }
+
+        let def1 = self.tys.get(ty1.0).expect("ty1 should be registered");
+        let def2 = self.tys.get(ty2.0).expect("ty2 should be registered");
+
+        match (def1, def2) {
+            (None, _) | (_, None) => false,
+            (Some(def1), Some(def2)) => match (def1, def2) {
+                (Alias(_), _) | (_, Alias(_)) => {
+                    unreachable!("Types should have been canonicalized");
+                }
+
+                (
+                    &Fn {
+                        param_tys: ref params1,
+                        return_ty: ret1,
+                        var_args: var_args1,
+                    },
+                    &Fn {
+                        param_tys: ref params2,
+                        return_ty: ret2,
+                        var_args: var_args2,
+                    },
+                ) => {
+                    params1.len() == params2.len()
+                        && params1.iter().zip(params2.iter()).all(|(p1, p2)| self.tys_eq(*p1, *p2))
+                        && self.tys_eq(ret1, ret2)
+                        && var_args1 == var_args2
+                }
+
+                (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.tys_eq(inner1, inner2),
+
+                (
+                    &Struct {
+                        struct_: struct_1,
+                        gen_args: ref gen_args_1,
+                    },
+                    &Struct {
+                        struct_: struct_2,
+                        gen_args: ref gen_args_2,
+                    },
+                ) => {
+                    struct_1 == struct_2
+                        && gen_args_1.len() == gen_args_2.len()
+                        && gen_args_1
+                            .iter()
+                            .zip(gen_args_2.iter())
+                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                }
+
+                (
+                    &Enum {
+                        enum_: enum_1,
+                        gen_args: ref gen_args_1,
+                    },
+                    &Enum {
+                        enum_: enum_2,
+                        gen_args: ref gen_args_2,
+                    },
+                ) => {
+                    enum_1 == enum_2
+                        && gen_args_1.len() == gen_args_2.len()
+                        && gen_args_1
+                            .iter()
+                            .zip(gen_args_2.iter())
+                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                }
+
+                _ => false,
+            },
+        }
+    }
 }

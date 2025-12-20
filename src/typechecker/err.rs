@@ -91,6 +91,14 @@ pub enum TyError {
     DereferenceOfCVoidPtr {
         ty: Ty,
     },
+    NoSuchMethod {
+        base_ty: Ty,
+        method_name: String,
+    },
+    AmbiguousMethod {
+        base_ty: Ty,
+        method_name: String,
+    },
 }
 
 impl<T> From<TyError> for TyResult<T> {

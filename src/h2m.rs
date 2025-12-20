@@ -113,7 +113,7 @@ impl<'a> H2M<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
-            MethodCall { .. } => todo!("lowering of method calls"),
+            MethodCall { base, name, arguments } => self.build_method_call(base, name, arguments),
             Struct { name, fields } => self.build_struct_or_enum_val(name, fields),
             If {
                 condition,
@@ -214,15 +214,34 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: &hlr::Expr, arguments: &[hlr::Expr]) -> H2MResult<mlr::Val> {
+    fn build_call(&mut self, callee: &hlr::Expr, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let callee = self.lower_to_op(callee)?;
 
-        let args = arguments
+        let args = args
             .iter()
             .map(|arg| self.lower_to_op(arg))
             .collect::<H2MResult<Vec<_>>>()?;
 
         self.builder.insert_call_val(callee, args)
+    }
+
+    fn build_method_call(
+        &mut self,
+        base: &hlr::Expr,
+        method_name: &str,
+        args: &[hlr::Expr],
+    ) -> Result<mlr::Val, H2MError> {
+        let base = self.lower_to_op(base)?;
+        let base_ty = self.mlr().get_op_ty(&base);
+
+        let method = self.typechecker().resolve_method(base_ty, method_name)?;
+        let method = self.builder.insert_fn_spec_op(method)?;
+
+        let args = std::iter::once(Ok(base))
+            .chain(args.iter().map(|arg| self.lower_to_op(arg)))
+            .collect::<H2MResult<Vec<_>>>()?;
+
+        self.builder.insert_call_val(method, args)
     }
 
     fn build_if(

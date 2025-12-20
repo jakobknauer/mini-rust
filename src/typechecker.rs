@@ -10,6 +10,7 @@ pub struct Typechecker<'a> {
     tys: &'a mut ctxt::TyReg,
     fns: &'a mut ctxt::FnReg,
     mlr: &'a mut ctxt::mlr::Mlr,
+    impls: &'a mut ctxt::ImplReg,
     fn_: fns::Fn,
 }
 
@@ -19,6 +20,7 @@ impl<'a> Typechecker<'a> {
             tys: &mut ctxt.tys,
             fns: &mut ctxt.fns,
             mlr: &mut ctxt.mlr,
+            impls: &mut ctxt.impls,
             fn_,
         }
     }
@@ -385,5 +387,44 @@ impl<'a> Typechecker<'a> {
     pub fn get_enum_variant_ty(&mut self, ty: ty::Ty, variant_index: usize) -> TyResult<ty::Ty> {
         let ty = self.tys.get_enum_variant_ty(ty, variant_index)?;
         Ok(ty)
+    }
+
+    pub fn resolve_method(
+        &self,
+        base_ty: ty::Ty,
+        method_name: &str,
+    ) -> TyResult<fns::FnSpecialization> {
+        // Step 1: find all impls for the base type
+        let impls = self
+            .impls
+            .get_all_impls()
+            .into_iter()
+            .filter(|impl_| self.tys.tys_eq(base_ty, impl_.1.ty));
+
+        // Step 2: find candidate fns
+        let candidates: Vec<fns::Fn> = impls
+            .into_iter()
+            .flat_map(|impl_| {
+                impl_.1.methods_by_name.get(method_name).cloned().into_iter()
+            })
+            .collect();
+
+        // Step 3: resolve ambiguity
+        match candidates[..] {
+            [fn_] => Ok(fns::FnSpecialization {
+                fn_,
+                gen_args: Vec::new(),
+            }),
+            [] => TyError::NoSuchMethod {
+                base_ty,
+                method_name: method_name.to_string(),
+            }
+            .into(),
+            [_, _, ..] => TyError::AmbiguousMethod {
+                base_ty,
+                method_name: method_name.to_string(),
+            }
+            .into(),
+        }
     }
 }

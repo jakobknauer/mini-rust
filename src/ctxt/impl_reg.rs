@@ -15,16 +15,22 @@ impl ImplReg {
         let impl_def = ImplDef {
             ty,
             methods: Vec::new(),
+            methods_by_name: Default::default(),
         };
         self.impls.push(impl_def);
         impl_
     }
 
-    pub fn register_method(&mut self, impl_: Impl, method: Fn) {
-        self.impls[impl_.0].methods.push(method);
+    pub fn register_method(&mut self, impl_: Impl, method: Fn, name: &str) {
+        let impl_ = self.impls.get_mut(impl_.0).unwrap();
+        impl_.methods.push(method);
+        impl_.methods_by_name.insert(name.to_string(), method);
     }
 
-    pub fn get_impls(&self) -> &Vec<ImplDef> {
-        &self.impls
+    pub fn get_all_impls(&self) -> impl IntoIterator<Item = (Impl, &ImplDef)> {
+        self.impls
+            .iter()
+            .enumerate()
+            .map(|(impl_, impl_def)| (Impl(impl_), impl_def))
     }
 }
