@@ -234,7 +234,9 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_fn_spec_op(&mut self, fn_spec: fns::FnSpecialization) -> H2MResult<mlr::Op> {
-        self.ctxt.fns.specialize_fn(&self.target_fn, &fn_spec.fn_, fn_spec.gen_args.clone());
+        self.ctxt
+            .fns
+            .specialize_fn(&self.target_fn, &fn_spec.fn_, fn_spec.gen_args.clone());
         let op = mlr::OpDef::Fn(fn_spec);
         self.insert_op(op)
     }

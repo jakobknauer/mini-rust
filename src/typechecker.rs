@@ -389,11 +389,7 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn resolve_method(
-        &self,
-        base_ty: ty::Ty,
-        method_name: &str,
-    ) -> TyResult<fns::FnSpecialization> {
+    pub fn resolve_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<fns::FnSpecialization> {
         // Step 1: find all impls for the base type
         let impls = self
             .impls
@@ -404,9 +400,7 @@ impl<'a> Typechecker<'a> {
         // Step 2: find candidate fns
         let candidates: Vec<fns::Fn> = impls
             .into_iter()
-            .flat_map(|impl_| {
-                impl_.1.methods_by_name.get(method_name).cloned().into_iter()
-            })
+            .flat_map(|impl_| impl_.1.methods_by_name.get(method_name).cloned().into_iter())
             .collect();
 
         // Step 3: resolve ambiguity
