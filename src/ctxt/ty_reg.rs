@@ -82,11 +82,11 @@ impl TyReg {
     }
 
     pub fn register_primitive_tys(&mut self) -> Result<(), ()> {
-        self.i32_ty = Some(self.register_named_ty("i32", TyDef::Primitve(Primitive::Integer32))?);
-        self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitve(Primitive::Boolean))?);
-        self.unit_ty = Some(self.register_named_ty("()", TyDef::Primitve(Primitive::Unit))?);
-        self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitve(Primitive::CVoid))?);
-        self.c_char_ty = Some(self.register_named_ty("c_char", TyDef::Primitve(Primitive::CChar))?);
+        self.i32_ty = Some(self.register_named_ty("i32", TyDef::Primitive(Primitive::Integer32))?);
+        self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?);
+        self.unit_ty = Some(self.register_named_ty("()", TyDef::Primitive(Primitive::Unit))?);
+        self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?);
+        self.c_char_ty = Some(self.register_named_ty("c_char", TyDef::Primitive(Primitive::CChar))?);
         Ok(())
     }
 
@@ -227,7 +227,7 @@ impl TyReg {
 
     pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
         let ty_def = self.get_ty_def(base_ty);
-        matches!(ty_def, Some(TyDef::Primitve(Primitive::CVoid)))
+        matches!(ty_def, Some(TyDef::Primitive(Primitive::CVoid)))
     }
 
     pub fn try_resolve_hlr_annot(
@@ -289,7 +289,7 @@ impl TyReg {
     }
 
     pub fn get_string_rep(&self, ty: Ty) -> String {
-        use Primitive::*;
+        use self::Primitive::*;
         use TyDef::*;
 
         if ty.0 >= self.tys.len() {
@@ -317,7 +317,7 @@ impl TyReg {
             Ptr(ty) => format!("*{}", self.get_string_rep(ty)),
             Alias(ty) => self.get_string_rep(ty),
             GenVar(gen_var) => self.gen_var_names[gen_var.0].clone(),
-            Primitve(primitive) => match primitive {
+            Primitive(primitive) => match primitive {
                 Integer32 => "i32".to_string(),
                 Boolean => "bool".to_string(),
                 Unit => "()".to_string(),
@@ -549,7 +549,7 @@ impl TyReg {
                     .collect::<Vec<_>>();
                 self.instantiate_enum(enum_, new_gen_args).unwrap()
             }
-            Primitve(..) => ty,
+            Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
         }
     }
@@ -670,6 +670,7 @@ impl TyReg {
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
     }
 
+    #[allow(dead_code)]
     pub fn tys_eq(&self, ty1: Ty, ty2: Ty) -> bool {
         use TyDef::*;
 
@@ -748,6 +749,121 @@ impl TyReg {
 
                 _ => false,
             },
+        }
+    }
+
+    pub fn try_find_instantiation(&self, base_ty: Ty, ty: Ty, gen_vars: &[GenVar]) -> Result<HashMap<GenVar, Ty>, ()> {
+        let mut instantiations = HashMap::new();
+        for gen_param in gen_vars {
+            instantiations.insert(*gen_param, None);
+        }
+
+        if self.try_find_instantiation_internal(base_ty, ty, &mut instantiations) {
+            Ok(instantiations
+                .iter()
+                .map(|(gen_var, ty)| (*gen_var, ty.unwrap()))
+                .collect())
+        } else {
+            Err(())
+        }
+    }
+
+    fn try_find_instantiation_internal(
+        &self,
+        target: Ty,
+        generic: Ty,
+        instantiation: &mut HashMap<GenVar, Option<Ty>>,
+    ) -> bool {
+        use TyDef::*;
+
+        let Some(target_def) = self.get_ty_def(target) else {
+            return false;
+        };
+        let Some(generic_def) = self.get_ty_def(generic) else {
+            return false;
+        };
+
+        match (target_def, generic_def) {
+            (Alias(_), _) | (_, Alias(_)) => {
+                unreachable!("Types should have been canonicalized");
+            }
+
+            (_, &GenVar(gen_var)) if instantiation.contains_key(&gen_var) => {
+                let substitute = instantiation.get(&gen_var).unwrap();
+                if let Some(substitute) = substitute {
+                    self.tys_eq(*substitute, target)
+                } else {
+                    instantiation.insert(gen_var, Some(target));
+                    true
+                }
+            }
+
+            (GenVar(var1), GenVar(var2)) => var1 == var2,
+
+            (&Primitive(a), &Primitive(b)) => a == b,
+
+            (
+                &Fn {
+                    param_tys: ref param_tys1,
+                    return_ty: ret1,
+                    var_args: var_args1,
+                },
+                &Fn {
+                    param_tys: ref param_tys2,
+                    return_ty: ret2,
+                    var_args: var_args2,
+                },
+            ) => {
+                param_tys1.len() == param_tys2.len()
+                    && param_tys1
+                        .iter()
+                        .zip(param_tys2.iter())
+                        .all(|(param1, param2)| self.try_find_instantiation_internal(*param1, *param2, instantiation))
+                    && self.try_find_instantiation_internal(ret1, ret2, instantiation)
+                    && var_args1 == var_args2
+            }
+
+            (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => {
+                self.try_find_instantiation_internal(inner1, inner2, instantiation)
+            }
+
+            (
+                &Struct {
+                    struct_: struct_1,
+                    gen_args: ref gen_args_1,
+                },
+                &Struct {
+                    struct_: struct_2,
+                    gen_args: ref gen_args_2,
+                },
+            ) => {
+                struct_1 == struct_2
+                    && gen_args_1.len() == gen_args_2.len()
+                    && gen_args_1
+                        .iter()
+                        .zip(gen_args_2.iter())
+                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+            }
+
+            (
+                &Enum {
+                    enum_: enum_1,
+                    gen_args: ref gen_args_1,
+                },
+                &Enum {
+                    enum_: enum_2,
+                    gen_args: ref gen_args_2,
+                },
+            ) => {
+                enum_1 == enum_2
+                    && gen_args_1.len() == gen_args_2.len()
+                    && gen_args_1
+                        .iter()
+                        .zip(gen_args_2.iter())
+                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+            }
+
+            (_, _) => false,
         }
     }
 }

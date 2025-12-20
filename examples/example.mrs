@@ -1,13 +1,9 @@
 fn main() -> i32 {
-    let point = Point { x: 0, y: 2 };
+    let opt = Some::<*c_char> { item: "hello" };
+    printf("%s\n", opt.unwrap_or("bye"));
 
-    if point.is_origin() {
-        printf("Point is at origin\n");
-        0
-    } else {
-        printf("Point is not at origin\n");
-        1
-    }
+    let opt = Some::<i32> { item: 5 };
+    opt.unwrap_or(1)
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -52,10 +48,10 @@ enum Option<T> {
 }
 
 impl<T> Option<T> {
-    fn is_none(self) -> bool {
+    fn unwrap_or(self, default: T) -> T {
         match self {
-            None {} => true,
-            Some { item: item } => false
+            Some { item: item } => item,
+            None {} => default,
         }
     }
 }

@@ -145,7 +145,7 @@ fn register_functions(
     stdlib::register_fns(tys, fns)?;
 
     for (idx, function) in hlr.fns.iter().enumerate() {
-        let fn_ = register_function(function, tys, fns, None)?;
+        let fn_ = register_function(function, tys, fns, None, &[])?;
         hlr_meta.fn_ids.insert(idx, fn_);
     }
 
@@ -157,8 +157,14 @@ fn register_function(
     tys: &mut ctxt::TyReg,
     fns: &mut ctxt::FnReg,
     self_ty: Option<ty::Ty>,
+    outer_gen_params: &[ty::GenVar],
 ) -> Result<fns::Fn, ()> {
-    let gen_params: Vec<_> = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
+    let gen_params: Vec<_> = hlr_fn
+        .gen_params
+        .iter()
+        .map(|gp| tys.register_gen_var(gp))
+        .chain(outer_gen_params.iter().cloned())
+        .collect();
 
     let params = hlr_fn
         .params
@@ -209,11 +215,11 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
             .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None)
             .ok_or(())?;
 
-        let impl_ = ctxt.impls.register_impl(ty, gen_params);
+        let impl_ = ctxt.impls.register_impl(ty, gen_params.clone());
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {
-            let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty))?;
+            let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty), &gen_params)?;
             ctxt.impls.register_method(impl_, fn_, &method.name);
         }
     }

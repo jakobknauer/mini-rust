@@ -97,7 +97,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
         let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
 
         let inkwell_type = match *type_ {
-            Primitve(ref primitive_type) => match primitive_type {
+            Primitive(ref primitive_type) => match primitive_type {
                 Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                 Unit | CVoid => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),

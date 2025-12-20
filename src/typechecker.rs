@@ -391,24 +391,30 @@ impl<'a> Typechecker<'a> {
 
     pub fn resolve_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<fns::FnSpecialization> {
         // Step 1: find all impls for the base type
-        let impls = self
-            .impls
-            .get_all_impls()
-            .into_iter()
-            .filter(|impl_| self.tys.tys_eq(base_ty, impl_.1.ty));
+        let impls = self.impls.get_all_impls().into_iter().filter_map(|(impl_, impl_def)| {
+            self.tys
+                .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
+                .ok()
+                .map(|substitution| (impl_, impl_def, substitution))
+        });
 
         // Step 2: find candidate fns
-        let candidates: Vec<fns::Fn> = impls
+        let candidates: Vec<fns::FnSpecialization> = impls
             .into_iter()
-            .flat_map(|impl_| impl_.1.methods_by_name.get(method_name).cloned().into_iter())
+            .flat_map(|(_, impl_def, subst)| {
+                impl_def
+                    .methods_by_name
+                    .get(method_name)
+                    .map(|&method| fns::FnSpecialization {
+                        fn_: method,
+                        gen_args: subst.values().cloned().collect(),
+                    })
+            })
             .collect();
 
         // Step 3: resolve ambiguity
-        match candidates[..] {
-            [fn_] => Ok(fns::FnSpecialization {
-                fn_,
-                gen_args: Vec::new(),
-            }),
+        match &candidates[..] {
+            [fn_spec] => Ok(fn_spec.clone()),
             [] => TyError::NoSuchMethod {
                 base_ty,
                 method_name: method_name.to_string(),
