@@ -113,7 +113,7 @@ impl<'a> H2M<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
-            MethodCall { base, name, arguments } => self.build_method_call(base, name, arguments),
+            MethodCall { obj, method, arguments } => self.build_method_call(obj, method, arguments),
             Struct { name, fields } => self.build_struct_or_enum_val(name, fields),
             If {
                 condition,
@@ -133,7 +133,7 @@ impl<'a> H2M<'a> {
 
         match expr {
             Ident(ident) if ident.gen_args.is_empty() => self.lower_ident_to_place(&ident.ident),
-            FieldAccess { base, name } => self.lower_field_access_to_place(base, name),
+            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field),
             Deref { base } => self.lower_deref_to_place(base),
             Self_ => {
                 let loc = self.builder.get_receiver_loc().unwrap();
@@ -227,14 +227,20 @@ impl<'a> H2M<'a> {
 
     fn build_method_call(
         &mut self,
-        base: &hlr::Expr,
-        method_name: &str,
+        obj: &hlr::Expr,
+        method: &hlr::Ident,
         args: &[hlr::Expr],
     ) -> Result<mlr::Val, H2MError> {
-        let base = self.lower_to_op(base)?;
+        let base = self.lower_to_op(obj)?;
         let base_ty = self.mlr().get_op_ty(&base);
 
-        let method = self.typechecker().resolve_method(base_ty, method_name)?;
+        let gen_args: Vec<_> = method
+            .gen_args
+            .iter()
+            .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+            .collect::<Result<_, _>>()?;
+
+        let method = self.typechecker().resolve_method(base_ty, &method.ident, &gen_args)?;
         let method = self.builder.insert_fn_spec_op(method)?;
 
         let args = std::iter::once(Ok(base))
@@ -465,14 +471,20 @@ impl<'a> H2M<'a> {
         self.builder.insert_loc_place(loc)
     }
 
-    fn lower_field_access_to_place(&mut self, base: &hlr::Expr, field_name: &str) -> H2MResult<mlr::Place> {
+    fn lower_field_access_to_place(&mut self, obj: &hlr::Expr, field: &hlr::Ident) -> H2MResult<mlr::Place> {
         // TODO allow general expressions as base (by lowering to val and then creating a
         // temporary place). This requires some attention to different expressions (temporaries vs.
         // places).
-        let base = self.lower_to_place(base)?;
-        let base_ty = self.mlr().get_place_ty(&base);
-        let field_index = self.typechecker().resolve_struct_field(base_ty, field_name)?;
-        self.builder.insert_field_access_place(base, field_index)
+        let obj = self.lower_to_place(obj)?;
+        let obj_ty = self.mlr().get_place_ty(&obj);
+
+        if !field.gen_args.is_empty() {
+            return Err(H2MError::NotAPlace);
+        }
+        let field_name = field.ident.as_str();
+
+        let field_index = self.typechecker().resolve_struct_field(obj_ty, field_name)?;
+        self.builder.insert_field_access_place(obj, field_index)
     }
 
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {

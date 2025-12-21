@@ -159,11 +159,10 @@ fn register_function(
     self_ty: Option<ty::Ty>,
     outer_gen_params: &[ty::GenVar],
 ) -> Result<fns::Fn, ()> {
-    let gen_params: Vec<_> = hlr_fn
-        .gen_params
+    let gen_params: Vec<_> = outer_gen_params
         .iter()
-        .map(|gp| tys.register_gen_var(gp))
-        .chain(outer_gen_params.iter().cloned())
+        .cloned()
+        .chain(hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)))
         .collect();
 
     let params = hlr_fn

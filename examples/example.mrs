@@ -1,9 +1,14 @@
 fn main() -> i32 {
-    let opt = Some::<*c_char> { item: "hello" };
-    printf("%s\n", opt.unwrap_or("bye"));
+    let x = 1.pair_with::<bool>(false);
 
-    let opt = Some::<i32> { item: 5 };
-    opt.unwrap_or(1)
+    let opt = None::<i32> {};
+    let opt = opt.map::<i32>(double);
+
+    opt.unwrap_or(10)
+}
+
+fn double(x: i32) -> i32 {
+    x * 2
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -53,5 +58,23 @@ impl<T> Option<T> {
             Some { item: item } => item,
             None {} => default,
         }
+    }
+
+    fn map<U>(self, f: fn(T) -> U) -> Option<U> {
+        match self {
+            Some { item: item } => Some::<U> { item: f(item) },
+            None {} => None::<U> {},
+        }
+    }
+}
+
+struct Pair<A, B> {
+    first: A,
+    second: B,
+}
+
+impl<T> T {
+    fn pair_with<S>(self, other: S) -> Pair<T, S> {
+        Pair::<T, S> { first: self, second: other }
     }
 }

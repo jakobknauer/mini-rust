@@ -752,17 +752,18 @@ impl TyReg {
         }
     }
 
-    pub fn try_find_instantiation(&self, base_ty: Ty, ty: Ty, gen_vars: &[GenVar]) -> Result<HashMap<GenVar, Ty>, ()> {
+    pub fn try_find_instantiation(&self, base_ty: Ty, ty: Ty, gen_vars: &[GenVar]) -> Result<Vec<Ty>, ()> {
         let mut instantiations = HashMap::new();
         for gen_param in gen_vars {
             instantiations.insert(*gen_param, None);
         }
 
         if self.try_find_instantiation_internal(base_ty, ty, &mut instantiations) {
-            Ok(instantiations
+            let substitutions = gen_vars
                 .iter()
-                .map(|(gen_var, ty)| (*gen_var, ty.unwrap()))
-                .collect())
+                .map(|gen_var| instantiations[gen_var].unwrap())
+                .collect();
+            Ok(substitutions)
         } else {
             Err(())
         }

@@ -555,7 +555,7 @@ impl<'a> HlrParser<'a> {
                 };
             } else if self.advance_if(Token::Dot) {
                 // field access or method call
-                let field_name = self.expect_identifier()?;
+                let member = self.parse_ident()?;
 
                 if self.advance_if(Token::LParen) {
                     // method call
@@ -569,15 +569,15 @@ impl<'a> HlrParser<'a> {
                     }
                     self.expect_token(Token::RParen)?;
                     acc = Expr::MethodCall {
-                        base: Box::new(acc),
-                        name: field_name,
+                        obj: Box::new(acc),
+                        method: member,
                         arguments,
                     };
                 } else {
                     // field access
                     acc = Expr::FieldAccess {
-                        base: Box::new(acc),
-                        name: field_name,
+                        obj: Box::new(acc),
+                        field: member,
                     };
                 }
             } else {
@@ -612,27 +612,8 @@ impl<'a> HlrParser<'a> {
                 self.position += 1;
                 Ok(Expr::Lit(Lit::CString(value)))
             }
-            Token::Identifier(ident) => {
-                let ident = ident.clone();
-                self.position += 1;
-
-                let gen_args = if self.advance_if(Token::ColonColon) {
-                    let mut gen_args = Vec::new();
-                    self.expect_token(Token::Smaller)?;
-                    while self.current() != Some(&Token::Greater) {
-                        let gen_arg = self.parse_ty_annot()?;
-                        gen_args.push(gen_arg);
-                        if !self.advance_if(Token::Comma) {
-                            break;
-                        }
-                    }
-                    self.expect_token(Token::Greater)?;
-                    gen_args
-                } else {
-                    vec![]
-                };
-
-                let ident = Ident { ident, gen_args };
+            Token::Identifier(..) => {
+                let ident = self.parse_ident()?;
 
                 if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
                     // parse struct expr
@@ -673,6 +654,29 @@ impl<'a> HlrParser<'a> {
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
+    }
+
+    fn parse_ident(&mut self) -> Result<Ident, ParserErr> {
+        let ident = self.expect_identifier()?;
+
+        let gen_args = if self.advance_if(Token::ColonColon) {
+            let mut gen_args = Vec::new();
+            self.expect_token(Token::Smaller)?;
+            while self.current() != Some(&Token::Greater) {
+                let gen_arg = self.parse_ty_annot()?;
+                gen_args.push(gen_arg);
+                if !self.advance_if(Token::Comma) {
+                    break;
+                }
+            }
+            self.expect_token(Token::Greater)?;
+            gen_args
+        } else {
+            vec![]
+        };
+
+        let ident = Ident { ident, gen_args };
+        Ok(ident)
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
@@ -1020,8 +1024,11 @@ mod tests {
                         body: Some(Block {
                             stmts: vec![],
                             return_expr: Some(Box::new(Expr::FieldAccess {
-                                base: Box::new(Expr::Self_),
-                                name: "b".to_string(),
+                                obj: Box::new(Expr::Self_),
+                                field: Ident {
+                                    ident: "b".to_string(),
+                                    gen_args: vec![],
+                                },
                             })),
                         }),
                     }],
@@ -1219,15 +1226,21 @@ mod tests {
             let input = "(function(arg0).method(arg1, arg2).field)(arg3)";
             let expected = Expr::Call {
                 callee: Box::new(Expr::FieldAccess {
-                    base: Box::new(Expr::MethodCall {
-                        base: Box::new(Expr::Call {
+                    obj: Box::new(Expr::MethodCall {
+                        obj: Box::new(Expr::Call {
                             callee: Box::new(make_ident("function")),
                             arguments: vec![make_ident("arg0")],
                         }),
-                        name: "method".to_string(),
+                        method: Ident {
+                            ident: "method".to_string(),
+                            gen_args: vec![],
+                        },
                         arguments: vec![make_ident("arg1"), make_ident("arg2")],
                     }),
-                    name: "field".to_string(),
+                    field: Ident {
+                        ident: "field".to_string(),
+                        gen_args: vec![],
+                    },
                 }),
                 arguments: vec![make_ident("arg3")],
             };

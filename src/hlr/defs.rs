@@ -92,8 +92,8 @@ pub enum Expr {
         arguments: Vec<Expr>,
     },
     MethodCall {
-        base: Box<Expr>,
-        name: String,
+        obj: Box<Expr>,
+        method: Ident,
         arguments: Vec<Expr>,
     },
     Struct {
@@ -110,8 +110,8 @@ pub enum Expr {
     },
     Block(Block),
     FieldAccess {
-        base: Box<Expr>,
-        name: String,
+        obj: Box<Expr>,
+        field: Ident,
     },
     Match {
         scrutinee: Box<Expr>,
