@@ -9,6 +9,8 @@ pub struct Fn(pub usize);
 #[derive(Clone)]
 pub struct FnSig {
     pub name: String,
+    /// The type of which the function is an associated method, if any
+    pub associated_type: Option<Ty>,
     /// The generic parameters appearing in the function signature
     pub gen_params: Vec<GenVar>,
     /// Generic used in the functions' body that do not appear in the signature,

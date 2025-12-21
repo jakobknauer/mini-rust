@@ -180,14 +180,9 @@ fn register_function(
         None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
 
-    let name = if let Some(self_ty) = self_ty {
-        format!("{}::{}", tys.get_string_rep(self_ty), hlr_fn.name)
-    } else {
-        hlr_fn.name.clone()
-    };
-
     let signature = fns::FnSig {
-        name,
+        name: hlr_fn.name.clone(),
+        associated_type: self_ty,
         gen_params,
         env_gen_params,
         params,

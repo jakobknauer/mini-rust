@@ -24,11 +24,24 @@ pub struct Ctxt {
 impl Ctxt {
     pub fn get_fn_spec_name(&self, fn_spec: &fns::FnSpecialization) -> String {
         let signature = self.fns.get_sig(&fn_spec.fn_).unwrap();
-        if signature.gen_params.is_empty() {
+
+        let prefix = if let Some(assoc_ty) = signature.associated_type {
+            let substitutions = signature
+                .env_gen_params
+                .iter()
+                .cloned()
+                .zip(fn_spec.env_gen_args.iter().cloned())
+                .collect();
+            format!("{}::", self.tys.get_string_rep_with_subst(assoc_ty, &substitutions))
+        } else {
+            "".to_string()
+        };
+
+        let postfix = if signature.gen_params.is_empty() {
             signature.name.to_string()
         } else {
             format!(
-                "{}::<{}>",
+                "{}<{}>",
                 signature.name,
                 fn_spec
                     .gen_args
@@ -37,7 +50,9 @@ impl Ctxt {
                     .collect::<Vec<_>>()
                     .join(", ")
             )
-        }
+        };
+
+        format!("{}{}", prefix, postfix)
     }
 
     pub fn get_specialized_fn_sig(&mut self, fn_spec: &fns::FnSpecialization) -> fns::FnSig {
@@ -56,7 +71,8 @@ impl Ctxt {
         let specialized_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &substitutions);
 
         fns::FnSig {
-            name: self.get_fn_spec_name(fn_spec),
+            name: signature.name.clone(),
+            associated_type: signature.associated_type,
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
             params: specialized_params,

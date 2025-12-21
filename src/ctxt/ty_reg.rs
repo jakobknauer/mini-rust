@@ -289,6 +289,10 @@ impl TyReg {
     }
 
     pub fn get_string_rep(&self, ty: Ty) -> String {
+        self.get_string_rep_with_subst(ty, &HashMap::new())
+    }
+
+    pub fn get_string_rep_with_subst(&self, ty: Ty, substitutions: &HashMap<GenVar, Ty>) -> String {
         use self::Primitive::*;
         use TyDef::*;
 
@@ -306,17 +310,23 @@ impl TyReg {
                 return_ty,
                 var_args,
             } => {
-                let mut param_names: Vec<_> = param_tys.iter().map(|&pt| self.get_string_rep(pt)).collect();
+                let mut param_names: Vec<_> = param_tys
+                    .iter()
+                    .map(|&pt| self.get_string_rep_with_subst(pt, substitutions))
+                    .collect();
                 if var_args {
                     param_names.push("...".to_string());
                 }
-                let return_name = self.get_string_rep(return_ty);
+                let return_name = self.get_string_rep_with_subst(return_ty, substitutions);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
-            Ref(ty) => format!("&{}", self.get_string_rep(ty)),
-            Ptr(ty) => format!("*{}", self.get_string_rep(ty)),
-            Alias(ty) => self.get_string_rep(ty),
-            GenVar(gen_var) => self.gen_var_names[gen_var.0].clone(),
+            Ref(ty) => format!("&{}", self.get_string_rep_with_subst(ty, substitutions)),
+            Ptr(ty) => format!("*{}", self.get_string_rep_with_subst(ty, substitutions)),
+            Alias(ty) => self.get_string_rep_with_subst(ty, substitutions),
+            GenVar(gen_var) => substitutions
+                .get(&gen_var)
+                .map(|&ty| self.get_string_rep_with_subst(ty, substitutions))
+                .unwrap_or(self.get_gen_var_name(gen_var).to_string()),
             Primitive(primitive) => match primitive {
                 Integer32 => "i32".to_string(),
                 Boolean => "bool".to_string(),
@@ -331,7 +341,7 @@ impl TyReg {
                 }
                 let gen_arg_names = gen_args
                     .iter()
-                    .map(|&ga| self.get_string_rep(ga))
+                    .map(|&ga| self.get_string_rep_with_subst(ga, substitutions))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", struct_name, gen_arg_names)
@@ -343,7 +353,7 @@ impl TyReg {
                 }
                 let gen_arg_names = gen_args
                     .iter()
-                    .map(|&ga| self.get_string_rep(ga))
+                    .map(|&ga| self.get_string_rep_with_subst(ga, substitutions))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", enum_name, gen_arg_names)

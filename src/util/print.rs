@@ -57,7 +57,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         let mlr = self.mlr.expect("self.mlr should not be empty");
 
-        write!(self.writer, "fn {}", signature.name)?;
+        let name = if let Some(assoc_ty) = signature.associated_type {
+            format!("{}::{}", self.ctxt.tys.get_string_rep(assoc_ty), signature.name)
+        } else {
+            signature.name.to_string()
+        };
+
+        write!(self.writer, "fn {}", name)?;
 
         for (i, &gen_param) in signature.gen_params.iter().enumerate() {
             if i == 0 {
