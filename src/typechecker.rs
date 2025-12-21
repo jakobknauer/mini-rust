@@ -202,6 +202,14 @@ impl<'a> Typechecker<'a> {
             }
             .into();
         }
+        if signature.env_gen_params.len() != fn_specialization.env_gen_args.len() {
+            return TyError::FnEnvGenericArgCountMismatch {
+                fn_: fn_specialization.fn_,
+                expected: signature.gen_params.len(),
+                actual: fn_specialization.gen_args.len(),
+            }
+            .into();
+        }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let fn_ty = self
@@ -412,7 +420,8 @@ impl<'a> Typechecker<'a> {
                     .get(method_name)
                     .map(|&method| fns::FnSpecialization {
                         fn_: method,
-                        gen_args: subst.iter().chain(gen_args).cloned().collect(),
+                        gen_args: gen_args.to_vec(),
+                        env_gen_args: subst,
                     })
             })
             .collect();

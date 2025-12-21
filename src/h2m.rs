@@ -183,7 +183,7 @@ impl<'a> H2M<'a> {
             .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
             .collect::<H2MResult<_>>()?;
 
-        self.builder.insert_gen_fn_op(fn_, gen_arg_tys)
+        self.builder.insert_gen_fn_op(fn_, gen_arg_tys, Vec::new())
     }
 
     fn build_binary_op(

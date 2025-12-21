@@ -66,6 +66,11 @@ pub enum TyError {
         expected: usize,
         actual: usize,
     },
+    FnEnvGenericArgCountMismatch {
+        fn_: Fn,
+        expected: usize,
+        actual: usize,
+    },
     StructGenericArgCountMismatch {
         struct_: Struct,
         expected: usize,

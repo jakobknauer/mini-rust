@@ -129,6 +129,15 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             expected,
             actual
         ),
+        FnEnvGenericArgCountMismatch { fn_, expected, actual } => format!(
+            "Environment generic argument count mismatch in function '{}': expected {}, got {}",
+            ctxt.fns
+                .get_sig(&fn_)
+                .map(|sig| sig.name.as_str())
+                .unwrap_or("<unknown>"),
+            expected,
+            actual
+        ),
         MissingVariants { ty, missing_variants } => format!(
             "Enum type '{}' is missing variants: {}",
             ctxt.tys.get_string_rep(ty),

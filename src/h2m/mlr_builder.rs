@@ -225,18 +225,30 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_fn_op(&mut self, fn_: fns::Fn) -> H2MResult<mlr::Op> {
-        self.insert_gen_fn_op(fn_, Vec::new())
+        self.insert_gen_fn_op(fn_, Vec::new(), Vec::new())
     }
 
-    pub fn insert_gen_fn_op(&mut self, fn_: fns::Fn, gen_args: Vec<ty::Ty>) -> H2MResult<mlr::Op> {
-        let fn_spec = fns::FnSpecialization { fn_, gen_args };
+    pub fn insert_gen_fn_op(
+        &mut self,
+        fn_: fns::Fn,
+        gen_args: Vec<ty::Ty>,
+        env_gen_args: Vec<ty::Ty>,
+    ) -> H2MResult<mlr::Op> {
+        let fn_spec = fns::FnSpecialization {
+            fn_,
+            gen_args,
+            env_gen_args,
+        };
         self.insert_fn_spec_op(fn_spec)
     }
 
     pub fn insert_fn_spec_op(&mut self, fn_spec: fns::FnSpecialization) -> H2MResult<mlr::Op> {
-        self.ctxt
-            .fns
-            .specialize_fn(&self.target_fn, &fn_spec.fn_, fn_spec.gen_args.clone());
+        self.ctxt.fns.specialize_fn(
+            &self.target_fn,
+            &fn_spec.fn_,
+            fn_spec.gen_args.clone(),
+            fn_spec.env_gen_args.clone(),
+        );
         let op = mlr::OpDef::Fn(fn_spec);
         self.insert_op(op)
     }
@@ -310,11 +322,14 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn resolve_hlr_ty_annot(&mut self, annot: &hlr::TyAnnot) -> H2MResult<ty::Ty> {
-        let gen_params = self.get_signature().gen_params.clone();
+        let gen_params = &self.get_signature().gen_params;
+        let env_gen_params = &self.get_signature().env_gen_params;
+        let all_gen_params: Vec<_> = gen_params.iter().chain(env_gen_params.iter()).cloned().collect();
+
         let ty = self
             .ctxt
             .tys
-            .try_resolve_hlr_annot(annot, &gen_params, None)
+            .try_resolve_hlr_annot(annot, &all_gen_params, None)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }

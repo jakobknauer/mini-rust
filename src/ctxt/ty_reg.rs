@@ -759,11 +759,11 @@ impl TyReg {
         }
 
         if self.try_find_instantiation_internal(base_ty, ty, &mut instantiations) {
-            let substitutions = gen_vars
+            gen_vars
                 .iter()
-                .map(|gen_var| instantiations[gen_var].unwrap())
-                .collect();
-            Ok(substitutions)
+                .map(|gen_var| instantiations[gen_var])
+                .collect::<Option<_>>()
+                .ok_or(())
         } else {
             Err(())
         }

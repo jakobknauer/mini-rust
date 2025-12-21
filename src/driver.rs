@@ -145,7 +145,7 @@ fn register_functions(
     stdlib::register_fns(tys, fns)?;
 
     for (idx, function) in hlr.fns.iter().enumerate() {
-        let fn_ = register_function(function, tys, fns, None, &[])?;
+        let fn_ = register_function(function, tys, fns, None, Vec::new())?;
         hlr_meta.fn_ids.insert(idx, fn_);
     }
 
@@ -157,13 +157,10 @@ fn register_function(
     tys: &mut ctxt::TyReg,
     fns: &mut ctxt::FnReg,
     self_ty: Option<ty::Ty>,
-    outer_gen_params: &[ty::GenVar],
+    env_gen_params: Vec<ty::GenVar>,
 ) -> Result<fns::Fn, ()> {
-    let gen_params: Vec<_> = outer_gen_params
-        .iter()
-        .cloned()
-        .chain(hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)))
-        .collect();
+    let gen_params: Vec<_> = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
+    let all_gen_params: Vec<_> = gen_params.iter().chain(env_gen_params.iter()).cloned().collect();
 
     let params = hlr_fn
         .params
@@ -172,14 +169,14 @@ fn register_function(
             Ok(fns::FnParam {
                 name: parameter.name.clone(),
                 ty: tys
-                    .try_resolve_hlr_annot(&parameter.ty, &gen_params, self_ty)
+                    .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, self_ty)
                     .ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
-        Some(ty) => tys.try_resolve_hlr_annot(ty, &gen_params, self_ty).ok_or(())?,
+        Some(ty) => tys.try_resolve_hlr_annot(ty, &all_gen_params, self_ty).ok_or(())?,
         None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
 
@@ -192,6 +189,7 @@ fn register_function(
     let signature = fns::FnSig {
         name,
         gen_params,
+        env_gen_params,
         params,
         var_args: hlr_fn.var_args,
         return_ty,
@@ -218,7 +216,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {
-            let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty), &gen_params)?;
+            let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty), gen_params.clone())?;
             ctxt.impls.register_method(impl_, fn_, &method.name);
         }
     }
@@ -279,6 +277,7 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
     open.push_back(fns::FnSpecialization {
         fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
         gen_args: Vec::new(),
+        env_gen_args: Vec::new(),
     });
 
     let mut closed = HashSet::new();
@@ -290,21 +289,19 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
 
         let subst = ctxt.fns.get_substitutions_for_specialization(&current);
 
-        let fn_specs =
-            ctxt.fns
-                .get_called_specializations(&current.fn_)
+        let fn_specs = ctxt.fns.get_called_specializations(&current.fn_).iter().map(|fn_spec| {
+            let new_gen_args = fn_spec
+                .gen_args
                 .iter()
-                .map(|fns::FnSpecialization { fn_, gen_args }| {
-                    let new_gen_args = gen_args
-                        .iter()
-                        .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
-                        .collect();
+                .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
+                .collect();
 
-                    fns::FnSpecialization {
-                        fn_: *fn_,
-                        gen_args: new_gen_args,
-                    }
-                });
+            fns::FnSpecialization {
+                fn_: fn_spec.fn_,
+                gen_args: new_gen_args,
+                env_gen_args: fn_spec.env_gen_args.clone(),
+            }
+        });
 
         open.extend(fn_specs);
         closed.insert(current);

@@ -53,13 +53,20 @@ impl FnReg {
         self.fn_names.values()
     }
 
-    pub fn specialize_fn(&mut self, caller: &Fn, callee: &Fn, gen_args: impl Into<Vec<Ty>>) {
+    pub fn specialize_fn(
+        &mut self,
+        caller: &Fn,
+        callee: &Fn,
+        gen_args: impl Into<Vec<Ty>>,
+        env_gen_args: impl Into<Vec<Ty>>,
+    ) {
         self.called_specializations
             .entry(*caller)
             .or_default()
             .push(FnSpecialization {
                 fn_: *callee,
                 gen_args: gen_args.into(),
+                env_gen_args: env_gen_args.into(),
             });
     }
 
@@ -69,10 +76,16 @@ impl FnReg {
 
     pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<GenVar, Ty> {
         let sig = self.get_sig(&fn_specialization.fn_).unwrap();
-        sig.gen_params
+        let gen_param_substitutions = sig
+            .gen_params
             .iter()
             .cloned()
-            .zip(fn_specialization.gen_args.iter().cloned())
-            .collect()
+            .zip(fn_specialization.gen_args.iter().cloned());
+        let env_gen_param_substitutions = sig
+            .env_gen_params
+            .iter()
+            .cloned()
+            .zip(fn_specialization.env_gen_args.iter().cloned());
+        env_gen_param_substitutions.chain(gen_param_substitutions).collect()
     }
 }

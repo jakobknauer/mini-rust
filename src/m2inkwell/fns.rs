@@ -333,9 +333,15 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             .iter()
             .map(|&arg| self.m2iw.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
             .collect::<Vec<_>>();
+        let substituted_env_gen_args = fn_spec
+            .env_gen_args
+            .iter()
+            .map(|&arg| self.m2iw.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
+            .collect::<Vec<_>>();
         let substituted_fn_spec = mr_fns::FnSpecialization {
             fn_: fn_spec.fn_,
             gen_args: substituted_gen_args,
+            env_gen_args: substituted_env_gen_args,
         };
 
         self.m2iw
