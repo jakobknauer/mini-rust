@@ -10,6 +10,7 @@ pub struct Fn(pub usize);
 pub struct FnSig {
     pub name: String,
     /// The type of which the function is an associated method, if any
+    /// At the moment, this is only used for printing names.
     pub associated_type: Option<Ty>,
     /// The generic parameters appearing in the function signature
     pub gen_params: Vec<GenVar>,

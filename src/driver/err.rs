@@ -9,6 +9,7 @@ pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
         UndelimitedStmt => "Parser error: Undelimited statement".to_string(),
         InvalidLiteral => "Parser error: Invalid literal".to_string(),
         UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
+        TraitMethodWithBody => "Parser error: Trait method with body".to_string(),
     }
 }
 

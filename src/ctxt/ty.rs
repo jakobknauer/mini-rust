@@ -1,3 +1,5 @@
+use crate::ctxt::traits::Trait;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Ty(pub usize);
 
@@ -30,6 +32,7 @@ pub enum TyDef {
     Ptr(Ty),
     Alias(Ty),
     GenVar(GenVar),
+    TraitSelf(Trait),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

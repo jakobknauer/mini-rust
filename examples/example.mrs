@@ -78,3 +78,7 @@ impl<T> T {
         Pair::<T, S> { first: self, second: other }
     }
 }
+
+trait Blah {
+    fn foo(self) -> bool;
+}

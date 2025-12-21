@@ -4,6 +4,7 @@ pub struct Program {
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
     pub impls: Vec<Impl>,
+    pub traits: Vec<Trait>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -111,6 +111,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
                 "generic type variable '{}' should be substituted before this point",
                 gen_var.0
             ),
+            TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

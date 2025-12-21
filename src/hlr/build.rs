@@ -32,6 +32,7 @@ pub enum ParserErr {
     UndelimitedStmt,
     InvalidLiteral,
     UnexpectedEOF,
+    TraitMethodWithBody,
 }
 
 impl From<LexerErr> for ParserErr {
@@ -121,6 +122,7 @@ impl<'a> HlrParser<'a> {
                 Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
                 Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
                 Token::Keyword(Keyword::Impl) => program.impls.push(self.parse_impl()?),
+                Token::Keyword(Keyword::Trait) => program.traits.push(self.parse_trait()?),
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
         }
@@ -313,6 +315,24 @@ impl<'a> HlrParser<'a> {
             ty,
             methods,
         })
+    }
+
+    fn parse_trait(&mut self) -> Result<Trait, ParserErr> {
+        self.expect_keyword(Keyword::Trait)?;
+        let name = self.expect_identifier()?;
+        self.expect_token(Token::LBrace)?;
+
+        let mut methods = Vec::new();
+        while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
+            let method = self.parse_function(true)?;
+            if method.body.is_some() {
+                return Err(ParserErr::TraitMethodWithBody);
+            }
+            methods.push(method);
+        }
+
+        self.expect_token(Token::RBrace)?;
+        Ok(Trait { name, methods })
     }
 
     fn parse_gen_params(&mut self) -> Result<Vec<String>, ParserErr> {
@@ -860,6 +880,9 @@ mod tests {
 
                 impl Empty {
                 }
+
+                trait Empty {
+                }
                 "#;
 
             let expected = Program {
@@ -887,6 +910,10 @@ mod tests {
                 impls: vec![Impl {
                     gen_params: vec![],
                     ty: TyAnnot::Named("Empty".to_string()),
+                    methods: vec![],
+                }],
+                traits: vec![Trait {
+                    name: "Empty".to_string(),
                     methods: vec![],
                 }],
             };

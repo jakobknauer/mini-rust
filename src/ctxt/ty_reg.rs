@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ctxt::ty::*, hlr};
+use crate::{
+    ctxt::{traits::Trait, ty::*},
+    hlr,
+};
 
 #[derive(Default)]
 pub struct TyReg {
@@ -158,6 +161,11 @@ impl TyReg {
         let gen_var = GenVar(self.gen_var_names.len());
         self.gen_var_names.push(name.to_string());
         gen_var
+    }
+
+    pub fn register_trait_self_type(&mut self, trait_: Trait) -> Ty {
+        let trait_self = TyDef::TraitSelf(trait_);
+        self.register_ty(trait_self)
     }
 
     pub fn instantiate_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
@@ -358,6 +366,7 @@ impl TyReg {
                     .join(", ");
                 format!("{}<{}>", enum_name, gen_arg_names)
             }
+            TraitSelf(_) => "self".to_string(),
         }
     }
 
@@ -561,6 +570,7 @@ impl TyReg {
             }
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
+            TraitSelf(_) => ty,
         }
     }
 

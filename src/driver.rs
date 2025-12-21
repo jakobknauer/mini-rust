@@ -41,6 +41,7 @@ pub fn compile(
 
     print_pretty("Building MLR from HLR");
     register_tys(&hlr, &mut ctxt.tys, &mut hlr_meta).map_err(|_| "Error registering types")?;
+    register_traits(&hlr, &mut ctxt).map_err(|_| "Error registering traits")?;
     define_tys(&hlr, &mut ctxt.tys, &hlr_meta).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns, &mut hlr_meta).map_err(|_| "Error registering functions")?;
     register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
@@ -192,6 +193,57 @@ fn register_function(
     };
 
     fns.register_fn(signature)
+}
+
+fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+    for hlr_trait in &hlr.traits {
+        let trait_ = ctxt.traits.register_trait(&hlr_trait.name);
+        let self_type = ctxt.tys.register_trait_self_type(trait_);
+
+        for method in &hlr_trait.methods {
+            let gen_params: Vec<_> = method
+                .gen_params
+                .iter()
+                .map(|gp| ctxt.tys.register_gen_var(gp))
+                .collect();
+            let params = method
+                .params
+                .iter()
+                .map(|parameter| {
+                    Ok(fns::FnParam {
+                        name: parameter.name.clone(),
+                        ty: ctxt
+                            .tys
+                            .try_resolve_hlr_annot(&parameter.ty, &gen_params, Some(self_type))
+                            .ok_or(())?,
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            let return_ty = match &method.return_ty {
+                Some(ty) => ctxt
+                    .tys
+                    .try_resolve_hlr_annot(ty, &gen_params, Some(self_type))
+                    .ok_or(())?,
+                None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
+            };
+
+            let sig = fns::FnSig {
+                name: method.name.clone(),
+                associated_type: None,
+                gen_params,
+                env_gen_params: Vec::new(),
+                params,
+                var_args: false,
+                return_ty,
+                has_receiver: method.params.first().map(|p| p.is_receiver).unwrap_or(false),
+            };
+
+            ctxt.traits.register_method(trait_, sig);
+        }
+    }
+
+    Ok(())
 }
 
 fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
