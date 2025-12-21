@@ -57,6 +57,12 @@ pub struct Impl {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Trait {
+    pub name: String,
+    pub methods: Vec<Fn>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
     pub return_expr: Option<Box<Expr>>,

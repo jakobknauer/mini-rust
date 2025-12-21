@@ -49,6 +49,25 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
 
 const THREE_CHAR_TOKENS: &[(char, char, char, Token)] = &[('.', '.', '.', Token::Dots)];
 
+const KEYWORDS: &[(&str, Token)] = &[
+    ("as", Token::Keyword(Keyword::As)),
+    ("break", Token::Keyword(Keyword::Break)),
+    ("else", Token::Keyword(Keyword::Else)),
+    ("enum", Token::Keyword(Keyword::Enum)),
+    ("false", Token::BoolLiteral(false)),
+    ("fn", Token::Keyword(Keyword::Fn)),
+    ("if", Token::Keyword(Keyword::If)),
+    ("impl", Token::Keyword(Keyword::Impl)),
+    ("let", Token::Keyword(Keyword::Let)),
+    ("loop", Token::Keyword(Keyword::Loop)),
+    ("match", Token::Keyword(Keyword::Match)),
+    ("return", Token::Keyword(Keyword::Return)),
+    ("self", Token::Keyword(Keyword::Self_)),
+    ("struct", Token::Keyword(Keyword::Struct)),
+    ("trait", Token::Keyword(Keyword::Trait)),
+    ("true", Token::BoolLiteral(true)),
+];
+
 impl<'a> Lexer<'a> {
     fn new(input: &'a str) -> Self {
         Lexer { input, position: 0 }
@@ -230,24 +249,10 @@ impl Iterator for Lexer<'_> {
 }
 
 fn try_into_keyword_token(keyword: &str) -> Option<Token> {
-    match keyword {
-        "as" => Some(Token::Keyword(Keyword::As)),
-        "break" => Some(Token::Keyword(Keyword::Break)),
-        "else" => Some(Token::Keyword(Keyword::Else)),
-        "enum" => Some(Token::Keyword(Keyword::Enum)),
-        "false" => Some(Token::BoolLiteral(false)),
-        "fn" => Some(Token::Keyword(Keyword::Fn)),
-        "if" => Some(Token::Keyword(Keyword::If)),
-        "impl" => Some(Token::Keyword(Keyword::Impl)),
-        "let" => Some(Token::Keyword(Keyword::Let)),
-        "loop" => Some(Token::Keyword(Keyword::Loop)),
-        "match" => Some(Token::Keyword(Keyword::Match)),
-        "return" => Some(Token::Keyword(Keyword::Return)),
-        "self" => Some(Token::Keyword(Keyword::Self_)),
-        "struct" => Some(Token::Keyword(Keyword::Struct)),
-        "true" => Some(Token::BoolLiteral(true)),
-        _ => None,
-    }
+    KEYWORDS
+        .iter()
+        .find_map(|(kw, token)| (kw == &keyword).then_some(token))
+        .cloned()
 }
 
 mod test {

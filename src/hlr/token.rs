@@ -52,4 +52,5 @@ pub enum Keyword {
     Return,
     Self_,
     Struct,
+    Trait,
 }
