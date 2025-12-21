@@ -5,11 +5,11 @@ mod match_util;
 mod ops;
 #[macro_use]
 mod macros;
-pub mod mlr_builder;
 
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr, typechecker,
+    util::mlr_builder::MlrBuilder,
 };
 
 pub use err::{H2MError, H2MResult};
@@ -20,13 +20,13 @@ pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_fn: &hlr::Fn, target_fn: fns::Fn) -
 }
 
 struct H2M<'a> {
-    builder: mlr_builder::MlrBuilder<'a>,
+    builder: MlrBuilder<'a>,
 }
 
 impl<'a> H2M<'a> {
     pub fn new(target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
-            builder: mlr_builder::MlrBuilder::new(target_fn, ctxt),
+            builder: MlrBuilder::new(target_fn, ctxt),
         }
     }
 
