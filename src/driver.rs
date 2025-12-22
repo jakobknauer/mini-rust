@@ -1,5 +1,6 @@
 mod err;
 mod stdlib;
+mod trait_check;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -8,6 +9,7 @@ use std::{
 
 use crate::{
     ctxt::{self, fns, impls, ty},
+    driver::{err::print_trait_check_error, trait_check::check_trait_impls},
     h2m, hlr, m2inkwell,
     util::print,
 };
@@ -45,6 +47,7 @@ pub fn compile(
     define_tys(&hlr, &mut ctxt.tys, &hlr_meta).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns, &mut hlr_meta).map_err(|_| "Error registering functions")?;
     register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
+    check_trait_impls(&ctxt).map_err(|err| print_trait_check_error(err, &ctxt))?;
     build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
     build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
 

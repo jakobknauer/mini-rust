@@ -92,4 +92,8 @@ impl FnReg {
             .zip(fn_specialization.env_gen_args.iter().cloned());
         env_gen_param_substitutions.chain(gen_param_substitutions).collect()
     }
+
+    pub fn get_fn_name(&self, method: Fn) -> &str {
+        &self.get_sig(&method).unwrap().name
+    }
 }

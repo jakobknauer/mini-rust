@@ -28,4 +28,12 @@ impl TraitReg {
             .position(|trait_| trait_.name == trait_name)
             .map(Trait)
     }
+
+    pub fn get_trait_def(&self, trait_: Trait) -> &TraitDef {
+        self.traits.get(trait_.0).unwrap()
+    }
+
+    pub fn get_trait_name(&self, trait_: Trait) -> &str {
+        self.traits.get(trait_.0).unwrap().name.as_str()
+    }
 }

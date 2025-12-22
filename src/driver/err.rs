@@ -1,4 +1,9 @@
-use crate::{ctxt, h2m, hlr, typechecker::TyError};
+use crate::{
+    ctxt,
+    driver::trait_check::{TraitCheckError, TraitCheckErrorKind},
+    h2m, hlr,
+    typechecker::TyError,
+};
 
 pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
     use hlr::ParserErr::*;
@@ -191,4 +196,20 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
         ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
+}
+
+pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> String {
+    use TraitCheckErrorKind::*;
+
+    let desc = match err.kind {
+        MissingMethods(items) => format!("Missing methods: {}", items.join(", ")),
+        ExtraMethods(items) => format!("Extra methods: {}", items.join(", ")),
+    };
+
+    format!(
+        "Error checking implementation of trait '{}' for type '{}': {}",
+        ctxt.traits.get_trait_name(err.trait_),
+        ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).unwrap().ty),
+        desc
+    )
 }
