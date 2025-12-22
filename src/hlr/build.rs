@@ -33,6 +33,7 @@ pub enum ParserErr {
     InvalidLiteral,
     UnexpectedEOF,
     TraitMethodWithBody,
+    ExpectedTraitName,
 }
 
 impl From<LexerErr> for ParserErr {
@@ -302,6 +303,17 @@ impl<'a> HlrParser<'a> {
         self.expect_keyword(Keyword::Impl)?;
         let gen_params = self.parse_gen_params()?;
         let ty = self.parse_ty_annot()?;
+
+        let (trait_name, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
+            let ty2 = self.parse_ty_annot()?;
+            let TyAnnot::Named(trait_name) = &ty else {
+                return Err(ParserErr::ExpectedTraitName);
+            };
+            (Some(trait_name.clone()), ty2)
+        } else {
+            (None, ty)
+        };
+
         self.expect_token(Token::LBrace)?;
 
         let mut methods = Vec::new();
@@ -312,6 +324,7 @@ impl<'a> HlrParser<'a> {
         self.expect_token(Token::RBrace)?;
         Ok(Impl {
             gen_params,
+            trait_name,
             ty,
             methods,
         })
@@ -910,6 +923,7 @@ mod tests {
                 impls: vec![Impl {
                     gen_params: vec![],
                     ty: TyAnnot::Named("Empty".to_string()),
+                    trait_name: None,
                     methods: vec![],
                 }],
                 traits: vec![Trait {
@@ -1038,6 +1052,7 @@ mod tests {
                 impls: vec![Impl {
                     gen_params: vec![],
                     ty: TyAnnot::Named("A".to_string()),
+                    trait_name: None,
                     methods: vec![Fn {
                         name: "get_b".to_string(),
                         gen_params: vec![],

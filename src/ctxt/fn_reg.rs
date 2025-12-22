@@ -22,7 +22,11 @@ impl FnReg {
 
         let fn_ = Fn(self.sigs.len());
 
-        self.fn_names.insert(signature.name.to_string(), fn_);
+        if signature.associated_type.is_none() {
+            // Only register the function by 'global' name if it is not an associated method
+            // TODO This is a bit of a hack
+            self.fn_names.insert(signature.name.to_string(), fn_);
+        }
         self.sigs.push(signature);
         self.called_specializations.insert(fn_, Vec::new());
 

@@ -53,6 +53,7 @@ pub struct EnumVariant {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Impl {
     pub gen_params: Vec<String>,
+    pub trait_name: Option<String>,
     pub ty: TyAnnot,
     pub methods: Vec<Fn>,
 }

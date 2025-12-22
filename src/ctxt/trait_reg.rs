@@ -21,4 +21,11 @@ impl TraitReg {
     pub fn register_method(&mut self, trait_: Trait, sig: FnSig) {
         self.traits[trait_.0].methods.push(sig);
     }
+
+    pub fn resolve_trait_name(&self, trait_name: &str) -> Option<Trait> {
+        self.traits
+            .iter()
+            .position(|trait_| trait_.name == trait_name)
+            .map(Trait)
+    }
 }

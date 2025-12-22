@@ -259,7 +259,13 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
             .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None)
             .ok_or(())?;
 
-        let impl_ = ctxt.impls.register_impl(ty, gen_params.clone());
+        let trait_ = hlr_impl
+            .trait_name
+            .as_ref()
+            .map(|trait_name| ctxt.traits.resolve_trait_name(trait_name).ok_or(()))
+            .transpose()?;
+
+        let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_);
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {

@@ -41,6 +41,7 @@ pub enum Token {
 pub enum Keyword {
     As,
     Break,
+    For,
     Else,
     Enum,
     Fn,

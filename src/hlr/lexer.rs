@@ -52,6 +52,7 @@ const THREE_CHAR_TOKENS: &[(char, char, char, Token)] = &[('.', '.', '.', Token:
 const KEYWORDS: &[(&str, Token)] = &[
     ("as", Token::Keyword(Keyword::As)),
     ("break", Token::Keyword(Keyword::Break)),
+    ("for", Token::Keyword(Keyword::For)),
     ("else", Token::Keyword(Keyword::Else)),
     ("enum", Token::Keyword(Keyword::Enum)),
     ("false", Token::BoolLiteral(false)),
