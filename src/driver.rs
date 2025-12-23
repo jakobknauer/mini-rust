@@ -314,7 +314,7 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &Hlr
 fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
     for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
         let impl_ = hlr_meta.impl_ids[&idx];
-        let impl_def = ctxt.impls.get_impl_def(impl_).unwrap();
+        let impl_def = ctxt.impls.get_impl_def(impl_);
         let impl_methods = impl_def.methods.clone();
 
         for (hlr_method, target_fn) in hlr_impl.methods.iter().zip(impl_methods) {
@@ -373,10 +373,9 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
         open.extend(fn_specs);
 
         let called_trait_methods = ctxt.fns.get_called_trait_methods(&current.fn_).to_vec();
-        let trait_fn_specs = called_trait_methods.into_iter().map(|trait_method| {
-            let concrete_impl_ty = ctxt.tys.substitute_gen_vars(trait_method.impl_ty, &subst);
-            ctxt.get_fn_spec_for_trait_call(trait_method.trait_, trait_method.method_idx, concrete_impl_ty)
-        });
+        let trait_fn_specs = called_trait_methods
+            .into_iter()
+            .map(|trait_method| ctxt.specialize_trait_method_call(&trait_method, &subst));
         open.extend(trait_fn_specs);
 
         closed.insert(current);

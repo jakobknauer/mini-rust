@@ -1,5 +1,5 @@
 use crate::ctxt::{
-    fns::FnSig,
+    fns::{self, FnSig},
     traits::{Trait, TraitDef},
 };
 
@@ -37,7 +37,24 @@ impl TraitReg {
         self.traits.get(trait_.0).unwrap().name.as_str()
     }
 
-    pub fn get_all_traits(&self) -> Vec<Trait> {
-        (0..self.traits.len()).map(Trait).collect()
+    pub fn get_trait_method_name(&self, trait_: Trait, method_index: usize) -> &str {
+        self.traits.get(trait_.0).unwrap().methods[method_index].name.as_str()
+    }
+
+    pub fn get_trait_methods_with_name(&self, method_name: &str) -> impl Iterator<Item = (Trait, usize)> {
+        self.traits
+            .iter()
+            .enumerate()
+            .filter_map(move |(trait_idx, trait_def)| {
+                trait_def
+                    .methods
+                    .iter()
+                    .position(|method| method.name == method_name)
+                    .map(|method_idx| (Trait(trait_idx), method_idx))
+            })
+    }
+
+    pub fn get_trait_method_sig(&self, trait_method: &fns::TraitMethod) -> &FnSig {
+        &self.traits[trait_method.trait_.0].methods[trait_method.method_idx]
     }
 }

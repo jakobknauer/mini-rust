@@ -9,14 +9,14 @@ mod impl_reg;
 mod trait_reg;
 mod ty_reg;
 
+use std::collections::HashMap;
+
 pub use fn_reg::FnReg;
 pub use impl_reg::ImplReg;
 pub use trait_reg::TraitReg;
 pub use ty_reg::*;
 
 use mlr::Mlr;
-
-use crate::ctxt::traits::Trait;
 
 #[derive(Default)]
 pub struct Ctxt {
@@ -98,33 +98,33 @@ impl Ctxt {
         }
     }
 
-    pub fn get_fn_spec_for_trait_call(
+    pub fn specialize_trait_method_call(
         &mut self,
-        trait_: Trait,
-        method_index: usize,
-        receiver_ty: ty::Ty,
+        trait_method: &fns::TraitMethod,
+        substitutions: &HashMap<ty::GenVar, ty::Ty>,
     ) -> fns::FnSpecialization {
-        // Find impl for trait trait_method.trait_ and concrete type concrete_impl_ty
-        let (impl_, impl_instantiation) = self
+        let &fns::TraitMethod {
+            trait_,
+            method_idx,
+            impl_ty,
+        } = trait_method;
+
+        let impl_ty = self.tys.substitute_gen_vars(impl_ty, substitutions);
+
+        let (impl_def, impl_instantiation) = self
             .impls
-            .get_all_impls()
-            .into_iter()
-            .filter_map(|impl_| {
-                let impl_def = self.impls.get_impl_def(impl_).unwrap();
-                if impl_def.trait_ != Some(trait_) {
-                    return None;
-                }
+            .get_impls_for_trait(trait_)
+            .map(|impl_| self.impls.get_impl_def(impl_))
+            .filter_map(|impl_def| {
                 self.tys
-                    .try_find_instantiation(receiver_ty, impl_def.ty, &impl_def.gen_params)
+                    .try_find_instantiation(impl_ty, impl_def.ty, &impl_def.gen_params)
                     .ok()
-                    .map(|inst| (impl_, inst))
+                    .map(|inst| (impl_def, inst))
             })
             .next()
             .unwrap();
 
-        let trait_method_name = &self.traits.get_trait_def(trait_).methods[method_index].name;
-
-        let impl_def = self.impls.get_impl_def(impl_).unwrap();
+        let trait_method_name = self.traits.get_trait_method_name(trait_, method_idx);
 
         fns::FnSpecialization {
             fn_: impl_def.methods_by_name[trait_method_name],

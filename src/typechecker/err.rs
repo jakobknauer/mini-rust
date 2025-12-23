@@ -96,11 +96,11 @@ pub enum TyError {
     DereferenceOfCVoidPtr {
         ty: Ty,
     },
-    NoSuchMethod {
+    AmbiguousMethod {
         base_ty: Ty,
         method_name: String,
     },
-    AmbiguousMethod {
+    MethodResolutionFailed {
         base_ty: Ty,
         method_name: String,
     },

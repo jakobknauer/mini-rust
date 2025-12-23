@@ -743,7 +743,6 @@ impl TyReg {
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
     }
 
-    #[allow(dead_code)]
     pub fn tys_eq(&self, ty1: Ty, ty2: Ty) -> bool {
         use TyDef::*;
 

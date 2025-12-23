@@ -241,12 +241,9 @@ impl<'a> H2M<'a> {
             .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
             .collect::<Result<_, _>>()?;
 
-        let resolution = self.typechecker().resolve_method(base_ty, &method.ident, &gen_args);
-
-        let method = match resolution {
+        let method = match self.typechecker().resolve_method(base_ty, &method.ident, &gen_args)? {
             MethodResolutionResult::Inherent(fn_spec) => self.builder.insert_fn_spec_op(fn_spec),
             MethodResolutionResult::Trait(trait_method) => self.builder.insert_trait_method_op(trait_method),
-            MethodResolutionResult::Err(ty_error) => Err(ty_error.into()),
         }?;
 
         let args = std::iter::once(Ok(base))

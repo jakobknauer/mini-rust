@@ -367,12 +367,10 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn build_trait_method(&mut self, trait_method: mr_fns::TraitMethod) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let concrete_impl_ty = self.substitute(trait_method.impl_ty);
-        let fn_spec = self.m2iw.mr_ctxt.get_fn_spec_for_trait_call(
-            trait_method.trait_,
-            trait_method.method_idx,
-            concrete_impl_ty,
-        );
+        let fn_spec = self
+            .m2iw
+            .mr_ctxt
+            .specialize_trait_method_call(&trait_method, &self.substitutions);
         self.build_global_function(&fn_spec)
     }
 

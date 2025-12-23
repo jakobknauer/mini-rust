@@ -184,13 +184,13 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(op_ty),
             ctxt.tys.get_string_rep(target_ty)
         ),
-        NoSuchMethod { base_ty, method_name } => format!(
-            "Cannot resolve method '{}' for type '{}'",
+        AmbiguousMethod { base_ty, method_name } => format!(
+            "Ambiguous method name '{}' for type '{}'",
             method_name,
             ctxt.tys.get_string_rep(base_ty),
         ),
-        AmbiguousMethod { base_ty, method_name } => format!(
-            "Ambiguous method name '{}' for type '{}'",
+        MethodResolutionFailed { base_ty, method_name } => format!(
+            "Could not resolve method '{}' for type '{}'",
             method_name,
             ctxt.tys.get_string_rep(base_ty),
         ),
@@ -239,7 +239,7 @@ pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> Strin
     format!(
         "Error checking implementation of trait '{}' for type '{}': {}",
         ctxt.traits.get_trait_name(err.trait_),
-        ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).unwrap().ty),
+        ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).ty),
         desc
     )
 }

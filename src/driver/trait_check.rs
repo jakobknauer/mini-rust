@@ -30,7 +30,7 @@ pub enum TraitCheckErrorKind {
 }
 
 pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), TraitCheckError> {
-    let all_impls: Vec<_> = ctxt.impls.get_all_impls().into_iter().collect();
+    let all_impls: Vec<_> = ctxt.impls.get_all_impls().collect();
     for impl_ in all_impls {
         let Some(trait_) = ctxt.impls.get_impl_trait(impl_) else {
             continue;
@@ -42,22 +42,28 @@ pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), TraitCheckError> {
 }
 
 fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), TraitCheckError> {
-    // First compare the method names
     check_method_names(ctxt, impl_, trait_).map_err(|kind| TraitCheckError { impl_, trait_, kind })?;
 
-    let impl_def = ctxt.impls.get_impl_def(impl_).unwrap();
-    for method_idx in 0..impl_def.methods.len() {
-        check_method_sigs(ctxt, impl_, trait_, method_idx).map_err(|kind| TraitCheckError { impl_, trait_, kind })?;
+    let impl_def = ctxt.impls.get_impl_def(impl_);
+    let trait_def = ctxt.traits.get_trait_def(trait_);
+
+    for &method in &impl_def.methods {
+        let impl_method_sig = ctxt.fns.get_sig(&method).unwrap();
+
+        let method_name = ctxt.fns.get_fn_name(method);
+        let trait_method_sig = trait_def.methods.iter().find(|m| m.name == method_name).unwrap();
+
+        check_method_sigs(&mut ctxt.tys, impl_method_sig, trait_method_sig, impl_def.ty)
+            .map_err(|kind| TraitCheckError { impl_, trait_, kind })?;
     }
 
     Ok(())
 }
 
 fn check_method_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), TraitCheckErrorKind> {
-    let impl_def = ctxt.impls.get_impl_def(impl_).unwrap();
+    let impl_def = ctxt.impls.get_impl_def(impl_);
     let trait_def = ctxt.traits.get_trait_def(trait_);
 
-    // check for missing and extra methods
     let trait_method_names: HashSet<&str> = trait_def.methods.iter().map(|method| method.name.as_str()).collect();
     let impl_method_names: HashSet<&str> = impl_def
         .methods
@@ -83,26 +89,18 @@ fn check_method_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Resu
 }
 
 fn check_method_sigs(
-    ctxt: &mut ctxt::Ctxt,
-    impl_: Impl,
-    trait_: Trait,
-    method_idx: usize,
+    tys: &mut ctxt::TyReg,
+    impl_method_sig: &ctxt::fns::FnSig,
+    trait_method_sig: &ctxt::fns::FnSig,
+    impl_ty: ctxt::ty::Ty,
 ) -> Result<(), TraitCheckErrorKind> {
     // TODO: consider generic vars also
     // TODO: other fields of signature, e.g. receiver, var_args etc.
 
-    let impl_def = ctxt.impls.get_impl_def(impl_).unwrap();
-    let method = impl_def.methods[method_idx];
-    let impl_method_sig = ctxt.fns.get_sig(&method).unwrap();
-
-    let trait_def = ctxt.traits.get_trait_def(trait_);
-    let method_name = ctxt.fns.get_fn_name(method);
-    let trait_method_sig = trait_def.methods.iter().find(|m| m.name == method_name).unwrap();
-
     // Compare param count
     if impl_method_sig.params.len() != trait_method_sig.params.len() {
         return Err(TraitCheckErrorKind::ArgCountMismatch {
-            method: method_name.to_string(),
+            method: impl_method_sig.name.to_string(),
             expected: trait_method_sig.params.len(),
             actual: impl_method_sig.params.len(),
         });
@@ -115,10 +113,10 @@ fn check_method_sigs(
         .zip(impl_method_sig.params.iter())
         .enumerate()
     {
-        let expected_with_self_substituted = ctxt.tys.substitute_self_ty(expected.ty, impl_def.ty);
-        if !ctxt.tys.tys_eq(expected_with_self_substituted, actual.ty) {
+        let expected_with_self_substituted = tys.substitute_self_ty(expected.ty, impl_ty);
+        if !tys.tys_eq(expected_with_self_substituted, actual.ty) {
             return Err(TraitCheckErrorKind::ArgTypeMismatch {
-                method: method_name.to_string(),
+                method: impl_method_sig.name.to_string(),
                 arg_idx: idx,
                 expected: expected_with_self_substituted,
                 actual: actual.ty,
@@ -127,13 +125,10 @@ fn check_method_sigs(
     }
 
     // Compare return type
-    let return_type_with_self_substituted = ctxt.tys.substitute_self_ty(trait_method_sig.return_ty, impl_def.ty);
-    if !ctxt
-        .tys
-        .tys_eq(return_type_with_self_substituted, impl_method_sig.return_ty)
-    {
+    let return_type_with_self_substituted = tys.substitute_self_ty(trait_method_sig.return_ty, impl_ty);
+    if !tys.tys_eq(return_type_with_self_substituted, impl_method_sig.return_ty) {
         return Err(TraitCheckErrorKind::ReturnTypeMismatch {
-            method: method_name.to_string(),
+            method: impl_method_sig.name.to_string(),
             expected: return_type_with_self_substituted,
             actual: impl_method_sig.return_ty,
         });
