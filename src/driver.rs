@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ctxt::{self, fns, impls, ty},
+    ctxt::{self, fns, impls, traits, ty},
     driver::{err::print_trait_check_error, trait_check::check_trait_impls},
     h2m, hlr, m2inkwell,
     util::print,
@@ -149,7 +149,7 @@ fn register_functions(
     stdlib::register_fns(tys, fns)?;
 
     for (idx, function) in hlr.fns.iter().enumerate() {
-        let fn_ = register_function(function, tys, fns, None, Vec::new())?;
+        let fn_ = register_function(function, tys, fns, None, None, Vec::new())?;
         hlr_meta.fn_ids.insert(idx, fn_);
     }
 
@@ -160,7 +160,8 @@ fn register_function(
     hlr_fn: &hlr::Fn,
     tys: &mut ctxt::TyReg,
     fns: &mut ctxt::FnReg,
-    self_ty: Option<ty::Ty>,
+    associated_ty: Option<ty::Ty>,
+    associated_trait: Option<traits::Trait>,
     env_gen_params: Vec<ty::GenVar>,
 ) -> Result<fns::Fn, ()> {
     let gen_params: Vec<_> = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
@@ -173,20 +174,23 @@ fn register_function(
             Ok(fns::FnParam {
                 name: parameter.name.clone(),
                 ty: tys
-                    .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, self_ty)
+                    .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, associated_ty)
                     .ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
-        Some(ty) => tys.try_resolve_hlr_annot(ty, &all_gen_params, self_ty).ok_or(())?,
+        Some(ty) => tys
+            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty)
+            .ok_or(())?,
         None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
 
     let signature = fns::FnSig {
         name: hlr_fn.name.clone(),
-        associated_type: self_ty,
+        associated_ty,
+        associated_trait,
         gen_params,
         env_gen_params,
         params,
@@ -233,7 +237,8 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
 
             let sig = fns::FnSig {
                 name: method.name.clone(),
-                associated_type: None,
+                associated_ty: None,
+                associated_trait: Some(trait_),
                 gen_params,
                 env_gen_params: Vec::new(),
                 params,
@@ -272,7 +277,14 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {
-            let fn_ = register_function(method, &mut ctxt.tys, &mut ctxt.fns, Some(ty), gen_params.clone())?;
+            let fn_ = register_function(
+                method,
+                &mut ctxt.tys,
+                &mut ctxt.fns,
+                Some(ty),
+                trait_,
+                gen_params.clone(),
+            )?;
             ctxt.impls.register_method(impl_, fn_, &method.name);
         }
     }

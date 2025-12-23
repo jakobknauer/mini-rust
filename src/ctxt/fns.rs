@@ -12,7 +12,8 @@ pub struct FnSig {
     pub name: String,
     /// The type of which the function is an associated method, if any
     /// At the moment, this is only used for printing names.
-    pub associated_type: Option<Ty>,
+    pub associated_ty: Option<Ty>,
+    pub associated_trait: Option<Trait>,
     /// The generic parameters appearing in the function signature
     pub gen_params: Vec<GenVar>,
     /// Generic used in the functions' body that do not appear in the signature,

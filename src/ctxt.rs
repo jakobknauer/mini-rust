@@ -31,14 +31,23 @@ impl Ctxt {
     pub fn get_fn_spec_name(&self, fn_spec: &fns::FnSpecialization) -> String {
         let signature = self.fns.get_sig(&fn_spec.fn_).unwrap();
 
-        let prefix = if let Some(assoc_ty) = signature.associated_type {
+        let prefix = if let Some(assoc_ty) = signature.associated_ty {
             let substitutions = signature
                 .env_gen_params
                 .iter()
                 .cloned()
                 .zip(fn_spec.env_gen_args.iter().cloned())
                 .collect();
-            format!("{}::", self.tys.get_string_rep_with_subst(assoc_ty, &substitutions))
+            if let Some(assoc_trait) = signature.associated_trait {
+                let trait_name = self.traits.get_trait_name(assoc_trait);
+                format!(
+                    "({} as {})::",
+                    self.tys.get_string_rep_with_subst(assoc_ty, &substitutions),
+                    trait_name
+                )
+            } else {
+                format!("{}::", self.tys.get_string_rep_with_subst(assoc_ty, &substitutions))
+            }
         } else {
             "".to_string()
         };
@@ -78,7 +87,8 @@ impl Ctxt {
 
         fns::FnSig {
             name: signature.name.clone(),
-            associated_type: signature.associated_type,
+            associated_ty: signature.associated_ty,
+            associated_trait: signature.associated_trait,
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
             params: specialized_params,

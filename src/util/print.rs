@@ -57,7 +57,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         let mlr = self.mlr.expect("self.mlr should not be empty");
 
-        let name = if let Some(assoc_ty) = signature.associated_type {
+        let name = if let Some(assoc_ty) = signature.associated_ty {
             format!("{}::{}", self.ctxt.tys.get_string_rep(assoc_ty), signature.name)
         } else {
             signature.name.to_string()
