@@ -100,3 +100,13 @@ impl IntoBool for i32 {
         self != 0
     }
 }
+
+trait Foo {
+    fn bar(self, x: i32) -> bool;
+}
+
+impl Foo for i32 {
+    fn bar(self, x: i32) -> bool {
+        false
+    }
+}

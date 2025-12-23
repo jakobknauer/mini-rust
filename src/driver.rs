@@ -47,7 +47,7 @@ pub fn compile(
     define_tys(&hlr, &mut ctxt.tys, &hlr_meta).map_err(|_| "Error defining types")?;
     register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns, &mut hlr_meta).map_err(|_| "Error registering functions")?;
     register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
-    check_trait_impls(&ctxt).map_err(|err| print_trait_check_error(err, &ctxt))?;
+    check_trait_impls(&mut ctxt).map_err(|err| print_trait_check_error(err, &ctxt))?;
     build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
     build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
 

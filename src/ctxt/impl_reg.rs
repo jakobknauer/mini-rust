@@ -32,14 +32,15 @@ impl ImplReg {
         impl_.methods_by_name.insert(name.to_string(), method);
     }
 
-    pub fn get_all_impls(&self) -> impl IntoIterator<Item = (Impl, &ImplDef)> {
-        self.impls
-            .iter()
-            .enumerate()
-            .map(|(impl_, impl_def)| (Impl(impl_), impl_def))
+    pub fn get_all_impls(&self) -> impl IntoIterator<Item = Impl> {
+        (0..self.impls.len()).map(Impl)
     }
 
     pub fn get_impl_def(&self, impl_: Impl) -> Option<&ImplDef> {
         self.impls.get(impl_.0)
+    }
+
+    pub fn get_impl_trait(&self, impl_: Impl) -> Option<Trait> {
+        self.get_impl_def(impl_).and_then(|impl_def| impl_def.trait_)
     }
 }

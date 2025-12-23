@@ -204,6 +204,36 @@ pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> Strin
     let desc = match err.kind {
         MissingMethods(items) => format!("Missing methods: {}", items.join(", ")),
         ExtraMethods(items) => format!("Extra methods: {}", items.join(", ")),
+        ArgCountMismatch {
+            method,
+            expected,
+            actual,
+        } => format!(
+            "Argument count mismatch for method '{}': expected {}, got {}",
+            method, expected, actual
+        ),
+        ArgTypeMismatch {
+            method,
+            arg_idx,
+            expected,
+            actual,
+        } => format!(
+            "Argument {} type mismatch for method '{}': expected '{}', got '{}'",
+            arg_idx,
+            method,
+            ctxt.tys.get_string_rep(expected),
+            ctxt.tys.get_string_rep(actual)
+        ),
+        ReturnTypeMismatch {
+            method,
+            expected,
+            actual,
+        } => format!(
+            "Return type mismatch for method '{}': expected '{}', got '{}'",
+            method,
+            ctxt.tys.get_string_rep(expected),
+            ctxt.tys.get_string_rep(actual)
+        ),
     };
 
     format!(

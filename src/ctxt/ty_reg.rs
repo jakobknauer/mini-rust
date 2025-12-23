@@ -574,6 +574,59 @@ impl TyReg {
         }
     }
 
+    pub fn substitute_self_ty(&mut self, ty: Ty, substitute: Ty) -> Ty {
+        use TyDef::*;
+
+        let ty = self.canonicalize(ty);
+        let Some(ty_def) = self.tys.get(ty.0).expect("ty should be registered") else {
+            return ty;
+        };
+
+        match *ty_def {
+            GenVar(..) => ty,
+            Fn {
+                ref param_tys,
+                return_ty,
+                var_args,
+            } => {
+                let new_param_tys = param_tys
+                    .clone()
+                    .into_iter()
+                    .map(|pt| self.substitute_self_ty(pt, substitute))
+                    .collect::<Vec<_>>();
+                let new_return_ty = self.substitute_self_ty(return_ty, substitute);
+                self.register_fn_ty(new_param_tys, new_return_ty, var_args)
+            }
+            Ref(inner_ty) => {
+                let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
+                self.register_ref_ty(new_inner_ty)
+            }
+            Ptr(inner_ty) => {
+                let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
+                self.register_ptr_ty(new_inner_ty)
+            }
+            Struct { struct_, ref gen_args } => {
+                let new_gen_args = gen_args
+                    .clone()
+                    .iter()
+                    .map(|&ga| self.substitute_self_ty(ga, substitute))
+                    .collect::<Vec<_>>();
+                self.instantiate_struct(struct_, new_gen_args).unwrap()
+            }
+            Enum { enum_, ref gen_args } => {
+                let new_gen_args = gen_args
+                    .clone()
+                    .iter()
+                    .map(|&ga| self.substitute_self_ty(ga, substitute))
+                    .collect::<Vec<_>>();
+                self.instantiate_enum(enum_, new_gen_args).unwrap()
+            }
+            Primitive(..) => ty,
+            Alias(..) => unreachable!("ty should have been canonicalized"),
+            TraitSelf(_) => substitute,
+        }
+    }
+
     pub fn get_struct_field_ty(&mut self, ty: Ty, index: usize) -> Result<Ty, NotAStruct> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
         let &TyDef::Struct { struct_, ref gen_args } = ty_def else {
@@ -772,13 +825,13 @@ impl TyReg {
         }
     }
 
-    pub fn try_find_instantiation(&self, base_ty: Ty, ty: Ty, gen_vars: &[GenVar]) -> Result<Vec<Ty>, ()> {
+    pub fn try_find_instantiation(&self, target: Ty, generic: Ty, gen_vars: &[GenVar]) -> Result<Vec<Ty>, ()> {
         let mut instantiations = HashMap::new();
         for gen_param in gen_vars {
             instantiations.insert(*gen_param, None);
         }
 
-        if self.try_find_instantiation_internal(base_ty, ty, &mut instantiations) {
+        if self.try_find_instantiation_internal(target, generic, &mut instantiations) {
             gen_vars
                 .iter()
                 .map(|gen_var| instantiations[gen_var])

@@ -404,7 +404,8 @@ impl<'a> Typechecker<'a> {
         gen_args: &[ty::Ty],
     ) -> TyResult<fns::FnSpecialization> {
         // Step 1: find all impls for the base type
-        let matching_impl_insts = self.impls.get_all_impls().into_iter().filter_map(|(_, impl_def)| {
+        let matching_impl_insts = self.impls.get_all_impls().into_iter().filter_map(|impl_| {
+            let impl_def = self.impls.get_impl_def(impl_).unwrap();
             self.tys
                 .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
                 .ok()
