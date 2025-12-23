@@ -8,7 +8,7 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::ctxt::{fns as mr_fns, mlr, ty as mr_ty};
+use crate::ctxt::{self as mr_ctxt, fns as mr_fns, mlr, ty as mr_ty};
 
 pub struct M2InkwellFn<'a, 'iw, 'mr> {
     m2iw: &'a mut super::M2Inkwell<'iw, 'mr>,
@@ -72,21 +72,37 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(())
     }
 
+    fn mr_ctxt(&self) -> &mr_ctxt::Ctxt {
+        self.m2iw.mr_ctxt
+    }
+
+    fn mlr(&self) -> &mr_ctxt::mlr::Mlr {
+        &self.mr_ctxt().mlr
+    }
+
+    fn tys(&self) -> &mr_ctxt::TyReg {
+        &self.mr_ctxt().tys
+    }
+
+    fn fns(&self) -> &mr_ctxt::FnReg {
+        &self.mr_ctxt().fns
+    }
+
     fn get_iw_ty_of_loc(&mut self, loc: &mlr::Loc) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.m2iw.mr_ctxt.mlr.get_loc_ty(loc);
+        let mr_ty = self.mlr().get_loc_ty(loc);
         let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(M2InkwellFnError)?;
         Ok(iw_ty)
     }
 
     fn get_iw_ty_of_place(&mut self, place: &mlr::Place) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.m2iw.mr_ctxt.mlr.get_place_ty(place);
+        let mr_ty = self.mlr().get_place_ty(place);
         let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(M2InkwellFnError)?;
         Ok(iw_ty)
     }
 
     fn get_fn_ty_of_loc(&mut self, op: &mlr::Op) -> M2InkwellFnResult<FunctionType<'iw>> {
-        let mr_ty = self.m2iw.mr_ctxt.mlr.get_op_ty(op);
-        let mr_ty_def = self.m2iw.mr_ctxt.tys.get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
+        let mr_ty = self.mlr().get_op_ty(op);
+        let mr_ty_def = self.tys().get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
 
         let mr_ty::TyDef::Fn {
             return_ty,
@@ -107,10 +123,8 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(return_ty.fn_type(&param_tys, var_args))
     }
 
-    fn mlr(&self) -> &mr_fns::FnMlr {
-        self.m2iw
-            .mr_ctxt
-            .fns
+    fn mlr_def(&self) -> &mr_fns::FnMlr {
+        self.fns()
             .get_fn_def(&self.specialization.fn_)
             .expect("MLR for function should be defined")
     }
@@ -138,7 +152,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn build_unit_value(&mut self) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let mr_unit_ty = self.m2iw.mr_ctxt.tys.get_primitive_ty(mr_ty::Primitive::Unit);
+        let mr_unit_ty = self.tys().get_primitive_ty(mr_ty::Primitive::Unit);
         let iw_ty = self.m2iw.get_or_define_ty(mr_unit_ty).ok_or(M2InkwellFnError)?;
         let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| M2InkwellFnError)?;
         Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())
@@ -149,7 +163,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         self.entry_block = Some(entry_block);
         self.iw_builder.position_at_end(entry_block);
 
-        let param_locs = self.mlr().param_locs.clone();
+        let param_locs = self.mlr_def().param_locs.clone();
 
         for (param_index, param_loc) in param_locs.iter().enumerate() {
             let param_address = self.build_alloca_for_loc(param_loc)?;
@@ -163,7 +177,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     fn build_function_body(&mut self) -> M2InkwellFnResult<BasicBlock<'iw>> {
         let body_block = self.m2iw.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.iw_builder.position_at_end(body_block);
-        self.build_stmt(&self.mlr().body.clone())?;
+        self.build_stmt(&self.mlr_def().body.clone())?;
 
         Ok(body_block)
     }
@@ -171,7 +185,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     fn build_stmt(&mut self, stmt: &mlr::Stmt) -> M2InkwellFnResult<()> {
         use mlr::StmtDef::*;
 
-        let stmt = self.m2iw.mr_ctxt.mlr.get_stmt_def(stmt);
+        let stmt = self.mlr().get_stmt_def(stmt);
 
         match *stmt {
             Alloc { loc } => {
@@ -201,7 +215,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     fn build_val(&mut self, val: &mlr::Val) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         use mlr::ValDef::*;
 
-        let val = self.m2iw.mr_ctxt.mlr.get_val_def(val);
+        let val = self.mlr().get_val_def(val);
 
         match *val {
             Use(place) => self.build_op(&place),
@@ -224,7 +238,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     fn build_place(&mut self, place: &mlr::Place) -> M2InkwellFnResult<PointerValue<'iw>> {
         use mlr::PlaceDef::*;
 
-        let place = self.m2iw.mr_ctxt.mlr.get_place_def(*place);
+        let place = self.mlr().get_place_def(*place);
 
         match *place {
             Loc(loc) => self.locs.get(&loc).ok_or(M2InkwellFnError).cloned(),
@@ -313,7 +327,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     fn build_op(&mut self, op: &mlr::Op) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         use mlr::OpDef::*;
 
-        let op = self.m2iw.mr_ctxt.mlr.get_op_def(op);
+        let op = self.mlr().get_op_def(op);
 
         match *op {
             Fn(ref fn_spec) => self.build_global_function(&fn_spec.clone()),
@@ -332,12 +346,12 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let substituted_gen_args = fn_spec
             .gen_args
             .iter()
-            .map(|&arg| self.m2iw.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
+            .map(|&arg| self.substitute(arg))
             .collect::<Vec<_>>();
         let substituted_env_gen_args = fn_spec
             .env_gen_args
             .iter()
-            .map(|&arg| self.m2iw.mr_ctxt.tys.substitute_gen_vars(arg, &self.substitutions))
+            .map(|&arg| self.substitute(arg))
             .collect::<Vec<_>>();
         let substituted_fn_spec = mr_fns::FnSpecialization {
             fn_: fn_spec.fn_,
@@ -353,11 +367,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn build_trait_method(&mut self, trait_method: mr_fns::TraitMethod) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let concrete_impl_ty = self
-            .m2iw
-            .mr_ctxt
-            .tys
-            .substitute_gen_vars(trait_method.impl_ty, &self.substitutions);
+        let concrete_impl_ty = self.substitute(trait_method.impl_ty);
         let fn_spec = self.m2iw.mr_ctxt.get_fn_spec_for_trait_call(
             trait_method.trait_,
             trait_method.method_idx,
@@ -434,12 +444,16 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn get_ty_as_basic_type_enum(&mut self, ty: mr_ty::Ty) -> Option<BasicTypeEnum<'iw>> {
-        let ty = self.m2iw.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions);
+        let ty = self.substitute(ty);
         self.m2iw.get_ty_as_basic_type_enum(ty)
     }
 
     fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_ty::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
-        let ty = self.m2iw.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions);
+        let ty = self.substitute(ty);
         self.m2iw.get_ty_as_basic_metadata_type_enum(ty)
+    }
+
+    fn substitute(&mut self, ty: mr_ty::Ty) -> mr_ty::Ty {
+        self.m2iw.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions)
     }
 }
