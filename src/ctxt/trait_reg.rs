@@ -36,4 +36,8 @@ impl TraitReg {
     pub fn get_trait_name(&self, trait_: Trait) -> &str {
         self.traits.get(trait_.0).unwrap().name.as_str()
     }
+
+    pub fn get_all_traits(&self) -> Vec<Trait> {
+        (0..self.traits.len()).map(Trait).collect()
+    }
 }

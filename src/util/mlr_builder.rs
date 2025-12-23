@@ -243,13 +243,16 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_fn_spec_op(&mut self, fn_spec: fns::FnSpecialization) -> H2MResult<mlr::Op> {
-        self.ctxt.fns.specialize_fn(
-            &self.target_fn,
-            &fn_spec.fn_,
-            fn_spec.gen_args.clone(),
-            fn_spec.env_gen_args.clone(),
-        );
+        self.ctxt.fns.specialize_fn(self.target_fn, fn_spec.clone());
         let op = mlr::OpDef::Fn(fn_spec);
+        self.insert_op(op)
+    }
+
+    pub fn insert_trait_method_op(&mut self, trait_method: fns::TraitMethod) -> Result<mlr::Op, H2MError> {
+        self.ctxt
+            .fns
+            .specialize_trait_method(self.target_fn, trait_method.clone());
+        let op = mlr::OpDef::TraitMethod(trait_method);
         self.insert_op(op)
     }
 

@@ -317,6 +317,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         match *op {
             Fn(ref fn_spec) => self.build_global_function(&fn_spec.clone()),
+            TraitMethod(..) => todo!(),
             Const(ref constant) => self.build_constant(&constant.clone()),
             Copy(place) => {
                 let place_ptr = self.build_place(&place)?;

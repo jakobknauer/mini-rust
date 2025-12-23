@@ -8,7 +8,8 @@ mod macros;
 
 use crate::{
     ctxt::{self, fns, mlr, ty},
-    hlr, typechecker,
+    hlr,
+    typechecker::{self, MethodResolutionResult},
     util::mlr_builder::MlrBuilder,
 };
 
@@ -240,13 +241,17 @@ impl<'a> H2M<'a> {
             .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
             .collect::<Result<_, _>>()?;
 
-        let method = self.typechecker().resolve_method(base_ty, &method.ident, &gen_args)?;
-        let method = self.builder.insert_fn_spec_op(method)?;
+        let resolution = self.typechecker().resolve_method(base_ty, &method.ident, &gen_args);
+
+        let method = match resolution {
+            MethodResolutionResult::Inherent(fn_spec) => self.builder.insert_fn_spec_op(fn_spec),
+            MethodResolutionResult::Trait(trait_method) => self.builder.insert_trait_method_op(trait_method),
+            MethodResolutionResult::Err(ty_error) => Err(ty_error.into()),
+        }?;
 
         let args = std::iter::once(Ok(base))
             .chain(args.iter().map(|arg| self.lower_to_op(arg)))
             .collect::<H2MResult<Vec<_>>>()?;
-
         self.builder.insert_call_val(method, args)
     }
 

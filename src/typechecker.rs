@@ -4,14 +4,21 @@ use std::collections::HashSet;
 
 pub use err::{TyError, TyResult};
 
-use crate::ctxt::{self, fns, mlr::*, ty};
+use crate::ctxt::{self, fns, mlr::*, traits::Trait, ty};
 
 pub struct Typechecker<'a> {
     tys: &'a mut ctxt::TyReg,
     fns: &'a mut ctxt::FnReg,
     mlr: &'a mut ctxt::mlr::Mlr,
     impls: &'a mut ctxt::ImplReg,
+    traits: &'a mut ctxt::TraitReg,
     fn_: fns::Fn,
+}
+
+pub enum MethodResolutionResult {
+    Inherent(fns::FnSpecialization),
+    Trait(fns::TraitMethod),
+    Err(TyError),
 }
 
 impl<'a> Typechecker<'a> {
@@ -21,6 +28,7 @@ impl<'a> Typechecker<'a> {
             fns: &mut ctxt.fns,
             mlr: &mut ctxt.mlr,
             impls: &mut ctxt.impls,
+            traits: &mut ctxt.traits,
             fn_,
         }
     }
@@ -66,6 +74,7 @@ impl<'a> Typechecker<'a> {
 
         let ty = match *op_def {
             Fn(ref fn_spec) => self.infer_ty_of_fn(&fn_spec.clone()),
+            TraitMethod(ref trait_method) => self.infer_ty_of_trait_method(trait_method.clone()),
             Const(ref constant) => self.infer_ty_of_constant(&constant.clone()),
             Copy(place) => self.infer_place_ty(place),
         }?;
@@ -220,6 +229,18 @@ impl<'a> Typechecker<'a> {
         let fn_spec_ty = self.tys.substitute_gen_vars(fn_ty, &substitutions);
 
         Ok(fn_spec_ty)
+    }
+
+    fn infer_ty_of_trait_method(&mut self, trait_method: fns::TraitMethod) -> TyResult<ty::Ty> {
+        let signature = &self.traits.get_trait_def(trait_method.trait_).methods[trait_method.method_idx];
+
+        let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
+        let fn_ty = self
+            .tys
+            .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
+
+        let substituted_fn_ty = self.tys.substitute_self_ty(fn_ty, trait_method.impl_ty);
+        Ok(substituted_fn_ty)
     }
 
     fn infer_ty_of_loc(&self, loc: &Loc) -> TyResult<ty::Ty> {
@@ -397,7 +418,20 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn resolve_method(
+    pub fn resolve_method(&self, base_ty: ty::Ty, method_name: &str, gen_args: &[ty::Ty]) -> MethodResolutionResult {
+        let inherent = self.resolve_inherent_method(base_ty, method_name, gen_args);
+
+        match inherent {
+            Ok(inherent) => MethodResolutionResult::Inherent(inherent),
+            Err(TyError::NoSuchMethod { .. }) => match self.resolve_trait_method(base_ty, method_name) {
+                Ok(trait_method) => MethodResolutionResult::Trait(trait_method),
+                Err(err) => MethodResolutionResult::Err(err),
+            },
+            Err(err) => MethodResolutionResult::Err(err),
+        }
+    }
+
+    fn resolve_inherent_method(
         &self,
         base_ty: ty::Ty,
         method_name: &str,
@@ -406,13 +440,16 @@ impl<'a> Typechecker<'a> {
         // Step 1: find all impls for the base type
         let matching_impl_insts = self.impls.get_all_impls().into_iter().filter_map(|impl_| {
             let impl_def = self.impls.get_impl_def(impl_).unwrap();
+            if impl_def.trait_.is_some() {
+                return None;
+            }
             self.tys
                 .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
                 .ok()
                 .map(|substitution| (impl_def, substitution))
         });
 
-        // Step 2: find candidate fns
+        // Step 2: find methods with matching name
         let candidate_fn_specs: Vec<fns::FnSpecialization> = matching_impl_insts
             .into_iter()
             .flat_map(|(impl_def, subst)| {
@@ -430,6 +467,51 @@ impl<'a> Typechecker<'a> {
         // Step 3: resolve ambiguity
         match &candidate_fn_specs[..] {
             [fn_spec] => Ok(fn_spec.clone()),
+            [] => TyError::NoSuchMethod {
+                base_ty,
+                method_name: method_name.to_string(),
+            }
+            .into(),
+            [_, _, ..] => TyError::AmbiguousMethod {
+                base_ty,
+                method_name: method_name.to_string(),
+            }
+            .into(),
+        }
+    }
+
+    fn resolve_trait_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<fns::TraitMethod> {
+        // 1. Find all traits that have a method with matching name
+        let trait_candidates = self.traits.get_all_traits().into_iter().filter_map(|trait_| {
+            let trait_def = self.traits.get_trait_def(trait_);
+            trait_def
+                .methods
+                .iter()
+                .position(|method| method.name == method_name)
+                .map(|idx| (trait_, idx))
+        });
+
+        // 2. Check which of these traits are implemented for the base type
+        let implemented_candidates: Vec<(Trait, usize)> = trait_candidates
+            .filter(|&(trait_, _)| {
+                self.impls.get_all_impls().into_iter().any(|impl_| {
+                    let impl_def = self.impls.get_impl_def(impl_).unwrap();
+                    impl_def.trait_ == Some(trait_)
+                        && self
+                            .tys
+                            .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
+                            .is_ok()
+                })
+            })
+            .collect();
+
+        // 3. Resolve ambiguity
+        match &implemented_candidates[..] {
+            [(trait_, method_idx)] => Ok(fns::TraitMethod {
+                trait_: *trait_,
+                method_idx: *method_idx,
+                impl_ty: base_ty,
+            }),
             [] => TyError::NoSuchMethod {
                 base_ty,
                 method_name: method_name.to_string(),

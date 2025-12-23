@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{Fn, FnMlr, FnSig, FnSpecialization},
+    fns::{Fn, FnMlr, FnSig, FnSpecialization, TraitMethod},
     ty::{GenVar, Ty},
 };
 
@@ -12,6 +12,7 @@ pub struct FnReg {
     defs: HashMap<Fn, FnMlr>,
 
     called_specializations: HashMap<Fn, Vec<FnSpecialization>>,
+    called_trait_methods: HashMap<Fn, Vec<TraitMethod>>,
 }
 
 impl FnReg {
@@ -57,21 +58,12 @@ impl FnReg {
         self.fn_names.values()
     }
 
-    pub fn specialize_fn(
-        &mut self,
-        caller: &Fn,
-        callee: &Fn,
-        gen_args: impl Into<Vec<Ty>>,
-        env_gen_args: impl Into<Vec<Ty>>,
-    ) {
-        self.called_specializations
-            .entry(*caller)
-            .or_default()
-            .push(FnSpecialization {
-                fn_: *callee,
-                gen_args: gen_args.into(),
-                env_gen_args: env_gen_args.into(),
-            });
+    pub fn specialize_fn(&mut self, caller: Fn, fn_spec: FnSpecialization) {
+        self.called_specializations.entry(caller).or_default().push(fn_spec);
+    }
+
+    pub fn specialize_trait_method(&mut self, caller: Fn, trait_method: TraitMethod) {
+        self.called_trait_methods.entry(caller).or_default().push(trait_method);
     }
 
     pub fn get_called_specializations(&self, caller: &Fn) -> &Vec<FnSpecialization> {

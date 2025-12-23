@@ -251,6 +251,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let fn_name = self.ctxt.get_fn_spec_name(fn_spec);
                     write!(self.writer, "fn {}", fn_name)
                 }
+                TraitMethod(trait_method) => {
+                    let base_ty_name = self.ctxt.tys.get_string_rep(trait_method.impl_ty);
+                    let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_);
+                    let method_name =
+                        &self.ctxt.traits.get_trait_def(trait_method.trait_).methods[trait_method.method_idx].name;
+                    write!(self.writer, "({} as {})::{}", base_ty_name, trait_name, method_name)
+                }
                 Const(constant) => match *constant {
                     Int(i) => write!(self.writer, "const {}", i),
                     Bool(b) => write!(self.writer, "const {}", b),

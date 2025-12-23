@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ctxt::{fns::FnSpecialization, ty::Ty};
+use crate::ctxt::{
+    fns::{FnSpecialization, TraitMethod},
+    ty::Ty,
+};
 
 #[derive(Default)]
 pub struct Mlr {
@@ -55,6 +58,7 @@ pub enum ValDef {
 #[derive(Debug, Clone)]
 pub enum OpDef {
     Fn(FnSpecialization),
+    TraitMethod(TraitMethod),
     Const(Const),
     Copy(Place),
 }
