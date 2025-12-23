@@ -357,7 +357,7 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
 
         let subst = ctxt.fns.get_substitutions_for_specialization(&current);
 
-        let fn_specs = ctxt.fns.get_called_specializations(&current.fn_).iter().map(|fn_spec| {
+        let fn_specs = ctxt.fns.get_called_specializations(current.fn_).iter().map(|fn_spec| {
             let new_gen_args = fn_spec
                 .gen_args
                 .iter()
@@ -372,7 +372,7 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
         });
         open.extend(fn_specs);
 
-        let called_trait_methods = ctxt.fns.get_called_trait_methods(&current.fn_).to_vec();
+        let called_trait_methods = ctxt.fns.get_called_trait_methods(current.fn_).to_vec();
         let trait_fn_specs = called_trait_methods
             .into_iter()
             .map(|trait_method| ctxt.specialize_trait_method_call(&trait_method, &subst));

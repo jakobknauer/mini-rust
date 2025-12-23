@@ -129,19 +129,13 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
         ),
         FnGenericArgCountMismatch { fn_, expected, actual } => format!(
             "Generic argument count mismatch in function '{}': expected {}, got {}",
-            ctxt.fns
-                .get_sig(&fn_)
-                .map(|sig| sig.name.as_str())
-                .unwrap_or("<unknown>"),
+            ctxt.fns.get_fn_name(fn_),
             expected,
             actual
         ),
         FnEnvGenericArgCountMismatch { fn_, expected, actual } => format!(
             "Environment generic argument count mismatch in function '{}': expected {}, got {}",
-            ctxt.fns
-                .get_sig(&fn_)
-                .map(|sig| sig.name.as_str())
-                .unwrap_or("<unknown>"),
+            ctxt.fns.get_fn_name(fn_),
             expected,
             actual
         ),

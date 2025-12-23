@@ -25,7 +25,8 @@ impl FnReg {
 
         if signature.associated_ty.is_none() {
             // Only register the function by 'global' name if it is not an associated method
-            // TODO This is a bit of a hack
+            // TODO This is a bit of a hack, but on the other hand, resolution is somewhat unclean
+            // atm anyway
             self.fn_names.insert(signature.name.to_string(), fn_);
         }
         self.sigs.push(signature);
@@ -35,7 +36,7 @@ impl FnReg {
         Ok(fn_)
     }
 
-    pub fn get_sig(&self, fn_: &Fn) -> Option<&FnSig> {
+    pub fn get_sig(&self, fn_: Fn) -> Option<&FnSig> {
         self.sigs.get(fn_.0)
     }
 
@@ -47,16 +48,16 @@ impl FnReg {
         self.defs.insert(fn_, mlr);
     }
 
-    pub fn is_fn_defined(&self, fn_: &Fn) -> bool {
-        self.defs.contains_key(fn_)
+    pub fn is_fn_defined(&self, fn_: Fn) -> bool {
+        self.defs.contains_key(&fn_)
     }
 
-    pub fn get_fn_def(&self, fn_: &Fn) -> Option<&FnMlr> {
-        self.defs.get(fn_)
+    pub fn get_fn_def(&self, fn_: Fn) -> Option<&FnMlr> {
+        self.defs.get(&fn_)
     }
 
-    pub fn get_all_fns(&self) -> impl IntoIterator<Item = &Fn> {
-        self.fn_names.values()
+    pub fn get_all_fns(&self) -> impl Iterator<Item = Fn> {
+        self.fn_names.values().cloned()
     }
 
     pub fn specialize_fn(&mut self, caller: Fn, fn_spec: FnSpecialization) {
@@ -67,16 +68,16 @@ impl FnReg {
         self.called_trait_methods.entry(caller).or_default().push(trait_method);
     }
 
-    pub fn get_called_specializations(&self, caller: &Fn) -> &Vec<FnSpecialization> {
-        self.called_specializations.get(caller).unwrap()
+    pub fn get_called_specializations(&self, caller: Fn) -> &Vec<FnSpecialization> {
+        self.called_specializations.get(&caller).unwrap()
     }
 
-    pub fn get_called_trait_methods(&self, caller: &Fn) -> &Vec<TraitMethod> {
-        self.called_trait_methods.get(caller).unwrap()
+    pub fn get_called_trait_methods(&self, caller: Fn) -> &Vec<TraitMethod> {
+        self.called_trait_methods.get(&caller).unwrap()
     }
 
     pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<GenVar, Ty> {
-        let sig = self.get_sig(&fn_specialization.fn_).unwrap();
+        let sig = self.get_sig(fn_specialization.fn_).unwrap();
         let gen_param_substitutions = sig
             .gen_params
             .iter()
@@ -91,6 +92,8 @@ impl FnReg {
     }
 
     pub fn get_fn_name(&self, method: Fn) -> &str {
-        &self.get_sig(&method).unwrap().name
+        self.get_sig(method)
+            .map(|sig| sig.name.as_str())
+            .unwrap_or("<unknown fn>")
     }
 }

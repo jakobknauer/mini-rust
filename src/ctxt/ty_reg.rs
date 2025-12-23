@@ -508,7 +508,7 @@ impl TyReg {
         .expect("primitive type should be registered")
     }
 
-    pub fn get_all_enums(&self) -> impl IntoIterator<Item = (Enum, &EnumDef)> {
+    pub fn get_all_enums(&self) -> impl Iterator<Item = (Enum, &EnumDef)> {
         self.enums
             .iter()
             .enumerate()
@@ -705,7 +705,7 @@ impl TyReg {
         Ok(instantiated_variant_struct_tys)
     }
 
-    pub fn get_struct_field_names(&mut self, ty: Ty) -> Result<impl IntoIterator<Item = &str>, NotAStruct> {
+    pub fn get_struct_field_names(&mut self, ty: Ty) -> Result<impl Iterator<Item = &str>, NotAStruct> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
         let &TyDef::Struct { struct_, .. } = ty_def else {
             return Err(NotAStruct(ty));
@@ -717,7 +717,7 @@ impl TyReg {
         Ok(struct_def.fields.iter().map(|field| field.name.as_str()))
     }
 
-    pub fn get_enum_variant_names(&self, ty: Ty) -> Result<impl IntoIterator<Item = &str>, NotAnEnum> {
+    pub fn get_enum_variant_names(&self, ty: Ty) -> Result<impl Iterator<Item = &str>, NotAnEnum> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
         let &TyDef::Enum { enum_, .. } = ty_def else {
             return Err(NotAnEnum(ty));

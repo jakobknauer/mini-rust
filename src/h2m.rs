@@ -197,8 +197,8 @@ impl<'a> H2M<'a> {
         let right_op = self.lower_to_op(right)?;
 
         let op = {
-            let left_ty = self.mlr().get_op_ty(&left_op);
-            let right_ty = self.mlr().get_op_ty(&right_op);
+            let left_ty = self.mlr().get_op_ty(left_op);
+            let right_ty = self.mlr().get_op_ty(right_op);
             let fn_ = self.resolve_operator(operator, (left_ty, right_ty))?;
             self.builder.insert_fn_op(fn_)?
         };
@@ -233,7 +233,7 @@ impl<'a> H2M<'a> {
         args: &[hlr::Expr],
     ) -> Result<mlr::Val, H2MError> {
         let base = self.lower_to_op(obj)?;
-        let base_ty = self.mlr().get_op_ty(&base);
+        let base_ty = self.mlr().get_op_ty(base);
 
         let gen_args: Vec<_> = method
             .gen_args
@@ -301,7 +301,7 @@ impl<'a> H2M<'a> {
                 .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
                 .collect::<H2MResult<Vec<_>>>()?;
             let ty = self.tys().instantiate_struct(struct_, gen_arg_tys)?;
-            self.build_struct_val(&ty, fields)
+            self.build_struct_val(ty, fields)
         } else if let Some((enum_, variant_index)) = self.builder.try_resolve_enum_variant(&ident.ident) {
             let gen_arg_tys = ident
                 .gen_args
@@ -318,9 +318,9 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_struct_val(&mut self, ty: &ty::Ty, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
-        let struct_val_place = self.builder.insert_alloc_with_ty(*ty)?;
-        self.build_struct_field_init_stmts(ty, fields, &struct_val_place)?;
+    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
+        let struct_val_place = self.builder.insert_alloc_with_ty(ty)?;
+        self.build_struct_field_init_stmts(ty, fields, struct_val_place)?;
         self.builder.insert_use_place_val(struct_val_place)
     }
 
@@ -345,24 +345,24 @@ impl<'a> H2M<'a> {
             .builder
             .insert_project_to_variant_place(base_place, *variant_index)?;
         let variant_ty = self.builder.typechecker().get_enum_variant_ty(ty, *variant_index)?;
-        self.build_struct_field_init_stmts(&variant_ty, fields, &variant_place)?;
+        self.build_struct_field_init_stmts(variant_ty, fields, variant_place)?;
 
         self.builder.insert_use_place_val(base_place)
     }
 
     fn build_struct_field_init_stmts(
         &mut self,
-        ty: &ty::Ty,
+        ty: ty::Ty,
         fields: &[(String, hlr::Expr)],
-        base_place: &mlr::Place,
+        base_place: mlr::Place,
     ) -> H2MResult<()> {
         let field_indices = self
             .builder
             .typechecker()
-            .resolve_struct_fields(*ty, fields.iter().map(|(name, _)| name.as_str()))?;
+            .resolve_struct_fields(ty, fields.iter().map(|(name, _)| name.as_str()))?;
 
         for ((_, expr), field_index) in fields.iter().zip(field_indices) {
-            let field_place = self.builder.insert_field_access_place(*base_place, field_index)?;
+            let field_place = self.builder.insert_field_access_place(base_place, field_index)?;
             let field_value = self.lower_to_val(expr)?;
             self.builder.insert_assign_stmt(field_place, field_value)?;
         }
@@ -383,7 +383,7 @@ impl<'a> H2M<'a> {
             self.builder.insert_fn_op(eq_fn)?
         };
 
-        let scrutinee_ty = self.mlr().get_place_ty(&scrutinee_place);
+        let scrutinee_ty = self.mlr().get_place_ty(scrutinee_place);
         let arm_indices = self
             .typechecker()
             .resolve_enum_variants(scrutinee_ty, arms.iter().map(|arm| arm.pattern.variant.as_str()))?;
@@ -478,7 +478,7 @@ impl<'a> H2M<'a> {
         // temporary place). This requires some attention to different expressions (temporaries vs.
         // places).
         let obj = self.lower_to_place(obj)?;
-        let obj_ty = self.mlr().get_place_ty(&obj);
+        let obj_ty = self.mlr().get_place_ty(obj);
 
         if !field.gen_args.is_empty() {
             return Err(H2MError::NotAPlace);

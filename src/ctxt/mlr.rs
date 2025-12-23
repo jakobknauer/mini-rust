@@ -143,7 +143,7 @@ impl Mlr {
         self.op_tys.insert(op, ty);
     }
 
-    pub fn get_stmt_def(&self, stmt: &Stmt) -> &StmtDef {
+    pub fn get_stmt_def(&self, stmt: Stmt) -> &StmtDef {
         self.stmts.get(stmt.0).expect("stmt should be known")
     }
 
@@ -151,11 +151,11 @@ impl Mlr {
         self.stmts.get(stmt.0)
     }
 
-    pub fn get_val_def(&self, val: &Val) -> &ValDef {
+    pub fn get_val_def(&self, val: Val) -> &ValDef {
         self.vals.get(val.0).expect("val should be known")
     }
 
-    pub fn try_get_val_def(&self, val: &Val) -> Option<&ValDef> {
+    pub fn try_get_val_def(&self, val: Val) -> Option<&ValDef> {
         self.vals.get(val.0)
     }
 
@@ -163,32 +163,32 @@ impl Mlr {
         self.places.get(place.0).expect("place should be known")
     }
 
-    pub fn try_get_place_def(&self, place: &Place) -> Option<&PlaceDef> {
+    pub fn try_get_place_def(&self, place: Place) -> Option<&PlaceDef> {
         self.places.get(place.0)
     }
 
-    pub fn get_op_def(&self, op: &Op) -> &OpDef {
+    pub fn get_op_def(&self, op: Op) -> &OpDef {
         self.ops.get(op.0).expect("op should be known")
     }
 
-    pub fn try_get_op_def(&self, op: &Op) -> Option<&OpDef> {
+    pub fn try_get_op_def(&self, op: Op) -> Option<&OpDef> {
         self.ops.get(op.0)
     }
 
-    pub fn get_val_ty(&self, val: &Val) -> Ty {
-        *self.val_tys.get(val).expect("type of val should be known")
+    pub fn get_val_ty(&self, val: Val) -> Ty {
+        *self.val_tys.get(&val).expect("type of val should be known")
     }
 
-    pub fn get_place_ty(&self, place: &Place) -> Ty {
-        *self.place_tys.get(place).expect("type of place should be known")
+    pub fn get_place_ty(&self, place: Place) -> Ty {
+        *self.place_tys.get(&place).expect("type of place should be known")
     }
 
-    pub fn get_op_ty(&self, op: &Op) -> Ty {
-        *self.op_tys.get(op).expect("type of op should be known")
+    pub fn get_op_ty(&self, op: Op) -> Ty {
+        *self.op_tys.get(&op).expect("type of op should be known")
     }
 
-    pub fn get_loc_ty(&self, loc: &Loc) -> Ty {
-        *self.loc_tys.get(loc).expect("type of loc should be known")
+    pub fn get_loc_ty(&self, loc: Loc) -> Ty {
+        *self.loc_tys.get(&loc).expect("type of loc should be known")
     }
 
     pub fn get_all_types_mut(&mut self) -> impl Iterator<Item = &mut Ty> {

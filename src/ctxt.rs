@@ -29,7 +29,7 @@ pub struct Ctxt {
 
 impl Ctxt {
     pub fn get_fn_spec_name(&self, fn_spec: &fns::FnSpecialization) -> String {
-        let signature = self.fns.get_sig(&fn_spec.fn_).unwrap();
+        let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
 
         let prefix = if let Some(assoc_ty) = signature.associated_ty {
             let substitutions = signature
@@ -71,7 +71,7 @@ impl Ctxt {
     }
 
     pub fn get_specialized_fn_sig(&mut self, fn_spec: &fns::FnSpecialization) -> fns::FnSig {
-        let signature = self.fns.get_sig(&fn_spec.fn_).unwrap();
+        let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
         let substitutions = self.fns.get_substitutions_for_specialization(fn_spec);
 
         let specialized_params = signature

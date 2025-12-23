@@ -48,7 +48,7 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result
     let trait_def = ctxt.traits.get_trait_def(trait_);
 
     for &method in &impl_def.methods {
-        let impl_method_sig = ctxt.fns.get_sig(&method).unwrap();
+        let impl_method_sig = ctxt.fns.get_sig(method).unwrap();
 
         let method_name = ctxt.fns.get_fn_name(method);
         let trait_method_sig = trait_def.methods.iter().find(|m| m.name == method_name).unwrap();

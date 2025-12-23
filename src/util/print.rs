@@ -6,9 +6,9 @@ use crate::ctxt::{
     mlr,
 };
 
-pub fn print_mlr<W: Write>(fn_: &Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
+pub fn print_mlr<W: Write>(fn_: Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
-        fn_: *fn_,
+        fn_,
         mlr: ctxt.fns.get_fn_def(fn_),
         signature: ctxt.fns.get_sig(fn_),
         ctxt,
@@ -44,7 +44,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         if let Some(mlr) = self.mlr {
             writeln!(self.writer)?;
-            self.print_stmt(&mlr.body)
+            self.print_stmt(mlr.body)
         } else {
             write!(self.writer, ";")
         }
@@ -96,7 +96,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
-        for stmt in stmts {
+        for &stmt in stmts {
             self.print_stmt(stmt)?;
         }
 
@@ -105,13 +105,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         write!(self.writer, "}}")
     }
 
-    fn print_stmt(&mut self, stmt: &mlr::Stmt) -> Result<(), std::io::Error> {
+    fn print_stmt(&mut self, stmt: mlr::Stmt) -> Result<(), std::io::Error> {
         use mlr::StmtDef::*;
 
-        let stmt_def = &self.ctxt.mlr.try_get_stmt_def(*stmt);
+        let stmt_def = &self.ctxt.mlr.try_get_stmt_def(stmt);
 
-        match stmt_def {
-            Some(stmt) => match stmt {
+        match *stmt_def {
+            Some(stmt) => match *stmt {
                 Alloc { loc } => {
                     let loc_ty = self.ctxt.mlr.get_loc_ty(loc);
                     let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
@@ -136,7 +136,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.indent()?;
                     writeln!(self.writer, "break;")
                 }
-                Block(stmts) => {
+                Block(ref stmts) => {
                     self.indent()?;
                     self.print_block(stmts)?;
                     writeln!(self.writer)
@@ -144,12 +144,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 If(if_) => {
                     self.indent()?;
                     write!(self.writer, "if ")?;
-                    self.print_op(&if_.cond)?;
+                    self.print_op(if_.cond)?;
                     writeln!(self.writer)?;
-                    self.print_stmt(&if_.then)?;
+                    self.print_stmt(if_.then)?;
                     self.indent()?;
                     writeln!(self.writer, "else")?;
-                    self.print_stmt(&if_.else_)
+                    self.print_stmt(if_.else_)
                     // writeln!(self.writer)
                 }
                 Loop { body } => {
@@ -163,22 +163,22 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn print_val(&mut self, val: &mlr::Val) -> Result<(), std::io::Error> {
+    fn print_val(&mut self, val: mlr::Val) -> Result<(), std::io::Error> {
         use mlr::ValDef::*;
 
         let val_def = &self.ctxt.mlr.try_get_val_def(val);
 
-        match val_def {
-            Some(val) => match val {
+        match *val_def {
+            Some(val) => match *val {
                 Use(op) => {
                     // write!(self.writer, "use ")?;
                     self.print_op(op)
                 }
-                Call { callable, args } => {
+                Call { callable, ref args } => {
                     write!(self.writer, "call ")?;
                     self.print_op(callable)?;
                     write!(self.writer, "(")?;
-                    for (i, arg) in args.iter().enumerate() {
+                    for (i, &arg) in args.iter().enumerate() {
                         if i > 0 {
                             write!(self.writer, ", ")?;
                         }
@@ -194,24 +194,24 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 As { op, target_ty } => {
                     write!(self.writer, "(")?;
                     self.print_op(op)?;
-                    let ty_name = self.ctxt.tys.get_string_rep(*target_ty);
+                    let ty_name = self.ctxt.tys.get_string_rep(target_ty);
                     write!(self.writer, " as {})", ty_name)
                 }
                 SizeOf(ty) => {
-                    write!(self.writer, "SizeOf({})", self.ctxt.tys.get_string_rep(*ty))
+                    write!(self.writer, "SizeOf({})", self.ctxt.tys.get_string_rep(ty))
                 }
             },
             None => write!(self.writer, "<val id {}>", val.0),
         }
     }
 
-    fn print_place(&mut self, place: &mlr::Place) -> Result<(), std::io::Error> {
+    fn print_place(&mut self, place: mlr::Place) -> Result<(), std::io::Error> {
         use mlr::PlaceDef::*;
 
         let place_def = &self.ctxt.mlr.try_get_place_def(place);
 
-        match place_def {
-            Some(place) => match place {
+        match *place_def {
+            Some(place) => match *place {
                 Loc(loc) => write!(self.writer, "{}", loc),
                 FieldAccess { base, field_index, .. } => {
                     self.print_place(base)?;
@@ -239,26 +239,26 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         }
     }
 
-    fn print_op(&mut self, op: &mlr::Op) -> Result<(), std::io::Error> {
+    fn print_op(&mut self, op: mlr::Op) -> Result<(), std::io::Error> {
         use mlr::Const::*;
         use mlr::OpDef::*;
 
         let op_def = &self.ctxt.mlr.try_get_op_def(op);
 
-        match op_def {
-            Some(operand) => match operand {
-                Fn(fn_spec) => {
+        match *op_def {
+            Some(operand) => match *operand {
+                Fn(ref fn_spec) => {
                     let fn_name = self.ctxt.get_fn_spec_name(fn_spec);
                     write!(self.writer, "fn {}", fn_name)
                 }
-                TraitMethod(trait_method) => {
+                TraitMethod(ref trait_method) => {
                     let base_ty_name = self.ctxt.tys.get_string_rep(trait_method.impl_ty);
                     let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_);
                     let method_name =
                         &self.ctxt.traits.get_trait_def(trait_method.trait_).methods[trait_method.method_idx].name;
                     write!(self.writer, "({} as {})::{}", base_ty_name, trait_name, method_name)
                 }
-                Const(constant) => match *constant {
+                Const(ref constant) => match *constant {
                     Int(i) => write!(self.writer, "const {}", i),
                     Bool(b) => write!(self.writer, "const {}", b),
                     Unit => write!(self.writer, "const ()"),

@@ -35,12 +35,12 @@ impl<'a> Typechecker<'a> {
     pub fn infer_val_ty(&mut self, val: Val) -> TyResult<ty::Ty> {
         use ValDef::*;
 
-        let val_def = self.mlr.get_val_def(&val);
+        let val_def = self.mlr.get_val_def(val);
 
         let ty = match *val_def {
-            Call { callable, ref args } => self.infer_ty_of_call(&callable, &args.clone()),
-            Use(op) => Ok(self.mlr.get_op_ty(&op)),
-            AddrOf(place) => self.infer_ty_of_addr_of_place(&place),
+            Call { callable, ref args } => self.infer_ty_of_call(callable, &args.clone()),
+            Use(op) => Ok(self.mlr.get_op_ty(op)),
+            AddrOf(place) => self.infer_ty_of_addr_of_place(place),
             As { op, target_ty } => self.infer_ty_of_as_expr(op, target_ty),
             SizeOf(..) => self.infer_ty_of_size_of_expr(),
         }?;
@@ -54,12 +54,12 @@ impl<'a> Typechecker<'a> {
 
         let place_def = self.mlr.get_place_def(place);
 
-        let ty = match place_def {
+        let ty = match *place_def {
             Loc(loc) => self.infer_ty_of_loc(loc),
-            &FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index),
+            FieldAccess { base, field_index } => self.infer_ty_of_field_access_place(base, field_index),
             EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(base),
-            &ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
-            &Deref(op) => self.infer_ty_of_deref_place(&op),
+            ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
+            Deref(op) => self.infer_ty_of_deref_place(op),
         }?;
 
         self.mlr.set_place_ty(place, ty);
@@ -69,7 +69,7 @@ impl<'a> Typechecker<'a> {
     pub fn infer_op_ty(&mut self, op: Op) -> TyResult<ty::Ty> {
         use OpDef::*;
 
-        let op_def = self.mlr.get_op_def(&op);
+        let op_def = self.mlr.get_op_def(op);
 
         let ty = match *op_def {
             Fn(ref fn_spec) => self.infer_ty_of_fn(&fn_spec.clone()),
@@ -85,7 +85,7 @@ impl<'a> Typechecker<'a> {
     pub fn check_stmt_ty(&mut self, stmt: Stmt) -> TyResult<()> {
         use StmtDef::*;
 
-        let stmt_def = self.mlr.get_stmt_def(&stmt);
+        let stmt_def = self.mlr.get_stmt_def(stmt);
 
         match *stmt_def {
             Assign { place, value } => self.check_assign_stmt(place, value)?,
@@ -116,7 +116,7 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    fn infer_ty_of_call(&mut self, callable: &Op, args: &[Op]) -> TyResult<ty::Ty> {
+    fn infer_ty_of_call(&mut self, callable: Op, args: &[Op]) -> TyResult<ty::Ty> {
         let ty = self.mlr.get_op_ty(callable);
         let callable_ty_def = self.tys.get_ty_def(ty).expect("type of callable should be registered");
 
@@ -131,7 +131,7 @@ impl<'a> Typechecker<'a> {
 
         let arg_tys = args
             .iter()
-            .map(|arg_loc| self.mlr.get_op_ty(arg_loc))
+            .map(|&arg_loc| self.mlr.get_op_ty(arg_loc))
             .collect::<Vec<_>>();
 
         if (var_args && arg_tys.len() < param_tys.len()) || (!var_args && arg_tys.len() != param_tys.len()) {
@@ -156,14 +156,14 @@ impl<'a> Typechecker<'a> {
         Ok(return_ty)
     }
 
-    fn infer_ty_of_addr_of_place(&mut self, place: &Place) -> TyResult<ty::Ty> {
+    fn infer_ty_of_addr_of_place(&mut self, place: Place) -> TyResult<ty::Ty> {
         let place_ty = self.mlr.get_place_ty(place);
         let ref_ty = self.tys.register_ref_ty(place_ty);
         Ok(ref_ty)
     }
 
     fn infer_ty_of_as_expr(&mut self, op: Op, target_ty: ty::Ty) -> Result<ty::Ty, TyError> {
-        let op_ty = self.mlr.get_op_ty(&op);
+        let op_ty = self.mlr.get_op_ty(op);
         let op_ty_def = self
             .tys
             .get_ty_def(op_ty)
@@ -199,7 +199,7 @@ impl<'a> Typechecker<'a> {
     fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {
         let signature = self
             .fns
-            .get_sig(&fn_specialization.fn_)
+            .get_sig(fn_specialization.fn_)
             .expect("function signature should be registered");
 
         if signature.gen_params.len() != fn_specialization.gen_args.len() {
@@ -242,17 +242,17 @@ impl<'a> Typechecker<'a> {
         Ok(substituted_fn_ty)
     }
 
-    fn infer_ty_of_loc(&self, loc: &Loc) -> TyResult<ty::Ty> {
+    fn infer_ty_of_loc(&self, loc: Loc) -> TyResult<ty::Ty> {
         Ok(self.mlr.get_loc_ty(loc))
     }
 
     fn infer_ty_of_field_access_place(&mut self, base: Place, field_index: usize) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(&base);
+        let base_ty = self.mlr.get_place_ty(base);
         let field_ty = self.tys.get_struct_field_ty(base_ty, field_index)?;
         Ok(field_ty)
     }
 
-    fn infer_ty_of_enum_discriminant(&self, base: &Place) -> TyResult<ty::Ty> {
+    fn infer_ty_of_enum_discriminant(&self, base: Place) -> TyResult<ty::Ty> {
         let base_ty = self.mlr.get_place_ty(base);
         if !self.tys.is_enum_ty(base_ty) {
             return TyError::NotAnEnum { ty: base_ty }.into();
@@ -264,11 +264,11 @@ impl<'a> Typechecker<'a> {
     }
 
     fn infer_ty_of_project_to_variant_place(&mut self, base: Place, variant_index: usize) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(&base);
+        let base_ty = self.mlr.get_place_ty(base);
         self.get_enum_variant_ty(base_ty, variant_index)
     }
 
-    fn infer_ty_of_deref_place(&mut self, op: &Op) -> TyResult<ty::Ty> {
+    fn infer_ty_of_deref_place(&mut self, op: Op) -> TyResult<ty::Ty> {
         let ref_ty = self.mlr.get_op_ty(op);
         let ty_def = self
             .tys
@@ -288,8 +288,8 @@ impl<'a> Typechecker<'a> {
     }
 
     fn check_assign_stmt(&mut self, place: Place, val: Val) -> TyResult<()> {
-        let place_ty = self.mlr.get_place_ty(&place);
-        let val_ty = self.mlr.get_val_ty(&val);
+        let place_ty = self.mlr.get_place_ty(place);
+        let val_ty = self.mlr.get_val_ty(val);
 
         self.tys
             .unify(place_ty, val_ty)
@@ -303,11 +303,11 @@ impl<'a> Typechecker<'a> {
     fn check_return_stmt(&mut self, val: Val) -> TyResult<()> {
         let return_ty = self
             .fns
-            .get_sig(&self.fn_)
+            .get_sig(self.fn_)
             .expect("function signature should be registered")
             .return_ty;
 
-        let val_ty = self.mlr.get_val_ty(&val);
+        let val_ty = self.mlr.get_val_ty(val);
 
         self.tys
             .unify(return_ty, val_ty)
@@ -330,7 +330,7 @@ impl<'a> Typechecker<'a> {
         let provided_names: Vec<&str> = field_names.into_iter().collect();
         let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
 
-        let expected_names: Vec<&str> = self.tys.get_struct_field_names(struct_ty)?.into_iter().collect();
+        let expected_names: Vec<&str> = self.tys.get_struct_field_names(struct_ty)?.collect();
         let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
 
         let missing_fields: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();
@@ -375,7 +375,7 @@ impl<'a> Typechecker<'a> {
         let provided_names: Vec<&str> = variant_names.into_iter().collect();
         let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
 
-        let expected_names: Vec<&str> = self.tys.get_enum_variant_names(enum_ty)?.into_iter().collect();
+        let expected_names: Vec<&str> = self.tys.get_enum_variant_names(enum_ty)?.collect();
         let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
 
         let missing_variants: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();

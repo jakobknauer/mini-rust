@@ -19,7 +19,7 @@ impl<'a> super::H2M<'a> {
             "arm_variant_indices length should match arms length"
         );
 
-        let enum_ty = self.mlr().get_place_ty(&scrutinee_place);
+        let enum_ty = self.mlr().get_place_ty(scrutinee_place);
 
         match (arms, variant_indices) {
             ([], []) => panic!("Match expressions must have at least one arm."),
@@ -31,7 +31,7 @@ impl<'a> super::H2M<'a> {
             }
 
             ([first_arm, arms @ ..], [first_variant_index, variant_indices @ ..]) => {
-                let condition = self.build_arm_condition(first_variant_index, &eq_fn, &discriminant)?;
+                let condition = self.build_arm_condition(*first_variant_index, eq_fn, discriminant)?;
 
                 self.builder.start_new_block();
                 let first_arm_result =
@@ -60,15 +60,14 @@ impl<'a> super::H2M<'a> {
 
     fn build_arm_condition(
         &mut self,
-        variant_index: &usize,
-        eq_fn: &mlr::Op,
-        discriminant: &mlr::Op,
+        variant_index: usize,
+        eq_fn: mlr::Op,
+        discriminant: mlr::Op,
     ) -> H2MResult<mlr::Op> {
-        let variant_index = self.builder.insert_int_op(*variant_index as i64)?;
+        let variant_index = self.builder.insert_int_op(variant_index as i64)?;
         let condition_place = assign_to_fresh_alloc!(
             self,
-            self.builder
-                .insert_call_val(*eq_fn, vec![*discriminant, variant_index])?
+            self.builder.insert_call_val(eq_fn, vec![discriminant, variant_index])?
         );
         self.builder.insert_copy_op(condition_place)
     }
@@ -95,7 +94,7 @@ impl<'a> super::H2M<'a> {
         for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
         {
             let field_place = self.builder.insert_field_access_place(variant_place, field_index)?;
-            let field_ty = self.mlr().get_place_ty(&field_place);
+            let field_ty = self.mlr().get_place_ty(field_place);
             let field_val = self.builder.insert_use_place_val(field_place)?;
 
             let assign_loc = self.mlr().insert_typed_loc(field_ty);

@@ -47,7 +47,7 @@ impl<'a> MlrBuilder<'a> {
     pub fn get_signature(&self) -> &fns::FnSig {
         self.ctxt
             .fns
-            .get_sig(&self.target_fn)
+            .get_sig(self.target_fn)
             .expect("function signature should be registered")
     }
 

@@ -34,7 +34,7 @@ pub type M2InkwellFnResult<T> = Result<T, M2InkwellFnError>;
 
 impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     pub fn new(m2iw: &'a mut super::M2Inkwell<'iw, 'mr>, specialization: mr_fns::FnSpecialization) -> Option<Self> {
-        if !m2iw.mr_ctxt.fns.is_fn_defined(&specialization.fn_) {
+        if !m2iw.mr_ctxt.fns.is_fn_defined(specialization.fn_) {
             return None;
         }
 
@@ -88,19 +88,19 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         &self.mr_ctxt().fns
     }
 
-    fn get_iw_ty_of_loc(&mut self, loc: &mlr::Loc) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
+    fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
         let mr_ty = self.mlr().get_loc_ty(loc);
         let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(M2InkwellFnError)?;
         Ok(iw_ty)
     }
 
-    fn get_iw_ty_of_place(&mut self, place: &mlr::Place) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
+    fn get_iw_ty_of_place(&mut self, place: mlr::Place) -> M2InkwellFnResult<BasicTypeEnum<'iw>> {
         let mr_ty = self.mlr().get_place_ty(place);
         let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(M2InkwellFnError)?;
         Ok(iw_ty)
     }
 
-    fn get_fn_ty_of_loc(&mut self, op: &mlr::Op) -> M2InkwellFnResult<FunctionType<'iw>> {
+    fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> M2InkwellFnResult<FunctionType<'iw>> {
         let mr_ty = self.mlr().get_op_ty(op);
         let mr_ty_def = self.tys().get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
 
@@ -125,15 +125,15 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
     fn mlr_def(&self) -> &mr_fns::FnMlr {
         self.fns()
-            .get_fn_def(&self.specialization.fn_)
+            .get_fn_def(self.specialization.fn_)
             .expect("MLR for function should be defined")
     }
 
-    fn build_alloca_for_loc(&mut self, loc: &mlr::Loc) -> M2InkwellFnResult<PointerValue<'iw>> {
+    fn build_alloca_for_loc(&mut self, loc: mlr::Loc) -> M2InkwellFnResult<PointerValue<'iw>> {
         let iw_ty = self.get_iw_ty_of_loc(loc)?;
         let name = loc.to_string();
         let address = self.build_alloca(iw_ty, &name)?;
-        self.locs.insert(*loc, address);
+        self.locs.insert(loc, address);
         Ok(address)
     }
 
@@ -165,7 +165,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         let param_locs = self.mlr_def().param_locs.clone();
 
-        for (param_index, param_loc) in param_locs.iter().enumerate() {
+        for (param_index, &param_loc) in param_locs.iter().enumerate() {
             let param_address = self.build_alloca_for_loc(param_loc)?;
             self.iw_builder
                 .build_store(param_address, self.iw_fn.get_nth_param(param_index as u32).unwrap())?;
@@ -177,27 +177,27 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     fn build_function_body(&mut self) -> M2InkwellFnResult<BasicBlock<'iw>> {
         let body_block = self.m2iw.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.iw_builder.position_at_end(body_block);
-        self.build_stmt(&self.mlr_def().body.clone())?;
+        self.build_stmt(self.mlr_def().body)?;
 
         Ok(body_block)
     }
 
-    fn build_stmt(&mut self, stmt: &mlr::Stmt) -> M2InkwellFnResult<()> {
+    fn build_stmt(&mut self, stmt: mlr::Stmt) -> M2InkwellFnResult<()> {
         use mlr::StmtDef::*;
 
         let stmt = self.mlr().get_stmt_def(stmt);
 
         match *stmt {
             Alloc { loc } => {
-                self.build_alloca_for_loc(&loc)?;
+                self.build_alloca_for_loc(loc)?;
             }
             Assign { place, value } => {
-                let place = self.build_place(&place)?;
-                let value = self.build_val(&value)?;
+                let place = self.build_place(place)?;
+                let value = self.build_val(value)?;
                 self.iw_builder.build_store(place, value)?;
             }
             Return { value } => {
-                let ret_value = self.build_val(&value)?;
+                let ret_value = self.build_val(value)?;
                 self.iw_builder.build_return(Some(&ret_value))?;
             }
             Break => {
@@ -205,26 +205,26 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 self.iw_builder.build_unconditional_branch(*after_loop_block)?;
             }
             Block(ref stmts) => self.build_block(&stmts.clone())?,
-            If(if_) => self.build_if(&if_)?,
-            Loop { body } => self.build_loop(&body)?,
+            If(if_) => self.build_if(if_)?,
+            Loop { body } => self.build_loop(body)?,
         }
 
         Ok(())
     }
 
-    fn build_val(&mut self, val: &mlr::Val) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+    fn build_val(&mut self, val: mlr::Val) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         use mlr::ValDef::*;
 
         let val = self.mlr().get_val_def(val);
 
         match *val {
-            Use(place) => self.build_op(&place),
-            Call { callable, ref args } => self.build_call(&callable, &args.clone()),
-            AddrOf(place) => self.build_place(&place).map(|ptr| ptr.as_basic_value_enum()),
+            Use(place) => self.build_op(place),
+            Call { callable, ref args } => self.build_call(callable, &args.clone()),
+            AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
             As { op, .. } => {
                 // since the only valid conversion atm is from ref to ptr of the same base type,
                 // we can just build the op and return it
-                self.build_op(&op)
+                self.build_op(op)
             }
             SizeOf(ty) => {
                 let ty = self.get_ty_as_basic_type_enum(ty).unwrap();
@@ -235,20 +235,20 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_place(&mut self, place: &mlr::Place) -> M2InkwellFnResult<PointerValue<'iw>> {
+    fn build_place(&mut self, place: mlr::Place) -> M2InkwellFnResult<PointerValue<'iw>> {
         use mlr::PlaceDef::*;
 
-        let place = self.mlr().get_place_def(*place);
+        let place = self.mlr().get_place_def(place);
 
         match *place {
             Loc(loc) => self.locs.get(&loc).ok_or(M2InkwellFnError).cloned(),
             FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(&base)?
+                    .get_iw_ty_of_place(base)?
                     .try_into()
                     .map_err(|_| M2InkwellFnError)?;
 
-                let base_address = self.build_place(&base)?;
+                let base_address = self.build_place(base)?;
 
                 let field_ptr = self.iw_builder.build_struct_gep(
                     iw_base_struct_type,
@@ -261,11 +261,11 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             }
             EnumDiscriminant { base, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(&base)?
+                    .get_iw_ty_of_place(base)?
                     .try_into()
                     .map_err(|_| M2InkwellFnError)?;
 
-                let base_address = self.build_place(&base)?;
+                let base_address = self.build_place(base)?;
 
                 let discrim_ptr =
                     self.iw_builder
@@ -275,11 +275,11 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             }
             ProjectToVariant { base, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(&base)?
+                    .get_iw_ty_of_place(base)?
                     .try_into()
                     .map_err(|_| M2InkwellFnError)?;
 
-                let base_address = self.build_place(&base)?;
+                let base_address = self.build_place(base)?;
 
                 let variant_ptr =
                     self.iw_builder
@@ -288,23 +288,23 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 Ok(variant_ptr)
             }
             Deref(op) => {
-                let ptr_value = self.build_op(&op)?.into_pointer_value();
+                let ptr_value = self.build_op(op)?.into_pointer_value();
                 Ok(ptr_value)
             }
         }
     }
 
     fn build_block(&mut self, stmts: &[mlr::Stmt]) -> M2InkwellFnResult<()> {
-        for stmt in stmts {
+        for &stmt in stmts {
             self.build_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn build_constant(&mut self, constant: &mlr::Const) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+    fn build_constant(&mut self, constant: mlr::Const) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         use mlr::Const::*;
 
-        let value = match *constant {
+        let value = match constant {
             Int(i) => {
                 let int_ty = self.m2iw.iw_ctxt.i32_type();
                 int_ty.const_int(i as u64, false).as_basic_value_enum()
@@ -324,7 +324,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(value)
     }
 
-    fn build_op(&mut self, op: &mlr::Op) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+    fn build_op(&mut self, op: mlr::Op) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         use mlr::OpDef::*;
 
         let op = self.mlr().get_op_def(op);
@@ -332,10 +332,10 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         match *op {
             Fn(ref fn_spec) => self.build_global_function(&fn_spec.clone()),
             TraitMethod(ref trait_method) => self.build_trait_method(trait_method.clone()),
-            Const(ref constant) => self.build_constant(&constant.clone()),
+            Const(ref constant) => self.build_constant(constant.clone()),
             Copy(place) => {
-                let place_ptr = self.build_place(&place)?;
-                let iw_ty = self.get_iw_ty_of_place(&place)?;
+                let place_ptr = self.build_place(place)?;
+                let iw_ty = self.get_iw_ty_of_place(place)?;
                 let value = self.iw_builder.build_load(iw_ty, place_ptr, "loaded_place")?;
                 Ok(value)
             }
@@ -374,13 +374,13 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         self.build_global_function(&fn_spec)
     }
 
-    fn build_call(&mut self, callable: &mlr::Op, args: &[mlr::Op]) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+    fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
         let fn_ptr = self.build_op(callable)?.into_pointer_value();
         let fn_ty = self.get_fn_ty_of_loc(callable)?;
 
         let args = args
             .iter()
-            .map(|arg| self.build_op(arg).unwrap().into())
+            .map(|&arg| self.build_op(arg).unwrap().into())
             .collect::<Vec<_>>();
 
         let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
@@ -388,9 +388,9 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)
     }
 
-    fn build_if(&mut self, if_: &mlr::If) -> M2InkwellFnResult<()> {
+    fn build_if(&mut self, if_: mlr::If) -> M2InkwellFnResult<()> {
         // Build condition
-        let cond_value = self.build_op(&if_.cond)?.into_int_value();
+        let cond_value = self.build_op(if_.cond)?.into_int_value();
 
         // Create blocks for then, else, and merge
         let then_block = self.m2iw.iw_ctxt.append_basic_block(self.iw_fn, "then");
@@ -403,12 +403,12 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         // Build then block
         self.iw_builder.position_at_end(then_block);
-        self.build_stmt(&if_.then)?;
+        self.build_stmt(if_.then)?;
         self.iw_builder.build_unconditional_branch(merge_block)?;
 
         // Build else block
         self.iw_builder.position_at_end(else_block);
-        self.build_stmt(&if_.else_)?;
+        self.build_stmt(if_.else_)?;
         self.iw_builder.build_unconditional_branch(merge_block)?;
 
         // Build merge block
@@ -416,7 +416,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(())
     }
 
-    fn build_loop(&mut self, body: &mlr::Stmt) -> M2InkwellFnResult<()> {
+    fn build_loop(&mut self, body: mlr::Stmt) -> M2InkwellFnResult<()> {
         let body_block = self.m2iw.iw_ctxt.append_basic_block(self.iw_fn, "loop");
         let after_loop = self.m2iw.iw_ctxt.append_basic_block(self.iw_fn, "loop_after");
 
