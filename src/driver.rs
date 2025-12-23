@@ -358,8 +358,15 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
                 env_gen_args: fn_spec.env_gen_args.clone(),
             }
         });
-
         open.extend(fn_specs);
+
+        let called_trait_methods = ctxt.fns.get_called_trait_methods(&current.fn_).to_vec();
+        let trait_fn_specs = called_trait_methods.into_iter().map(|trait_method| {
+            let concrete_impl_ty = ctxt.tys.substitute_gen_vars(trait_method.impl_ty, &subst);
+            ctxt.get_fn_spec_for_trait_call(trait_method.trait_, trait_method.method_idx, concrete_impl_ty)
+        });
+        open.extend(trait_fn_specs);
+
         closed.insert(current);
     }
 

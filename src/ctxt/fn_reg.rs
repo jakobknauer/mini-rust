@@ -30,6 +30,7 @@ impl FnReg {
         }
         self.sigs.push(signature);
         self.called_specializations.insert(fn_, Vec::new());
+        self.called_trait_methods.insert(fn_, Vec::new());
 
         Ok(fn_)
     }
@@ -68,6 +69,10 @@ impl FnReg {
 
     pub fn get_called_specializations(&self, caller: &Fn) -> &Vec<FnSpecialization> {
         self.called_specializations.get(caller).unwrap()
+    }
+
+    pub fn get_called_trait_methods(&self, caller: &Fn) -> &Vec<TraitMethod> {
+        self.called_trait_methods.get(caller).unwrap()
     }
 
     pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<GenVar, Ty> {

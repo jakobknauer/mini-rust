@@ -317,7 +317,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         match *op {
             Fn(ref fn_spec) => self.build_global_function(&fn_spec.clone()),
-            TraitMethod(..) => todo!(),
+            TraitMethod(ref trait_method) => self.build_trait_method(trait_method.clone()),
             Const(ref constant) => self.build_constant(&constant.clone()),
             Copy(place) => {
                 let place_ptr = self.build_place(&place)?;
@@ -350,6 +350,20 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             .get(&substituted_fn_spec)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
             .ok_or(M2InkwellFnError)
+    }
+
+    fn build_trait_method(&mut self, trait_method: mr_fns::TraitMethod) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+        let concrete_impl_ty = self
+            .m2iw
+            .mr_ctxt
+            .tys
+            .substitute_gen_vars(trait_method.impl_ty, &self.substitutions);
+        let fn_spec = self.m2iw.mr_ctxt.get_fn_spec_for_trait_call(
+            trait_method.trait_,
+            trait_method.method_idx,
+            concrete_impl_ty,
+        );
+        self.build_global_function(&fn_spec)
     }
 
     fn build_call(&mut self, callable: &mlr::Op, args: &[mlr::Op]) -> M2InkwellFnResult<BasicValueEnum<'iw>> {

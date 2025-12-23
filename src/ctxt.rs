@@ -16,6 +16,8 @@ pub use ty_reg::*;
 
 use mlr::Mlr;
 
+use crate::ctxt::traits::Trait;
+
 #[derive(Default)]
 pub struct Ctxt {
     pub tys: TyReg,
@@ -83,6 +85,41 @@ impl Ctxt {
             var_args: signature.var_args,
             return_ty: specialized_return_ty,
             has_receiver: signature.has_receiver,
+        }
+    }
+
+    pub fn get_fn_spec_for_trait_call(
+        &mut self,
+        trait_: Trait,
+        method_index: usize,
+        receiver_ty: ty::Ty,
+    ) -> fns::FnSpecialization {
+        // Find impl for trait trait_method.trait_ and concrete type concrete_impl_ty
+        let (impl_, impl_instantiation) = self
+            .impls
+            .get_all_impls()
+            .into_iter()
+            .filter_map(|impl_| {
+                let impl_def = self.impls.get_impl_def(impl_).unwrap();
+                if impl_def.trait_ != Some(trait_) {
+                    return None;
+                }
+                self.tys
+                    .try_find_instantiation(receiver_ty, impl_def.ty, &impl_def.gen_params)
+                    .ok()
+                    .map(|inst| (impl_, inst))
+            })
+            .next()
+            .unwrap();
+
+        let trait_method_name = &self.traits.get_trait_def(trait_).methods[method_index].name;
+
+        let impl_def = self.impls.get_impl_def(impl_).unwrap();
+
+        fns::FnSpecialization {
+            fn_: impl_def.methods_by_name[trait_method_name],
+            gen_args: vec![],
+            env_gen_args: impl_instantiation,
         }
     }
 }
