@@ -9,7 +9,7 @@ mod macros;
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
-    typechecker::{self, MethodResolutionResult},
+    typechecker::{self, MethodResolution},
     util::mlr_builder::MlrBuilder,
 };
 
@@ -76,6 +76,10 @@ impl<'a> H2M<'a> {
 
     fn fns(&mut self) -> &mut ctxt::FnReg {
         self.builder.fns()
+    }
+
+    fn traits(&mut self) -> &mut ctxt::TraitReg {
+        self.builder.traits()
     }
 
     /// Build an HLR block by inserting the statements into the current MLR block
@@ -241,9 +245,36 @@ impl<'a> H2M<'a> {
             .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
             .collect::<Result<_, _>>()?;
 
-        let method = match self.typechecker().resolve_method(base_ty, &method.ident, &gen_args)? {
-            MethodResolutionResult::Inherent(fn_spec) => self.builder.insert_fn_spec_op(fn_spec),
-            MethodResolutionResult::Trait(trait_method) => self.builder.insert_trait_method_op(trait_method),
+        let method = match self.typechecker().resolve_method(base_ty, &method.ident)? {
+            MethodResolution::Inherent { fn_, env_gen_args } => {
+                let gen_args = if gen_args.is_empty() {
+                    let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+                    (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
+                } else {
+                    gen_args
+                };
+                let fn_spec = fns::FnSpecialization {
+                    fn_,
+                    gen_args,
+                    env_gen_args,
+                };
+                self.builder.insert_fn_spec_op(fn_spec)
+            }
+            MethodResolution::Trait { trait_, method_idx } => {
+                let gen_args = if gen_args.is_empty() {
+                    let n_gen_params = self.traits().get_trait_method_sig(trait_, method_idx).gen_params.len();
+                    (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
+                } else {
+                    gen_args
+                };
+                let trait_method = fns::TraitMethod {
+                    trait_,
+                    method_idx,
+                    impl_ty: base_ty,
+                    gen_args,
+                };
+                self.builder.insert_trait_method_op(trait_method)
+            }
         }?;
 
         let args = std::iter::once(Ok(base))

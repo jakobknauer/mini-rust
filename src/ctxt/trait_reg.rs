@@ -1,5 +1,5 @@
 use crate::ctxt::{
-    fns::{self, FnSig},
+    fns::FnSig,
     traits::{Trait, TraitDef},
 };
 
@@ -54,7 +54,7 @@ impl TraitReg {
             })
     }
 
-    pub fn get_trait_method_sig(&self, trait_method: &fns::TraitMethod) -> &FnSig {
-        &self.traits[trait_method.trait_.0].methods[trait_method.method_idx]
+    pub fn get_trait_method_sig(&self, trait_: Trait, method_idx: usize) -> &FnSig {
+        &self.traits[trait_.0].methods[method_idx]
     }
 }

@@ -1,6 +1,7 @@
 fn main() -> i32 {
+    1.send(true);
     let opt = Some { item: 5 };
-    opt.map::<i32>(double).unwrap_or(0)
+    opt.map(double).unwrap_or(0)
 }
 
 fn double(x: i32) -> i32 {

@@ -357,6 +357,10 @@ impl<'a> MlrBuilder<'a> {
         &mut self.ctxt.mlr
     }
 
+    pub fn traits(&mut self) -> &mut ctxt::TraitReg {
+        &mut self.ctxt.traits
+    }
+
     pub fn register_receiver_loc(&mut self, receiver_loc: mlr::Loc) {
         self.receiver_loc = Some(receiver_loc);
     }

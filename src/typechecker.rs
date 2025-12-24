@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 pub use err::{TyError, TyResult};
 
-use crate::ctxt::{self, fns, mlr::*, ty};
+use crate::ctxt::{self, fns, mlr::*, traits, ty};
 
 pub struct Typechecker<'a> {
     tys: &'a mut ctxt::TyReg,
@@ -15,9 +15,9 @@ pub struct Typechecker<'a> {
     fn_: fns::Fn,
 }
 
-pub enum MethodResolutionResult {
-    Inherent(fns::FnSpecialization),
-    Trait(fns::TraitMethod),
+pub enum MethodResolution {
+    Inherent { fn_: fns::Fn, env_gen_args: Vec<ty::Ty> },
+    Trait { trait_: traits::Trait, method_idx: usize },
 }
 
 impl<'a> Typechecker<'a> {
@@ -231,7 +231,9 @@ impl<'a> Typechecker<'a> {
     }
 
     fn infer_ty_of_trait_method(&mut self, trait_method: &fns::TraitMethod) -> TyResult<ty::Ty> {
-        let signature = self.traits.get_trait_method_sig(trait_method);
+        let signature = self
+            .traits
+            .get_trait_method_sig(trait_method.trait_, trait_method.method_idx);
 
         if signature.gen_params.len() != trait_method.gen_args.len() {
             return TyError::TraitMethodGenericArgCountMismatch {
@@ -436,16 +438,11 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn resolve_method(
-        &self,
-        base_ty: ty::Ty,
-        method_name: &str,
-        gen_args: &[ty::Ty],
-    ) -> TyResult<MethodResolutionResult> {
-        if let Some(inherent) = self.resolve_inherent_method(base_ty, method_name, gen_args)? {
-            Ok(MethodResolutionResult::Inherent(inherent))
-        } else if let Some(trait_method) = self.resolve_trait_method(base_ty, method_name, gen_args)? {
-            Ok(MethodResolutionResult::Trait(trait_method))
+    pub fn resolve_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<MethodResolution> {
+        if let Some(inherent) = self.resolve_inherent_method(base_ty, method_name)? {
+            Ok(inherent)
+        } else if let Some(trait_method) = self.resolve_trait_method(base_ty, method_name)? {
+            Ok(trait_method)
         } else {
             TyError::MethodResolutionFailed {
                 base_ty,
@@ -455,13 +452,8 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn resolve_inherent_method(
-        &self,
-        base_ty: ty::Ty,
-        method_name: &str,
-        gen_args: &[ty::Ty],
-    ) -> TyResult<Option<fns::FnSpecialization>> {
-        let candidate_fn_specs: Vec<fns::FnSpecialization> = self
+    fn resolve_inherent_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
+        let candidate_fn_specs: Vec<_> = self
             .impls
             .get_inherent_impls()
             .map(|impl_| self.impls.get_impl_def(impl_))
@@ -471,21 +463,15 @@ impl<'a> Typechecker<'a> {
                     .ok()
                     .map(|substitution| (impl_def, substitution))
             })
-            .flat_map(|(impl_def, subst)| {
-                impl_def
-                    .methods_by_name
-                    .get(method_name)
-                    .map(|&method| fns::FnSpecialization {
-                        fn_: method,
-                        gen_args: gen_args.to_vec(),
-                        env_gen_args: subst,
-                    })
-            })
+            .flat_map(|(impl_def, subst)| impl_def.methods_by_name.get(method_name).map(|&method| (method, subst)))
             .collect();
 
         match &candidate_fn_specs[..] {
             [] => Ok(None),
-            [fn_spec] => Ok(Some(fn_spec.clone())),
+            [(fn_, subst)] => Ok(Some(MethodResolution::Inherent {
+                fn_: *fn_,
+                env_gen_args: subst.to_vec(),
+            })),
             [_, _, ..] => TyError::AmbiguousMethod {
                 base_ty,
                 method_name: method_name.to_string(),
@@ -494,13 +480,8 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn resolve_trait_method(
-        &self,
-        base_ty: ty::Ty,
-        method_name: &str,
-        gen_args: &[ty::Ty],
-    ) -> TyResult<Option<fns::TraitMethod>> {
-        let candidate_trait_methods: Vec<fns::TraitMethod> = self
+    fn resolve_trait_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
+        let candidate_trait_methods: Vec<_> = self
             .traits
             .get_trait_methods_with_name(method_name)
             .filter(|&(trait_, _)| {
@@ -511,17 +492,14 @@ impl<'a> Typechecker<'a> {
                         .is_ok()
                 })
             })
-            .map(|(trait_, method_idx)| fns::TraitMethod {
-                trait_,
-                method_idx,
-                impl_ty: base_ty,
-                gen_args: gen_args.to_vec(),
-            })
             .collect();
 
         match &candidate_trait_methods[..] {
             [] => Ok(None),
-            [trait_method] => Ok(Some(trait_method.clone())),
+            [(trait_, method_idx)] => Ok(Some(MethodResolution::Trait {
+                trait_: *trait_,
+                method_idx: *method_idx,
+            })),
             [_, _, ..] => TyError::AmbiguousMethod {
                 base_ty,
                 method_name: method_name.to_string(),
