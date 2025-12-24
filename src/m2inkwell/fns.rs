@@ -40,7 +40,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         let builder = m2iw.iw_ctxt.create_builder();
         let locs = HashMap::new();
-        let iw_fn = *m2iw.functions.get(&specialization)?;
+        let iw_fn = m2iw.get_fn(&specialization).unwrap();
         let after_loop_blocks = VecDeque::new();
         let substitutions = m2iw
             .mr_ctxt
@@ -219,7 +219,10 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         match *val {
             Use(place) => self.build_op(place),
-            Call { callable, ref args } => self.build_call(callable, &args.clone()),
+            Call { callable, ref args } => {
+                let result = self.build_call(callable, &args.clone())?;
+                Ok(result)
+            }
             AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
             As { op, .. } => {
                 // since the only valid conversion atm is from ref to ptr of the same base type,
@@ -359,11 +362,12 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             env_gen_args: substituted_env_gen_args,
         };
 
-        self.m2iw
-            .functions
-            .get(&substituted_fn_spec)
+        let result = self
+            .m2iw
+            .get_fn(&substituted_fn_spec)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
-            .ok_or(M2InkwellFnError)
+            .ok_or(M2InkwellFnError)?;
+        Ok(result)
     }
 
     fn build_trait_method(&mut self, trait_method: mr_fns::TraitMethod) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
@@ -384,8 +388,8 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             .collect::<Vec<_>>();
 
         let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
-
-        call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)
+        let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
+        Ok(output)
     }
 
     fn build_if(&mut self, if_: mlr::If) -> M2InkwellFnResult<()> {

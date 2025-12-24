@@ -1,7 +1,6 @@
 fn main() -> i32 {
-    3.send::<bool>(true);
-    5.send::<i32>(7);
-    5
+    let opt = Some { item: 5 };
+    opt.map::<i32>(double).unwrap_or(0)
 }
 
 fn double(x: i32) -> i32 {
@@ -74,19 +73,10 @@ trait Sink {
     fn send<T>(self, message: T) -> ();
 }
 
-impl Sink for i32 {
+impl<T> Sink for T {
     fn send<S>(self, message: S) {
-        let size = size_of::<S>();
-        printf("%d sends a message with size %d\n", self, size);
-    }
-}
-
-impl Sink for bool {
-    fn send<T>(self, message: T) {
-        if self {
-            printf("bool::send: true\n");
-        } else {
-            printf("bool::send: false\n");
-        }
+        let size_S = size_of::<S>();
+        let size_T = size_of::<T>();
+        printf("Sink of size %d received message of size %d\n", size_T, size_S);
     }
 }

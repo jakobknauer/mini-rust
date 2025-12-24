@@ -161,4 +161,26 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
         iw_enum_struct.set_body(&[discrim_type, data_array_type], false);
         iw_enum_struct.as_any_type_enum()
     }
+
+    fn get_fn(&self, needle: &mr_fns::FnSpecialization) -> Option<FunctionValue<'iw>> {
+        for (fn_spec, fn_value) in self.functions.iter() {
+            let eq = needle.fn_ == fn_spec.fn_
+                && needle.gen_args.len() == fn_spec.gen_args.len()
+                && needle
+                    .gen_args
+                    .iter()
+                    .zip(fn_spec.gen_args.iter())
+                    .all(|(a, b)| self.mr_ctxt.tys.tys_eq(*a, *b))
+                && needle.env_gen_args.len() == fn_spec.env_gen_args.len()
+                && needle
+                    .env_gen_args
+                    .iter()
+                    .zip(fn_spec.env_gen_args.iter())
+                    .all(|(a, b)| self.mr_ctxt.tys.tys_eq(*a, *b));
+            if eq {
+                return Some(*fn_value);
+            }
+        }
+        None
+    }
 }
