@@ -57,7 +57,7 @@ impl FnReg {
     }
 
     pub fn get_all_fns(&self) -> impl Iterator<Item = Fn> {
-        self.fn_names.values().cloned()
+        (0..self.sigs.len()).map(Fn)
     }
 
     pub fn specialize_fn(&mut self, caller: Fn, fn_spec: FnSpecialization) {
