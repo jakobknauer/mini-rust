@@ -44,6 +44,7 @@ pub struct TraitMethod {
     pub trait_: Trait,
     pub method_idx: usize,
     pub impl_ty: Ty,
+    pub gen_args: Vec<Ty>,
 }
 
 #[derive(Debug, Clone)]

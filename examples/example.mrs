@@ -1,7 +1,6 @@
 fn main() -> i32 {
-    let x = 3;
-    let b: bool = x.into();
-
+    3.send::<bool>(true);
+    5.send::<i32>(7);
     5
 }
 
@@ -71,30 +70,23 @@ struct Pair<A, B> {
     second: B,
 }
 
-impl<T> T {
-    fn pair_with<S>(self, other: S) -> Pair<T, S> {
-        Pair::<T, S> { first: self, second: other }
+trait Sink {
+    fn send<T>(self, message: T) -> ();
+}
+
+impl Sink for i32 {
+    fn send<S>(self, message: S) {
+        let size = size_of::<S>();
+        printf("%d sends a message with size %d\n", self, size);
     }
 }
 
-trait IntoBool {
-    fn into(self) -> bool;
-}
-
-impl IntoBool for Option<bool> {
-    fn into(self) -> bool {
-        self.unwrap_or(false)
-    }
-}
-
-impl IntoBool for bool {
-    fn into(self) -> bool {
-        self
-    }
-}
-
-impl IntoBool for i32 {
-    fn into(self) -> bool {
-        self != 0
+impl Sink for bool {
+    fn send<T>(self, message: T) {
+        if self {
+            printf("bool::send: true\n");
+        } else {
+            printf("bool::send: false\n");
+        }
     }
 }

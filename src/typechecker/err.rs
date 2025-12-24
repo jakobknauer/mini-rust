@@ -2,6 +2,7 @@ use crate::ctxt::{
     NotAStruct, NotAStructField, NotAnEnum, TyInstError,
     fns::Fn,
     mlr,
+    traits::Trait,
     ty::{Enum, Struct, Ty},
 };
 
@@ -103,6 +104,13 @@ pub enum TyError {
     MethodResolutionFailed {
         base_ty: Ty,
         method_name: String,
+    },
+    TraitMethodGenericArgCountMismatch {
+        trait_: Trait,
+        method_index: usize,
+        impl_ty: Ty,
+        expected: usize,
+        actual: usize,
     },
 }
 

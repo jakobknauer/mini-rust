@@ -188,6 +188,19 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             method_name,
             ctxt.tys.get_string_rep(base_ty),
         ),
+        TraitMethodGenericArgCountMismatch {
+            trait_,
+            method_index,
+            impl_ty,
+            expected,
+            actual,
+        } => format!(
+            "Generic argument count mismatch for trait method '{}' in type '{}': expected {}, got {}",
+            ctxt.traits.get_trait_method_name(trait_, method_index),
+            ctxt.tys.get_string_rep(impl_ty),
+            expected,
+            actual
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }
@@ -198,7 +211,7 @@ pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> Strin
     let desc = match err.kind {
         MissingMethods(items) => format!("Missing methods: {}", items.join(", ")),
         ExtraMethods(items) => format!("Extra methods: {}", items.join(", ")),
-        ArgCountMismatch {
+        ParamCountMismatch {
             method,
             expected,
             actual,
@@ -227,6 +240,14 @@ pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> Strin
             method,
             ctxt.tys.get_string_rep(expected),
             ctxt.tys.get_string_rep(actual)
+        ),
+        GenParamCountMismatch {
+            method,
+            expected,
+            actual,
+        } => format!(
+            "Generic argument count mismatch for method '{}': expected {}, got {}",
+            method, expected, actual
         ),
     };
 

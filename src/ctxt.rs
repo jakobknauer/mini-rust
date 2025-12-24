@@ -107,6 +107,7 @@ impl Ctxt {
             trait_,
             method_idx,
             impl_ty,
+            ref gen_args,
         } = trait_method;
 
         let impl_ty = self.tys.substitute_gen_vars(impl_ty, substitutions);
@@ -126,9 +127,14 @@ impl Ctxt {
 
         let trait_method_name = self.traits.get_trait_method_name(trait_, method_idx);
 
+        let new_gen_args = gen_args
+            .iter()
+            .map(|&ty| self.tys.substitute_gen_vars(ty, substitutions))
+            .collect();
+
         fns::FnSpecialization {
             fn_: impl_def.methods_by_name[trait_method_name],
-            gen_args: vec![],
+            gen_args: new_gen_args,
             env_gen_args: impl_instantiation,
         }
     }

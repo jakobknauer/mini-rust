@@ -233,12 +233,31 @@ impl<'a> Typechecker<'a> {
     fn infer_ty_of_trait_method(&mut self, trait_method: &fns::TraitMethod) -> TyResult<ty::Ty> {
         let signature = self.traits.get_trait_method_sig(trait_method);
 
+        if signature.gen_params.len() != trait_method.gen_args.len() {
+            return TyError::TraitMethodGenericArgCountMismatch {
+                trait_: trait_method.trait_,
+                method_index: trait_method.method_idx,
+                impl_ty: trait_method.impl_ty,
+                expected: signature.gen_params.len(),
+                actual: trait_method.gen_args.len(),
+            }
+            .into();
+        }
+
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let fn_ty = self
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
+        let gen_var_substitutions = signature
+            .gen_params
+            .iter()
+            .cloned()
+            .zip(trait_method.gen_args.iter().cloned())
+            .collect();
         let substituted_fn_ty = self.tys.substitute_self_ty(fn_ty, trait_method.impl_ty);
+        let substituted_fn_ty = self.tys.substitute_gen_vars(substituted_fn_ty, &gen_var_substitutions);
+
         Ok(substituted_fn_ty)
     }
 
@@ -425,7 +444,7 @@ impl<'a> Typechecker<'a> {
     ) -> TyResult<MethodResolutionResult> {
         if let Some(inherent) = self.resolve_inherent_method(base_ty, method_name, gen_args)? {
             Ok(MethodResolutionResult::Inherent(inherent))
-        } else if let Some(trait_method) = self.resolve_trait_method(base_ty, method_name)? {
+        } else if let Some(trait_method) = self.resolve_trait_method(base_ty, method_name, gen_args)? {
             Ok(MethodResolutionResult::Trait(trait_method))
         } else {
             TyError::MethodResolutionFailed {
@@ -475,7 +494,12 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn resolve_trait_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<fns::TraitMethod>> {
+    fn resolve_trait_method(
+        &self,
+        base_ty: ty::Ty,
+        method_name: &str,
+        gen_args: &[ty::Ty],
+    ) -> TyResult<Option<fns::TraitMethod>> {
         let candidate_trait_methods: Vec<fns::TraitMethod> = self
             .traits
             .get_trait_methods_with_name(method_name)
@@ -491,6 +515,7 @@ impl<'a> Typechecker<'a> {
                 trait_,
                 method_idx,
                 impl_ty: base_ty,
+                gen_args: gen_args.to_vec(),
             })
             .collect();
 

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{self, impls::Impl, traits::Trait};
 
@@ -11,7 +11,7 @@ pub struct TraitCheckError {
 pub enum TraitCheckErrorKind {
     MissingMethods(Vec<String>),
     ExtraMethods(Vec<String>),
-    ArgCountMismatch {
+    ParamCountMismatch {
         method: String,
         expected: usize,
         actual: usize,
@@ -26,6 +26,11 @@ pub enum TraitCheckErrorKind {
         method: String,
         expected: ctxt::ty::Ty,
         actual: ctxt::ty::Ty,
+    },
+    GenParamCountMismatch {
+        method: String,
+        expected: usize,
+        actual: usize,
     },
 }
 
@@ -94,12 +99,25 @@ fn check_method_sigs(
     trait_method_sig: &ctxt::fns::FnSig,
     impl_ty: ctxt::ty::Ty,
 ) -> Result<(), TraitCheckErrorKind> {
-    // TODO: consider generic vars also
-    // TODO: other fields of signature, e.g. receiver, var_args etc.
+    // Compare gen params
+    if impl_method_sig.gen_params.len() != trait_method_sig.gen_params.len() {
+        return Err(TraitCheckErrorKind::GenParamCountMismatch {
+            method: impl_method_sig.name.to_string(),
+            expected: trait_method_sig.gen_params.len(),
+            actual: impl_method_sig.gen_params.len(),
+        });
+    }
+    // Create substitution of generic params
+    let gen_params_substitution: HashMap<_, _> = trait_method_sig
+        .gen_params
+        .iter()
+        .cloned()
+        .zip(impl_method_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp)))
+        .collect();
 
     // Compare param count
     if impl_method_sig.params.len() != trait_method_sig.params.len() {
-        return Err(TraitCheckErrorKind::ArgCountMismatch {
+        return Err(TraitCheckErrorKind::ParamCountMismatch {
             method: impl_method_sig.name.to_string(),
             expected: trait_method_sig.params.len(),
             actual: impl_method_sig.params.len(),
@@ -114,7 +132,9 @@ fn check_method_sigs(
         .enumerate()
     {
         let expected_with_self_substituted = tys.substitute_self_ty(expected.ty, impl_ty);
-        if !tys.tys_eq(expected_with_self_substituted, actual.ty) {
+        let expected_with_gen_params_substituted =
+            tys.substitute_gen_vars(expected_with_self_substituted, &gen_params_substitution);
+        if !tys.tys_eq(expected_with_gen_params_substituted, actual.ty) {
             return Err(TraitCheckErrorKind::ArgTypeMismatch {
                 method: impl_method_sig.name.to_string(),
                 arg_idx: idx,
@@ -126,7 +146,9 @@ fn check_method_sigs(
 
     // Compare return type
     let return_type_with_self_substituted = tys.substitute_self_ty(trait_method_sig.return_ty, impl_ty);
-    if !tys.tys_eq(return_type_with_self_substituted, impl_method_sig.return_ty) {
+    let return_type_with_gen_params_substituted =
+        tys.substitute_gen_vars(return_type_with_self_substituted, &gen_params_substitution);
+    if !tys.tys_eq(return_type_with_gen_params_substituted, impl_method_sig.return_ty) {
         return Err(TraitCheckErrorKind::ReturnTypeMismatch {
             method: impl_method_sig.name.to_string(),
             expected: return_type_with_self_substituted,
