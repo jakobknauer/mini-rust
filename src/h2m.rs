@@ -177,18 +177,28 @@ impl<'a> H2M<'a> {
     }
 
     fn lower_ident_to_op(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
-        if gen_args.is_empty() {
-            return self.builder.resolve_name(ident);
+        if gen_args.is_empty()
+            && let Some(loc) = self.builder.resolve_name_to_location(ident)
+        {
+            let place = self.builder.insert_loc_place(loc)?;
+            self.builder.insert_copy_op(place)
+        } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
+            let gen_arg_tys = if gen_args.is_empty() {
+                let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+                (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
+            } else {
+                gen_args
+                    .iter()
+                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                    .collect::<H2MResult<_>>()?
+            };
+
+            self.builder.insert_gen_fn_op(fn_, gen_arg_tys, Vec::new())
+        } else {
+            Err(H2MError::UnresolvableSymbol {
+                name: ident.to_string(),
+            })
         }
-
-        let fn_ = self.builder.resolve_name_to_fn(ident)?;
-
-        let gen_arg_tys = gen_args
-            .iter()
-            .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-            .collect::<H2MResult<_>>()?;
-
-        self.builder.insert_gen_fn_op(fn_, gen_arg_tys, Vec::new())
     }
 
     fn build_binary_op(

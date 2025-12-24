@@ -291,19 +291,6 @@ impl<'a> MlrBuilder<'a> {
         Ok(loc)
     }
 
-    /// TODO move resolution functionality to an impl block in another submodule,
-    /// or create resolver submodule.
-    pub fn resolve_name(&mut self, name: &str) -> H2MResult<mlr::Op> {
-        if let Some(loc) = self.resolve_name_to_location(name) {
-            let place = self.insert_loc_place(loc)?;
-            self.insert_copy_op(place)
-        } else if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
-            self.insert_fn_op(fn_)
-        } else {
-            Err(H2MError::UnresolvableSymbol { name: name.to_string() })
-        }
-    }
-
     pub fn resolve_name_to_location(&self, name: &str) -> Option<mlr::Loc> {
         self.scopes
             .iter()
@@ -335,14 +322,6 @@ impl<'a> MlrBuilder<'a> {
             .try_resolve_hlr_annot(annot, &all_gen_params, None)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
-    }
-
-    pub fn resolve_name_to_fn(&self, name: &str) -> H2MResult<fns::Fn> {
-        if let Some(fn_) = self.ctxt.fns.get_fn_by_name(name) {
-            Ok(fn_)
-        } else {
-            Err(H2MError::UnresolvableSymbol { name: name.to_string() })
-        }
     }
 
     pub fn tys(&mut self) -> &mut ctxt::TyReg {

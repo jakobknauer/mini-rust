@@ -1,7 +1,12 @@
 fn main() -> i32 {
     1.send(true);
     let opt = Some { item: 5 };
-    opt.map(double).unwrap_or(0)
+    let y = opt.map(double).unwrap_or(0);
+    apply(double, y)
+}
+
+fn apply<A, B>(f: fn(A) -> B, x: A) -> B {
+    f(x)
 }
 
 fn double(x: i32) -> i32 {
