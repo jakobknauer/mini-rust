@@ -44,6 +44,6 @@
     - ~~Test with `printf`~~
 
 ## Version 3
-- Traits and trait bounds
+- ~~Traits and trait bounds~~
+- ~~Trait function calls~~
 - Closures
-- Trait functions call using explicit syntax only (e.g. Add::\<i32\>::add(a, b))
