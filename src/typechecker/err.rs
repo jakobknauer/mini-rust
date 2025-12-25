@@ -3,7 +3,7 @@ use crate::ctxt::{
     fns::Fn,
     mlr,
     traits::Trait,
-    ty::{Enum, Struct, Ty},
+    ty::{Enum, GenVar, Struct, Ty},
 };
 
 pub type TyResult<T> = Result<T, TyError>;
@@ -111,6 +111,12 @@ pub enum TyError {
         impl_ty: Ty,
         expected: usize,
         actual: usize,
+    },
+    UnfulfilledConstraint {
+        fn_: Fn,
+        gen_var: GenVar,
+        constraint: Trait,
+        gen_arg: Ty,
     },
 }
 

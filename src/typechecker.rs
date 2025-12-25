@@ -210,6 +210,22 @@ impl<'a> Typechecker<'a> {
             }
             .into();
         }
+
+        for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_specialization.gen_args) {
+            let constraints = self.tys.get_constraints_for(gen_var);
+            for constraint in constraints {
+                if !self.ty_implements_trait(gen_arg, constraint) {
+                    return TyError::UnfulfilledConstraint {
+                        fn_: fn_specialization.fn_,
+                        gen_var,
+                        constraint,
+                        gen_arg,
+                    }
+                    .into();
+                }
+            }
+        }
+
         if signature.env_gen_params.len() != fn_specialization.env_gen_args.len() {
             return TyError::FnEnvGenericArgCountMismatch {
                 fn_: fn_specialization.fn_,
@@ -484,14 +500,7 @@ impl<'a> Typechecker<'a> {
         let candidate_trait_methods: Vec<_> = self
             .traits
             .get_trait_methods_with_name(method_name)
-            .filter(|&(trait_, _)| {
-                self.impls.get_impls_for_trait(trait_).any(|impl_| {
-                    let impl_def = self.impls.get_impl_def(impl_);
-                    self.tys
-                        .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
-                        .is_ok()
-                })
-            })
+            .filter(|&(trait_, _)| self.ty_implements_trait(base_ty, trait_))
             .collect();
 
         match &candidate_trait_methods[..] {
@@ -506,5 +515,25 @@ impl<'a> Typechecker<'a> {
             }
             .into(),
         }
+    }
+
+    pub fn ty_implements_trait(&self, ty: ty::Ty, trait_: traits::Trait) -> bool {
+        let ty_def = self.tys.get_ty_def(ty);
+        if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
+            && self.tys.constraint_exists(gen_var, trait_)
+        {
+            return true;
+        }
+
+        self.impls
+            .get_impls_for_trait(trait_)
+            .map(|impl_| self.impls.get_impl_def(impl_))
+            .filter_map(|impl_def| {
+                self.tys
+                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
+                    .ok()
+            })
+            .next()
+            .is_some()
     }
 }

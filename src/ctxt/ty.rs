@@ -69,3 +69,9 @@ pub struct EnumVariant {
     pub name: String,
     pub struct_: Struct,
 }
+
+#[derive(Clone)]
+pub struct Constraint {
+    pub gen_var: GenVar,
+    pub trait_: Trait,
+}

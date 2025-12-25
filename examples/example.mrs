@@ -1,8 +1,7 @@
 fn main() -> i32 {
-    1.send(true);
-    let opt = Some { item: 5 };
-    let y = opt.map(double).unwrap_or(0);
-    apply(double, y)
+    print::<i32>(5);
+    print::<bool>(false);
+    3
 }
 
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B {
@@ -94,4 +93,21 @@ trait ToString {
 fn print<T>(x: T) 
     where T: ToString
 {
+    printf("Printing object: %s\n", x.to_string());
+}
+
+impl ToString for i32 {
+    fn to_string(self) -> *c_char {
+        "i32"
+    }
+}
+
+impl ToString for bool {
+    fn to_string(self) -> *c_char {
+        if self {
+            "true"
+        } else {
+            "false"
+        }
+    }
 }

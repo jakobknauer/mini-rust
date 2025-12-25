@@ -21,6 +21,8 @@ pub struct TyReg {
 
     tys_inv: HashMap<TyDef, Ty>,
     named_tys: HashMap<String, Named>,
+
+    constraints: Vec<Constraint>,
 }
 
 #[derive(Clone, Copy)]
@@ -938,5 +940,21 @@ impl TyReg {
 
             (_, _) => false,
         }
+    }
+
+    pub fn add_constraint(&mut self, gen_var: GenVar, trait_: Trait) {
+        self.constraints.push(Constraint { gen_var, trait_ });
+    }
+
+    pub fn constraint_exists(&self, gen_var: GenVar, trait_: Trait) -> bool {
+        self.constraints
+            .iter()
+            .any(|c| c.gen_var == gen_var && c.trait_ == trait_)
+    }
+
+    pub fn get_constraints_for(&self, gen_var: GenVar) -> impl Iterator<Item = Trait> {
+        self.constraints
+            .iter()
+            .filter_map(move |c| if c.gen_var == gen_var { Some(c.trait_) } else { None })
     }
 }

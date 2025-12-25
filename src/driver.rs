@@ -45,7 +45,7 @@ pub fn compile(
     register_tys(&hlr, &mut ctxt.tys, &mut hlr_meta).map_err(|_| "Error registering types")?;
     register_traits(&hlr, &mut ctxt).map_err(|_| "Error registering traits")?;
     define_tys(&hlr, &mut ctxt.tys, &hlr_meta).map_err(|_| "Error defining types")?;
-    register_functions(&hlr, &mut ctxt.tys, &mut ctxt.fns, &mut hlr_meta).map_err(|_| "Error registering functions")?;
+    register_functions(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering functions")?;
     register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
     check_trait_impls(&mut ctxt).map_err(|err| print_trait_check_error(err, &ctxt))?;
     build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
@@ -140,16 +140,11 @@ fn set_struct_fields<'a>(
     Ok(())
 }
 
-fn register_functions(
-    hlr: &hlr::Program,
-    tys: &mut ctxt::TyReg,
-    fns: &mut ctxt::FnReg,
-    hlr_meta: &mut HlrMetadata,
-) -> Result<(), ()> {
-    stdlib::register_fns(tys, fns)?;
+fn register_functions(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+    stdlib::register_fns(&mut ctxt.tys, &mut ctxt.fns)?;
 
     for (idx, function) in hlr.fns.iter().enumerate() {
-        let fn_ = register_function(function, tys, fns, None, None, Vec::new())?;
+        let fn_ = register_function(function, ctxt, None, None, Vec::new())?;
         hlr_meta.fn_ids.insert(idx, fn_);
     }
 
@@ -158,14 +153,17 @@ fn register_functions(
 
 fn register_function(
     hlr_fn: &hlr::Fn,
-    tys: &mut ctxt::TyReg,
-    fns: &mut ctxt::FnReg,
+    ctxt: &mut ctxt::Ctxt,
     associated_ty: Option<ty::Ty>,
     associated_trait: Option<traits::Trait>,
     env_gen_params: Vec<ty::GenVar>,
 ) -> Result<fns::Fn, ()> {
-    let gen_params: Vec<_> = hlr_fn.gen_params.iter().map(|gp| tys.register_gen_var(gp)).collect();
-    let all_gen_params: Vec<_> = gen_params.iter().chain(env_gen_params.iter()).cloned().collect();
+    let gen_params: Vec<_> = hlr_fn
+        .gen_params
+        .iter()
+        .map(|gp| ctxt.tys.register_gen_var(gp))
+        .collect();
+    let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
     let params = hlr_fn
         .params
@@ -173,7 +171,8 @@ fn register_function(
         .map(|parameter| {
             Ok(fns::FnParam {
                 name: parameter.name.clone(),
-                ty: tys
+                ty: ctxt
+                    .tys
                     .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, associated_ty)
                     .ok_or(())?,
             })
@@ -181,11 +180,24 @@ fn register_function(
         .collect::<Result<_, _>>()?;
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
-        Some(ty) => tys
+        Some(ty) => ctxt
+            .tys
             .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty)
             .ok_or(())?,
-        None => tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
+        None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
+
+    for constraint in &hlr_fn.constraints {
+        let gen_var = gen_params
+            .iter()
+            .cloned()
+            .find(|&gp| ctxt.tys.get_gen_var_name(gp) == constraint.gen_param)
+            .ok_or(())?;
+
+        let trait_ = ctxt.traits.resolve_trait_name(&constraint.trait_).ok_or(())?;
+
+        ctxt.tys.add_constraint(gen_var, trait_);
+    }
 
     let signature = fns::FnSig {
         name: hlr_fn.name.clone(),
@@ -199,7 +211,7 @@ fn register_function(
         has_receiver: hlr_fn.params.first().map(|p| p.is_receiver).unwrap_or(false),
     };
 
-    fns.register_fn(signature)
+    ctxt.fns.register_fn(signature)
 }
 
 fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
@@ -277,14 +289,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {
-            let fn_ = register_function(
-                method,
-                &mut ctxt.tys,
-                &mut ctxt.fns,
-                Some(ty),
-                trait_,
-                gen_params.clone(),
-            )?;
+            let fn_ = register_function(method, ctxt, Some(ty), trait_, gen_params.clone())?;
             ctxt.impls.register_method(impl_, fn_, &method.name);
         }
     }

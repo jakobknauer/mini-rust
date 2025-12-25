@@ -931,6 +931,7 @@ mod tests {
                     params: vec![],
                     var_args: false,
                     return_ty: None,
+                    constraints: vec![],
                     body: Some(Block {
                         stmts: vec![],
                         return_expr: None,
@@ -987,6 +988,7 @@ mod tests {
                     ],
                     var_args: false,
                     return_ty: Some(TyAnnot::Named("int".to_string())),
+                    constraints: vec![],
                     body: Some(Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
                             left: Box::new(make_ident("a")),
@@ -1089,6 +1091,7 @@ mod tests {
                         }],
                         var_args: false,
                         return_ty: Some(TyAnnot::Named("B".to_string())),
+                        constraints: vec![],
                         body: Some(Block {
                             stmts: vec![],
                             return_expr: Some(Box::new(Expr::FieldAccess {

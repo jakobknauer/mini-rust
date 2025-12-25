@@ -201,6 +201,18 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             expected,
             actual
         ),
+        UnfulfilledConstraint {
+            fn_,
+            gen_var,
+            constraint,
+            gen_arg,
+        } => format!(
+            "Constraint '{}: {}' in function '{}' is not fulfilled by type '{}'",
+            ctxt.tys.get_gen_var_name(gen_var),
+            ctxt.traits.get_trait_name(constraint),
+            ctxt.fns.get_fn_name(fn_),
+            ctxt.tys.get_string_rep(gen_arg),
+        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }
