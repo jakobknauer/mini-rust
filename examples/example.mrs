@@ -1,6 +1,6 @@
 fn main() -> i32 {
-    print::<i32>(5);
-    print::<bool>(false);
+    print(5);
+    print(false);
     3
 }
 

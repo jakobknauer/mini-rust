@@ -212,17 +212,9 @@ impl<'a> Typechecker<'a> {
         }
 
         for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_specialization.gen_args) {
-            let constraints = self.tys.get_constraints_for(gen_var);
+            let constraints: Vec<_> = self.tys.get_constraints_for(gen_var).collect();
             for constraint in constraints {
-                if !self.ty_implements_trait(gen_arg, constraint) {
-                    return TyError::UnfulfilledConstraint {
-                        fn_: fn_specialization.fn_,
-                        gen_var,
-                        constraint,
-                        gen_arg,
-                    }
-                    .into();
-                }
+                self.tys.add_obligation(gen_arg, constraint, self.fn_);
             }
         }
 

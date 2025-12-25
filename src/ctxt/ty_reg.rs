@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{traits::Trait, ty::*},
+    ctxt::{fns::Fn, traits::Trait, ty::*},
     hlr,
 };
 
@@ -23,6 +23,7 @@ pub struct TyReg {
     named_tys: HashMap<String, Named>,
 
     constraints: Vec<Constraint>,
+    obligations: Vec<Obligation>,
 }
 
 #[derive(Clone, Copy)]
@@ -956,5 +957,13 @@ impl TyReg {
         self.constraints
             .iter()
             .filter_map(move |c| if c.gen_var == gen_var { Some(c.trait_) } else { None })
+    }
+
+    pub fn add_obligation(&mut self, ty: Ty, trait_: Trait, fn_: Fn) {
+        self.obligations.push(Obligation { ty, trait_, fn_ });
+    }
+
+    pub fn get_all_obligations(&self) -> &[Obligation] {
+        &self.obligations
     }
 }

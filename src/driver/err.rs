@@ -270,3 +270,12 @@ pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> Strin
         desc
     )
 }
+
+pub fn print_obligation_check_error(err: crate::traitchecker::ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
+    format!(
+        "Obligation check error in function '{}': type '{}' does not implement trait '{}'",
+        ctxt.fns.get_fn_name(err.obligation.fn_),
+        ctxt.tys.get_string_rep(err.obligation.ty),
+        ctxt.traits.get_trait_name(err.obligation.trait_),
+    )
+}

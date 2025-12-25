@@ -1,4 +1,4 @@
-use crate::ctxt::traits::Trait;
+use crate::ctxt::{fns::Fn, traits::Trait};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Ty(pub usize);
@@ -74,4 +74,11 @@ pub struct EnumVariant {
 pub struct Constraint {
     pub gen_var: GenVar,
     pub trait_: Trait,
+}
+
+#[derive(Clone)]
+pub struct Obligation {
+    pub ty: Ty,
+    pub trait_: Trait,
+    pub fn_: Fn,
 }

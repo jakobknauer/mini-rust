@@ -9,8 +9,12 @@ use std::{
 
 use crate::{
     ctxt::{self, fns, impls, traits, ty},
-    driver::{err::print_trait_check_error, trait_check::check_trait_impls},
+    driver::{
+        err::{print_obligation_check_error, print_trait_check_error},
+        trait_check::check_trait_impls,
+    },
     h2m, hlr, m2inkwell,
+    traitchecker::check_obligations,
     util::print,
 };
 
@@ -50,6 +54,7 @@ pub fn compile(
     check_trait_impls(&mut ctxt).map_err(|err| print_trait_check_error(err, &ctxt))?;
     build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
     build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
+    check_obligations(&mut ctxt).map_err(|err| print_obligation_check_error(err, &ctxt))?;
 
     h2m::opt::canonicalize_types(&mut ctxt);
 
