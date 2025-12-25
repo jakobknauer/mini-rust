@@ -70,6 +70,22 @@ impl Ctxt {
         format!("{}{}", prefix, postfix)
     }
 
+    pub fn fn_specs_eq(&self, fn_spec1: &fns::FnSpecialization, fn_spec2: &fns::FnSpecialization) -> bool {
+        fn_spec1.fn_ == fn_spec2.fn_
+            && fn_spec1.gen_args.len() == fn_spec2.gen_args.len()
+            && fn_spec1
+                .gen_args
+                .iter()
+                .zip(fn_spec2.gen_args.iter())
+                .all(|(a, b)| self.tys.tys_eq(*a, *b))
+            && fn_spec1.env_gen_args.len() == fn_spec2.env_gen_args.len()
+            && fn_spec1
+                .env_gen_args
+                .iter()
+                .zip(fn_spec2.env_gen_args.iter())
+                .all(|(a, b)| self.tys.tys_eq(*a, *b))
+    }
+
     pub fn get_specialized_fn_sig(&mut self, fn_spec: &fns::FnSpecialization) -> fns::FnSig {
         let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
         let substitutions = self.fns.get_substitutions_for_specialization(fn_spec);

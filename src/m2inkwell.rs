@@ -37,6 +37,8 @@ struct M2Inkwell<'iw, 'mr> {
 
     types: HashMap<mr_tys::Ty, AnyTypeEnum<'iw>>,
     functions: HashMap<mr_fns::FnSpecialization, FunctionValue<'iw>>,
+    structs: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
+    enums: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
 }
 
 impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
@@ -49,6 +51,8 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             mr_ctxt,
             types: HashMap::new(),
             functions: HashMap::new(),
+            structs: Vec::new(),
+            enums: Vec::new(),
         }
     }
 
@@ -91,6 +95,8 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
         use mr_tys::{Primitive::*, TyDef::*};
 
         if self.types.contains_key(&ty) {
+            // TODO real canonicalization, such that the lookup actually considers true type equivalence
+            // For now, structs and enums contain separate mechanisms to avoid duplicate definitions
             return self.types.get(&ty).cloned();
         }
 
@@ -126,9 +132,16 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
     }
 
     fn define_struct(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
+        for &(ty_2, iw_type) in &self.structs {
+            if self.mr_ctxt.tys.tys_eq(ty, ty_2) {
+                return iw_type.as_any_type_enum();
+            }
+        }
+
         let name = self.mr_ctxt.tys.get_string_rep(ty);
         let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(&name);
         self.types.insert(ty, iw_struct.as_any_type_enum());
+        self.structs.push((ty, iw_struct));
 
         let mr_field_tys = self.mr_ctxt.tys.get_struct_field_tys(ty).unwrap();
         let iw_field_tys: Vec<BasicTypeEnum> = mr_field_tys
@@ -141,9 +154,16 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
     }
 
     fn define_enum(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
+        for &(ty_2, iw_type) in &self.enums {
+            if self.mr_ctxt.tys.tys_eq(ty, ty_2) {
+                return iw_type.as_any_type_enum();
+            }
+        }
+
         let name = self.mr_ctxt.tys.get_string_rep(ty);
         let iw_enum_struct = self.iw_ctxt.opaque_struct_type(&name);
         self.types.insert(ty, iw_enum_struct.as_any_type_enum());
+        self.enums.push((ty, iw_enum_struct));
 
         let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits).as_basic_type_enum();
@@ -162,23 +182,10 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
         iw_enum_struct.as_any_type_enum()
     }
 
-    fn get_fn(&self, needle: &mr_fns::FnSpecialization) -> Option<FunctionValue<'iw>> {
-        for (fn_spec, fn_value) in self.functions.iter() {
-            let eq = needle.fn_ == fn_spec.fn_
-                && needle.gen_args.len() == fn_spec.gen_args.len()
-                && needle
-                    .gen_args
-                    .iter()
-                    .zip(fn_spec.gen_args.iter())
-                    .all(|(a, b)| self.mr_ctxt.tys.tys_eq(*a, *b))
-                && needle.env_gen_args.len() == fn_spec.env_gen_args.len()
-                && needle
-                    .env_gen_args
-                    .iter()
-                    .zip(fn_spec.env_gen_args.iter())
-                    .all(|(a, b)| self.mr_ctxt.tys.tys_eq(*a, *b));
-            if eq {
-                return Some(*fn_value);
+    fn get_fn(&self, fn_spec: &mr_fns::FnSpecialization) -> Option<FunctionValue<'iw>> {
+        for (fn_spec_2, &fn_value) in &self.functions {
+            if self.mr_ctxt.fn_specs_eq(fn_spec, fn_spec_2) {
+                return Some(fn_value);
             }
         }
         None
