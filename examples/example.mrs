@@ -1,7 +1,9 @@
 fn main() -> i32 {
     print(5);
     print(false);
-    3
+
+    let x = new();
+    *x
 }
 
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B {
@@ -21,8 +23,8 @@ fn scanf(format: *c_char, ...) -> i32;
 fn new<T>() -> *T {
     malloc(size_of::<T>()) as *T
 }
-fn delete<T>(ref: &T) {
-    free(ref as *T as *c_void)
+fn delete<T>(ref: *T) {
+    free(ref as *c_void)
 }
 
 fn fac(n: i32) -> i32 {

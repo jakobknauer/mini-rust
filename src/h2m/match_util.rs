@@ -5,6 +5,7 @@ use crate::{
 };
 
 impl<'a> super::H2M<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn build_match_arms(
         &mut self,
         arms: &[hlr::MatchArm],
@@ -13,6 +14,7 @@ impl<'a> super::H2M<'a> {
         discriminant: mlr::Op,
         scrutinee_place: mlr::Place,
         result_place: mlr::Place,
+        expected: Option<ty::Ty>,
     ) -> H2MResult<()> {
         assert!(
             arms.len() == variant_indices.len(),
@@ -25,7 +27,7 @@ impl<'a> super::H2M<'a> {
             ([], []) => panic!("Match expressions must have at least one arm."),
 
             ([arm], [variant_index]) => {
-                let arm_result = self.build_arm_block(arm, enum_ty, *variant_index, scrutinee_place)?;
+                let arm_result = self.build_arm_block(arm, enum_ty, *variant_index, scrutinee_place, expected)?;
                 self.builder.insert_assign_stmt(result_place, arm_result)?;
                 Ok(())
             }
@@ -35,7 +37,7 @@ impl<'a> super::H2M<'a> {
 
                 self.builder.start_new_block();
                 let first_arm_result =
-                    self.build_arm_block(first_arm, enum_ty, *first_variant_index, scrutinee_place)?;
+                    self.build_arm_block(first_arm, enum_ty, *first_variant_index, scrutinee_place, expected)?;
                 self.builder.insert_assign_stmt(result_place, first_arm_result)?;
                 let then_block = self.builder.release_current_block();
 
@@ -47,6 +49,7 @@ impl<'a> super::H2M<'a> {
                     discriminant,
                     scrutinee_place,
                     result_place,
+                    expected,
                 )?;
                 let else_block = self.builder.release_current_block();
 
@@ -78,6 +81,7 @@ impl<'a> super::H2M<'a> {
         enum_ty: ty::Ty,
         variant_index: usize,
         base_place: mlr::Place,
+        expected: Option<ty::Ty>,
     ) -> H2MResult<mlr::Val> {
         let enum_variant_ty = self.tys().get_enum_variant_ty(enum_ty, variant_index)?;
         let field_indices = self.typechecker().resolve_struct_fields(
@@ -105,7 +109,7 @@ impl<'a> super::H2M<'a> {
         }
 
         // build actual arm block
-        let output = self.lower_to_val(&arm.value)?;
+        let output = self.lower_to_val(&arm.value, expected)?;
 
         self.builder.pop_scope();
 

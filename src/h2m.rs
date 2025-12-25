@@ -54,7 +54,7 @@ impl<'a> H2M<'a> {
 
         self.builder.start_new_block();
 
-        let return_val = self.build_block(input.body.as_ref().unwrap())?;
+        let return_val = self.build_block(input.body.as_ref().unwrap(), None)?;
         self.builder.insert_return_stmt(return_val)?;
 
         let body = self.builder.release_current_block();
@@ -87,7 +87,7 @@ impl<'a> H2M<'a> {
     /// all while in a new scope.
     ///
     /// This method does not start or end a new MLR block; but it does push and pop a new scope.
-    fn build_block(&mut self, block: &hlr::Block) -> H2MResult<mlr::Val> {
+    fn build_block(&mut self, block: &hlr::Block, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
         self.builder.push_scope();
 
         for stmt in &block.stmts {
@@ -95,7 +95,7 @@ impl<'a> H2M<'a> {
         }
 
         let output = match &block.return_expr {
-            Some(expr) => self.lower_to_val(expr)?,
+            Some(expr) => self.lower_to_val(expr, expected)?,
             None => {
                 let unit = self.builder.insert_unit_op()?;
                 self.builder.insert_use_val(unit)?
@@ -107,12 +107,12 @@ impl<'a> H2M<'a> {
         Ok(output)
     }
 
-    fn lower_to_val(&mut self, expr: &hlr::Expr) -> H2MResult<mlr::Val> {
+    fn lower_to_val(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
         use hlr::Expr::*;
 
         match expr {
             Lit(..) | Ident { .. } | FieldAccess { .. } | Deref { .. } | Self_ => {
-                let op = self.lower_to_op(expr)?;
+                let op = self.lower_to_op(expr, expected)?;
                 self.builder.insert_use_val(op)
             }
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
@@ -124,10 +124,10 @@ impl<'a> H2M<'a> {
                 condition,
                 then_block,
                 else_block,
-            } => self.build_if(condition, then_block, else_block.as_ref()),
+            } => self.build_if(condition, then_block, else_block.as_ref(), expected),
             Loop { body } => self.build_loop(body),
-            Block(block) => self.build_block(block),
-            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms),
+            Block(block) => self.build_block(block, expected),
+            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected),
             AddrOf { base } => self.build_addr_of_val(base),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty),
         }
@@ -148,7 +148,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn lower_to_op(&mut self, expr: &hlr::Expr) -> H2MResult<mlr::Op> {
+    fn lower_to_op(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Op> {
         use hlr::Expr::*;
 
         match expr {
@@ -159,7 +159,7 @@ impl<'a> H2M<'a> {
                 self.builder.insert_copy_op(place)
             }
             _ => {
-                let val_place = assign_to_fresh_alloc!(self, self.lower_to_val(expr)?);
+                let val_place = assign_to_fresh_alloc!(self, self.lower_to_val(expr, expected)?);
                 self.builder.insert_copy_op(val_place)
             }
         }
@@ -207,8 +207,8 @@ impl<'a> H2M<'a> {
         operator: &hlr::BinaryOperator,
         right: &hlr::Expr,
     ) -> H2MResult<mlr::Val> {
-        let left_op = self.lower_to_op(left)?;
-        let right_op = self.lower_to_op(right)?;
+        let left_op = self.lower_to_op(left, None)?;
+        let right_op = self.lower_to_op(right, None)?;
 
         let op = {
             let left_ty = self.mlr().get_op_ty(left_op);
@@ -222,7 +222,7 @@ impl<'a> H2M<'a> {
 
     fn build_assignment(&mut self, target: &hlr::Expr, value: &hlr::Expr) -> H2MResult<mlr::Val> {
         let loc = self.lower_to_place(target)?;
-        let value = self.lower_to_val(value)?;
+        let value = self.lower_to_val(value, None)?;
         self.builder.insert_assign_stmt(loc, value)?;
 
         let output = self.builder.insert_unit_op()?;
@@ -230,11 +230,14 @@ impl<'a> H2M<'a> {
     }
 
     fn build_call(&mut self, callee: &hlr::Expr, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
-        let callee = self.lower_to_op(callee)?;
+        let callee = self.lower_to_op(callee, None)?;
+
+        // TODO get callee type, check that it is a function
+        // then pass the argument types as expected to lower_to_op
 
         let args = args
             .iter()
-            .map(|arg| self.lower_to_op(arg))
+            .map(|arg| self.lower_to_op(arg, None))
             .collect::<H2MResult<Vec<_>>>()?;
 
         self.builder.insert_call_val(callee, args)
@@ -246,7 +249,7 @@ impl<'a> H2M<'a> {
         method: &hlr::Ident,
         args: &[hlr::Expr],
     ) -> Result<mlr::Val, H2MError> {
-        let base = self.lower_to_op(obj)?;
+        let base = self.lower_to_op(obj, None)?;
         let base_ty = self.mlr().get_op_ty(base);
 
         let gen_args: Vec<_> = method
@@ -287,8 +290,9 @@ impl<'a> H2M<'a> {
             }
         }?;
 
+        // TODO similar to build_call
         let args = std::iter::once(Ok(base))
-            .chain(args.iter().map(|arg| self.lower_to_op(arg)))
+            .chain(args.iter().map(|arg| self.lower_to_op(arg, None)))
             .collect::<H2MResult<Vec<_>>>()?;
         self.builder.insert_call_val(method, args)
     }
@@ -298,19 +302,20 @@ impl<'a> H2M<'a> {
         condition: &hlr::Expr,
         then_block: &hlr::Block,
         else_block: Option<&hlr::Block>,
+        expected: Option<ty::Ty>,
     ) -> H2MResult<mlr::Val> {
-        let cond = self.lower_to_op(condition)?;
+        let cond = self.lower_to_op(condition, None)?;
 
         let result_place = self.builder.insert_fresh_alloc()?;
 
         self.builder.start_new_block();
-        let then_result = self.build_block(then_block)?;
+        let then_result = self.build_block(then_block, expected)?;
         self.builder.insert_assign_stmt(result_place, then_result)?;
         let then_block = self.builder.release_current_block();
 
         self.builder.start_new_block();
         let else_result = match else_block {
-            Some(block) => self.build_block(block),
+            Some(block) => self.build_block(block, expected),
             None => {
                 let unit = self.builder.insert_unit_op()?;
                 self.builder.insert_use_val(unit)
@@ -326,7 +331,7 @@ impl<'a> H2M<'a> {
 
     fn build_loop(&mut self, body: &hlr::Block) -> H2MResult<mlr::Val> {
         self.builder.start_new_block();
-        self.build_block(body)?;
+        self.build_block(body, None)?;
         let body = self.builder.release_current_block();
         self.builder.insert_loop_stmt(body)?;
 
@@ -415,14 +420,19 @@ impl<'a> H2M<'a> {
 
         for ((_, expr), field_index) in fields.iter().zip(field_indices) {
             let field_place = self.builder.insert_field_access_place(base_place, field_index)?;
-            let field_value = self.lower_to_val(expr)?;
+            let field_value = self.lower_to_val(expr, None)?; // TODO pass expected type
             self.builder.insert_assign_stmt(field_place, field_value)?;
         }
         Ok(())
     }
 
-    fn build_match_expr(&mut self, scrutinee: &hlr::Expr, arms: &[hlr::MatchArm]) -> H2MResult<mlr::Val> {
-        let scrutinee = self.lower_to_op(scrutinee)?;
+    fn build_match_expr(
+        &mut self,
+        scrutinee: &hlr::Expr,
+        arms: &[hlr::MatchArm],
+        expected: Option<ty::Ty>,
+    ) -> H2MResult<mlr::Val> {
+        let scrutinee = self.lower_to_op(scrutinee, None)?;
         let scrutinee_place = assign_to_fresh_alloc!(self, self.builder.insert_use_val(scrutinee)?);
 
         let discriminant_place = self.builder.insert_enum_discriminant_place(scrutinee_place)?;
@@ -441,10 +451,18 @@ impl<'a> H2M<'a> {
             .resolve_enum_variants(scrutinee_ty, arms.iter().map(|arm| arm.pattern.variant.as_str()))?;
 
         // now build the match statement
-        let result_loc = self.builder.insert_fresh_alloc()?;
-        self.build_match_arms(arms, &arm_indices, eq_fn, discriminant, scrutinee_place, result_loc)?;
+        let result_place = self.builder.insert_fresh_alloc()?;
+        self.build_match_arms(
+            arms,
+            &arm_indices,
+            eq_fn,
+            discriminant,
+            scrutinee_place,
+            result_place,
+            expected,
+        )?;
 
-        let result_op = self.builder.insert_copy_op(result_loc)?;
+        let result_op = self.builder.insert_copy_op(result_place)?;
         self.builder.insert_use_val(result_op)
     }
 
@@ -454,7 +472,7 @@ impl<'a> H2M<'a> {
     }
 
     fn build_as_expr(&mut self, expr: &hlr::Expr, target_ty: &hlr::TyAnnot) -> Result<mlr::Val, H2MError> {
-        let expr_op = self.lower_to_op(expr)?;
+        let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_hlr_ty_annot(target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
     }
@@ -480,7 +498,7 @@ impl<'a> H2M<'a> {
 
         self.builder.start_new_block();
 
-        let val = self.lower_to_val(value)?;
+        let val = self.lower_to_val(value, Some(annot_ty))?;
         self.builder.insert_assign_to_loc_stmt(loc, val)?;
 
         self.builder.end_and_insert_current_block();
@@ -491,7 +509,7 @@ impl<'a> H2M<'a> {
 
     fn build_expr_stmt(&mut self, expr: &hlr::Expr) -> H2MResult<()> {
         self.builder.start_new_block();
-        let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr)?);
+        let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr, None)?);
         self.builder.end_and_insert_current_block();
         Ok(())
     }
@@ -499,8 +517,10 @@ impl<'a> H2M<'a> {
     fn build_return_stmt(&mut self, expr: Option<&hlr::Expr>) -> H2MResult<()> {
         self.builder.start_new_block();
 
+        let return_ty = self.builder.get_signature().return_ty;
+
         let return_val = match expr {
-            Some(expr) => self.lower_to_val(expr)?,
+            Some(expr) => self.lower_to_val(expr, Some(return_ty))?,
             None => {
                 let unit = self.builder.insert_unit_op()?;
                 self.builder.insert_use_val(unit)?
@@ -542,7 +562,7 @@ impl<'a> H2M<'a> {
     }
 
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {
-        let base_op = self.lower_to_op(base)?;
+        let base_op = self.lower_to_op(base, None)?;
         self.builder.insert_deref_place(base_op)
     }
 }
