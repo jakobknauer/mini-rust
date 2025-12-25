@@ -14,6 +14,7 @@ pub struct Fn {
     pub params: Vec<Param>,
     pub var_args: bool,
     pub return_ty: Option<TyAnnot>,
+    pub constraints: Vec<Constraint>,
     pub body: Option<Block>,
 }
 
@@ -22,6 +23,12 @@ pub struct Param {
     pub name: String,
     pub ty: TyAnnot,
     pub is_receiver: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Constraint {
+    pub gen_param: String,
+    pub trait_: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]

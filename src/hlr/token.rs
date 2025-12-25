@@ -54,4 +54,5 @@ pub enum Keyword {
     Self_,
     Struct,
     Trait,
+    Where,
 }

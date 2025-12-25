@@ -146,6 +146,13 @@ impl<'a> HlrParser<'a> {
         self.expect_token(Token::RParen)?;
 
         let return_ty = self.parse_function_return_type()?;
+
+        let constraints = if self.advance_if(Token::Keyword(Keyword::Where)) {
+            self.parse_function_constraints()?
+        } else {
+            Vec::new()
+        };
+
         let body = if self.current() == Some(&Token::LBrace) {
             Some(self.parse_block()?)
         } else {
@@ -159,6 +166,7 @@ impl<'a> HlrParser<'a> {
             params,
             var_args,
             return_ty,
+            constraints,
             body,
         })
     }
@@ -222,6 +230,24 @@ impl<'a> HlrParser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_function_constraints(&mut self) -> Result<Vec<Constraint>, ParserErr> {
+        let mut constraints = Vec::new();
+        while let Some(Token::Identifier(_)) = self.current() {
+            constraints.push(self.parse_constraint()?);
+            if !self.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        Ok(constraints)
+    }
+
+    fn parse_constraint(&mut self) -> Result<Constraint, ParserErr> {
+        let gen_param = self.expect_identifier()?;
+        self.expect_token(Token::Colon)?;
+        let trait_ = self.expect_identifier()?;
+        Ok(Constraint { gen_param, trait_ })
     }
 
     fn parse_struct(&mut self) -> Result<Struct, ParserErr> {

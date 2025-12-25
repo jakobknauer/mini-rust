@@ -86,3 +86,12 @@ impl<T> Sink for T {
         printf("Sink of size %d received message of size %d\n", size_T, size_S);
     }
 }
+
+trait ToString {
+    fn to_string(self) -> *c_char;
+}
+
+fn print<T>(x: T) 
+    where T: ToString
+{
+}
