@@ -3,6 +3,6 @@ pub mod driver;
 mod h2m;
 mod hlr;
 mod m2inkwell;
-mod traitchecker;
+mod obligation_check;
 mod typechecker;
 mod util;

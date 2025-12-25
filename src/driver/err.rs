@@ -1,6 +1,6 @@
 use crate::{
     ctxt,
-    driver::trait_check::{TraitCheckError, TraitCheckErrorKind},
+    driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     h2m, hlr,
     typechecker::TyError,
 };
@@ -217,8 +217,8 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
     format!("Type error in function '{}': {}", fn_name, msg)
 }
 
-pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> String {
-    use TraitCheckErrorKind::*;
+pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String {
+    use ImplCheckErrorKind::*;
 
     let desc = match err.kind {
         MissingMethods(items) => format!("Missing methods: {}", items.join(", ")),
@@ -271,7 +271,7 @@ pub fn print_trait_check_error(err: TraitCheckError, ctxt: &ctxt::Ctxt) -> Strin
     )
 }
 
-pub fn print_obligation_check_error(err: crate::traitchecker::ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
+pub fn print_obligation_check_error(err: crate::obligation_check::ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
     format!(
         "Obligation check error in function '{}': type '{}' does not implement trait '{}'",
         ctxt.fns.get_fn_name(err.obligation.fn_),

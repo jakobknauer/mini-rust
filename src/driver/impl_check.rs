@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{self, impls::Impl, traits::Trait};
 
-pub struct TraitCheckError {
+pub struct ImplCheckError {
     pub impl_: Impl,
     pub trait_: Trait,
-    pub kind: TraitCheckErrorKind,
+    pub kind: ImplCheckErrorKind,
 }
 
-pub enum TraitCheckErrorKind {
+pub enum ImplCheckErrorKind {
     MissingMethods(Vec<String>),
     ExtraMethods(Vec<String>),
     ParamCountMismatch {
@@ -34,7 +34,7 @@ pub enum TraitCheckErrorKind {
     },
 }
 
-pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), TraitCheckError> {
+pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
     let all_impls: Vec<_> = ctxt.impls.get_all_impls().collect();
     for impl_ in all_impls {
         let Some(trait_) = ctxt.impls.get_impl_trait(impl_) else {
@@ -46,8 +46,8 @@ pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), TraitCheckError> {
     Ok(())
 }
 
-fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), TraitCheckError> {
-    check_method_names(ctxt, impl_, trait_).map_err(|kind| TraitCheckError { impl_, trait_, kind })?;
+fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), ImplCheckError> {
+    check_method_names(ctxt, impl_, trait_).map_err(|kind| ImplCheckError { impl_, trait_, kind })?;
 
     let impl_def = ctxt.impls.get_impl_def(impl_);
     let trait_def = ctxt.traits.get_trait_def(trait_);
@@ -59,13 +59,13 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result
         let trait_method_sig = trait_def.methods.iter().find(|m| m.name == method_name).unwrap();
 
         check_method_sigs(&mut ctxt.tys, impl_method_sig, trait_method_sig, impl_def.ty)
-            .map_err(|kind| TraitCheckError { impl_, trait_, kind })?;
+            .map_err(|kind| ImplCheckError { impl_, trait_, kind })?;
     }
 
     Ok(())
 }
 
-fn check_method_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), TraitCheckErrorKind> {
+fn check_method_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), ImplCheckErrorKind> {
     let impl_def = ctxt.impls.get_impl_def(impl_);
     let trait_def = ctxt.traits.get_trait_def(trait_);
 
@@ -78,14 +78,14 @@ fn check_method_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Resu
 
     let missing_methods: Vec<&str> = trait_method_names.difference(&impl_method_names).cloned().collect();
     if !missing_methods.is_empty() {
-        return Err(TraitCheckErrorKind::MissingMethods(
+        return Err(ImplCheckErrorKind::MissingMethods(
             missing_methods.iter().map(|s| s.to_string()).collect(),
         ));
     }
 
     let extra_methods: Vec<&str> = impl_method_names.difference(&trait_method_names).cloned().collect();
     if !extra_methods.is_empty() {
-        return Err(TraitCheckErrorKind::ExtraMethods(
+        return Err(ImplCheckErrorKind::ExtraMethods(
             extra_methods.iter().map(|s| s.to_string()).collect(),
         ));
     }
@@ -98,10 +98,10 @@ fn check_method_sigs(
     impl_method_sig: &ctxt::fns::FnSig,
     trait_method_sig: &ctxt::fns::FnSig,
     impl_ty: ctxt::ty::Ty,
-) -> Result<(), TraitCheckErrorKind> {
+) -> Result<(), ImplCheckErrorKind> {
     // Compare gen params
     if impl_method_sig.gen_params.len() != trait_method_sig.gen_params.len() {
-        return Err(TraitCheckErrorKind::GenParamCountMismatch {
+        return Err(ImplCheckErrorKind::GenParamCountMismatch {
             method: impl_method_sig.name.to_string(),
             expected: trait_method_sig.gen_params.len(),
             actual: impl_method_sig.gen_params.len(),
@@ -117,7 +117,7 @@ fn check_method_sigs(
 
     // Compare param count
     if impl_method_sig.params.len() != trait_method_sig.params.len() {
-        return Err(TraitCheckErrorKind::ParamCountMismatch {
+        return Err(ImplCheckErrorKind::ParamCountMismatch {
             method: impl_method_sig.name.to_string(),
             expected: trait_method_sig.params.len(),
             actual: impl_method_sig.params.len(),
@@ -135,7 +135,7 @@ fn check_method_sigs(
         let expected_with_gen_params_substituted =
             tys.substitute_gen_vars(expected_with_self_substituted, &gen_params_substitution);
         if !tys.tys_eq(expected_with_gen_params_substituted, actual.ty) {
-            return Err(TraitCheckErrorKind::ArgTypeMismatch {
+            return Err(ImplCheckErrorKind::ArgTypeMismatch {
                 method: impl_method_sig.name.to_string(),
                 arg_idx: idx,
                 expected: expected_with_self_substituted,
@@ -149,7 +149,7 @@ fn check_method_sigs(
     let return_type_with_gen_params_substituted =
         tys.substitute_gen_vars(return_type_with_self_substituted, &gen_params_substitution);
     if !tys.tys_eq(return_type_with_gen_params_substituted, impl_method_sig.return_ty) {
-        return Err(TraitCheckErrorKind::ReturnTypeMismatch {
+        return Err(ImplCheckErrorKind::ReturnTypeMismatch {
             method: impl_method_sig.name.to_string(),
             expected: return_type_with_self_substituted,
             actual: impl_method_sig.return_ty,

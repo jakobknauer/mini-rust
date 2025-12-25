@@ -7,11 +7,7 @@ pub use err::{TyError, TyResult};
 use crate::ctxt::{self, fns, mlr::*, traits, ty};
 
 pub struct Typechecker<'a> {
-    tys: &'a mut ctxt::TyReg,
-    fns: &'a mut ctxt::FnReg,
-    mlr: &'a mut ctxt::mlr::Mlr,
-    impls: &'a mut ctxt::ImplReg,
-    traits: &'a mut ctxt::TraitReg,
+    ctxt: &'a mut ctxt::Ctxt,
     fn_: fns::Fn,
 }
 
@@ -22,37 +18,30 @@ pub enum MethodResolution {
 
 impl<'a> Typechecker<'a> {
     pub fn new(ctxt: &'a mut ctxt::Ctxt, fn_: fns::Fn) -> Self {
-        Typechecker {
-            tys: &mut ctxt.tys,
-            fns: &mut ctxt.fns,
-            mlr: &mut ctxt.mlr,
-            impls: &mut ctxt.impls,
-            traits: &mut ctxt.traits,
-            fn_,
-        }
+        Typechecker { ctxt, fn_ }
     }
 
     pub fn infer_val_ty(&mut self, val: Val) -> TyResult<ty::Ty> {
         use ValDef::*;
 
-        let val_def = self.mlr.get_val_def(val);
+        let val_def = self.ctxt.mlr.get_val_def(val);
 
         let ty = match *val_def {
             Call { callable, ref args } => self.infer_ty_of_call(callable, &args.clone()),
-            Use(op) => Ok(self.mlr.get_op_ty(op)),
+            Use(op) => Ok(self.ctxt.mlr.get_op_ty(op)),
             AddrOf(place) => self.infer_ty_of_addr_of_place(place),
             As { op, target_ty } => self.infer_ty_of_as_expr(op, target_ty),
             SizeOf(..) => self.infer_ty_of_size_of_expr(),
         }?;
 
-        self.mlr.set_val_ty(val, ty);
+        self.ctxt.mlr.set_val_ty(val, ty);
         Ok(ty)
     }
 
     pub fn infer_place_ty(&mut self, place: Place) -> TyResult<ty::Ty> {
         use PlaceDef::*;
 
-        let place_def = self.mlr.get_place_def(place);
+        let place_def = self.ctxt.mlr.get_place_def(place);
 
         let ty = match *place_def {
             Loc(loc) => self.infer_ty_of_loc(loc),
@@ -62,14 +51,14 @@ impl<'a> Typechecker<'a> {
             Deref(op) => self.infer_ty_of_deref_place(op),
         }?;
 
-        self.mlr.set_place_ty(place, ty);
+        self.ctxt.mlr.set_place_ty(place, ty);
         Ok(ty)
     }
 
     pub fn infer_op_ty(&mut self, op: Op) -> TyResult<ty::Ty> {
         use OpDef::*;
 
-        let op_def = self.mlr.get_op_def(op);
+        let op_def = self.ctxt.mlr.get_op_def(op);
 
         let ty = match *op_def {
             Fn(ref fn_spec) => self.infer_ty_of_fn(&fn_spec.clone()),
@@ -78,14 +67,14 @@ impl<'a> Typechecker<'a> {
             Copy(place) => self.infer_place_ty(place),
         }?;
 
-        self.mlr.set_op_ty(op, ty);
+        self.ctxt.mlr.set_op_ty(op, ty);
         Ok(ty)
     }
 
     pub fn check_stmt_ty(&mut self, stmt: Stmt) -> TyResult<()> {
         use StmtDef::*;
 
-        let stmt_def = self.mlr.get_stmt_def(stmt);
+        let stmt_def = self.ctxt.mlr.get_stmt_def(stmt);
 
         match *stmt_def {
             Assign { place, value } => self.check_assign_stmt(place, value)?,
@@ -105,20 +94,24 @@ impl<'a> Typechecker<'a> {
             Unit => ty::Primitive::Unit,
             CChar(_) => ty::Primitive::CChar,
             CString(..) => {
-                let c_char_ty = self.tys.get_primitive_ty(ty::Primitive::CChar);
-                let ptr_to_c_char_ty = self.tys.register_ptr_ty(c_char_ty);
+                let c_char_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::CChar);
+                let ptr_to_c_char_ty = self.ctxt.tys.register_ptr_ty(c_char_ty);
                 return Ok(ptr_to_c_char_ty);
             }
         };
 
-        let ty = self.tys.get_primitive_ty(ty);
+        let ty = self.ctxt.tys.get_primitive_ty(ty);
 
         Ok(ty)
     }
 
     fn infer_ty_of_call(&mut self, callable: Op, args: &[Op]) -> TyResult<ty::Ty> {
-        let ty = self.mlr.get_op_ty(callable);
-        let callable_ty_def = self.tys.get_ty_def(ty).expect("type of callable should be registered");
+        let ty = self.ctxt.mlr.get_op_ty(callable);
+        let callable_ty_def = self
+            .ctxt
+            .tys
+            .get_ty_def(ty)
+            .expect("type of callable should be registered");
 
         let ty::TyDef::Fn {
             param_tys,
@@ -131,7 +124,7 @@ impl<'a> Typechecker<'a> {
 
         let arg_tys = args
             .iter()
-            .map(|&arg_loc| self.mlr.get_op_ty(arg_loc))
+            .map(|&arg_loc| self.ctxt.mlr.get_op_ty(arg_loc))
             .collect::<Vec<_>>();
 
         if (var_args && arg_tys.len() < param_tys.len()) || (!var_args && arg_tys.len() != param_tys.len()) {
@@ -144,7 +137,8 @@ impl<'a> Typechecker<'a> {
         }
 
         for (i, (&param_ty, arg_ty)) in param_tys.iter().zip(arg_tys).enumerate() {
-            self.tys
+            self.ctxt
+                .tys
                 .unify(param_ty, arg_ty)
                 .map_err(|_| TyError::CallArgumentTyMismatch {
                     index: i,
@@ -157,19 +151,21 @@ impl<'a> Typechecker<'a> {
     }
 
     fn infer_ty_of_addr_of_place(&mut self, place: Place) -> TyResult<ty::Ty> {
-        let place_ty = self.mlr.get_place_ty(place);
-        let ref_ty = self.tys.register_ref_ty(place_ty);
+        let place_ty = self.ctxt.mlr.get_place_ty(place);
+        let ref_ty = self.ctxt.tys.register_ref_ty(place_ty);
         Ok(ref_ty)
     }
 
     fn infer_ty_of_as_expr(&mut self, op: Op, target_ty: ty::Ty) -> Result<ty::Ty, TyError> {
-        let op_ty = self.mlr.get_op_ty(op);
+        let op_ty = self.ctxt.mlr.get_op_ty(op);
         let op_ty_def = self
+            .ctxt
             .tys
             .get_ty_def(op_ty)
             .expect("type of as-expr operand should be registered");
 
         let target_ty_def = self
+            .ctxt
             .tys
             .get_ty_def(target_ty)
             .expect("type of as-expr target type should be registered");
@@ -180,7 +176,8 @@ impl<'a> Typechecker<'a> {
 
             // Allow casts from Ref to Ptr with same base type
             (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty)) => {
-                self.tys
+                self.ctxt
+                    .tys
                     .unify(op_base_ty, target_base_ty)
                     .map_err(|_| TyError::InvalidAsExpr { op_ty, target_ty })?;
 
@@ -192,12 +189,13 @@ impl<'a> Typechecker<'a> {
     }
 
     fn infer_ty_of_size_of_expr(&self) -> Result<ty::Ty, TyError> {
-        let int_ty = self.tys.get_primitive_ty(ty::Primitive::Integer32);
+        let int_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32);
         Ok(int_ty)
     }
 
     fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {
         let signature = self
+            .ctxt
             .fns
             .get_sig(fn_specialization.fn_)
             .expect("function signature should be registered");
@@ -212,9 +210,9 @@ impl<'a> Typechecker<'a> {
         }
 
         for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_specialization.gen_args) {
-            let constraints: Vec<_> = self.tys.get_constraints_for(gen_var).collect();
+            let constraints: Vec<_> = self.ctxt.tys.get_constraints_for(gen_var).collect();
             for constraint in constraints {
-                self.tys.add_obligation(gen_arg, constraint, self.fn_);
+                self.ctxt.tys.add_obligation(gen_arg, constraint, self.fn_);
             }
         }
 
@@ -229,17 +227,19 @@ impl<'a> Typechecker<'a> {
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let fn_ty = self
+            .ctxt
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
-        let substitutions = self.fns.get_substitutions_for_specialization(fn_specialization);
-        let fn_spec_ty = self.tys.substitute_gen_vars(fn_ty, &substitutions);
+        let substitutions = self.ctxt.fns.get_substitutions_for_specialization(fn_specialization);
+        let fn_spec_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &substitutions);
 
         Ok(fn_spec_ty)
     }
 
     fn infer_ty_of_trait_method(&mut self, trait_method: &fns::TraitMethod) -> TyResult<ty::Ty> {
         let signature = self
+            .ctxt
             .traits
             .get_trait_method_sig(trait_method.trait_, trait_method.method_idx);
 
@@ -256,6 +256,7 @@ impl<'a> Typechecker<'a> {
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let fn_ty = self
+            .ctxt
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
@@ -265,48 +266,52 @@ impl<'a> Typechecker<'a> {
             .cloned()
             .zip(trait_method.gen_args.iter().cloned())
             .collect();
-        let substituted_fn_ty = self.tys.substitute_self_ty(fn_ty, trait_method.impl_ty);
-        let substituted_fn_ty = self.tys.substitute_gen_vars(substituted_fn_ty, &gen_var_substitutions);
+        let substituted_fn_ty = self.ctxt.tys.substitute_self_ty(fn_ty, trait_method.impl_ty);
+        let substituted_fn_ty = self
+            .ctxt
+            .tys
+            .substitute_gen_vars(substituted_fn_ty, &gen_var_substitutions);
 
         Ok(substituted_fn_ty)
     }
 
     fn infer_ty_of_loc(&self, loc: Loc) -> TyResult<ty::Ty> {
-        Ok(self.mlr.get_loc_ty(loc))
+        Ok(self.ctxt.mlr.get_loc_ty(loc))
     }
 
     fn infer_ty_of_field_access_place(&mut self, base: Place, field_index: usize) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(base);
-        let field_ty = self.tys.get_struct_field_ty(base_ty, field_index)?;
+        let base_ty = self.ctxt.mlr.get_place_ty(base);
+        let field_ty = self.ctxt.tys.get_struct_field_ty(base_ty, field_index)?;
         Ok(field_ty)
     }
 
     fn infer_ty_of_enum_discriminant(&self, base: Place) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(base);
-        if !self.tys.is_enum_ty(base_ty) {
+        let base_ty = self.ctxt.mlr.get_place_ty(base);
+        if !self.ctxt.tys.is_enum_ty(base_ty) {
             return TyError::NotAnEnum { ty: base_ty }.into();
         }
 
         // the discriminant is always an integer
-        let int_ty = self.tys.get_primitive_ty(ty::Primitive::Integer32);
+        let int_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32);
         Ok(int_ty)
     }
 
     fn infer_ty_of_project_to_variant_place(&mut self, base: Place, variant_index: usize) -> TyResult<ty::Ty> {
-        let base_ty = self.mlr.get_place_ty(base);
+        let base_ty = self.ctxt.mlr.get_place_ty(base);
         self.get_enum_variant_ty(base_ty, variant_index)
     }
 
     fn infer_ty_of_deref_place(&mut self, op: Op) -> TyResult<ty::Ty> {
-        let ref_ty = self.mlr.get_op_ty(op);
+        let ref_ty = self.ctxt.mlr.get_op_ty(op);
         let ty_def = self
+            .ctxt
             .tys
             .get_ty_def(ref_ty)
             .expect("type of dereferenced op should be registered");
 
         match *ty_def {
             ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty) => {
-                if self.tys.is_c_void_ty(base_ty) {
+                if self.ctxt.tys.is_c_void_ty(base_ty) {
                     Err(TyError::DereferenceOfCVoidPtr { ty: ref_ty })
                 } else {
                     Ok(base_ty)
@@ -317,10 +322,11 @@ impl<'a> Typechecker<'a> {
     }
 
     fn check_assign_stmt(&mut self, place: Place, val: Val) -> TyResult<()> {
-        let place_ty = self.mlr.get_place_ty(place);
-        let val_ty = self.mlr.get_val_ty(val);
+        let place_ty = self.ctxt.mlr.get_place_ty(place);
+        let val_ty = self.ctxt.mlr.get_val_ty(val);
 
-        self.tys
+        self.ctxt
+            .tys
             .unify(place_ty, val_ty)
             .map_err(|_| TyError::AssignStmtTyMismatch {
                 place,
@@ -331,14 +337,16 @@ impl<'a> Typechecker<'a> {
 
     fn check_return_stmt(&mut self, val: Val) -> TyResult<()> {
         let return_ty = self
+            .ctxt
             .fns
             .get_sig(self.fn_)
             .expect("function signature should be registered")
             .return_ty;
 
-        let val_ty = self.mlr.get_val_ty(val);
+        let val_ty = self.ctxt.mlr.get_val_ty(val);
 
-        self.tys
+        self.ctxt
+            .tys
             .unify(return_ty, val_ty)
             .map_err(|_| TyError::ReturnTyMismatch {
                 expected: return_ty,
@@ -347,7 +355,7 @@ impl<'a> Typechecker<'a> {
     }
 
     pub fn resolve_struct_field(&mut self, struct_ty: ty::Ty, field_name: &str) -> TyResult<usize> {
-        let field_index = self.tys.get_struct_field_index_by_name(struct_ty, field_name)?;
+        let field_index = self.ctxt.tys.get_struct_field_index_by_name(struct_ty, field_name)?;
         Ok(field_index)
     }
 
@@ -359,7 +367,7 @@ impl<'a> Typechecker<'a> {
         let provided_names: Vec<&str> = field_names.into_iter().collect();
         let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
 
-        let expected_names: Vec<&str> = self.tys.get_struct_field_names(struct_ty)?.collect();
+        let expected_names: Vec<&str> = self.ctxt.tys.get_struct_field_names(struct_ty)?.collect();
         let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
 
         let missing_fields: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();
@@ -404,7 +412,7 @@ impl<'a> Typechecker<'a> {
         let provided_names: Vec<&str> = variant_names.into_iter().collect();
         let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
 
-        let expected_names: Vec<&str> = self.tys.get_enum_variant_names(enum_ty)?.collect();
+        let expected_names: Vec<&str> = self.ctxt.tys.get_enum_variant_names(enum_ty)?.collect();
         let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
 
         let missing_variants: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();
@@ -442,7 +450,7 @@ impl<'a> Typechecker<'a> {
     }
 
     pub fn get_enum_variant_ty(&mut self, ty: ty::Ty, variant_index: usize) -> TyResult<ty::Ty> {
-        let ty = self.tys.get_enum_variant_ty(ty, variant_index)?;
+        let ty = self.ctxt.tys.get_enum_variant_ty(ty, variant_index)?;
         Ok(ty)
     }
 
@@ -462,11 +470,13 @@ impl<'a> Typechecker<'a> {
 
     fn resolve_inherent_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
         let candidate_fn_specs: Vec<_> = self
+            .ctxt
             .impls
             .get_inherent_impls()
-            .map(|impl_| self.impls.get_impl_def(impl_))
+            .map(|impl_| self.ctxt.impls.get_impl_def(impl_))
             .filter_map(|impl_def| {
-                self.tys
+                self.ctxt
+                    .tys
                     .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
                     .ok()
                     .map(|substitution| (impl_def, substitution))
@@ -490,9 +500,10 @@ impl<'a> Typechecker<'a> {
 
     fn resolve_trait_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
         let candidate_trait_methods: Vec<_> = self
+            .ctxt
             .traits
             .get_trait_methods_with_name(method_name)
-            .filter(|&(trait_, _)| self.ty_implements_trait(base_ty, trait_))
+            .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(base_ty, trait_))
             .collect();
 
         match &candidate_trait_methods[..] {
@@ -507,25 +518,5 @@ impl<'a> Typechecker<'a> {
             }
             .into(),
         }
-    }
-
-    pub fn ty_implements_trait(&self, ty: ty::Ty, trait_: traits::Trait) -> bool {
-        let ty_def = self.tys.get_ty_def(ty);
-        if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
-            && self.tys.constraint_exists(gen_var, trait_)
-        {
-            return true;
-        }
-
-        self.impls
-            .get_impls_for_trait(trait_)
-            .map(|impl_| self.impls.get_impl_def(impl_))
-            .filter_map(|impl_def| {
-                self.tys
-                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
-                    .ok()
-            })
-            .next()
-            .is_some()
     }
 }

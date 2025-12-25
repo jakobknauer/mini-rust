@@ -154,4 +154,24 @@ impl Ctxt {
             env_gen_args: impl_instantiation,
         }
     }
+
+    pub fn ty_implements_trait(&self, ty: ty::Ty, trait_: traits::Trait) -> bool {
+        let ty_def = self.tys.get_ty_def(ty);
+        if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
+            && self.tys.constraint_exists(gen_var, trait_)
+        {
+            return true;
+        }
+
+        self.impls
+            .get_impls_for_trait(trait_)
+            .map(|impl_| self.impls.get_impl_def(impl_))
+            .filter_map(|impl_def| {
+                self.tys
+                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
+                    .ok()
+            })
+            .next()
+            .is_some()
+    }
 }
