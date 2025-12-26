@@ -9,24 +9,26 @@ use crate::{
 
 macro_rules! register_fn {
     ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_ty:ident ),* ) -> $return_ty:expr ) => {
-        $fn_reg.register_fn(fns::FnSig {
-            name: $name.to_string(),
-            associated_ty: None,
-            associated_trait: None,
-            gen_params: vec![],
-            env_gen_params: vec![],
-            params: vec![
-                $(
-                    fns::FnParam {
-                        name: stringify!($param_name).to_string(),
-                        ty: $param_ty,
-                    },
-                )*
-            ],
-            var_args: false,
-            return_ty: $return_ty,
-            has_receiver: false,
-        })?;
+        $fn_reg.register_fn(
+            fns::FnSig {
+                name: $name.to_string(),
+                associated_ty: None,
+                associated_trait: None,
+                gen_params: vec![],
+                env_gen_params: vec![],
+                params: vec![
+                    $(
+                        fns::FnParam {
+                            name: stringify!($param_name).to_string(),
+                            ty: $param_ty,
+                        },
+                    )*
+                ],
+                var_args: false,
+                return_ty: $return_ty,
+                has_receiver: false,
+            },
+            true)?;
     };
 }
 
@@ -62,17 +64,20 @@ pub fn register_fns(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
 }
 
 fn register_size_of(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    fns.register_fn(fns::FnSig {
-        name: "size_of".to_string(),
-        associated_ty: None,
-        associated_trait: None,
-        gen_params: vec![tys.register_gen_var("T")],
-        env_gen_params: vec![],
-        params: vec![],
-        var_args: false,
-        return_ty: tys.get_primitive_ty(ty::Primitive::Integer32),
-        has_receiver: false,
-    })?;
+    fns.register_fn(
+        fns::FnSig {
+            name: "size_of".to_string(),
+            associated_ty: None,
+            associated_trait: None,
+            gen_params: vec![tys.register_gen_var("T")],
+            env_gen_params: vec![],
+            params: vec![],
+            var_args: false,
+            return_ty: tys.get_primitive_ty(ty::Primitive::Integer32),
+            has_receiver: false,
+        },
+        true,
+    )?;
     Ok(())
 }
 

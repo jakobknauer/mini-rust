@@ -1,5 +1,7 @@
 fn main() -> i32 {
-    wrap_and_unwrap(1)
+    wrap_and_unwrap(false);
+    wrap_and_unwrap(1);
+    5
 }
 
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B {

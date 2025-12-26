@@ -216,7 +216,7 @@ fn register_function(
         has_receiver: hlr_fn.params.first().map(|p| p.is_receiver).unwrap_or(false),
     };
 
-    ctxt.fns.register_fn(signature)
+    ctxt.fns.register_fn(signature, associated_ty.is_none())
 }
 
 fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {

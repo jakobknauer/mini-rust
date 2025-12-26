@@ -525,7 +525,12 @@ impl<'a> H2M<'a> {
 
         // register a new function with signature and all
         let signature = self.generate_closure_sig(params, &param_tys, return_ty);
-        let fn_ = self.fns().register_fn(signature).unwrap();
+        let env_gen_params = signature
+            .env_gen_params
+            .iter()
+            .map(|gen_var| self.tys().register_gen_var_ty(*gen_var))
+            .collect();
+        let fn_ = self.fns().register_fn(signature, false).unwrap();
 
         // then create a new H2M object and build and typecheck the body of the closure
         let h2m = H2M::new(fn_, self.builder.ctxt());
@@ -533,14 +538,7 @@ impl<'a> H2M<'a> {
         self.fns().add_fn_def(fn_, fn_mlr);
 
         // then build a function value using the newly constructed function and return it
-        let mut all_gen_params = self.builder.get_signature().env_gen_params.clone();
-        all_gen_params.extend(self.builder.get_signature().gen_params.clone());
-        let all_gen_params = all_gen_params
-            .iter()
-            .map(|gen_var| self.tys().register_gen_var_ty(*gen_var))
-            .collect();
-
-        let fn_op = self.builder.insert_gen_fn_op(fn_, Vec::new(), all_gen_params)?;
+        let fn_op = self.builder.insert_gen_fn_op(fn_, Vec::new(), env_gen_params)?;
         self.builder.insert_use_val(fn_op)
     }
 
@@ -635,32 +633,35 @@ impl<'a> H2M<'a> {
     }
 
     fn generate_closure_sig(&mut self, params: &[String], param_tys: &[ty::Ty], return_ty: ty::Ty) -> fns::FnSig {
-        let mut all_gen_params = self.builder.get_signature().env_gen_params.clone();
-        all_gen_params.extend(self.builder.get_signature().gen_params.clone());
+        let outer_sig = self.builder.get_signature();
+        let env_gen_params = outer_sig
+            .env_gen_params
+            .iter()
+            .chain(&outer_sig.gen_params)
+            .cloned()
+            .collect();
 
-        let signature = fns::FnSig {
-            name: format!(
-                "<closure {}.{}>",
-                self.builder.get_signature().name,
-                self.closure_counter
-            ),
+        let name = format!(
+            "<closure {}.{}>",
+            self.builder.get_signature().name,
+            self.closure_counter
+        );
+        self.closure_counter += 1;
+
+        fns::FnSig {
+            name,
             associated_ty: None,
             associated_trait: None,
             gen_params: Vec::new(),
-            env_gen_params: all_gen_params,
+            env_gen_params,
             params: params
                 .iter()
-                .zip(param_tys.iter())
-                .map(|(name, ty)| fns::FnParam {
-                    name: name.clone(),
-                    ty: *ty,
-                })
+                .zip(param_tys)
+                .map(|(name, &ty)| fns::FnParam { name: name.clone(), ty })
                 .collect(),
             var_args: false,
             return_ty,
             has_receiver: false,
-        };
-        self.closure_counter += 1;
-        signature
+        }
     }
 }

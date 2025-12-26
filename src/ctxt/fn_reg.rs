@@ -16,19 +16,16 @@ pub struct FnReg {
 }
 
 impl FnReg {
-    pub fn register_fn(&mut self, signature: FnSig) -> Result<Fn, ()> {
-        if self.fn_names.contains_key(&signature.name) {
-            return Err(());
-        }
-
+    pub fn register_fn(&mut self, signature: FnSig, register_name: bool) -> Result<Fn, ()> {
         let fn_ = Fn(self.sigs.len());
 
-        if signature.associated_ty.is_none() {
-            // Only register the function by 'global' name if it is not an associated method
-            // TODO This is a bit of a hack, but on the other hand, resolution is somewhat unclean
-            // atm anyway
+        if register_name {
+            if self.fn_names.contains_key(&signature.name) {
+                return Err(());
+            }
             self.fn_names.insert(signature.name.to_string(), fn_);
         }
+
         self.sigs.push(signature);
         self.called_specializations.insert(fn_, Vec::new());
         self.called_trait_methods.insert(fn_, Vec::new());
