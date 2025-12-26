@@ -533,7 +533,14 @@ impl<'a> H2M<'a> {
         self.fns().add_fn_def(fn_, fn_mlr);
 
         // then build a function value using the newly constructed function and return it
-        let fn_op = self.builder.insert_fn_op(fn_)?;
+        let mut all_gen_params = self.builder.get_signature().env_gen_params.clone();
+        all_gen_params.extend(self.builder.get_signature().gen_params.clone());
+        let all_gen_params = all_gen_params
+            .iter()
+            .map(|gen_var| self.tys().register_gen_var_ty(*gen_var))
+            .collect();
+
+        let fn_op = self.builder.insert_gen_fn_op(fn_, Vec::new(), all_gen_params)?;
         self.builder.insert_use_val(fn_op)
     }
 
@@ -628,6 +635,9 @@ impl<'a> H2M<'a> {
     }
 
     fn generate_closure_sig(&mut self, params: &[String], param_tys: &[ty::Ty], return_ty: ty::Ty) -> fns::FnSig {
+        let mut all_gen_params = self.builder.get_signature().env_gen_params.clone();
+        all_gen_params.extend(self.builder.get_signature().gen_params.clone());
+
         let signature = fns::FnSig {
             name: format!(
                 "<closure {}.{}>",
@@ -637,7 +647,7 @@ impl<'a> H2M<'a> {
             associated_ty: None,
             associated_trait: None,
             gen_params: Vec::new(),
-            env_gen_params: Vec::new(), // TODO use gen_params+env_gen_params of current functio
+            env_gen_params: all_gen_params,
             params: params
                 .iter()
                 .zip(param_tys.iter())

@@ -1,10 +1,14 @@
 fn main() -> i32 {
-    let opt = Some { item: 42 };
-    opt.map(|x| 2 * x).unwrap_or(0)
+    wrap_and_unwrap(1)
 }
 
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B {
     f(x)
+}
+
+fn wrap_and_unwrap<T>(x: T) -> T {
+    let opt = Some { item: x };
+    opt.map(|x| x).unwrap_or(x)
 }
 
 fn double(x: i32) -> i32 {

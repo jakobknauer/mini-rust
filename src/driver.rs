@@ -373,11 +373,16 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
                 .iter()
                 .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
                 .collect();
+            let new_env_gen_args = fn_spec
+                .env_gen_args
+                .iter()
+                .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
+                .collect();
 
             fns::FnSpecialization {
                 fn_: fn_spec.fn_,
                 gen_args: new_gen_args,
-                env_gen_args: fn_spec.env_gen_args.clone(),
+                env_gen_args: new_env_gen_args,
             }
         });
         open.extend(fn_specs);
