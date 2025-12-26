@@ -1,5 +1,7 @@
 fn main() -> i32 {
-    apply(|x| x + 1, 5);
+    let increase_by_one: fn(i32) -> i32 = |x| x + 1;
+    let identity = |x| x;
+    identity(increase_by_one(8))
 }
 
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B {

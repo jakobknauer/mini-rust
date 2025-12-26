@@ -347,4 +347,8 @@ impl<'a> MlrBuilder<'a> {
     pub fn get_receiver_loc(&self) -> Option<mlr::Loc> {
         self.receiver_loc
     }
+
+    pub fn ctxt(&mut self) -> &mut ctxt::Ctxt {
+        &mut self.ctxt
+    }
 }

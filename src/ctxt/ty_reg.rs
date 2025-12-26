@@ -33,6 +33,7 @@ pub enum Named {
     Enum(Enum),
 }
 
+#[derive(Debug)]
 pub enum UnificationError {
     FunctionParamCountMismatch,
     TypeMismatch,

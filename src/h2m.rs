@@ -17,21 +17,23 @@ pub use err::{H2MError, H2MResult};
 
 pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_fn: &hlr::Fn, target_fn: fns::Fn) -> H2MResult<fns::FnMlr> {
     let h2m = H2M::new(target_fn, ctxt);
-    h2m.build(hlr_fn)
+    h2m.build(hlr_fn.body.as_ref().unwrap())
 }
 
 struct H2M<'a> {
     builder: MlrBuilder<'a>,
+    closure_counter: u32,
 }
 
 impl<'a> H2M<'a> {
     pub fn new(target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
         Self {
             builder: MlrBuilder::new(target_fn, ctxt),
+            closure_counter: 0,
         }
     }
 
-    pub fn build(mut self, input: &'a hlr::Fn) -> H2MResult<fns::FnMlr> {
+    pub fn build(mut self, body: &'a hlr::Block) -> H2MResult<fns::FnMlr> {
         let signature = self.builder.get_signature();
         if signature.var_args {
             return Err(H2MError::VarArgsNotSupported);
@@ -54,7 +56,7 @@ impl<'a> H2M<'a> {
 
         self.builder.start_new_block();
 
-        let return_val = self.build_block(input.body.as_ref().unwrap(), None)?;
+        let return_val = self.build_block(body, None)?;
         self.builder.insert_return_stmt(return_val)?;
 
         let body = self.builder.release_current_block();
@@ -130,7 +132,7 @@ impl<'a> H2M<'a> {
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected),
             AddrOf { base } => self.build_addr_of_val(base),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty),
-            Closure { .. } => todo!(),
+            Closure { params, body } => self.build_closure(params, body, expected),
         }
     }
 
@@ -476,6 +478,60 @@ impl<'a> H2M<'a> {
         let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_hlr_ty_annot(target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
+    }
+
+    fn build_closure(
+        &mut self,
+        params: &[String],
+        body: &hlr::Expr,
+        expected: Option<ty::Ty>,
+    ) -> Result<mlr::Val, H2MError> {
+        let param_tys: Vec<_> = params.iter().map(|_| self.tys().new_undefined_ty()).collect();
+        let return_ty = self.tys().new_undefined_ty();
+        let closure_ty = self.tys().register_fn_ty(param_tys.clone(), return_ty, false);
+
+        if let Some(expected) = expected {
+            self.tys().unify(closure_ty, expected).unwrap(); // TODO proper error handling here
+        }
+
+        // register a new function with signature and all
+        let signature = fns::FnSig {
+            name: format!(
+                "<closure {}.{}>",
+                self.builder.get_signature().name,
+                self.closure_counter
+            ),
+            associated_ty: None,
+            associated_trait: None,
+            gen_params: Vec::new(),
+            env_gen_params: Vec::new(), // TODO use gen_params+env_gen_params of current functio
+            params: params
+                .iter()
+                .zip(param_tys.iter())
+                .map(|(name, ty)| fns::FnParam {
+                    name: name.clone(),
+                    ty: *ty,
+                })
+                .collect(),
+            var_args: false,
+            return_ty,
+            has_receiver: false,
+        };
+        self.closure_counter += 1;
+        let fn_ = self.fns().register_fn(signature).unwrap();
+
+        // then create a new H2M object and build and typecheck the body of the closure
+        let h2m = H2M::new(fn_, self.builder.ctxt());
+        let body = hlr::Block {
+            stmts: Vec::new(),
+            return_expr: Some(Box::new(body.clone())),
+        };
+        let fn_mlr = h2m.build(&body)?;
+        self.fns().add_fn_def(fn_, fn_mlr);
+
+        // then build a function value using the newly constructed function and return it
+        let fn_op = self.builder.insert_fn_op(fn_)?;
+        self.builder.insert_use_val(fn_op)
     }
 
     fn build_stmt(&mut self, stmt: &hlr::Stmt) -> H2MResult<()> {

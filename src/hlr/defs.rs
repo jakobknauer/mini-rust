@@ -71,13 +71,13 @@ pub struct Trait {
     pub methods: Vec<Fn>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
     pub return_expr: Option<Box<Expr>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     Let {
         name: String,
@@ -89,7 +89,7 @@ pub enum Stmt {
     Break,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Lit(Lit),
     Ident(Ident),
@@ -149,13 +149,13 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ident {
     pub ident: String,
     pub gen_args: Vec<TyAnnot>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Lit {
     Int(i64),
     Bool(bool),
@@ -163,7 +163,7 @@ pub enum Lit {
     CString(Vec<u8>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -180,7 +180,7 @@ pub enum BinaryOperator {
     BitAnd,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub value: Box<Expr>,
@@ -188,19 +188,19 @@ pub struct MatchArm {
 
 type Pattern = StructPattern;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructPattern {
     pub variant: String,
     pub fields: Vec<StructPatternField>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructPatternField {
     pub field_name: String,
     pub binding_name: String,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TyAnnot {
     Named(String),
     Generic(Ident),
