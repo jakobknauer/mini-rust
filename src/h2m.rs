@@ -130,6 +130,7 @@ impl<'a> H2M<'a> {
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected),
             AddrOf { base } => self.build_addr_of_val(base),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty),
+            Closure { .. } => todo!(),
         }
     }
 
@@ -533,7 +534,8 @@ impl<'a> H2M<'a> {
     }
 
     fn build_break_stmt(&mut self) -> H2MResult<()> {
-        self.builder.insert_break_stmt().map(|_| ())
+        self.builder.insert_break_stmt()?;
+        Ok(())
     }
 
     fn lower_ident_to_place(&mut self, name: &str) -> H2MResult<mlr::Place> {

@@ -710,6 +710,36 @@ impl<'a> HlrParser<'a> {
                 self.position += 1;
                 Ok(Expr::Self_)
             }
+            Token::Pipe => {
+                self.position += 1;
+
+                let mut params = Vec::new();
+                while self.current() != Some(&Token::Pipe) {
+                    let param_name = self.expect_identifier()?;
+                    params.push(param_name);
+                    if !self.advance_if(Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect_token(Token::Pipe)?;
+
+                let body = self.parse_expr(true)?;
+
+                Ok(Expr::Closure {
+                    params,
+                    body: Box::new(body),
+                })
+            }
+            Token::PipePipe => {
+                self.position += 1;
+
+                let body = self.parse_expr(true)?;
+
+                Ok(Expr::Closure {
+                    params: vec![],
+                    body: Box::new(body),
+                })
+            }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }

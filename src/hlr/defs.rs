@@ -143,6 +143,10 @@ pub enum Expr {
         target_ty: TyAnnot,
     },
     Self_,
+    Closure {
+        params: Vec<String>,
+        body: Box<Expr>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
