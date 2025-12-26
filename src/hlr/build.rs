@@ -723,22 +723,14 @@ impl<'a> HlrParser<'a> {
                 }
                 self.expect_token(Token::Pipe)?;
 
-                let body = self.parse_expr(true)?;
+                let body = self.parse_closure_body()?;
 
-                Ok(Expr::Closure {
-                    params,
-                    body: Box::new(body),
-                })
+                Ok(Expr::Closure { params, body })
             }
             Token::PipePipe => {
                 self.position += 1;
-
-                let body = self.parse_expr(true)?;
-
-                Ok(Expr::Closure {
-                    params: vec![],
-                    body: Box::new(body),
-                })
+                let body = self.parse_closure_body()?;
+                Ok(Expr::Closure { params: vec![], body })
             }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
@@ -911,6 +903,19 @@ impl<'a> HlrParser<'a> {
                 Ok(TyAnnot::Fn { param_tys, return_ty })
             }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
+        }
+    }
+
+    fn parse_closure_body(&mut self) -> Result<Block, ParserErr> {
+        if self.current() == Some(&Token::LBrace) {
+            self.parse_block()
+        } else {
+            let return_expr = self.parse_expr(true)?;
+            let block = Block {
+                return_expr: Some(Box::new(return_expr)),
+                stmts: Vec::new(),
+            };
+            Ok(block)
         }
     }
 }

@@ -349,6 +349,6 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn ctxt(&mut self) -> &mut ctxt::Ctxt {
-        &mut self.ctxt
+        self.ctxt
     }
 }

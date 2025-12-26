@@ -145,7 +145,7 @@ pub enum Expr {
     Self_,
     Closure {
         params: Vec<String>,
-        body: Box<Expr>,
+        body: Block,
     },
 }
 

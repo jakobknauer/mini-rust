@@ -483,7 +483,7 @@ impl<'a> H2M<'a> {
     fn build_closure(
         &mut self,
         params: &[String],
-        body: &hlr::Expr,
+        body: &hlr::Block,
         expected: Option<ty::Ty>,
     ) -> Result<mlr::Val, H2MError> {
         let param_tys: Vec<_> = params.iter().map(|_| self.tys().new_undefined_ty()).collect();
@@ -522,11 +522,7 @@ impl<'a> H2M<'a> {
 
         // then create a new H2M object and build and typecheck the body of the closure
         let h2m = H2M::new(fn_, self.builder.ctxt());
-        let body = hlr::Block {
-            stmts: Vec::new(),
-            return_expr: Some(Box::new(body.clone())),
-        };
-        let fn_mlr = h2m.build(&body)?;
+        let fn_mlr = h2m.build(body)?;
         self.fns().add_fn_def(fn_, fn_mlr);
 
         // then build a function value using the newly constructed function and return it
