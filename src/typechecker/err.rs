@@ -118,6 +118,7 @@ pub enum TyError {
         constraint: Trait,
         gen_arg: Ty,
     },
+    ClosureMismatchWithExpected,
 }
 
 impl<T> From<TyError> for TyResult<T> {

@@ -213,6 +213,7 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.fns.get_fn_name(fn_),
             ctxt.tys.get_string_rep(gen_arg),
         ),
+        ClosureMismatchWithExpected => "Closure type cannot be unified with expected type".to_string(),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

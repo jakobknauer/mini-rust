@@ -1,10 +1,6 @@
 fn main() -> i32 {
-    let increase_by_one: fn(i32) -> i32 = |x| {
-        printf("Incrementing %d\n", x);
-        x + 1
-    };
-    let identity = |x| x;
-    identity(increase_by_one(8))
+    let opt = Some { item: 42 };
+    opt.map(|x| 2 * x).unwrap_or(0)
 }
 
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B {

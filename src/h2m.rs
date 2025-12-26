@@ -9,7 +9,7 @@ mod macros;
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
-    typechecker::{self, MethodResolution},
+    typechecker::{self, MethodResolution, TyError},
     util::mlr_builder::MlrBuilder,
 };
 
@@ -234,13 +234,22 @@ impl<'a> H2M<'a> {
 
     fn build_call(&mut self, callee: &hlr::Expr, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let callee = self.lower_to_op(callee, None)?;
+        let callee_ty = self.mlr().get_op_ty(callee);
+        let callee_ty_def = self.tys().get_ty_def(callee_ty);
 
-        // TODO get callee type, check that it is a function
-        // then pass the argument types as expected to lower_to_op
+        let param_tys = if let Some(ty::TyDef::Fn { param_tys, .. }) = callee_ty_def {
+            param_tys.clone()
+        } else {
+            Vec::new()
+        };
 
         let args = args
             .iter()
-            .map(|arg| self.lower_to_op(arg, None))
+            .enumerate()
+            .map(|(idx, arg)| {
+                let expected = param_tys.get(idx).cloned(); // possibly None
+                self.lower_to_op(arg, expected)
+            })
             .collect::<H2MResult<Vec<_>>>()?;
 
         self.builder.insert_call_val(callee, args)
@@ -261,7 +270,7 @@ impl<'a> H2M<'a> {
             .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
             .collect::<Result<_, _>>()?;
 
-        let method = match self.typechecker().resolve_method(base_ty, &method.ident)? {
+        let callee = match self.typechecker().resolve_method(base_ty, &method.ident)? {
             MethodResolution::Inherent { fn_, env_gen_args } => {
                 let gen_args = if gen_args.is_empty() {
                     let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
@@ -293,11 +302,26 @@ impl<'a> H2M<'a> {
             }
         }?;
 
-        // TODO similar to build_call
-        let args = std::iter::once(Ok(base))
-            .chain(args.iter().map(|arg| self.lower_to_op(arg, None)))
+        let callee_ty = self.mlr().get_op_ty(callee);
+        let callee_ty_def = self.tys().get_ty_def(callee_ty);
+
+        let param_tys = if let Some(ty::TyDef::Fn { param_tys, .. }) = callee_ty_def {
+            param_tys.clone()
+        } else {
+            Vec::new()
+        };
+
+        let args = args
+            .iter()
+            .enumerate()
+            .map(|(idx, arg)| {
+                let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
+                self.lower_to_op(arg, expected)
+            })
             .collect::<H2MResult<Vec<_>>>()?;
-        self.builder.insert_call_val(method, args)
+        let args = std::iter::once(base).chain(args).collect();
+
+        self.builder.insert_call_val(callee, args)
     }
 
     fn build_if(
@@ -423,7 +447,10 @@ impl<'a> H2M<'a> {
 
         for ((_, expr), field_index) in fields.iter().zip(field_indices) {
             let field_place = self.builder.insert_field_access_place(base_place, field_index)?;
-            let field_value = self.lower_to_val(expr, None)?; // TODO pass expected type
+
+            let expected_ty = self.tys().get_struct_field_ty(ty, field_index)?;
+            let field_value = self.lower_to_val(expr, Some(expected_ty))?;
+
             self.builder.insert_assign_stmt(field_place, field_value)?;
         }
         Ok(())
@@ -491,33 +518,13 @@ impl<'a> H2M<'a> {
         let closure_ty = self.tys().register_fn_ty(param_tys.clone(), return_ty, false);
 
         if let Some(expected) = expected {
-            self.tys().unify(closure_ty, expected).unwrap(); // TODO proper error handling here
+            self.tys()
+                .unify(closure_ty, expected)
+                .map_err(|_| TyError::ClosureMismatchWithExpected)?;
         }
 
         // register a new function with signature and all
-        let signature = fns::FnSig {
-            name: format!(
-                "<closure {}.{}>",
-                self.builder.get_signature().name,
-                self.closure_counter
-            ),
-            associated_ty: None,
-            associated_trait: None,
-            gen_params: Vec::new(),
-            env_gen_params: Vec::new(), // TODO use gen_params+env_gen_params of current functio
-            params: params
-                .iter()
-                .zip(param_tys.iter())
-                .map(|(name, ty)| fns::FnParam {
-                    name: name.clone(),
-                    ty: *ty,
-                })
-                .collect(),
-            var_args: false,
-            return_ty,
-            has_receiver: false,
-        };
-        self.closure_counter += 1;
+        let signature = self.generate_closure_sig(params, &param_tys, return_ty);
         let fn_ = self.fns().register_fn(signature).unwrap();
 
         // then create a new H2M object and build and typecheck the body of the closure
@@ -618,5 +625,32 @@ impl<'a> H2M<'a> {
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {
         let base_op = self.lower_to_op(base, None)?;
         self.builder.insert_deref_place(base_op)
+    }
+
+    fn generate_closure_sig(&mut self, params: &[String], param_tys: &[ty::Ty], return_ty: ty::Ty) -> fns::FnSig {
+        let signature = fns::FnSig {
+            name: format!(
+                "<closure {}.{}>",
+                self.builder.get_signature().name,
+                self.closure_counter
+            ),
+            associated_ty: None,
+            associated_trait: None,
+            gen_params: Vec::new(),
+            env_gen_params: Vec::new(), // TODO use gen_params+env_gen_params of current functio
+            params: params
+                .iter()
+                .zip(param_tys.iter())
+                .map(|(name, ty)| fns::FnParam {
+                    name: name.clone(),
+                    ty: *ty,
+                })
+                .collect(),
+            var_args: false,
+            return_ty,
+            has_receiver: false,
+        };
+        self.closure_counter += 1;
+        signature
     }
 }
