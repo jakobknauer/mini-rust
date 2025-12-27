@@ -134,7 +134,9 @@ fn set_struct_fields<'a>(
         .map(|field| {
             Ok(ty::StructField {
                 name: field.name.clone(),
-                ty: tys.try_resolve_hlr_annot(&field.ty, &gen_params, None, false).ok_or(())?,
+                ty: tys
+                    .try_resolve_hlr_annot(&field.ty, &gen_params, None, false)
+                    .ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
