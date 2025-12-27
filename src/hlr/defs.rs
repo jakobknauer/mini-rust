@@ -27,8 +27,14 @@ pub struct Param {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Constraint {
-    pub gen_param: String,
-    pub trait_: String,
+    pub subject: String,
+    pub requirement: ConstraintRequirement,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConstraintRequirement {
+    Trait(String),
+    Callable { params: Vec<TyAnnot>, return_ty: Option<TyAnnot> },
 }
 
 #[derive(Debug, PartialEq, Eq)]

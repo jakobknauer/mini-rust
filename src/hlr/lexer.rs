@@ -57,6 +57,7 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("enum", Token::Keyword(Keyword::Enum)),
     ("false", Token::BoolLiteral(false)),
     ("fn", Token::Keyword(Keyword::Fn)),
+    ("Fn", Token::Keyword(Keyword::CallableTrait)),
     ("if", Token::Keyword(Keyword::If)),
     ("impl", Token::Keyword(Keyword::Impl)),
     ("let", Token::Keyword(Keyword::Let)),

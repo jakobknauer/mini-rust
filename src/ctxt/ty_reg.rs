@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{fns::Fn, traits::Trait, ty::*},
+    ctxt::{traits::Trait, ty::*},
     hlr,
 };
 
@@ -944,24 +944,85 @@ impl TyReg {
         }
     }
 
-    pub fn add_constraint(&mut self, gen_var: GenVar, trait_: Trait) {
-        self.constraints.push(Constraint { gen_var, trait_ });
+    pub fn add_implements_trait_constraint(&mut self, subject: GenVar, trait_: Trait) {
+        self.constraints.push(Constraint {
+            subject,
+            requirement: ConstraintRequirement::Trait(trait_),
+        });
     }
 
-    pub fn constraint_exists(&self, gen_var: GenVar, trait_: Trait) -> bool {
+    pub fn add_callable_constraint(&mut self, subject: GenVar, params: Vec<Ty>, return_ty: Ty) {
+        self.constraints.push(Constraint {
+            subject,
+            requirement: ConstraintRequirement::Callable {
+                param_tys: params,
+                return_ty,
+            },
+        });
+    }
+
+    pub fn implements_trait_constraint_exists(&self, gen_var: GenVar, trait_: Trait) -> bool {
         self.constraints
             .iter()
-            .any(|c| c.gen_var == gen_var && c.trait_ == trait_)
+            .any(|c| c.subject == gen_var && c.requirement == ConstraintRequirement::Trait(trait_))
     }
 
-    pub fn get_constraints_for(&self, gen_var: GenVar) -> impl Iterator<Item = Trait> {
+    pub fn try_get_callable_obligation(&self, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
+        self.obligations
+            .iter()
+            .filter_map(|obligation| {
+                if let Obligation::Callable {
+                    ty,
+                    param_tys,
+                    return_ty,
+                } = obligation
+                    && self.tys_eq(*ty, subject)
+                {
+                    Some((param_tys.clone(), *return_ty))
+                } else {
+                    None
+                }
+            })
+            .next()
+    }
+
+    pub fn try_get_callable_constraint(&self, subject: GenVar) -> Option<(Vec<Ty>, Ty)> {
         self.constraints
             .iter()
-            .filter_map(move |c| if c.gen_var == gen_var { Some(c.trait_) } else { None })
+            .filter_map(|c| {
+                if c.subject == subject {
+                    if let ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
+                        Some((param_tys.clone(), *return_ty))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .next()
     }
 
-    pub fn add_obligation(&mut self, ty: Ty, trait_: Trait, fn_: Fn) {
-        self.obligations.push(Obligation { ty, trait_, fn_ });
+    pub fn get_requirements_for(&self, subject: GenVar) -> impl Iterator<Item = &ConstraintRequirement> {
+        self.constraints.iter().filter_map(move |c| {
+            if c.subject == subject {
+                Some(&c.requirement)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn add_implements_trait_obligation(&mut self, ty: Ty, trait_: Trait) {
+        self.obligations.push(Obligation::ImplementsTrait { ty, trait_ });
+    }
+
+    pub fn add_callable_obligation(&mut self, ty: Ty, param_tys: Vec<Ty>, return_ty: Ty) {
+        self.obligations.push(Obligation::Callable {
+            ty,
+            param_tys,
+            return_ty,
+        });
     }
 
     pub fn get_all_obligations(&self) -> &[Obligation] {

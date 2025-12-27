@@ -158,7 +158,7 @@ impl Ctxt {
     pub fn ty_implements_trait(&self, ty: ty::Ty, trait_: traits::Trait) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
         if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
-            && self.tys.constraint_exists(gen_var, trait_)
+            && self.tys.implements_trait_constraint_exists(gen_var, trait_)
         {
             return true;
         }
@@ -173,5 +173,24 @@ impl Ctxt {
             })
             .next()
             .is_some()
+    }
+
+    pub fn ty_is_callable(&self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
+        if let Some((param_tys, return_ty)) = self.tys.try_get_callable_obligation(ty) {
+            Some((param_tys, return_ty, false))
+        } else if let Some(ty::TyDef::Fn {
+            param_tys,
+            return_ty,
+            var_args,
+        }) = self.tys.get_ty_def(ty)
+        {
+            Some((param_tys.clone(), *return_ty, *var_args))
+        } else if let Some(ty::TyDef::GenVar(gen_var)) = self.tys.get_ty_def(ty)
+            && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
+        {
+            Some((param_tys, return_ty, false))
+        } else {
+            None
+        }
     }
 }

@@ -9,7 +9,7 @@ mod macros;
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
-    typechecker::{self, MethodResolution, TyError},
+    typechecker::{self, MethodResolution},
     util::mlr_builder::MlrBuilder,
 };
 
@@ -66,6 +66,10 @@ impl<'a> H2M<'a> {
 
     fn typechecker(&mut self) -> typechecker::Typechecker<'_> {
         self.builder.typechecker()
+    }
+
+    fn ctxt(&mut self) -> &mut ctxt::Ctxt {
+        self.builder.ctxt()
     }
 
     fn tys(&mut self) -> &mut ctxt::TyReg {
@@ -235,10 +239,9 @@ impl<'a> H2M<'a> {
     fn build_call(&mut self, callee: &hlr::Expr, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let callee = self.lower_to_op(callee, None)?;
         let callee_ty = self.mlr().get_op_ty(callee);
-        let callee_ty_def = self.tys().get_ty_def(callee_ty);
 
-        let param_tys = if let Some(ty::TyDef::Fn { param_tys, .. }) = callee_ty_def {
-            param_tys.clone()
+        let param_tys = if let Some((param_tys, ..)) = self.ctxt().ty_is_callable(callee_ty) {
+            param_tys
         } else {
             Vec::new()
         };
@@ -515,12 +518,16 @@ impl<'a> H2M<'a> {
     ) -> Result<mlr::Val, H2MError> {
         let param_tys: Vec<_> = params.iter().map(|_| self.tys().new_undefined_ty()).collect();
         let return_ty = self.tys().new_undefined_ty();
-        let closure_ty = self.tys().register_fn_ty(param_tys.clone(), return_ty, false);
 
-        if let Some(expected) = expected {
-            self.tys()
-                .unify(closure_ty, expected)
-                .map_err(|_| TyError::ClosureMismatchWithExpected)?;
+        if let Some(expected) = expected
+            && let Some((exp_param_tys, exp_return_ty, var_args)) = self.ctxt().ty_is_callable(expected)
+            && exp_param_tys.len() == param_tys.len()
+            && !var_args
+        {
+            for (&param_ty, &exp_param_ty) in param_tys.iter().zip(exp_param_tys.iter()) {
+                self.tys().unify(param_ty, exp_param_ty).unwrap();
+            }
+            self.tys().unify(return_ty, exp_return_ty).unwrap();
         }
 
         // register a new function with signature and all
@@ -533,7 +540,7 @@ impl<'a> H2M<'a> {
         let fn_ = self.fns().register_fn(signature, false).unwrap();
 
         // then create a new H2M object and build and typecheck the body of the closure
-        let h2m = H2M::new(fn_, self.builder.ctxt());
+        let h2m = H2M::new(fn_, self.ctxt());
         let fn_mlr = h2m.build(body)?;
         self.fns().add_fn_def(fn_, fn_mlr);
 

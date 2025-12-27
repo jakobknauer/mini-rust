@@ -244,10 +244,44 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_constraint(&mut self) -> Result<Constraint, ParserErr> {
-        let gen_param = self.expect_identifier()?;
+        let subject = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
-        let trait_ = self.expect_identifier()?;
-        Ok(Constraint { gen_param, trait_ })
+        let requirement = self.parse_constraint_requirement()?;
+        Ok(Constraint { subject, requirement })
+    }
+
+    fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement, ParserErr> {
+        let requirement = match self.current() {
+            Some(Token::Keyword(Keyword::CallableTrait)) => {
+                self.position += 1;
+                self.expect_token(Token::LParen)?;
+
+                let mut params = Vec::new();
+                while self.current() != Some(&Token::RParen) {
+                    let param = self.parse_ty_annot()?;
+                    params.push(param);
+                    if !self.advance_if(Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect_token(Token::RParen)?;
+
+                let return_ty = if self.advance_if(Token::Arrow) {
+                    Some(self.parse_ty_annot()?)
+                } else {
+                    None
+                };
+
+                ConstraintRequirement::Callable { params, return_ty }
+            }
+            Some(Token::Identifier(trait_)) => {
+                let trait_ = trait_.clone();
+                self.position += 1;
+                ConstraintRequirement::Trait(trait_)
+            }
+            _ => return Err(ParserErr::UnexpectedToken(self.current().unwrap().clone())),
+        };
+        Ok(requirement)
     }
 
     fn parse_struct(&mut self) -> Result<Struct, ParserErr> {

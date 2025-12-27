@@ -106,19 +106,9 @@ impl<'a> Typechecker<'a> {
     }
 
     fn infer_ty_of_call(&mut self, callable: Op, args: &[Op]) -> TyResult<ty::Ty> {
-        let ty = self.ctxt.mlr.get_op_ty(callable);
-        let callable_ty_def = self
-            .ctxt
-            .tys
-            .get_ty_def(ty)
-            .expect("type of callable should be registered");
+        let callable_ty = self.ctxt.mlr.get_op_ty(callable);
 
-        let ty::TyDef::Fn {
-            param_tys,
-            return_ty,
-            var_args,
-        } = callable_ty_def.clone()
-        else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(callable_ty) else {
             return TyError::ValNotCallable.into();
         };
 
@@ -209,10 +199,24 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
+        let substitutions = self.ctxt.fns.get_substitutions_for_specialization(fn_specialization);
+
         for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_specialization.gen_args) {
-            let constraints: Vec<_> = self.ctxt.tys.get_constraints_for(gen_var).collect();
-            for constraint in constraints {
-                self.ctxt.tys.add_obligation(gen_arg, constraint, self.fn_);
+            let requirements: Vec<_> = self.ctxt.tys.get_requirements_for(gen_var).cloned().collect();
+            for requirement in requirements {
+                match requirement {
+                    ty::ConstraintRequirement::Trait(trait_) => {
+                        self.ctxt.tys.add_implements_trait_obligation(gen_arg, trait_)
+                    }
+                    ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+                        let param_tys: Vec<_> = param_tys
+                            .iter()
+                            .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &substitutions))
+                            .collect();
+                        let return_ty = self.ctxt.tys.substitute_gen_vars(return_ty, &substitutions);
+                        self.ctxt.tys.add_callable_obligation(gen_arg, param_tys, return_ty)
+                    }
+                }
             }
         }
 
@@ -231,7 +235,6 @@ impl<'a> Typechecker<'a> {
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
-        let substitutions = self.ctxt.fns.get_substitutions_for_specialization(fn_specialization);
         let fn_spec_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &substitutions);
 
         Ok(fn_spec_ty)

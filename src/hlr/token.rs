@@ -41,10 +41,11 @@ pub enum Token {
 pub enum Keyword {
     As,
     Break,
-    For,
+    CallableTrait,
     Else,
     Enum,
     Fn,
+    For,
     If,
     Impl,
     Let,

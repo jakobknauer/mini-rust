@@ -102,6 +102,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
     fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> M2InkwellFnResult<FunctionType<'iw>> {
         let mr_ty = self.mlr().get_op_ty(op);
+        let mr_ty = self.substitute(mr_ty);
         let mr_ty_def = self.tys().get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
 
         let mr_ty::TyDef::Fn {

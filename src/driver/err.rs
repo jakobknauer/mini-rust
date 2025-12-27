@@ -1,7 +1,8 @@
 use crate::{
-    ctxt,
+    ctxt::{self, ty::Obligation},
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     h2m, hlr,
+    obligation_check::ObligationCheckError,
     typechecker::TyError,
 };
 
@@ -272,11 +273,26 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
     )
 }
 
-pub fn print_obligation_check_error(err: crate::obligation_check::ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
-    format!(
-        "Obligation check error in function '{}': type '{}' does not implement trait '{}'",
-        ctxt.fns.get_fn_name(err.obligation.fn_),
-        ctxt.tys.get_string_rep(err.obligation.ty),
-        ctxt.traits.get_trait_name(err.obligation.trait_),
-    )
+pub fn print_obligation_check_error(err: ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
+    match err.obligation {
+        Obligation::ImplementsTrait { ty, trait_ } => format!(
+            "Obligation check error:  type '{}' does not implement trait '{}'",
+            ctxt.tys.get_string_rep(ty),
+            ctxt.traits.get_trait_name(trait_),
+        ),
+        Obligation::Callable {
+            ty,
+            param_tys,
+            return_ty,
+        } => format!(
+            "Obligation check error:  type '{}' is not callable with arguments '{}' and return type '{}'",
+            ctxt.tys.get_string_rep(ty),
+            param_tys
+                .iter()
+                .map(|ty| ctxt.tys.get_string_rep(*ty))
+                .collect::<Vec<String>>()
+                .join(", "),
+            ctxt.tys.get_string_rep(return_ty),
+        ),
+    }
 }

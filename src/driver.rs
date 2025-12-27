@@ -193,15 +193,36 @@ fn register_function(
     };
 
     for constraint in &hlr_fn.constraints {
-        let gen_var = gen_params
+        let subject = gen_params
             .iter()
             .cloned()
-            .find(|&gp| ctxt.tys.get_gen_var_name(gp) == constraint.gen_param)
+            .find(|&gp| ctxt.tys.get_gen_var_name(gp) == constraint.subject)
             .ok_or(())?;
 
-        let trait_ = ctxt.traits.resolve_trait_name(&constraint.trait_).ok_or(())?;
-
-        ctxt.tys.add_constraint(gen_var, trait_);
+        match &constraint.requirement {
+            hlr::ConstraintRequirement::Trait(trait_) => {
+                let trait_ = ctxt.traits.resolve_trait_name(trait_).ok_or(())?;
+                ctxt.tys.add_implements_trait_constraint(subject, trait_);
+            }
+            hlr::ConstraintRequirement::Callable { params, return_ty } => {
+                let params = params
+                    .iter()
+                    .map(|ty| {
+                        ctxt.tys
+                            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty)
+                            .ok_or(())
+                    })
+                    .collect::<Result<_, _>>()?;
+                let return_ty = match return_ty {
+                    Some(return_ty) => ctxt
+                        .tys
+                        .try_resolve_hlr_annot(return_ty, &all_gen_params, associated_ty)
+                        .ok_or(())?,
+                    None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
+                };
+                ctxt.tys.add_callable_constraint(subject, params, return_ty);
+            }
+        }
     }
 
     let signature = fns::FnSig {
