@@ -247,6 +247,7 @@ impl TyReg {
         annot: &hlr::TyAnnot,
         gen_vars: &[GenVar],
         self_ty: Option<Ty>,
+        allow_wildcards: bool,
     ) -> Option<Ty> {
         use hlr::TyAnnot::*;
 
@@ -264,20 +265,20 @@ impl TyReg {
                 }
             }
             Ref(ty_annot) => self
-                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty)
+                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
                 .map(|inner| self.register_ref_ty(inner)),
             Ptr(ty_annot) => self
-                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty)
+                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
                 .map(|inner| self.register_ptr_ty(inner)),
             Unit => Some(self.get_primitive_ty(Primitive::Unit)),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys
                     .iter()
-                    .map(|pt| self.try_resolve_hlr_annot(pt, gen_vars, self_ty))
+                    .map(|pt| self.try_resolve_hlr_annot(pt, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars, self_ty),
+                    Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars, self_ty, allow_wildcards),
                     None => Some(self.get_primitive_ty(Primitive::Unit)),
                 }?;
 
@@ -287,7 +288,7 @@ impl TyReg {
                 let gen_args: Vec<Ty> = ident
                     .gen_args
                     .iter()
-                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty))
+                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.named_tys.get(&ident.ident)? {
@@ -296,6 +297,7 @@ impl TyReg {
                     self::Named::Ty(..) => None,
                 }
             }
+            Wildcard => allow_wildcards.then(|| self.new_undefined_ty()),
             Self_ => Some(self_ty.expect("self type not available")),
         }
     }

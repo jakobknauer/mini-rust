@@ -34,7 +34,10 @@ pub struct Constraint {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConstraintRequirement {
     Trait(String),
-    Callable { params: Vec<TyAnnot>, return_ty: Option<TyAnnot> },
+    Callable {
+        params: Vec<TyAnnot>,
+        return_ty: Option<TyAnnot>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -218,4 +221,5 @@ pub enum TyAnnot {
         return_ty: Option<Box<TyAnnot>>,
     },
     Self_,
+    Wildcard,
 }

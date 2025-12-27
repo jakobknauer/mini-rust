@@ -33,6 +33,7 @@ const ONE_CHAR_TOKENS: &[(char, Token)] = &[
     ('&', Token::Ampersand),
     ('<', Token::Smaller),
     ('>', Token::Greater),
+    ('_', Token::Underscore),
 ];
 
 const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[

@@ -1,10 +1,11 @@
 fn main() -> i32 {
-    let x = Some { item: 5 };
-    x.map(|a| a + 1).unwrap_or(0)
+    apply::<_, i32, _>(|x| x + 2, 3)
 }
 
-fn apply<A, B>(f: fn(A) -> B, x: A) -> B {
-    f(x)
+fn apply<F, A, B>(f: F, a: A) -> B 
+    where F: Fn(A) -> B
+{
+    f(a)
 }
 
 fn double(x: i32) -> i32 {

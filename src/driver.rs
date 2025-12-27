@@ -134,7 +134,7 @@ fn set_struct_fields<'a>(
         .map(|field| {
             Ok(ty::StructField {
                 name: field.name.clone(),
-                ty: tys.try_resolve_hlr_annot(&field.ty, &gen_params, None).ok_or(())?,
+                ty: tys.try_resolve_hlr_annot(&field.ty, &gen_params, None, false).ok_or(())?,
             })
         })
         .collect::<Result<_, _>>()?;
@@ -178,7 +178,7 @@ fn register_function(
                 name: parameter.name.clone(),
                 ty: ctxt
                     .tys
-                    .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, associated_ty)
+                    .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, associated_ty, false)
                     .ok_or(())?,
             })
         })
@@ -187,7 +187,7 @@ fn register_function(
     let return_ty = match hlr_fn.return_ty.as_ref() {
         Some(ty) => ctxt
             .tys
-            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty)
+            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
             .ok_or(())?,
         None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
     };
@@ -209,14 +209,14 @@ fn register_function(
                     .iter()
                     .map(|ty| {
                         ctxt.tys
-                            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty)
+                            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
                             .ok_or(())
                     })
                     .collect::<Result<_, _>>()?;
                 let return_ty = match return_ty {
                     Some(return_ty) => ctxt
                         .tys
-                        .try_resolve_hlr_annot(return_ty, &all_gen_params, associated_ty)
+                        .try_resolve_hlr_annot(return_ty, &all_gen_params, associated_ty, false)
                         .ok_or(())?,
                     None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
                 };
@@ -259,7 +259,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                         name: parameter.name.clone(),
                         ty: ctxt
                             .tys
-                            .try_resolve_hlr_annot(&parameter.ty, &gen_params, Some(self_type))
+                            .try_resolve_hlr_annot(&parameter.ty, &gen_params, Some(self_type), false)
                             .ok_or(())?,
                     })
                 })
@@ -268,7 +268,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
             let return_ty = match &method.return_ty {
                 Some(ty) => ctxt
                     .tys
-                    .try_resolve_hlr_annot(ty, &gen_params, Some(self_type))
+                    .try_resolve_hlr_annot(ty, &gen_params, Some(self_type), false)
                     .ok_or(())?,
                 None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
             };
@@ -302,7 +302,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
 
         let ty = ctxt
             .tys
-            .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None)
+            .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None, false)
             .ok_or(())?;
 
         let trait_ = hlr_impl

@@ -936,6 +936,10 @@ impl<'a> HlrParser<'a> {
 
                 Ok(TyAnnot::Fn { param_tys, return_ty })
             }
+            Token::Underscore => {
+                self.position += 1;
+                Ok(TyAnnot::Wildcard)
+            }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }

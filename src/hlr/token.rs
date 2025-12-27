@@ -35,6 +35,7 @@ pub enum Token {
     SmallerEqual,       // <=
     GreaterEqual,       // >=
     Dots,               // ...
+    Underscore,         // _
 }
 
 #[derive(Debug, PartialEq, Clone)]

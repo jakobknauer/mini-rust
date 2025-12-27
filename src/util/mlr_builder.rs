@@ -319,7 +319,7 @@ impl<'a> MlrBuilder<'a> {
         let ty = self
             .ctxt
             .tys
-            .try_resolve_hlr_annot(annot, &all_gen_params, None)
+            .try_resolve_hlr_annot(annot, &all_gen_params, None, true)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }
