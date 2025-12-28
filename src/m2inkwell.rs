@@ -118,6 +118,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
                 gen_var.0
             ),
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
+            Closure { .. } => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

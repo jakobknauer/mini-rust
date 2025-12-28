@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{traits::Trait, ty::*},
+    ctxt::{fns, traits::Trait, ty::*},
     hlr,
 };
 
@@ -170,6 +170,14 @@ impl TyReg {
     pub fn register_trait_self_type(&mut self, trait_: Trait) -> Ty {
         let trait_self = TyDef::TraitSelf(trait_);
         self.register_ty(trait_self)
+    }
+
+    pub fn register_closure_type(&mut self, fn_spec: fns::FnSpecialization, name: impl Into<String>) -> Ty {
+        let closure = TyDef::Closure {
+            fn_spec,
+            name: name.into(),
+        };
+        self.register_ty(closure)
     }
 
     pub fn instantiate_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
@@ -373,6 +381,7 @@ impl TyReg {
                 format!("{}<{}>", enum_name, gen_arg_names)
             }
             TraitSelf(_) => "self".to_string(),
+            Closure { ref name, .. } => name.clone(),
         }
     }
 
@@ -491,6 +500,26 @@ impl TyReg {
                     Ok(())
                 }
 
+                (Closure { fn_spec: fn_spec1, .. }, Closure { fn_spec: fn_spec2, .. }) => {
+                    if fn_spec1 != fn_spec2 {
+                        return Err(UnificationError::TypeMismatch);
+                    }
+
+                    let fn_spec1 = fn_spec1.clone();
+                    let fn_spec2 = fn_spec2.clone();
+
+                    let gen_args_pairs = fn_spec1.gen_args.iter().zip(&fn_spec2.gen_args);
+                    for (arg1, arg2) in gen_args_pairs {
+                        self.unify(*arg1, *arg2)?;
+                    }
+                    let env_gen_args_pairs = fn_spec1.env_gen_args.iter().zip(&fn_spec2.env_gen_args);
+                    for (arg1, arg2) in env_gen_args_pairs {
+                        self.unify(*arg1, *arg2)?;
+                    }
+
+                    Ok(())
+                }
+
                 _ => Err(UnificationError::TypeMismatch),
             },
         }
@@ -577,6 +606,18 @@ impl TyReg {
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => ty,
+            Closure { ref fn_spec, ref name } => {
+                let name = name.clone();
+                let mut new_fn_spec = fn_spec.clone();
+                for gen_arg in &mut new_fn_spec.gen_args {
+                    *gen_arg = self.substitute_gen_vars(*gen_arg, substitutions);
+                }
+                for env_gen_arg in &mut new_fn_spec.env_gen_args {
+                    *env_gen_arg = self.substitute_gen_vars(*env_gen_arg, substitutions);
+                }
+
+                self.register_closure_type(new_fn_spec, name)
+            }
         }
     }
 
@@ -630,6 +671,18 @@ impl TyReg {
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => substitute,
+            Closure { ref fn_spec, ref name } => {
+                let name = name.clone();
+                let mut new_fn_spec = fn_spec.clone();
+                for gen_arg in &mut new_fn_spec.gen_args {
+                    *gen_arg = self.substitute_self_ty(*gen_arg, substitute);
+                }
+                for env_gen_arg in &mut new_fn_spec.env_gen_args {
+                    *env_gen_arg = self.substitute_self_ty(*env_gen_arg, substitute);
+                }
+
+                self.register_closure_type(new_fn_spec, name)
+            }
         }
     }
 
@@ -825,6 +878,22 @@ impl TyReg {
                             .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
                 }
 
+                (Closure { fn_spec: fn_spec1, .. }, Closure { fn_spec: fn_spec2, .. }) => {
+                    fn_spec1.fn_ == fn_spec2.fn_
+                        && fn_spec1.gen_args.len() == fn_spec2.gen_args.len()
+                        && fn_spec1
+                            .gen_args
+                            .iter()
+                            .zip(&fn_spec2.gen_args)
+                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                        && fn_spec1.env_gen_args.len() == fn_spec2.env_gen_args.len()
+                        && fn_spec1
+                            .env_gen_args
+                            .iter()
+                            .zip(&fn_spec2.env_gen_args)
+                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                }
+
                 _ => false,
             },
         }
@@ -939,6 +1008,22 @@ impl TyReg {
                     && gen_args_1
                         .iter()
                         .zip(gen_args_2.iter())
+                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+            }
+
+            (Closure { fn_spec: fn_spec1, .. }, Closure { fn_spec: fn_spec2, .. }) => {
+                fn_spec1.fn_ == fn_spec2.fn_
+                    && fn_spec1.gen_args.len() == fn_spec2.gen_args.len()
+                    && fn_spec1
+                        .gen_args
+                        .iter()
+                        .zip(&fn_spec2.gen_args)
+                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+                    && fn_spec1.env_gen_args.len() == fn_spec2.env_gen_args.len()
+                    && fn_spec1
+                        .env_gen_args
+                        .iter()
+                        .zip(&fn_spec2.env_gen_args)
                         .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
             }
 

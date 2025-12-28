@@ -1,5 +1,8 @@
 fn main() -> i32 {
-    apply::<_, i32, _>(|x| x + 2, 3)
+    let x1 = apply::<_, i32, _>(|x| x + 2, 3);
+    let x2 = apply::<_, i32, _>(|x| x + 3, 5);
+    printf("%d %d\n", x1, x2);
+    11
 }
 
 fn apply<F, A, B>(f: F, a: A) -> B 

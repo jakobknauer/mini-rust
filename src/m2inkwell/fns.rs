@@ -102,15 +102,8 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
     fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> M2InkwellFnResult<FunctionType<'iw>> {
         let mr_ty = self.mlr().get_op_ty(op);
-        let mr_ty = self.substitute(mr_ty);
-        let mr_ty_def = self.tys().get_ty_def(mr_ty).ok_or(M2InkwellFnError)?;
 
-        let mr_ty::TyDef::Fn {
-            return_ty,
-            param_tys,
-            var_args,
-        } = mr_ty_def.clone()
-        else {
+        let Some((param_tys, return_ty, var_args)) = self.m2iw.mr_ctxt.ty_is_callable(mr_ty) else {
             return Err(M2InkwellFnError);
         };
 
@@ -380,7 +373,16 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let fn_ptr = self.build_op(callable)?.into_pointer_value();
+        let callable_ty = self.mlr().get_op_ty(callable);
+        let callable_ty = self.substitute(callable_ty);
+        let callable_ty_def = self.tys().get_ty_def(callable_ty).unwrap().clone();
+
+        let fn_ptr = if let mr_ty::TyDef::Closure { fn_spec, .. } = callable_ty_def {
+            self.build_global_function(&fn_spec)?.into_pointer_value()
+        } else {
+            self.build_op(callable)?.into_pointer_value()
+        };
+
         let fn_ty = self.get_fn_ty_of_loc(callable)?;
 
         let args = args

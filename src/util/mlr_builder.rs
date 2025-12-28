@@ -351,4 +351,8 @@ impl<'a> MlrBuilder<'a> {
     pub fn ctxt(&mut self) -> &mut ctxt::Ctxt {
         self.ctxt
     }
+
+    pub fn target_fn(&self) -> fns::Fn {
+        self.target_fn
+    }
 }

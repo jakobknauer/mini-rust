@@ -487,21 +487,31 @@ impl<'a> H2M<'a> {
 
         // register a new function with signature and all
         let signature = self.generate_closure_sig(params, &param_tys, return_ty);
-        let env_gen_params = signature
+        let env_gen_args = signature
             .env_gen_params
             .iter()
             .map(|gen_var| self.tys().register_gen_var_ty(*gen_var))
             .collect();
         let fn_ = self.fns().register_fn(signature, false).unwrap();
+        let fn_spec = fns::FnSpecialization {
+            fn_,
+            gen_args: Vec::new(),
+            env_gen_args,
+        };
+        let closure_name = format!("Closure:{}.{}", self.builder.get_signature().name, self.closure_counter);
+        self.closure_counter += 1;
+
+        let closure_ty = self.tys().register_closure_type(fn_spec.clone(), closure_name);
+        let target_fn = self.builder.target_fn();
+        self.fns().specialize_fn(target_fn, fn_spec);
 
         // then create a new H2M object and build and typecheck the body of the closure
         let h2m = H2M::new(fn_, self.ctxt());
         let fn_mlr = h2m.build(body)?;
         self.fns().add_fn_def(fn_, fn_mlr);
 
-        // then build a function value using the newly constructed function and return it
-        let fn_op = self.builder.insert_gen_fn_op(fn_, Vec::new(), env_gen_params)?;
-        self.builder.insert_use_val(fn_op)
+        let place = self.builder.insert_alloc_with_ty(closure_ty)?;
+        self.builder.insert_use_place_val(place)
     }
 
     fn build_stmt(&mut self, stmt: &hlr::Stmt) -> H2MResult<()> {
@@ -604,11 +614,10 @@ impl<'a> H2M<'a> {
             .collect();
 
         let name = format!(
-            "<closure {}.{}>",
+            "anonymous:{}.{}",
             self.builder.get_signature().name,
             self.closure_counter
         );
-        self.closure_counter += 1;
 
         fns::FnSig {
             name,

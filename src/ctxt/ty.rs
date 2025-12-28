@@ -1,4 +1,4 @@
-use crate::ctxt::traits::Trait;
+use crate::ctxt::{fns, traits};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Ty(pub usize);
@@ -32,7 +32,11 @@ pub enum TyDef {
     Ptr(Ty),
     Alias(Ty),
     GenVar(GenVar),
-    TraitSelf(Trait),
+    TraitSelf(traits::Trait),
+    Closure {
+        fn_spec: fns::FnSpecialization,
+        name: String,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -78,12 +82,12 @@ pub struct Constraint {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ConstraintRequirement {
-    Trait(Trait),
+    Trait(traits::Trait),
     Callable { param_tys: Vec<Ty>, return_ty: Ty },
 }
 
 #[derive(Clone)]
 pub enum Obligation {
-    ImplementsTrait { ty: Ty, trait_: Trait },
+    ImplementsTrait { ty: Ty, trait_: traits::Trait },
     Callable { ty: Ty, param_tys: Vec<Ty>, return_ty: Ty },
 }

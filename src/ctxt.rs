@@ -175,7 +175,7 @@ impl Ctxt {
             .is_some()
     }
 
-    pub fn ty_is_callable(&self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
+    pub fn ty_is_callable(&mut self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
         if let Some((param_tys, return_ty)) = self.tys.try_get_callable_obligation(ty) {
             Some((param_tys, return_ty, false))
         } else if let Some(ty::TyDef::Fn {
@@ -189,6 +189,14 @@ impl Ctxt {
             && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
         {
             Some((param_tys, return_ty, false))
+        } else if let Some(ty::TyDef::Closure { fn_spec, .. }) = self.tys.get_ty_def(ty) {
+            let fn_spec = fn_spec.clone();
+            let signature = self.get_specialized_fn_sig(&fn_spec);
+            Some((
+                signature.params.iter().map(|p| p.ty).collect(),
+                signature.return_ty,
+                false,
+            ))
         } else {
             None
         }
