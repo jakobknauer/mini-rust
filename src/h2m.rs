@@ -190,17 +190,10 @@ impl<'a> H2M<'a> {
             let place = self.builder.insert_loc_place(loc)?;
             self.builder.insert_copy_op(place)
         } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
-            let gen_arg_tys = if gen_args.is_empty() {
-                let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
-                (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
-            } else {
-                gen_args
-                    .iter()
-                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<_>>()?
-            };
+            let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+            let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
 
-            self.builder.insert_gen_fn_op(fn_, gen_arg_tys, Vec::new())
+            self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())
         } else {
             Err(H2MError::UnresolvableSymbol {
                 name: ident.to_string(),
@@ -240,47 +233,33 @@ impl<'a> H2M<'a> {
         let callee = self.lower_to_op(callee, None)?;
         let callee_ty = self.mlr().get_op_ty(callee);
 
-        let param_tys = if let Some((param_tys, ..)) = self.ctxt().ty_is_callable(callee_ty) {
-            param_tys
-        } else {
-            Vec::new()
-        };
+        let param_tys = self
+            .ctxt()
+            .ty_is_callable(callee_ty)
+            .map(|(param_tys, ..)| param_tys)
+            .unwrap_or_default();
 
-        let args = args
+        let args: Vec<_> = args
             .iter()
             .enumerate()
             .map(|(idx, arg)| {
                 let expected = param_tys.get(idx).cloned(); // possibly None
                 self.lower_to_op(arg, expected)
             })
-            .collect::<H2MResult<Vec<_>>>()?;
+            .collect::<H2MResult<_>>()?;
 
         self.builder.insert_call_val(callee, args)
     }
 
-    fn build_method_call(
-        &mut self,
-        obj: &hlr::Expr,
-        method: &hlr::Ident,
-        args: &[hlr::Expr],
-    ) -> Result<mlr::Val, H2MError> {
+    fn build_method_call(&mut self, obj: &hlr::Expr, method: &hlr::Ident, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let base = self.lower_to_op(obj, None)?;
         let base_ty = self.mlr().get_op_ty(base);
 
-        let gen_args: Vec<_> = method
-            .gen_args
-            .iter()
-            .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-            .collect::<Result<_, _>>()?;
-
         let callee = match self.typechecker().resolve_method(base_ty, &method.ident)? {
             MethodResolution::Inherent { fn_, env_gen_args } => {
-                let gen_args = if gen_args.is_empty() {
-                    let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
-                    (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
-                } else {
-                    gen_args
-                };
+                let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
+
                 let fn_spec = fns::FnSpecialization {
                     fn_,
                     gen_args,
@@ -289,12 +268,9 @@ impl<'a> H2M<'a> {
                 self.builder.insert_fn_spec_op(fn_spec)
             }
             MethodResolution::Trait { trait_, method_idx } => {
-                let gen_args = if gen_args.is_empty() {
-                    let n_gen_params = self.traits().get_trait_method_sig(trait_, method_idx).gen_params.len();
-                    (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
-                } else {
-                    gen_args
-                };
+                let n_gen_params = self.traits().get_trait_method_sig(trait_, method_idx).gen_params.len();
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
+
                 let trait_method = fns::TraitMethod {
                     trait_,
                     method_idx,
@@ -306,22 +282,21 @@ impl<'a> H2M<'a> {
         }?;
 
         let callee_ty = self.mlr().get_op_ty(callee);
-        let callee_ty_def = self.tys().get_ty_def(callee_ty);
 
-        let param_tys = if let Some(ty::TyDef::Fn { param_tys, .. }) = callee_ty_def {
-            param_tys.clone()
-        } else {
-            Vec::new()
-        };
+        let param_tys = self
+            .ctxt()
+            .ty_is_callable(callee_ty)
+            .map(|(param_tys, ..)| param_tys)
+            .unwrap_or_default();
 
-        let args = args
+        let args: Vec<_> = args
             .iter()
             .enumerate()
             .map(|(idx, arg)| {
                 let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
                 self.lower_to_op(arg, expected)
             })
-            .collect::<H2MResult<Vec<_>>>()?;
+            .collect::<H2MResult<_>>()?;
         let args = std::iter::once(base).chain(args).collect();
 
         self.builder.insert_call_val(callee, args)
@@ -371,31 +346,16 @@ impl<'a> H2M<'a> {
 
     fn build_struct_or_enum_val(&mut self, ident: &hlr::Ident, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
         if let Some(struct_) = self.tys().get_struct_by_name(&ident.ident) {
-            let gen_arg_tys = if ident.gen_args.is_empty() {
-                let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
-                (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
-            } else {
-                ident
-                    .gen_args
-                    .iter()
-                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<Vec<_>>>()?
-            };
+            let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
+            let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&ident.gen_args, n_gen_params)?;
 
-            let ty = self.tys().instantiate_struct(struct_, gen_arg_tys)?;
+            let ty = self.tys().instantiate_struct(struct_, gen_args)?;
             self.build_struct_val(ty, fields)
         } else if let Some((enum_, variant_index)) = self.builder.try_resolve_enum_variant(&ident.ident) {
-            let gen_arg_tys = if ident.gen_args.is_empty() {
-                let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
-                (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect()
-            } else {
-                ident
-                    .gen_args
-                    .iter()
-                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<Vec<_>>>()?
-            };
-            let ty = self.tys().instantiate_enum(enum_, gen_arg_tys)?;
+            let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
+            let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&ident.gen_args, n_gen_params)?;
+
+            let ty = self.tys().instantiate_enum(enum_, gen_args)?;
             self.build_enum_val(ty, &variant_index, fields)
         } else {
             H2MError::UnresolvableStructOrEnum {
@@ -504,18 +464,13 @@ impl<'a> H2M<'a> {
         self.builder.insert_addr_of_val(base)
     }
 
-    fn build_as_expr(&mut self, expr: &hlr::Expr, target_ty: &hlr::TyAnnot) -> Result<mlr::Val, H2MError> {
+    fn build_as_expr(&mut self, expr: &hlr::Expr, target_ty: &hlr::TyAnnot) -> H2MResult<mlr::Val> {
         let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_hlr_ty_annot(target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
     }
 
-    fn build_closure(
-        &mut self,
-        params: &[String],
-        body: &hlr::Block,
-        expected: Option<ty::Ty>,
-    ) -> Result<mlr::Val, H2MError> {
+    fn build_closure(&mut self, params: &[String], body: &hlr::Block, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
         let param_tys: Vec<_> = params.iter().map(|_| self.tys().new_undefined_ty()).collect();
         let return_ty = self.tys().new_undefined_ty();
 
@@ -669,6 +624,21 @@ impl<'a> H2M<'a> {
             var_args: false,
             return_ty,
             has_receiver: false,
+        }
+    }
+
+    fn resolve_gen_args_or_insert_fresh_variables(
+        &mut self,
+        gen_args: &[hlr::TyAnnot],
+        n_expected: usize,
+    ) -> H2MResult<Vec<ty::Ty>> {
+        if gen_args.is_empty() {
+            Ok((0..n_expected).map(|_| self.tys().new_undefined_ty()).collect())
+        } else {
+            gen_args
+                .iter()
+                .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                .collect::<H2MResult<_>>()
         }
     }
 }
