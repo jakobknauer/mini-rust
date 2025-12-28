@@ -81,11 +81,30 @@ impl<'a> Lexer<'a> {
         self.input.chars().nth(self.position)
     }
 
+    fn get_next_char(&self) -> Option<char> {
+        self.input.chars().nth(self.position + 1)
+    }
+
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.get_current_char()
             && c.is_whitespace()
         {
             self.position += 1;
+        }
+    }
+
+    fn skip_comments(&mut self) -> bool {
+        if self.get_current_char() == Some('/') && self.get_next_char() == Some('/') {
+            self.position += 2;
+            while let Some(c) = self.get_current_char()
+                && c != '\n'
+            {
+                self.position += 1;
+            }
+            self.position += 1;
+            true
+        } else {
+            false
         }
     }
 
@@ -232,6 +251,10 @@ impl Iterator for Lexer<'_> {
 
     fn next(&mut self) -> Option<Result<Token, LexerErr>> {
         self.skip_whitespace();
+        while self.skip_comments() {
+            self.skip_whitespace();
+        }
+
         if self.position >= self.input.len() {
             return None;
         }
