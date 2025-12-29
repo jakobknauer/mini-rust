@@ -46,4 +46,4 @@
 ## Version 3
 - ~~Traits and trait bounds~~
 - ~~Trait function calls~~
-- Closures
+- ~~Closures~~
