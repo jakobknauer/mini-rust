@@ -414,7 +414,9 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 .chain(args.iter().map(|&arg| self.build_op(arg).unwrap().into()))
                 .collect::<Vec<_>>();
 
-            let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "closure_call_site")?;
+            let call_site = self
+                .iw_builder
+                .build_indirect_call(fn_ty, fn_ptr, &args, "closure_call_site")?;
             let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
             Ok(output)
         } else {
