@@ -326,6 +326,8 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
 }
 
 fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
+    stdlib::define_size_of(ctxt)?;
+
     for (idx, hlr_fn) in hlr.fns.iter().enumerate() {
         let Some(body) = &hlr_fn.body else {
             continue;
@@ -335,8 +337,6 @@ fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &Hlr
 
         h2m::hlr_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
     }
-
-    stdlib::define_size_of(ctxt)?;
 
     Ok(())
 }

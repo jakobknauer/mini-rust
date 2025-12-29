@@ -88,15 +88,16 @@ pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
         .ok_or("function size_of not registered")?;
     let mut builder = MlrBuilder::new(size_of_fn, ctxt);
 
-    let gen_var = builder.get_signature().gen_params[0];
-    let gen_var_ty = builder.tys().register_gen_var_ty(gen_var);
+    let body = {
+        builder.start_new_block();
 
-    builder.start_new_block();
+        let gen_var = builder.get_signature().gen_params[0];
+        let gen_var_ty = builder.tys().register_gen_var_ty(gen_var);
+        let size_of_val = builder.insert_size_of_val(gen_var_ty).unwrap();
+        builder.insert_return_stmt(size_of_val).unwrap();
 
-    let size_of_val = builder.insert_size_of_val(gen_var_ty).unwrap();
-    builder.insert_return_stmt(size_of_val).unwrap();
-
-    let body = builder.release_current_block();
+        builder.release_current_block()
+    };
 
     let mlr = fns::FnMlr {
         body,
