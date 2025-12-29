@@ -327,16 +327,13 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
 
 fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
     for (idx, hlr_fn) in hlr.fns.iter().enumerate() {
-        if hlr_fn.body.is_none() {
+        let Some(body) = &hlr_fn.body else {
             continue;
-        }
+        };
 
         let target_fn = hlr_meta.fn_ids[&idx];
 
-        let mlr = h2m::hlr_to_mlr(ctxt, hlr_fn, target_fn)
-            .map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
-
-        ctxt.fns.add_fn_def(target_fn, mlr);
+        h2m::hlr_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
     }
 
     stdlib::define_size_of(ctxt)?;
@@ -351,10 +348,11 @@ fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrM
         let impl_methods = impl_def.methods.clone();
 
         for (hlr_method, target_fn) in hlr_impl.methods.iter().zip(impl_methods) {
-            let mlr = h2m::hlr_to_mlr(ctxt, hlr_method, target_fn)
+            let Some(body) = &hlr_method.body else {
+                continue;
+            };
+            h2m::hlr_to_mlr(ctxt, body, target_fn)
                 .map_err(|err| err::print_mlr_builder_error(&hlr_method.name, err, ctxt))?;
-
-            ctxt.fns.add_fn_def(target_fn, mlr);
         }
     }
 

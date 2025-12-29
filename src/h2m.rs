@@ -1,8 +1,10 @@
 pub mod opt;
 
+mod closure_util;
 mod err;
 mod match_util;
 mod ops;
+
 #[macro_use]
 mod macros;
 
@@ -15,9 +17,10 @@ use crate::{
 
 pub use err::{H2MError, H2MResult};
 
-pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_fn: &hlr::Fn, target_fn: fns::Fn) -> H2MResult<fns::FnMlr> {
-    let h2m = H2M::new(target_fn, ctxt);
-    h2m.build(hlr_fn.body.as_ref().unwrap())
+pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_body: &hlr::Block, target_fn: fns::Fn) -> H2MResult<()> {
+    let mlr = H2M::new(target_fn, ctxt).build(hlr_body)?;
+    ctxt.fns.add_fn_def(target_fn, mlr);
+    Ok(())
 }
 
 struct H2M<'a> {
@@ -470,45 +473,19 @@ impl<'a> H2M<'a> {
         self.builder.insert_as_val(expr_op, target_ty)
     }
 
-    fn build_closure(&mut self, params: &[String], body: &hlr::Block, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
-        let param_tys: Vec<_> = params.iter().map(|_| self.tys().new_undefined_ty()).collect();
-        let return_ty = self.tys().new_undefined_ty();
+    fn build_closure(
+        &mut self,
+        param_names: &[String],
+        body: &hlr::Block,
+        expected: Option<ty::Ty>,
+    ) -> H2MResult<mlr::Val> {
+        let (param_tys, return_ty) = self.match_param_and_return_ty(param_names.len(), expected)?;
+        let fn_sig = self.generate_closure_fn_sig(param_names, &param_tys, return_ty);
+        let fn_spec = self.generate_closure_fn_spec(fn_sig)?;
+        let fn_ = fn_spec.fn_;
 
-        if let Some(expected) = expected
-            && let Some((exp_param_tys, exp_return_ty, var_args)) = self.ctxt().ty_is_callable(expected)
-            && exp_param_tys.len() == param_tys.len()
-            && !var_args
-        {
-            for (&param_ty, &exp_param_ty) in param_tys.iter().zip(exp_param_tys.iter()) {
-                self.tys().unify(param_ty, exp_param_ty).unwrap();
-            }
-            self.tys().unify(return_ty, exp_return_ty).unwrap();
-        }
-
-        // register a new function with signature and all
-        let signature = self.generate_closure_sig(params, &param_tys, return_ty);
-        let env_gen_args = signature
-            .env_gen_params
-            .iter()
-            .map(|gen_var| self.tys().register_gen_var_ty(*gen_var))
-            .collect();
-        let fn_ = self.fns().register_fn(signature, false).unwrap();
-        let fn_spec = fns::FnSpecialization {
-            fn_,
-            gen_args: Vec::new(),
-            env_gen_args,
-        };
-        let closure_name = format!("Closure:{}.{}", self.builder.get_signature().name, self.closure_counter);
-        self.closure_counter += 1;
-
-        let closure_ty = self.tys().register_closure_type(fn_spec.clone(), closure_name);
-        let target_fn = self.builder.target_fn();
-        self.fns().specialize_fn(target_fn, fn_spec);
-
-        // then create a new H2M object and build and typecheck the body of the closure
-        let h2m = H2M::new(fn_, self.ctxt());
-        let fn_mlr = h2m.build(body)?;
-        self.fns().add_fn_def(fn_, fn_mlr);
+        let closure_ty = self.generate_closure_ty(fn_spec);
+        hlr_to_mlr(self.ctxt(), body, fn_)?;
 
         let place = self.builder.insert_alloc_with_ty(closure_ty)?;
         self.builder.insert_use_place_val(place)
@@ -602,38 +579,6 @@ impl<'a> H2M<'a> {
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {
         let base_op = self.lower_to_op(base, None)?;
         self.builder.insert_deref_place(base_op)
-    }
-
-    fn generate_closure_sig(&mut self, params: &[String], param_tys: &[ty::Ty], return_ty: ty::Ty) -> fns::FnSig {
-        let outer_sig = self.builder.get_signature();
-        let env_gen_params = outer_sig
-            .env_gen_params
-            .iter()
-            .chain(&outer_sig.gen_params)
-            .cloned()
-            .collect();
-
-        let name = format!(
-            "anonymous:{}.{}",
-            self.builder.get_signature().name,
-            self.closure_counter
-        );
-
-        fns::FnSig {
-            name,
-            associated_ty: None,
-            associated_trait: None,
-            gen_params: Vec::new(),
-            env_gen_params,
-            params: params
-                .iter()
-                .zip(param_tys)
-                .map(|(name, &ty)| fns::FnParam { name: name.clone(), ty })
-                .collect(),
-            var_args: false,
-            return_ty,
-            has_receiver: false,
-        }
     }
 
     fn resolve_gen_args_or_insert_fresh_variables(
