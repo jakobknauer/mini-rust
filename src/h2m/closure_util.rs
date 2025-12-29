@@ -31,6 +31,7 @@ impl<'a> super::H2M<'a> {
         param_names: &[String],
         param_tys: &[ty::Ty],
         return_ty: ty::Ty,
+        captures_ty: ty::Ty,
     ) -> fns::FnSig {
         let outer_sig = self.builder.get_signature();
 
@@ -48,10 +49,17 @@ impl<'a> super::H2M<'a> {
             .collect();
 
         assert_eq!(param_names.len(), param_tys.len());
-        let params = param_names
-            .iter()
-            .zip(param_tys)
-            .map(|(name, &ty)| fns::FnParam { name: name.clone(), ty })
+        let captures_param = fns::FnParam {
+            name: "captures".to_string(),
+            ty: captures_ty,
+        };
+        let params = std::iter::once(captures_param)
+            .chain(
+                param_names
+                    .iter()
+                    .zip(param_tys)
+                    .map(|(name, &ty)| fns::FnParam { name: name.clone(), ty }),
+            )
             .collect();
 
         fns::FnSig {

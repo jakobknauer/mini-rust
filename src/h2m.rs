@@ -8,6 +8,8 @@ mod ops;
 #[macro_use]
 mod macros;
 
+use std::collections::HashMap;
+
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
@@ -18,7 +20,17 @@ use crate::{
 pub use err::{H2MError, H2MResult};
 
 pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_body: &hlr::Block, target_fn: fns::Fn) -> H2MResult<()> {
-    let mlr = H2M::new(target_fn, ctxt).build(hlr_body)?;
+    hlr_to_mlr_with_external_scope(ctxt, hlr_body, target_fn, HashMap::new(), None)
+}
+
+pub fn hlr_to_mlr_with_external_scope(
+    ctxt: &mut ctxt::Ctxt,
+    hlr_body: &hlr::Block,
+    target_fn: fns::Fn,
+    external_scope: HashMap<String, mlr::Loc>,
+    captures_ty: Option<ty::Ty>,
+) -> H2MResult<()> {
+    let mlr = H2M::new(target_fn, ctxt, external_scope, captures_ty).build(hlr_body)?;
     ctxt.fns.add_fn_def(target_fn, mlr);
     Ok(())
 }
@@ -26,13 +38,30 @@ pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_body: &hlr::Block, target_fn: fns::
 struct H2M<'a> {
     builder: MlrBuilder<'a>,
     closure_counter: u32,
+
+    external_scope: HashMap<String, mlr::Loc>,
+    captures_ty: Option<ty::Ty>,
+    captures_place: Option<mlr::Place>,
+    // Map the original (outer) location of a captured variable to its index in the captures struct
+    captured_values: HashMap<mlr::Loc, usize>,
 }
 
 impl<'a> H2M<'a> {
-    pub fn new(target_fn: fns::Fn, ctxt: &'a mut ctxt::Ctxt) -> Self {
+    pub fn new(
+        target_fn: fns::Fn,
+        ctxt: &'a mut ctxt::Ctxt,
+        external_scope: HashMap<String, mlr::Loc>,
+        captures_ty: Option<ty::Ty>,
+    ) -> Self {
         Self {
             builder: MlrBuilder::new(target_fn, ctxt),
+
             closure_counter: 0,
+
+            external_scope,
+            captures_ty,
+            captures_place: None,
+            captured_values: HashMap::new(),
         }
     }
 
@@ -55,6 +84,19 @@ impl<'a> H2M<'a> {
 
         if has_receiver {
             self.builder.register_receiver_loc(param_locs[0]);
+        }
+
+        if let Some(captures_ty) = self.captures_ty {
+            let first_param_loc = param_locs[0];
+            let first_param_ty = self.mlr().get_loc_ty(first_param_loc);
+
+            assert!(
+                self.ctxt().tys.tys_eq(first_param_ty, captures_ty),
+                "In a closure the first parameter must be the captures struct"
+            );
+
+            let first_param_place = self.builder.insert_loc_place(first_param_loc)?;
+            self.captures_place = Some(first_param_place);
         }
 
         self.builder.start_new_block();
@@ -188,9 +230,8 @@ impl<'a> H2M<'a> {
 
     fn lower_ident_to_op(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
         if gen_args.is_empty()
-            && let Some(loc) = self.builder.resolve_name_to_location(ident)
+            && let Some(place) = self.resolve_name_to_place(ident)
         {
-            let place = self.builder.insert_loc_place(loc)?;
             self.builder.insert_copy_op(place)
         } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
             let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
@@ -480,12 +521,20 @@ impl<'a> H2M<'a> {
         expected: Option<ty::Ty>,
     ) -> H2MResult<mlr::Val> {
         let (param_tys, return_ty) = self.match_param_and_return_ty(param_names.len(), expected)?;
-        let fn_sig = self.generate_closure_fn_sig(param_names, &param_tys, return_ty);
+
+        // TODO proper name and gen args
+        let captures_struct = self.tys().register_struct("Captures", &[]).unwrap();
+        let captures_ty = self.tys().instantiate_struct(captures_struct, [])?;
+
+        let fn_sig = self.generate_closure_fn_sig(param_names, &param_tys, return_ty, captures_ty);
         let fn_spec = self.generate_closure_fn_spec(fn_sig)?;
         let fn_ = fn_spec.fn_;
 
         let closure_ty = self.generate_closure_ty(fn_spec);
-        hlr_to_mlr(self.ctxt(), body, fn_)?;
+
+        let current_bindings = self.builder.get_flattened_scope();
+
+        hlr_to_mlr_with_external_scope(self.ctxt(), body, fn_, current_bindings, Some(captures_ty))?;
 
         let place = self.builder.insert_alloc_with_ty(closure_ty)?;
         self.builder.insert_use_place_val(place)
@@ -552,12 +601,8 @@ impl<'a> H2M<'a> {
     }
 
     fn lower_ident_to_place(&mut self, name: &str) -> H2MResult<mlr::Place> {
-        let loc = self
-            .builder
-            .resolve_name_to_location(name)
-            .ok_or_else(|| H2MError::UnresolvableSymbol { name: name.to_string() })?;
-
-        self.builder.insert_loc_place(loc)
+        self.resolve_name_to_place(name)
+            .ok_or_else(|| H2MError::UnresolvableSymbol { name: name.to_string() })
     }
 
     fn lower_field_access_to_place(&mut self, obj: &hlr::Expr, field: &hlr::Ident) -> H2MResult<mlr::Place> {
@@ -593,6 +638,47 @@ impl<'a> H2M<'a> {
                 .iter()
                 .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
                 .collect::<H2MResult<_>>()
+        }
+    }
+
+    fn resolve_name_to_place(&mut self, name: &str) -> Option<mlr::Place> {
+        self.builder
+            .resolve_name_to_place(name)
+            .or_else(|| self.try_resolve_name_to_captured_value(name))
+    }
+
+    fn try_resolve_name_to_captured_value(&mut self, name: &str) -> Option<mlr::Place> {
+        let captured_loc = self.external_scope.get(name).cloned()?;
+        let captures_ty = self.captures_ty?;
+
+        if let Some(&index) = self.captured_values.get(&captured_loc) {
+            let field_access = self
+                .builder
+                .insert_field_access_place(self.captures_place?, index)
+                .ok()?;
+            Some(field_access)
+        } else {
+            let captures_struct = self.tys().get_ty_def(captures_ty).unwrap();
+            let ty::TyDef::Struct { struct_, .. } = *captures_struct else {
+                return None;
+            };
+
+            let field_ty = self.mlr().get_loc_ty(captured_loc);
+
+            let struct_def = self.tys().get_mut_struct_def(struct_).unwrap();
+            struct_def.fields.push(ty::StructField {
+                name: name.to_string(),
+                ty: field_ty,
+            });
+
+            let index = struct_def.fields.len() - 1;
+            self.captured_values.insert(captured_loc, index);
+
+            let field_access = self
+                .builder
+                .insert_field_access_place(self.captures_place?, index)
+                .ok()?;
+            Some(field_access)
         }
     }
 }

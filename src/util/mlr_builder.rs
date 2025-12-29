@@ -16,20 +16,14 @@ pub struct MlrBuilder<'a> {
     ctxt: &'a mut ctxt::Ctxt,
 
     scopes: VecDeque<Scope>,
+
     blocks: VecDeque<Vec<mlr::Stmt>>,
     receiver_loc: Option<mlr::Loc>,
 }
 
+#[derive(Default)]
 struct Scope {
     bindings: HashMap<String, mlr::Loc>,
-}
-
-impl Scope {
-    fn new() -> Self {
-        Self {
-            bindings: HashMap::new(),
-        }
-    }
 }
 
 impl<'a> MlrBuilder<'a> {
@@ -56,7 +50,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn push_scope(&mut self) {
-        self.scopes.push_back(Scope::new());
+        self.scopes.push_back(Scope::default());
     }
 
     pub fn pop_scope(&mut self) {
@@ -291,13 +285,14 @@ impl<'a> MlrBuilder<'a> {
         Ok(loc)
     }
 
-    pub fn resolve_name_to_location(&self, name: &str) -> Option<mlr::Loc> {
+    pub fn resolve_name_to_place(&mut self, name: &str) -> Option<mlr::Place> {
         self.scopes
             .iter()
             .rev()
             .filter_map(|scope| scope.bindings.get(name))
             .next()
             .cloned()
+            .and_then(|loc| self.insert_loc_place(loc).ok())
     }
 
     pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Enum, usize)> {
@@ -354,5 +349,17 @@ impl<'a> MlrBuilder<'a> {
 
     pub fn target_fn(&self) -> fns::Fn {
         self.target_fn
+    }
+
+    pub fn get_flattened_scope(&self) -> HashMap<String, mlr::Loc> {
+        let mut flattend_scope = HashMap::new();
+
+        for scope in self.scopes.iter() {
+            for (name, loc) in scope.bindings.iter() {
+                flattend_scope.insert(name.clone(), *loc);
+            }
+        }
+
+        flattend_scope
     }
 }
