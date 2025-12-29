@@ -1,7 +1,7 @@
 fn main() -> i32 {
     let a = 2;
     let b = 3;
-    let x1 = apply::<_, i32, _>(|x| b*x + a, 3);
+    let x1 = apply::<_, i32, _>(|x| b*x + a, 5);
     x1
 }
 

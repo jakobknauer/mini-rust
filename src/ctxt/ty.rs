@@ -36,6 +36,7 @@ pub enum TyDef {
     Closure {
         fn_spec: fns::FnSpecialization,
         name: String,
+        captures_ty: Ty,
     },
 }
 

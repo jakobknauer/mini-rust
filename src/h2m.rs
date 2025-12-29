@@ -20,7 +20,8 @@ use crate::{
 pub use err::{H2MError, H2MResult};
 
 pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_body: &hlr::Block, target_fn: fns::Fn) -> H2MResult<()> {
-    hlr_to_mlr_with_external_scope(ctxt, hlr_body, target_fn, HashMap::new(), None)
+    hlr_to_mlr_with_external_scope(ctxt, hlr_body, target_fn, HashMap::new(), None)?;
+    Ok(())
 }
 
 pub fn hlr_to_mlr_with_external_scope(
@@ -29,10 +30,10 @@ pub fn hlr_to_mlr_with_external_scope(
     target_fn: fns::Fn,
     external_scope: HashMap<String, mlr::Loc>,
     captures_ty: Option<ty::Ty>,
-) -> H2MResult<()> {
-    let mlr = H2M::new(target_fn, ctxt, external_scope, captures_ty).build(hlr_body)?;
+) -> H2MResult<HashMap<mlr::Loc, usize>> {
+    let (mlr, captured_values) = H2M::new(target_fn, ctxt, external_scope, captures_ty).build(hlr_body)?;
     ctxt.fns.add_fn_def(target_fn, mlr);
-    Ok(())
+    Ok(captured_values)
 }
 
 struct H2M<'a> {
@@ -65,7 +66,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    pub fn build(mut self, body: &'a hlr::Block) -> H2MResult<fns::FnMlr> {
+    pub fn build(mut self, body: &'a hlr::Block) -> H2MResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
         let signature = self.builder.get_signature();
         if signature.var_args {
             return Err(H2MError::VarArgsNotSupported);
@@ -106,7 +107,8 @@ impl<'a> H2M<'a> {
 
         let body = self.builder.release_current_block();
 
-        Ok(fns::FnMlr { body, param_locs })
+        let mlr = fns::FnMlr { body, param_locs };
+        Ok((mlr, self.captured_values))
     }
 
     fn typechecker(&mut self) -> typechecker::Typechecker<'_> {
@@ -522,7 +524,7 @@ impl<'a> H2M<'a> {
     ) -> H2MResult<mlr::Val> {
         let (param_tys, return_ty) = self.match_param_and_return_ty(param_names.len(), expected)?;
 
-        // TODO proper name and gen args
+        // TODO proper name and gen args handling
         let captures_struct = self.tys().register_struct("Captures", &[]).unwrap();
         let captures_ty = self.tys().instantiate_struct(captures_struct, [])?;
 
@@ -530,14 +532,28 @@ impl<'a> H2M<'a> {
         let fn_spec = self.generate_closure_fn_spec(fn_sig)?;
         let fn_ = fn_spec.fn_;
 
-        let closure_ty = self.generate_closure_ty(fn_spec);
+        let closure_ty = self.generate_closure_ty(fn_spec, captures_ty);
 
         let current_bindings = self.builder.get_flattened_scope();
 
-        hlr_to_mlr_with_external_scope(self.ctxt(), body, fn_, current_bindings, Some(captures_ty))?;
+        let captured_values =
+            hlr_to_mlr_with_external_scope(self.ctxt(), body, fn_, current_bindings, Some(captures_ty))?;
 
-        let place = self.builder.insert_alloc_with_ty(closure_ty)?;
-        self.builder.insert_use_place_val(place)
+        let closure_place = self.builder.insert_alloc_with_ty(closure_ty)?;
+        let captures_place = self.builder.insert_closure_captures_place(closure_place)?;
+
+        self.builder.start_new_block();
+        for (loc, field_index) in captured_values {
+            let place = self.builder.insert_loc_place(loc)?;
+            let val = self.builder.insert_use_place_val(place)?;
+
+            let field_place = self.builder.insert_field_access_place(captures_place, field_index)?;
+
+            self.builder.insert_assign_stmt(field_place, val)?;
+        }
+        self.builder.end_and_insert_current_block();
+
+        self.builder.insert_use_place_val(closure_place)
     }
 
     fn build_stmt(&mut self, stmt: &hlr::Stmt) -> H2MResult<()> {

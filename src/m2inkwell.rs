@@ -112,13 +112,13 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             Struct { .. } => self.define_struct(ty),
             Enum { .. } => self.define_enum(ty),
             Fn { .. } | Ref(..) | Ptr(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Closure { captures_ty, .. } => self.get_or_define_ty(captures_ty).unwrap(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(gen_var) => unreachable!(
                 "generic type variable '{}' should be substituted before this point",
                 gen_var.0
             ),
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
-            Closure { .. } => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

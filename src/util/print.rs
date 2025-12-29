@@ -234,6 +234,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_op(op)?;
                     write!(self.writer, ")")
                 }
+                ClosureCaptures(place) => {
+                    write!(self.writer, "ClosureCaptures(")?;
+                    self.print_place(place)?;
+                    write!(self.writer, ")")
+                }
             },
             None => write!(self.writer, "<place id {}>", place.0),
         }

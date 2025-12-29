@@ -5,7 +5,7 @@ use inkwell::{
     builder::{Builder, BuilderError},
     targets::TargetData,
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType},
-    values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
+    values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::ctxt::{self as mr_ctxt, fns as mr_fns, mlr, ty as mr_ty};
@@ -112,6 +112,29 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let param_tys: Vec<_> = param_tys
             .iter()
             .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(M2InkwellFnError))
+            .collect::<M2InkwellFnResult<_>>()?;
+
+        Ok(return_ty.fn_type(&param_tys, var_args))
+    }
+
+    fn get_closure_fn_ty(&mut self, op: mlr::Op, captures_ty: mr_ty::Ty) -> M2InkwellFnResult<FunctionType<'iw>> {
+        let mr_ty = self.mlr().get_op_ty(op);
+
+        let Some((param_tys, return_ty, var_args)) = self.m2iw.mr_ctxt.ty_is_callable(mr_ty) else {
+            return Err(M2InkwellFnError);
+        };
+
+        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(M2InkwellFnError)?;
+
+        let captures_ty = self
+            .get_ty_as_basic_metadata_type_enum(captures_ty)
+            .ok_or(M2InkwellFnError);
+        let param_tys: Vec<_> = std::iter::once(captures_ty)
+            .chain(
+                param_tys
+                    .iter()
+                    .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(M2InkwellFnError)),
+            )
             .collect::<M2InkwellFnResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, var_args))
@@ -288,6 +311,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 let ptr_value = self.build_op(op)?.into_pointer_value();
                 Ok(ptr_value)
             }
+            ClosureCaptures(base) => self.build_place(base),
         }
     }
 
@@ -377,22 +401,35 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let callable_ty = self.substitute(callable_ty);
         let callable_ty_def = self.tys().get_ty_def(callable_ty).unwrap().clone();
 
-        let fn_ptr = if let mr_ty::TyDef::Closure { fn_spec, .. } = callable_ty_def {
-            self.build_global_function(&fn_spec)?.into_pointer_value()
+        if let mr_ty::TyDef::Closure {
+            fn_spec, captures_ty, ..
+        } = callable_ty_def
+        {
+            let fn_ptr = self.build_global_function(&fn_spec)?.into_pointer_value();
+            let captures: BasicMetadataValueEnum<'iw> = self.build_op(callable)?.into();
+
+            let fn_ty = self.get_closure_fn_ty(callable, captures_ty)?;
+
+            let args = std::iter::once(captures)
+                .chain(args.iter().map(|&arg| self.build_op(arg).unwrap().into()))
+                .collect::<Vec<_>>();
+
+            let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "closure_call_site")?;
+            let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
+            Ok(output)
         } else {
-            self.build_op(callable)?.into_pointer_value()
-        };
+            let fn_ptr = self.build_op(callable)?.into_pointer_value();
+            let fn_ty = self.get_fn_ty_of_loc(callable)?;
 
-        let fn_ty = self.get_fn_ty_of_loc(callable)?;
+            let args = args
+                .iter()
+                .map(|&arg| self.build_op(arg).unwrap().into())
+                .collect::<Vec<_>>();
 
-        let args = args
-            .iter()
-            .map(|&arg| self.build_op(arg).unwrap().into())
-            .collect::<Vec<_>>();
-
-        let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
-        let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
-        Ok(output)
+            let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
+            let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
+            Ok(output)
+        }
     }
 
     fn build_if(&mut self, if_: mlr::If) -> M2InkwellFnResult<()> {

@@ -172,10 +172,16 @@ impl TyReg {
         self.register_ty(trait_self)
     }
 
-    pub fn register_closure_type(&mut self, fn_spec: fns::FnSpecialization, name: impl Into<String>) -> Ty {
+    pub fn register_closure_type(
+        &mut self,
+        fn_spec: fns::FnSpecialization,
+        name: impl Into<String>,
+        captures_ty: Ty,
+    ) -> Ty {
         let closure = TyDef::Closure {
             fn_spec,
             name: name.into(),
+            captures_ty,
         };
         self.register_ty(closure)
     }
@@ -606,7 +612,11 @@ impl TyReg {
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => ty,
-            Closure { ref fn_spec, ref name } => {
+            Closure {
+                ref fn_spec,
+                ref name,
+                captures_ty,
+            } => {
                 let name = name.clone();
                 let mut new_fn_spec = fn_spec.clone();
                 for gen_arg in &mut new_fn_spec.gen_args {
@@ -616,7 +626,9 @@ impl TyReg {
                     *env_gen_arg = self.substitute_gen_vars(*env_gen_arg, substitutions);
                 }
 
-                self.register_closure_type(new_fn_spec, name)
+                let captures_ty = self.substitute_gen_vars(captures_ty, substitutions);
+
+                self.register_closure_type(new_fn_spec, name, captures_ty)
             }
         }
     }
@@ -671,7 +683,11 @@ impl TyReg {
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => substitute,
-            Closure { ref fn_spec, ref name } => {
+            Closure {
+                ref fn_spec,
+                ref name,
+                captures_ty,
+            } => {
                 let name = name.clone();
                 let mut new_fn_spec = fn_spec.clone();
                 for gen_arg in &mut new_fn_spec.gen_args {
@@ -681,7 +697,7 @@ impl TyReg {
                     *env_gen_arg = self.substitute_self_ty(*env_gen_arg, substitute);
                 }
 
-                self.register_closure_type(new_fn_spec, name)
+                self.register_closure_type(new_fn_spec, name, captures_ty)
             }
         }
     }

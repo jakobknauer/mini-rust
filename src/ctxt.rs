@@ -193,7 +193,7 @@ impl Ctxt {
             let fn_spec = fn_spec.clone();
             let signature = self.get_specialized_fn_sig(&fn_spec);
             Some((
-                signature.params.iter().map(|p| p.ty).collect(),
+                signature.params.iter().skip(1).map(|p| p.ty).collect(),
                 signature.return_ty,
                 false,
             ))

@@ -49,6 +49,7 @@ impl<'a> Typechecker<'a> {
             EnumDiscriminant { base } => self.infer_ty_of_enum_discriminant(base),
             ProjectToVariant { base, variant_index } => self.infer_ty_of_project_to_variant_place(base, variant_index),
             Deref(op) => self.infer_ty_of_deref_place(op),
+            ClosureCaptures(place) => self.infer_ty_of_closure_captures(place),
         }?;
 
         self.ctxt.mlr.set_place_ty(place, ty);
@@ -322,6 +323,17 @@ impl<'a> Typechecker<'a> {
             }
             _ => TyError::InvalidDereference { ty: ref_ty }.into(),
         }
+    }
+
+    fn infer_ty_of_closure_captures(&self, place: Place) -> TyResult<ty::Ty> {
+        let closure_ty = self.ctxt.mlr.get_place_ty(place);
+        let closure_ty_def = self.ctxt.tys.get_ty_def(closure_ty).unwrap();
+
+        let ty::TyDef::Closure { captures_ty, .. } = closure_ty_def else {
+            panic!("closure type should be registered");
+        };
+
+        Ok(*captures_ty)
     }
 
     fn check_assign_stmt(&mut self, place: Place, val: Val) -> TyResult<()> {

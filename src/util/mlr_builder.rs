@@ -212,6 +212,11 @@ impl<'a> MlrBuilder<'a> {
         self.insert_place(place)
     }
 
+    pub fn insert_closure_captures_place(&mut self, closure_place: mlr::Place) -> H2MResult<mlr::Place> {
+        let place = mlr::PlaceDef::ClosureCaptures(closure_place);
+        self.insert_place(place)
+    }
+
     fn insert_op(&mut self, op_def: mlr::OpDef) -> H2MResult<mlr::Op> {
         let op = self.ctxt.mlr.insert_op(op_def);
         self.typechecker().infer_op_ty(op)?;

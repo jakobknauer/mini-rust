@@ -69,6 +69,7 @@ pub enum PlaceDef {
     FieldAccess { base: Place, field_index: usize },
     EnumDiscriminant { base: Place },
     ProjectToVariant { base: Place, variant_index: usize },
+    ClosureCaptures(Place),
     Deref(Op),
 }
 

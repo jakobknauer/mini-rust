@@ -96,9 +96,9 @@ impl<'a> super::H2M<'a> {
         Ok(fn_spec)
     }
 
-    pub fn generate_closure_ty(&mut self, fn_spec: fns::FnSpecialization) -> ty::Ty {
+    pub fn generate_closure_ty(&mut self, fn_spec: fns::FnSpecialization, captures_ty: ty::Ty) -> ty::Ty {
         let closure_name = format!("Closure:{}.{}", self.builder.get_signature().name, self.closure_counter);
         self.closure_counter += 1;
-        self.tys().register_closure_type(fn_spec, closure_name)
+        self.tys().register_closure_type(fn_spec, closure_name, captures_ty)
     }
 }
