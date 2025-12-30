@@ -98,16 +98,24 @@ impl TyReg {
     }
 
     pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
-        let struct_ = Struct(self.structs.len());
-
-        let gen_params = gen_param_names
+        let gen_params: Vec<_> = gen_param_names
             .iter()
             .map(|gp_name| self.register_gen_var(gp_name))
             .collect();
 
+        self.register_struct_with_existing_gen_vars(name, gen_params)
+    }
+
+    pub fn register_struct_with_existing_gen_vars(
+        &mut self,
+        name: &str,
+        gen_params: impl Into<Vec<GenVar>>,
+    ) -> Result<Struct, ()> {
+        let struct_ = Struct(self.structs.len());
+
         let struct_def = StructDef {
             name: name.to_string(),
-            gen_params,
+            gen_params: gen_params.into(),
             fields: vec![],
         };
         self.structs.push(struct_def);

@@ -1,18 +1,35 @@
 fn main() -> i32 {
-    let a = 2;
-    let b = 3;
-    let x1 = apply::<_, i32, _>(|x| b*x + a, 5);
-    let x2 = apply::<_, i32, _>(|x| a*x, 5);
-    
-    printf("%d\t%d\n", x1, x2);
+    let s = to_string::<i32>(3);
+    printf("s: %s\n", s);
 
-    x1
+    let s = to_string::<bool>(false);
+    printf("s: %s\n", s);
+
+    3
 }
 
 fn apply<F, A, B>(f: F, a: A) -> B 
     where F: Fn(A) -> B
 {
     f(a)
+}
+
+fn opt_to_string<T>(opt: Option<T>) -> *c_char 
+    where T: ToString
+{
+    opt.map(|x| x.to_string()).unwrap_or("None")  
+}
+
+
+fn to_string<T>(x: T) -> *c_char 
+    where T: ToString
+{
+    let val = x;
+    apply(|unused| val.to_string(), 0)
+}
+
+fn build_opt<T>() {
+    let x = None::<T> {};
 }
 
 fn double(x: i32) -> i32 {
@@ -72,8 +89,8 @@ impl<T> Option<T> {
         where F: Fn(T) -> U
     {
         match self {
-            Some { item: item } => Some::<U> { item: f(item) },
-            None {} => None::<U> {},
+            Some { item: item } => Some { item: f(item) },
+            None {} => None{},
         }
     }
 }

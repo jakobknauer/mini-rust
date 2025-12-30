@@ -29,14 +29,37 @@ impl<'a> super::H2M<'a> {
     }
 
     pub fn generate_captures_ty(&mut self) -> H2MResult<ty::Ty> {
-        // TODO proper gen args handling
         let captures_struct_name = format!(
             "<Captures:{}.{}>",
             self.builder.get_signature().name,
             self.closure_counter
         );
-        let captures_struct = self.tys().register_struct(&captures_struct_name, &[]).unwrap();
-        let captures_ty = self.tys().instantiate_struct(captures_struct, [])?;
+
+        // The captures type (potentially) depends on all generic variables that the surrounding
+        // function depends on
+        let surrounding_gen_vars: Vec<_> = self
+            .builder
+            .get_signature()
+            .env_gen_params
+            .iter()
+            .chain(&self.builder.get_signature().gen_params)
+            .cloned()
+            .collect();
+
+        // Instantiate the captures struct with the surrounding generic variables (to be replaced
+        // later)
+        let gen_args: Vec<_> = surrounding_gen_vars
+            .iter()
+            .map(|&gen_var| self.tys().register_gen_var_ty(gen_var))
+            .collect();
+
+        let captures_struct = self
+            .tys()
+            .register_struct_with_existing_gen_vars(&captures_struct_name, surrounding_gen_vars)
+            .unwrap();
+
+        let captures_ty = self.tys().instantiate_struct(captures_struct, gen_args)?;
+
         Ok(captures_ty)
     }
 
