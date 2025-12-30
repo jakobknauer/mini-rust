@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::{
-    ctxt::{fns, ty},
+    ctxt::{fns, mlr, ty},
     h2m::H2MResult,
 };
 
@@ -111,6 +113,27 @@ impl<'a> super::H2M<'a> {
     pub fn generate_closure_ty(&mut self, fn_spec: fns::FnSpecialization, captures_ty: ty::Ty) -> ty::Ty {
         let closure_name = format!("Closure:{}.{}", self.builder.get_signature().name, self.closure_counter);
         self.closure_counter += 1;
-        self.tys().register_closure_type(fn_spec, closure_name, captures_ty)
+        self.tys().register_closure_ty(fn_spec, closure_name, captures_ty)
+    }
+
+    pub fn fill_captures_fields(
+        &mut self,
+        closure_place: mlr::Place,
+        captured_values: HashMap<mlr::Loc, usize>,
+    ) -> H2MResult<()> {
+        let captures_place = self.builder.insert_closure_captures_place(closure_place)?;
+
+        self.builder.start_new_block();
+        for (loc, field_index) in captured_values {
+            let place = self.builder.insert_loc_place(loc)?;
+            let val = self.builder.insert_use_place_val(place)?;
+
+            let field_place = self.builder.insert_field_access_place(captures_place, field_index)?;
+
+            self.builder.insert_assign_stmt(field_place, val)?;
+        }
+        self.builder.end_and_insert_current_block();
+
+        Ok(())
     }
 }

@@ -40,10 +40,11 @@ struct H2M<'a> {
     builder: MlrBuilder<'a>,
     closure_counter: u32,
 
-    external_scope: HashMap<String, mlr::Loc>,
-    captures_ty: Option<ty::Ty>,
+    /// The available local variables in scope surrounding this function (i.e. only relevant for closures)
+    outer_scope: HashMap<String, mlr::Loc>,
+    captures_struct_ty: Option<ty::Ty>,
     captures_place: Option<mlr::Place>,
-    // Map the original (outer) location of a captured variable to its index in the captures struct
+    /// Map the original (outer) location of a captured variable to its index in the captures struct
     captured_values: HashMap<mlr::Loc, usize>,
 }
 
@@ -59,8 +60,8 @@ impl<'a> H2M<'a> {
 
             closure_counter: 0,
 
-            external_scope,
-            captures_ty,
+            outer_scope: external_scope,
+            captures_struct_ty: captures_ty,
             captures_place: None,
             captured_values: HashMap::new(),
         }
@@ -87,7 +88,7 @@ impl<'a> H2M<'a> {
             self.builder.register_receiver_loc(param_locs[0]);
         }
 
-        if let Some(captures_ty) = self.captures_ty {
+        if let Some(captures_ty) = self.captures_struct_ty {
             let first_param_loc = param_locs[0];
             let first_param_ty = self.mlr().get_loc_ty(first_param_loc);
 
@@ -532,24 +533,11 @@ impl<'a> H2M<'a> {
         let closure_ty = self.generate_closure_ty(fn_spec, captures_ty);
 
         let current_bindings = self.builder.get_flattened_scope();
-
         let captured_values =
             hlr_to_mlr_with_external_scope(self.ctxt(), body, fn_, current_bindings, Some(captures_ty))?;
 
         let closure_place = self.builder.insert_alloc_with_ty(closure_ty)?;
-        let captures_place = self.builder.insert_closure_captures_place(closure_place)?;
-
-        self.builder.start_new_block();
-        for (loc, field_index) in captured_values {
-            let place = self.builder.insert_loc_place(loc)?;
-            let val = self.builder.insert_use_place_val(place)?;
-
-            let field_place = self.builder.insert_field_access_place(captures_place, field_index)?;
-
-            self.builder.insert_assign_stmt(field_place, val)?;
-        }
-        self.builder.end_and_insert_current_block();
-
+        self.fill_captures_fields(closure_place, captured_values)?;
         self.builder.insert_use_place_val(closure_place)
     }
 
@@ -661,37 +649,32 @@ impl<'a> H2M<'a> {
     }
 
     fn try_resolve_name_to_captured_value(&mut self, name: &str) -> Option<mlr::Place> {
-        let captured_loc = self.external_scope.get(name).cloned()?;
-        let captures_ty = self.captures_ty?;
+        let captures_struct_ty = self.captures_struct_ty?;
 
-        if let Some(&index) = self.captured_values.get(&captured_loc) {
-            let field_access = self
-                .builder
-                .insert_field_access_place(self.captures_place?, index)
-                .ok()?;
-            Some(field_access)
-        } else {
-            let captures_struct = self.tys().get_ty_def(captures_ty).unwrap();
+        let outer_loc_of_captured_value = self.outer_scope.get(name).cloned()?;
+
+        if !self.captured_values.contains_key(&outer_loc_of_captured_value) {
+            let captured_value_ty = self.mlr().get_loc_ty(outer_loc_of_captured_value);
+
+            let captures_struct = self.tys().get_ty_def(captures_struct_ty).unwrap();
             let ty::TyDef::Struct { struct_, .. } = *captures_struct else {
                 return None;
             };
 
-            let field_ty = self.mlr().get_loc_ty(captured_loc);
+            let captures_struct_def = self.tys().get_mut_struct_def(struct_).unwrap();
+            let new_field_index = captures_struct_def.fields.len();
 
-            let struct_def = self.tys().get_mut_struct_def(struct_).unwrap();
-            struct_def.fields.push(ty::StructField {
+            captures_struct_def.fields.push(ty::StructField {
                 name: name.to_string(),
-                ty: field_ty,
+                ty: captured_value_ty,
             });
 
-            let index = struct_def.fields.len() - 1;
-            self.captured_values.insert(captured_loc, index);
+            self.captured_values
+                .insert(outer_loc_of_captured_value, new_field_index);
+        };
 
-            let field_access = self
-                .builder
-                .insert_field_access_place(self.captures_place?, index)
-                .ok()?;
-            Some(field_access)
-        }
+        let index = *self.captured_values.get(&outer_loc_of_captured_value).unwrap();
+
+        self.builder.insert_field_access_place(self.captures_place?, index).ok()
     }
 }

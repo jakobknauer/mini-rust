@@ -172,7 +172,7 @@ impl TyReg {
         self.register_ty(trait_self)
     }
 
-    pub fn register_closure_type(
+    pub fn register_closure_ty(
         &mut self,
         fn_spec: fns::FnSpecialization,
         name: impl Into<String>,
@@ -628,7 +628,7 @@ impl TyReg {
 
                 let captures_ty = self.substitute_gen_vars(captures_ty, substitutions);
 
-                self.register_closure_type(new_fn_spec, name, captures_ty)
+                self.register_closure_ty(new_fn_spec, name, captures_ty)
             }
         }
     }
@@ -697,7 +697,7 @@ impl TyReg {
                     *env_gen_arg = self.substitute_self_ty(*env_gen_arg, substitute);
                 }
 
-                self.register_closure_type(new_fn_spec, name, captures_ty)
+                self.register_closure_ty(new_fn_spec, name, captures_ty)
             }
         }
     }
