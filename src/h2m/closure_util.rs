@@ -121,6 +121,10 @@ impl<'a> super::H2M<'a> {
         closure_place: mlr::Place,
         captured_values: HashMap<mlr::Loc, usize>,
     ) -> H2MResult<()> {
+        if captured_values.is_empty() {
+            return Ok(());
+        }
+
         let captures_place = self.builder.insert_closure_captures_place(closure_place)?;
 
         self.builder.start_new_block();
