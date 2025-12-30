@@ -1,42 +1,5 @@
 fn main() -> i32 {
-    let s = to_string::<i32>(3);
-    printf("s: %s\n", s);
-
-    let s = to_string::<bool>(false);
-    printf("s: %s\n", s);
-
-    let opt = Some { item: 3 };
-    opt.map(|x| x + 1).unwrap_or(0);
-
-    3
-}
-
-fn apply<F, A, B>(f: F, a: A) -> B 
-    where F: Fn(A) -> B
-{
-    f(a)
-}
-
-fn opt_to_string<T>(opt: Option<T>) -> *c_char 
-    where T: ToString
-{
-    opt.map(|x| x.to_string()).unwrap_or("None")  
-}
-
-
-fn to_string<T>(x: T) -> *c_char 
-    where T: ToString
-{
-    let val = x;
-    apply(|unused| val.to_string(), 0)
-}
-
-fn build_opt<T>() {
-    let x = None::<T> {};
-}
-
-fn double(x: i32) -> i32 {
-    x * 2
+    0
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -50,6 +13,16 @@ fn new<T>() -> *T {
 }
 fn delete<T>(ref: *T) {
     free(ref as *c_void)
+}
+
+fn apply<F, A, B>(f: F, a: A) -> B
+    where F: Fn(A) -> B
+{
+    f(a)
+}
+
+fn double(x: i32) -> i32 {
+    x * 2
 }
 
 fn fac(n: i32) -> i32 {
@@ -98,23 +71,6 @@ impl<T> Option<T> {
     }
 }
 
-struct Pair<A, B> {
-    first: A,
-    second: B,
-}
-
-trait Sink {
-    fn send<T>(self, message: T) -> ();
-}
-
-impl<T> Sink for T {
-    fn send<S>(self, message: S) {
-        let size_S = size_of::<S>();
-        let size_T = size_of::<T>();
-        printf("Sink of size %d received message of size %d\n", size_T, size_S);
-    }
-}
-
 trait ToString {
     fn to_string(self) -> *c_char;
 }
@@ -133,11 +89,7 @@ impl ToString for i32 {
 
 impl ToString for bool {
     fn to_string(self) -> *c_char {
-        if self {
-            "true"
-        } else {
-            "false"
-        }
+        if self { "true" } else { "false" }
     }
 }
 
