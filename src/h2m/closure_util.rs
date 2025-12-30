@@ -26,6 +26,18 @@ impl<'a> super::H2M<'a> {
         Ok((param_tys, return_ty))
     }
 
+    pub fn generate_captures_ty(&mut self) -> H2MResult<ty::Ty> {
+        // TODO proper gen args handling
+        let captures_struct_name = format!(
+            "<Captures:{}.{}>",
+            self.builder.get_signature().name,
+            self.closure_counter
+        );
+        let captures_struct = self.tys().register_struct(&captures_struct_name, &[]).unwrap();
+        let captures_ty = self.tys().instantiate_struct(captures_struct, [])?;
+        Ok(captures_ty)
+    }
+
     pub fn generate_closure_fn_sig(
         &mut self,
         param_names: &[String],

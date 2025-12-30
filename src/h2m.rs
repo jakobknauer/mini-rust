@@ -524,10 +524,7 @@ impl<'a> H2M<'a> {
     ) -> H2MResult<mlr::Val> {
         let (param_tys, return_ty) = self.match_param_and_return_ty(param_names.len(), expected)?;
 
-        // TODO proper name and gen args handling
-        let captures_struct = self.tys().register_struct("Captures", &[]).unwrap();
-        let captures_ty = self.tys().instantiate_struct(captures_struct, [])?;
-
+        let captures_ty = self.generate_captures_ty()?;
         let fn_sig = self.generate_closure_fn_sig(param_names, &param_tys, return_ty, captures_ty);
         let fn_spec = self.generate_closure_fn_spec(fn_sig)?;
         let fn_ = fn_spec.fn_;
