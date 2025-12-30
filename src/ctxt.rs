@@ -31,33 +31,37 @@ impl Ctxt {
     pub fn get_fn_spec_name(&self, fn_spec: &fns::FnSpecialization) -> String {
         let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
 
-        let prefix = if let Some(assoc_ty) = signature.associated_ty {
-            let substitutions = signature
-                .env_gen_params
-                .iter()
-                .cloned()
-                .zip(fn_spec.env_gen_args.iter().cloned())
-                .collect();
+        let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
+            let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
             if let Some(assoc_trait) = signature.associated_trait {
-                let trait_name = self.traits.get_trait_name(assoc_trait);
-                format!(
-                    "({} as {})::",
-                    self.tys.get_string_rep_with_subst(assoc_ty, &substitutions),
-                    trait_name
-                )
+                let assoc_trait_name = self.traits.get_trait_name(assoc_trait);
+                format!("({} as {})::", assoc_ty_name, assoc_trait_name)
             } else {
-                format!("{}::", self.tys.get_string_rep_with_subst(assoc_ty, &substitutions))
+                format!("{}::", assoc_ty_name)
             }
         } else {
             "".to_string()
         };
 
-        let postfix = if signature.gen_params.is_empty() {
-            signature.name.to_string()
+        let env_gen_args = if fn_spec.env_gen_args.is_empty() {
+            "".to_string()
         } else {
             format!(
-                "{}<{}>",
-                signature.name,
+                "{{{}}}",
+                fn_spec
+                    .env_gen_args
+                    .iter()
+                    .map(|&ty| self.tys.get_string_rep(ty))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+
+        let gen_args = if fn_spec.gen_args.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                "<{}>",
                 fn_spec
                     .gen_args
                     .iter()
@@ -67,7 +71,7 @@ impl Ctxt {
             )
         };
 
-        format!("{}{}", prefix, postfix)
+        format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
     }
 
     pub fn fn_specs_eq(&self, fn_spec1: &fns::FnSpecialization, fn_spec2: &fns::FnSpecialization) -> bool {

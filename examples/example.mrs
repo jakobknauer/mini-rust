@@ -5,6 +5,9 @@ fn main() -> i32 {
     let s = to_string::<bool>(false);
     printf("s: %s\n", s);
 
+    let opt = Some { item: 3 };
+    opt.map(|x| x + 1).unwrap_or(0);
+
     3
 }
 
