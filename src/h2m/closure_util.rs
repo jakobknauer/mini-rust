@@ -8,12 +8,10 @@ use crate::{
 impl<'a> super::H2M<'a> {
     pub fn match_param_and_return_ty(
         &mut self,
-        n_params: usize,
+        param_tys: &[ty::Ty],
+        return_ty: ty::Ty,
         expected: Option<ty::Ty>,
-    ) -> H2MResult<(Vec<ty::Ty>, ty::Ty)> {
-        let param_tys: Vec<_> = (0..n_params).map(|_| self.tys().new_undefined_ty()).collect();
-        let return_ty = self.tys().new_undefined_ty();
-
+    ) -> H2MResult<()> {
         if let Some(expected) = expected
             && let Some((exp_param_tys, exp_return_ty, var_args)) = self.ctxt().ty_is_callable(expected)
             && exp_param_tys.len() == param_tys.len()
@@ -25,7 +23,7 @@ impl<'a> super::H2M<'a> {
             self.tys().unify(return_ty, exp_return_ty).unwrap();
         }
 
-        Ok((param_tys, return_ty))
+        Ok(())
     }
 
     pub fn generate_captures_ty(&mut self) -> H2MResult<ty::Ty> {

@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    0
+    apply(|x: bool| -> Option<i32> { x.then_some(1) }, true).unwrap_or(2)
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -66,7 +66,7 @@ impl<T> Option<T> {
     {
         match self {
             Some { item: item } => Some { item: f(item) },
-            None {} => None{},
+            None {} => None {},
         }
     }
 }
@@ -96,5 +96,15 @@ impl ToString for bool {
 impl ToString for *c_char {
     fn to_string(self) -> *c_char {
         self
+    }
+}
+
+impl bool {
+    fn then_some<T>(self, item: T) -> Option<T> {
+        if self {
+            Some { item: item }
+        } else {
+            None {}
+        }
     }
 }

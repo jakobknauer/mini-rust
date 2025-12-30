@@ -749,26 +749,58 @@ impl<'a> HlrParser<'a> {
 
                 let mut params = Vec::new();
                 while self.current() != Some(&Token::Pipe) {
-                    let param_name = self.expect_identifier()?;
-                    params.push(param_name);
+                    let param = self.parse_closure_param()?;
+                    params.push(param);
                     if !self.advance_if(Token::Comma) {
                         break;
                     }
                 }
                 self.expect_token(Token::Pipe)?;
 
-                let body = self.parse_closure_body()?;
+                let return_ty = if self.advance_if(Token::Arrow) {
+                    Some(self.parse_ty_annot()?)
+                } else {
+                    None
+                };
 
-                Ok(Expr::Closure { params, body })
+                let body = self.parse_closure_body(return_ty.is_some())?;
+
+                Ok(Expr::Closure {
+                    params,
+                    return_ty,
+                    body,
+                })
             }
             Token::PipePipe => {
                 self.position += 1;
-                let body = self.parse_closure_body()?;
-                Ok(Expr::Closure { params: vec![], body })
+
+                let return_ty = if self.advance_if(Token::Arrow) {
+                    Some(self.parse_ty_annot()?)
+                } else {
+                    None
+                };
+
+                let body = self.parse_closure_body(return_ty.is_some())?;
+
+                Ok(Expr::Closure {
+                    params: vec![],
+                    return_ty,
+                    body,
+                })
             }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
+    }
+
+    fn parse_closure_param(&mut self) -> Result<ClosureParam, ParserErr> {
+        let name = self.expect_identifier()?;
+        let ty = if self.advance_if(Token::Colon) {
+            Some(self.parse_ty_annot()?)
+        } else {
+            None
+        };
+        Ok(ClosureParam { name, ty })
     }
 
     fn parse_ident(&mut self) -> Result<Ident, ParserErr> {
@@ -944,8 +976,8 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_closure_body(&mut self) -> Result<Block, ParserErr> {
-        if self.current() == Some(&Token::LBrace) {
+    fn parse_closure_body(&mut self, force_block: bool) -> Result<Block, ParserErr> {
+        if self.current() == Some(&Token::LBrace) || force_block {
             self.parse_block()
         } else {
             let return_expr = self.parse_expr(true)?;

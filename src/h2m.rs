@@ -184,7 +184,11 @@ impl<'a> H2M<'a> {
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected),
             AddrOf { base } => self.build_addr_of_val(base),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty),
-            Closure { params, body } => self.build_closure(params, body, expected),
+            Closure {
+                params,
+                body,
+                return_ty,
+            } => self.build_closure(params, return_ty, body, expected),
         }
     }
 
@@ -519,14 +523,24 @@ impl<'a> H2M<'a> {
 
     fn build_closure(
         &mut self,
-        param_names: &[String],
+        params: &[hlr::ClosureParam],
+        return_ty: &Option<hlr::TyAnnot>,
         body: &hlr::Block,
         expected: Option<ty::Ty>,
     ) -> H2MResult<mlr::Val> {
-        let (param_tys, return_ty) = self.match_param_and_return_ty(param_names.len(), expected)?;
+        let param_tys = params
+            .iter()
+            .map(|param| self.builder.resolve_hlr_ty_annot_or_insert_new_type(param.ty.as_ref()))
+            .collect::<H2MResult<Vec<_>>>()?;
+        let return_ty = self
+            .builder
+            .resolve_hlr_ty_annot_or_insert_new_type(return_ty.as_ref())?;
+
+        self.match_param_and_return_ty(&param_tys, return_ty, expected)?;
 
         let captures_ty = self.generate_captures_ty()?;
-        let fn_sig = self.generate_closure_fn_sig(param_names, &param_tys, return_ty, captures_ty);
+        let param_names = params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
+        let fn_sig = self.generate_closure_fn_sig(&param_names, &param_tys, return_ty, captures_ty);
         let fn_spec = self.generate_closure_fn_spec(fn_sig)?;
         let fn_ = fn_spec.fn_;
 

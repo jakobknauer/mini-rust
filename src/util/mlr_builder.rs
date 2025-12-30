@@ -311,6 +311,12 @@ impl<'a> MlrBuilder<'a> {
         None
     }
 
+    pub fn resolve_hlr_ty_annot_or_insert_new_type(&mut self, annot: Option<&hlr::TyAnnot>) -> H2MResult<ty::Ty> {
+        annot
+            .map(|annot| self.resolve_hlr_ty_annot(annot))
+            .unwrap_or_else(|| Ok(self.tys().new_undefined_ty()))
+    }
+
     pub fn resolve_hlr_ty_annot(&mut self, annot: &hlr::TyAnnot) -> H2MResult<ty::Ty> {
         let gen_params = &self.get_signature().gen_params;
         let env_gen_params = &self.get_signature().env_gen_params;

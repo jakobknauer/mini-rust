@@ -153,9 +153,16 @@ pub enum Expr {
     },
     Self_,
     Closure {
-        params: Vec<String>,
+        params: Vec<ClosureParam>,
+        return_ty: Option<TyAnnot>,
         body: Block,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClosureParam {
+    pub name: String,
+    pub ty: Option<TyAnnot>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
