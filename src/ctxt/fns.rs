@@ -23,13 +23,27 @@ pub struct FnSig {
     pub params: Vec<FnParam>,
     pub var_args: bool,
     pub return_ty: Ty,
-    pub has_receiver: bool,
+}
+
+impl FnSig {
+    pub fn has_receiver(&self) -> bool {
+        self.params
+            .first()
+            .map(|param| param.kind == FnParamKind::Self_)
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Clone)]
 pub struct FnParam {
-    pub name: String,
+    pub kind: FnParamKind,
     pub ty: Ty,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum FnParamKind {
+    Regular(String),
+    Self_,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]

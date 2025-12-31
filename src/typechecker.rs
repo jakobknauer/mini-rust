@@ -497,7 +497,7 @@ impl<'a> Typechecker<'a> {
                     .map(|substitution| (impl_def, substitution))
             })
             .flat_map(|(impl_def, subst)| impl_def.methods_by_name.get(method_name).map(|&method| (method, subst)))
-            .filter(|&(method, _)| self.ctxt.fns.get_sig(method).unwrap().has_receiver)
+            .filter(|&(method, _)| self.ctxt.fns.get_sig(method).unwrap().has_receiver())
             .collect();
 
         match &candidate_fn_specs[..] {

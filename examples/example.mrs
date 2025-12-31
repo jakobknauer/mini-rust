@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    apply(|x: bool| -> Option<i32> { x.then_some(1) }, true).unwrap_or(2)
+    5.bla(3)
 }
 
 fn malloc(size: i32) -> *c_void;

@@ -49,7 +49,7 @@ impl TraitReg {
                 trait_def
                     .methods
                     .iter()
-                    .position(|method| method.name == method_name && method.has_receiver)
+                    .position(|method| method.name == method_name && method.has_receiver())
                     .map(|method_idx| (Trait(trait_idx), method_idx))
             })
     }

@@ -175,15 +175,8 @@ fn register_function(
     let params = hlr_fn
         .params
         .iter()
-        .map(|parameter| {
-            Ok(fns::FnParam {
-                name: parameter.name.clone(),
-                ty: ctxt
-                    .tys
-                    .try_resolve_hlr_annot(&parameter.ty, &all_gen_params, associated_ty, false)
-                    .ok_or(())?,
-            })
-        })
+        .enumerate()
+        .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &all_gen_params, associated_ty, idx == 0))
         .collect::<Result<_, _>>()?;
 
     let return_ty = match hlr_fn.return_ty.as_ref() {
@@ -236,10 +229,34 @@ fn register_function(
         params,
         var_args: hlr_fn.var_args,
         return_ty,
-        has_receiver: hlr_fn.params.first().map(|p| p.is_receiver).unwrap_or(false),
     };
 
     ctxt.fns.register_fn(signature, associated_ty.is_none())
+}
+
+fn build_fn_param(
+    tys: &mut ctxt::TyReg,
+    param: &hlr::Param,
+    gen_params: &[ty::GenVar],
+    self_ty: Option<ty::Ty>,
+    allow_self: bool,
+) -> Result<fns::FnParam, ()> {
+    let kind = if param.is_receiver {
+        if allow_self {
+            fns::FnParamKind::Self_
+        } else {
+            return Err(());
+        }
+    } else {
+        fns::FnParamKind::Regular(param.name.clone())
+    };
+
+    Ok(fns::FnParam {
+        kind,
+        ty: tys
+            .try_resolve_hlr_annot(&param.ty, gen_params, self_ty, false)
+            .ok_or(())?,
+    })
 }
 
 fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
@@ -253,18 +270,12 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 .iter()
                 .map(|gp| ctxt.tys.register_gen_var(gp))
                 .collect();
+
             let params = method
                 .params
                 .iter()
-                .map(|parameter| {
-                    Ok(fns::FnParam {
-                        name: parameter.name.clone(),
-                        ty: ctxt
-                            .tys
-                            .try_resolve_hlr_annot(&parameter.ty, &gen_params, Some(self_type), false)
-                            .ok_or(())?,
-                    })
-                })
+                .enumerate()
+                .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &gen_params, Some(self_type), idx == 0))
                 .collect::<Result<_, _>>()?;
 
             let return_ty = match &method.return_ty {
@@ -284,7 +295,6 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 params,
                 var_args: false,
                 return_ty,
-                has_receiver: method.params.first().map(|p| p.is_receiver).unwrap_or(false),
             };
 
             ctxt.traits.register_method(trait_, sig);

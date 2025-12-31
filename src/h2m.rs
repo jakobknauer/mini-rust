@@ -74,18 +74,17 @@ impl<'a> H2M<'a> {
         }
 
         let params = signature.params.clone();
-        let has_receiver = signature.has_receiver;
         let mut param_locs = Vec::new();
 
         self.builder.push_scope();
-        for fns::FnParam { name, ty } in params {
+        for fns::FnParam { kind: name, ty } in params {
             let loc = self.builder.insert_typed_loc(ty)?;
-            self.builder.add_binding(&name, loc);
             param_locs.push(loc);
-        }
 
-        if has_receiver {
-            self.builder.register_receiver_loc(param_locs[0]);
+            match name {
+                fns::FnParamKind::Regular(name) => self.builder.add_binding(&name, loc),
+                fns::FnParamKind::Self_ => self.builder.register_receiver_loc(loc),
+            }
         }
 
         if let Some(captures_ty) = self.captures_struct_ty {

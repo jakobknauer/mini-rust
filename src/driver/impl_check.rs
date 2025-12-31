@@ -121,11 +121,11 @@ fn check_method_sigs(
         .collect();
 
     // Compare receiver
-    if impl_method_sig.has_receiver != trait_method_sig.has_receiver {
+    if impl_method_sig.has_receiver() != trait_method_sig.has_receiver() {
         return Err(ImplCheckErrorKind::ReceiverMismatch {
             method: impl_method_sig.name.to_string(),
-            expected: trait_method_sig.has_receiver,
-            actual: impl_method_sig.has_receiver,
+            expected: trait_method_sig.has_receiver(),
+            actual: impl_method_sig.has_receiver(),
         });
     }
 

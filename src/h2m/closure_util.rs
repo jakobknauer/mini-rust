@@ -85,16 +85,14 @@ impl<'a> super::H2M<'a> {
 
         assert_eq!(param_names.len(), param_tys.len());
         let captures_param = fns::FnParam {
-            name: "captures".to_string(),
+            kind: fns::FnParamKind::Regular("captures".to_string()),
             ty: captures_ty,
         };
         let params = std::iter::once(captures_param)
-            .chain(
-                param_names
-                    .iter()
-                    .zip(param_tys)
-                    .map(|(name, &ty)| fns::FnParam { name: name.clone(), ty }),
-            )
+            .chain(param_names.iter().zip(param_tys).map(|(name, &ty)| fns::FnParam {
+                kind: fns::FnParamKind::Regular(name.clone()),
+                ty,
+            }))
             .collect();
 
         fns::FnSig {
@@ -106,7 +104,6 @@ impl<'a> super::H2M<'a> {
             params,
             var_args: false,
             return_ty,
-            has_receiver: false,
         }
     }
 

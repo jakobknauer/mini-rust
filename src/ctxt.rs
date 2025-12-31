@@ -98,7 +98,7 @@ impl Ctxt {
             .params
             .iter()
             .map(|param| fns::FnParam {
-                name: param.name.clone(),
+                kind: param.kind.clone(),
                 ty: self.tys.substitute_gen_vars(param.ty, &substitutions),
             })
             .collect();
@@ -114,7 +114,6 @@ impl Ctxt {
             params: specialized_params,
             var_args: signature.var_args,
             return_ty: specialized_return_ty,
-            has_receiver: signature.has_receiver,
         }
     }
 

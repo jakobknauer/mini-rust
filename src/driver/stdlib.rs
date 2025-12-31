@@ -19,14 +19,13 @@ macro_rules! register_fn {
                 params: vec![
                     $(
                         fns::FnParam {
-                            name: stringify!($param_name).to_string(),
+                            kind: fns::FnParamKind::Regular(stringify!($param_name).to_string()),
                             ty: $param_ty,
                         },
                     )*
                 ],
                 var_args: false,
                 return_ty: $return_ty,
-                has_receiver: false,
             },
             true)?;
     };
@@ -74,7 +73,6 @@ fn register_size_of(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
             params: vec![],
             var_args: false,
             return_ty: tys.get_primitive_ty(ty::Primitive::Integer32),
-            has_receiver: false,
         },
         true,
     )?;
