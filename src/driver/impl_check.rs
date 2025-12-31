@@ -32,6 +32,11 @@ pub enum ImplCheckErrorKind {
         expected: usize,
         actual: usize,
     },
+    ReceiverMismatch {
+        method: String,
+        expected: bool,
+        actual: bool,
+    },
 }
 
 pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
@@ -115,6 +120,15 @@ fn check_method_sigs(
         .zip(impl_method_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp)))
         .collect();
 
+    // Compare receiver
+    if impl_method_sig.has_receiver != trait_method_sig.has_receiver {
+        return Err(ImplCheckErrorKind::ReceiverMismatch {
+            method: impl_method_sig.name.to_string(),
+            expected: trait_method_sig.has_receiver,
+            actual: impl_method_sig.has_receiver,
+        });
+    }
+
     // Compare param count
     if impl_method_sig.params.len() != trait_method_sig.params.len() {
         return Err(ImplCheckErrorKind::ParamCountMismatch {
@@ -134,6 +148,7 @@ fn check_method_sigs(
         let expected_with_self_substituted = tys.substitute_self_ty(expected.ty, impl_ty);
         let expected_with_gen_params_substituted =
             tys.substitute_gen_vars(expected_with_self_substituted, &gen_params_substitution);
+
         if !tys.tys_eq(expected_with_gen_params_substituted, actual.ty) {
             return Err(ImplCheckErrorKind::ArgTypeMismatch {
                 method: impl_method_sig.name.to_string(),

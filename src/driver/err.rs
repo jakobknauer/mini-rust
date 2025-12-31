@@ -263,6 +263,14 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
             "Generic argument count mismatch for method '{}': expected {}, got {}",
             method, expected, actual
         ),
+        ReceiverMismatch {
+            method,
+            expected,
+            actual,
+        } => format!(
+            "Receiver type mismatch for method '{}': expected '{}', got '{}'",
+            method, expected, actual
+        ),
     };
 
     format!(
