@@ -34,6 +34,7 @@ pub enum ParserErr {
     UnexpectedEOF,
     TraitMethodWithBody,
     ExpectedTraitName,
+    UnexpectedReceiverArg,
 }
 
 impl From<LexerErr> for ParserErr {
@@ -190,8 +191,8 @@ impl<'a> HlrParser<'a> {
     fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param>, bool), ParserErr> {
         let mut params = Vec::new();
         let mut first = true;
-        while let Some(Token::Identifier(_) | Token::Keyword(Keyword::Self_)) = self.current() {
-            params.push(self.parse_function_param(first && allow_receiver)?);
+        while !matches!(self.current(), Some(&Token::RParen | &Token::Dots)) {
+            params.push(self.parse_fn_param(first && allow_receiver)?);
             first = false;
 
             if !self.advance_if(Token::Comma) {
@@ -203,23 +204,25 @@ impl<'a> HlrParser<'a> {
         Ok((params, var_args))
     }
 
-    fn parse_function_param(&mut self, allow_receiver: bool) -> Result<Param, ParserErr> {
-        if allow_receiver && self.current() == Some(&Token::Keyword(Keyword::Self_)) {
+    fn parse_fn_param(&mut self, allow_receiver: bool) -> Result<Param, ParserErr> {
+        if self.current() == Some(&Token::Keyword(Keyword::Self_)) {
             self.position += 1;
-            Ok(Param {
-                name: "self".to_string(),
-                ty: TyAnnot::Self_,
-                is_receiver: true,
-            })
+            if !allow_receiver {
+                return Err(ParserErr::UnexpectedReceiverArg);
+            }
+            Ok(Param::Receiver)
+        } else if self.current() == Some(&Token::Ampersand) {
+            self.position += 1;
+            self.expect_token(Token::Keyword(Keyword::Self_))?;
+            if !allow_receiver {
+                return Err(ParserErr::UnexpectedReceiverArg);
+            }
+            Ok(Param::ReceiverByRef)
         } else {
             let name = self.expect_identifier()?;
             self.expect_token(Token::Colon)?;
             let ty = self.parse_ty_annot()?;
-            Ok(Param {
-                name,
-                ty,
-                is_receiver: false,
-            })
+            Ok(Param::Regular { name, ty })
         }
     }
 
@@ -1080,15 +1083,13 @@ mod tests {
                     name: "add".to_string(),
                     gen_params: vec![],
                     params: vec![
-                        Param {
+                        Param::Regular {
                             name: "a".to_string(),
                             ty: TyAnnot::Named("int".to_string()),
-                            is_receiver: false,
                         },
-                        Param {
+                        Param::Regular {
                             name: "b".to_string(),
                             ty: TyAnnot::Named("int".to_string()),
-                            is_receiver: false,
                         },
                     ],
                     var_args: false,
@@ -1189,11 +1190,7 @@ mod tests {
                     methods: vec![Fn {
                         name: "get_b".to_string(),
                         gen_params: vec![],
-                        params: vec![Param {
-                            name: "self".to_string(),
-                            ty: TyAnnot::Self_,
-                            is_receiver: true,
-                        }],
+                        params: vec![Param::Receiver],
                         var_args: false,
                         return_ty: Some(TyAnnot::Named("B".to_string())),
                         constraints: vec![],

@@ -239,24 +239,23 @@ fn build_fn_param(
     param: &hlr::Param,
     gen_params: &[ty::GenVar],
     self_ty: Option<ty::Ty>,
-    allow_self: bool,
+    allow_receiver: bool,
 ) -> Result<fns::FnParam, ()> {
-    let kind = if param.is_receiver {
-        if allow_self {
-            fns::FnParamKind::Self_
-        } else {
-            return Err(());
-        }
-    } else {
-        fns::FnParamKind::Regular(param.name.clone())
-    };
-
-    Ok(fns::FnParam {
-        kind,
-        ty: tys
-            .try_resolve_hlr_annot(&param.ty, gen_params, self_ty, false)
-            .ok_or(())?,
-    })
+    match param {
+        hlr::Param::Regular { name, ty } => Ok(fns::FnParam {
+            kind: fns::FnParamKind::Regular(name.clone()),
+            ty: tys.try_resolve_hlr_annot(ty, gen_params, self_ty, false).ok_or(())?,
+        }),
+        hlr::Param::Receiver if allow_receiver => Ok(fns::FnParam {
+            kind: fns::FnParamKind::Self_,
+            ty: self_ty.ok_or(())?,
+        }),
+        hlr::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
+            kind: fns::FnParamKind::SelfByRef,
+            ty: self_ty.map(|self_ty| tys.register_ref_ty(self_ty)).ok_or(())?,
+        }),
+        _ => Err(()),
+    }
 }
 
 fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {

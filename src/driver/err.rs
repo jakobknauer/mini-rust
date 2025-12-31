@@ -17,6 +17,7 @@ pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
         UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
         TraitMethodWithBody => "Parser error: Trait method with body".to_string(),
         ExpectedTraitName => "Parser error: Expected trait name".to_string(),
+        UnexpectedReceiverArg => "Parser error: Unexpected receiver argument".to_string(),
     }
 }
 

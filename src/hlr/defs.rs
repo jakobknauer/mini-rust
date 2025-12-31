@@ -19,10 +19,10 @@ pub struct Fn {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Param {
-    pub name: String,
-    pub ty: TyAnnot,
-    pub is_receiver: bool,
+pub enum Param {
+    Regular { name: String, ty: TyAnnot },
+    Receiver,
+    ReceiverByRef,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -227,6 +227,7 @@ pub enum TyAnnot {
         param_tys: Vec<TyAnnot>,
         return_ty: Option<Box<TyAnnot>>,
     },
+    #[allow(unused)]
     Self_,
     Wildcard,
 }

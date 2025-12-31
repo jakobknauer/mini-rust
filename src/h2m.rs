@@ -83,7 +83,7 @@ impl<'a> H2M<'a> {
 
             match name {
                 fns::FnParamKind::Regular(name) => self.builder.add_binding(&name, loc),
-                fns::FnParamKind::Self_ => self.builder.register_receiver_loc(loc),
+                fns::FnParamKind::Self_ | fns::FnParamKind::SelfByRef => self.builder.register_receiver_loc(loc),
             }
         }
 
@@ -202,7 +202,7 @@ impl<'a> H2M<'a> {
                 let loc = self.builder.get_receiver_loc().unwrap();
                 self.builder.insert_loc_place(loc)
             }
-            _ => Err(H2MError::NotAPlace),
+            _ => Ok(assign_to_fresh_alloc!(self, self.lower_to_val(expr, None)?)),
         }
     }
 
@@ -302,12 +302,15 @@ impl<'a> H2M<'a> {
     }
 
     fn build_method_call(&mut self, obj: &hlr::Expr, method: &hlr::Ident, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
-        let base = self.lower_to_op(obj, None)?;
-        let base_ty = self.mlr().get_op_ty(base);
+        let base_place = self.lower_to_place(obj)?;
+        let base_ty = self.mlr().get_place_ty(base_place);
 
-        let callee = match self.typechecker().resolve_method(base_ty, &method.ident)? {
+        let (callee, by_ref) = match self.typechecker().resolve_method(base_ty, &method.ident)? {
             MethodResolution::Inherent { fn_, env_gen_args } => {
-                let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+                let sig = self.fns().get_sig(fn_).unwrap();
+                let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
+
+                let n_gen_params = sig.gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
 
                 let fn_spec = fns::FnSpecialization {
@@ -315,10 +318,14 @@ impl<'a> H2M<'a> {
                     gen_args,
                     env_gen_args,
                 };
-                self.builder.insert_fn_spec_op(fn_spec)
+
+                (self.builder.insert_fn_spec_op(fn_spec)?, by_ref)
             }
             MethodResolution::Trait { trait_, method_idx } => {
-                let n_gen_params = self.traits().get_trait_method_sig(trait_, method_idx).gen_params.len();
+                let sig = self.traits().get_trait_method_sig(trait_, method_idx);
+                let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
+
+                let n_gen_params = sig.gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
 
                 let trait_method = fns::TraitMethod {
@@ -327,9 +334,18 @@ impl<'a> H2M<'a> {
                     impl_ty: base_ty,
                     gen_args,
                 };
-                self.builder.insert_trait_method_op(trait_method)
+
+                (self.builder.insert_trait_method_op(trait_method)?, by_ref)
             }
-        }?;
+        };
+
+        let base = if by_ref {
+            let base_addr = self.builder.insert_addr_of_val(base_place)?;
+            let base_addr_place = assign_to_fresh_alloc!(self, base_addr);
+            self.builder.insert_copy_op(base_addr_place)?
+        } else {
+            self.builder.insert_copy_op(base_place)?
+        };
 
         let callee_ty = self.mlr().get_op_ty(callee);
 
@@ -339,15 +355,12 @@ impl<'a> H2M<'a> {
             .map(|(param_tys, ..)| param_tys)
             .unwrap_or_default();
 
-        let args: Vec<_> = args
-            .iter()
-            .enumerate()
-            .map(|(idx, arg)| {
+        let args = std::iter::once(Ok(base))
+            .chain(args.iter().enumerate().map(|(idx, arg)| {
                 let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
                 self.lower_to_op(arg, expected)
-            })
+            }))
             .collect::<H2MResult<_>>()?;
-        let args = std::iter::once(base).chain(args).collect();
 
         self.builder.insert_call_val(callee, args)
     }
