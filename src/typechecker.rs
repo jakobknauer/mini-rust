@@ -497,6 +497,7 @@ impl<'a> Typechecker<'a> {
                     .map(|substitution| (impl_def, substitution))
             })
             .flat_map(|(impl_def, subst)| impl_def.methods_by_name.get(method_name).map(|&method| (method, subst)))
+            .filter(|&(method, _)| self.ctxt.fns.get_sig(method).unwrap().has_receiver)
             .collect();
 
         match &candidate_fn_specs[..] {
@@ -517,7 +518,7 @@ impl<'a> Typechecker<'a> {
         let candidate_trait_methods: Vec<_> = self
             .ctxt
             .traits
-            .get_trait_methods_with_name(method_name)
+            .get_trait_methods_with_receiver_and_name(method_name)
             .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(base_ty, trait_))
             .collect();
 

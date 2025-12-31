@@ -41,7 +41,7 @@ impl TraitReg {
         self.traits.get(trait_.0).unwrap().methods[method_index].name.as_str()
     }
 
-    pub fn get_trait_methods_with_name(&self, method_name: &str) -> impl Iterator<Item = (Trait, usize)> {
+    pub fn get_trait_methods_with_receiver_and_name(&self, method_name: &str) -> impl Iterator<Item = (Trait, usize)> {
         self.traits
             .iter()
             .enumerate()
@@ -49,7 +49,7 @@ impl TraitReg {
                 trait_def
                     .methods
                     .iter()
-                    .position(|method| method.name == method_name)
+                    .position(|method| method.name == method_name && method.has_receiver)
                     .map(|method_idx| (Trait(trait_idx), method_idx))
             })
     }
