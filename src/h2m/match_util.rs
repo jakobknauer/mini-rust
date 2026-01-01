@@ -8,10 +8,12 @@ impl<'a> super::H2M<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn build_match_arms(
         &mut self,
+        enum_ty: ty::Ty,
+        by_ref: bool,
         arms: &[hlr::MatchArm],
         variant_indices: &[usize],
         eq_fn: mlr::Op,
-        discriminant: mlr::Op,
+        discriminant_op: mlr::Op,
         scrutinee_place: mlr::Place,
         result_place: mlr::Place,
         expected: Option<ty::Ty>,
@@ -21,32 +23,39 @@ impl<'a> super::H2M<'a> {
             "arm_variant_indices length should match arms length"
         );
 
-        let enum_ty = self.mlr().get_place_ty(scrutinee_place);
-
         match (arms, variant_indices) {
             ([], []) => panic!("Match expressions must have at least one arm."),
 
             ([arm], [variant_index]) => {
-                let arm_result = self.build_arm_block(arm, enum_ty, *variant_index, scrutinee_place, expected)?;
+                let arm_result =
+                    self.build_arm_block(enum_ty, by_ref, arm, *variant_index, scrutinee_place, expected)?;
                 self.builder.insert_assign_stmt(result_place, arm_result)?;
                 Ok(())
             }
 
             ([first_arm, arms @ ..], [first_variant_index, variant_indices @ ..]) => {
-                let condition = self.build_arm_condition(*first_variant_index, eq_fn, discriminant)?;
+                let condition = self.build_arm_condition(*first_variant_index, eq_fn, discriminant_op)?;
 
                 self.builder.start_new_block();
-                let first_arm_result =
-                    self.build_arm_block(first_arm, enum_ty, *first_variant_index, scrutinee_place, expected)?;
+                let first_arm_result = self.build_arm_block(
+                    enum_ty,
+                    by_ref,
+                    first_arm,
+                    *first_variant_index,
+                    scrutinee_place,
+                    expected,
+                )?;
                 self.builder.insert_assign_stmt(result_place, first_arm_result)?;
                 let then_block = self.builder.release_current_block();
 
                 self.builder.start_new_block();
                 self.build_match_arms(
+                    enum_ty,
+                    by_ref,
                     arms,
                     variant_indices,
                     eq_fn,
-                    discriminant,
+                    discriminant_op,
                     scrutinee_place,
                     result_place,
                     expected,
@@ -77,8 +86,9 @@ impl<'a> super::H2M<'a> {
 
     fn build_arm_block(
         &mut self,
-        arm: &hlr::MatchArm,
         enum_ty: ty::Ty,
+        by_ref: bool,
+        arm: &hlr::MatchArm,
         variant_index: usize,
         base_place: mlr::Place,
         expected: Option<ty::Ty>,
@@ -99,13 +109,25 @@ impl<'a> super::H2M<'a> {
         {
             let field_place = self.builder.insert_field_access_place(variant_place, field_index)?;
             let field_ty = self.mlr().get_place_ty(field_place);
-            let field_val = self.builder.insert_use_place_val(field_place)?;
+            if by_ref {
+                let field_ref_ty = self.tys().register_ref_ty(field_ty);
 
-            let assign_loc = self.mlr().insert_typed_loc(field_ty);
-            self.builder.insert_alloc_stmt(assign_loc)?;
+                let field_addr = self.builder.insert_addr_of_val(field_place)?;
+                let assign_loc = self.mlr().insert_typed_loc(field_ref_ty);
+                self.builder.insert_alloc_stmt(assign_loc)?;
+                self.builder.insert_assign_to_loc_stmt(assign_loc, field_addr)?;
 
-            self.builder.insert_assign_to_loc_stmt(assign_loc, field_val)?;
-            self.builder.add_binding(binding_name, assign_loc);
+                self.builder.add_binding(binding_name, assign_loc);
+            } else {
+                let field_ty = self.mlr().get_place_ty(field_place);
+
+                let field_val = self.builder.insert_use_place_val(field_place)?;
+                let assign_loc = self.mlr().insert_typed_loc(field_ty);
+                self.builder.insert_alloc_stmt(assign_loc)?;
+                self.builder.insert_assign_to_loc_stmt(assign_loc, field_val)?;
+
+                self.builder.add_binding(binding_name, assign_loc);
+            }
         }
 
         // build actual arm block

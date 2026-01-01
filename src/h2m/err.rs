@@ -12,6 +12,7 @@ pub enum H2MError {
     UnresolvableStructOrEnum { ty_name: String },
     UnresolvableTyAnnot,
     VarArgsNotSupported,
+    NonMatchableScrutinee { ty: Ty },
 }
 
 impl<T> From<H2MError> for H2MResult<T> {

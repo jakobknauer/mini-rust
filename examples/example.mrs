@@ -1,5 +1,6 @@
 fn main() -> i32 {
-    let opt = Some { item: 5 }.map(|x| x + 1);
+    let opt = Some { item: 5 };
+    opt.update(|x| *x = *x * 2);
     opt.unwrap_or(0)
 }
 
@@ -55,18 +56,34 @@ enum Option<T> {
 }
 
 impl<T> Option<T> {
-    fn unwrap_or(&self, default: T) -> T {
-        match *self {
+    fn unwrap_or(self, default: T) -> T {
+        match self {
             Some { item: item } => item,
             None {} => default,
         }
     }
 
-    fn map<F, U>(&self, f: F) -> Option<U>
+    fn map<F, U>(self, f: F) -> Option<U>
         where F: Fn(T) -> U
     {
-        match *self {
+        match self {
             Some { item: item } => Some { item: f(item) },
+            None {} => None {},
+        }
+    }
+
+    fn update<F>(&self, f: F)
+        where F: Fn(&T)
+    {
+        match self {
+            Some { item: item } => f(item),
+            None {} => {}
+        }
+    }
+
+    fn as_ref(&self) -> Option<&T> {
+        match self {
+            Some { item: item } => Some { item: item },
             None {} => None {},
         }
     }

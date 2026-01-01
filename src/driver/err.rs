@@ -45,6 +45,10 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::C
         }
         UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
         VarArgsNotSupported => "Cannot build MLR for variadic function".to_string(),
+        NonMatchableScrutinee { ty } => format!(
+            "Match scrutinee has type '{}', which is not matchable",
+            ctxt.tys.get_string_rep(ty)
+        ),
     }
 }
 

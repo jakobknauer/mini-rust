@@ -488,11 +488,32 @@ impl<'a> H2M<'a> {
         arms: &[hlr::MatchArm],
         expected: Option<ty::Ty>,
     ) -> H2MResult<mlr::Val> {
-        let scrutinee = self.lower_to_op(scrutinee, None)?;
-        let scrutinee_place = assign_to_fresh_alloc!(self, self.builder.insert_use_val(scrutinee)?);
+        let scrutinee_place = self.lower_to_place(scrutinee)?;
+        let scrutinee_ty = self.mlr().get_place_ty(scrutinee_place);
+        let scrutinee_ty_def = self.tys().get_ty_def(scrutinee_ty).unwrap();
+
+        let (enum_ty, by_ref, scrutinee_place) = match scrutinee_ty_def {
+            ty::TyDef::Enum { .. } => Ok((scrutinee_ty, false, scrutinee_place)),
+            &ty::TyDef::Ref(inner) => {
+                let inner_ty_def = self.tys().get_ty_def(inner).unwrap();
+                match inner_ty_def {
+                    ty::TyDef::Enum { .. } => {
+                        let scrutinee_addr_op = self.builder.insert_copy_op(scrutinee_place)?;
+                        let scrutinee_place = self.builder.insert_deref_place(scrutinee_addr_op)?;
+                        Ok((inner, true, scrutinee_place))
+                    }
+                    _ => Err(H2MError::NonMatchableScrutinee { ty: scrutinee_ty }),
+                }
+            }
+            _ => Err(H2MError::NonMatchableScrutinee { ty: scrutinee_ty }),
+        }?;
 
         let discriminant_place = self.builder.insert_enum_discriminant_place(scrutinee_place)?;
         let discriminant = self.builder.insert_copy_op(discriminant_place)?;
+
+        let arm_indices = self
+            .typechecker()
+            .resolve_enum_variants(enum_ty, arms.iter().map(|arm| arm.pattern.variant.as_str()))?;
 
         // resolve equality function for discriminant comparisons once
         let eq_fn = {
@@ -501,14 +522,11 @@ impl<'a> H2M<'a> {
             self.builder.insert_fn_op(eq_fn)?
         };
 
-        let scrutinee_ty = self.mlr().get_place_ty(scrutinee_place);
-        let arm_indices = self
-            .typechecker()
-            .resolve_enum_variants(scrutinee_ty, arms.iter().map(|arm| arm.pattern.variant.as_str()))?;
-
         // now build the match statement
         let result_place = self.builder.insert_fresh_alloc()?;
         self.build_match_arms(
+            enum_ty,
+            by_ref,
             arms,
             &arm_indices,
             eq_fn,
