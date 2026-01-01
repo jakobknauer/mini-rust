@@ -1,6 +1,1 @@
-*.ll
-!stdlib.ll
-
-*.out
-*.opt
-*.mlr
+build

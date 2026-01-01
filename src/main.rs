@@ -14,17 +14,26 @@ fn main() {
         std::process::exit(1);
     };
 
-    println!("Loading source from {}", input_path);
+    let Some(build_path) = std::env::args().nth(2) else {
+        print_error("No build directory specified");
+        std::process::exit(1);
+    };
+
     let input_path = PathBuf::from(input_path);
+    let build_path = PathBuf::from(build_path);
+
+    println!("Loading source from {}", input_path.as_os_str().to_str().unwrap());
 
     let Ok(source) = std::fs::read_to_string(&input_path) else {
         print_error("Could not read source file");
         std::process::exit(1);
     };
 
+    let input_stem = input_path.file_stem().unwrap();
+
     let output_paths = mini_rust::driver::OutputPaths {
-        mlr: Some(&input_path.with_extension("mlr")),
-        llvm_ir: Some(&input_path.with_extension("ll")),
+        mlr: Some(&build_path.join(input_stem).with_extension("mlr")),
+        llvm_ir: Some(&build_path.join(input_stem).with_extension("ll")),
     };
 
     if let Err(err) = mini_rust::driver::compile(&source, print_pretty, print_detail, &output_paths) {
