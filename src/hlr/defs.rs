@@ -227,7 +227,6 @@ pub enum TyAnnot {
         param_tys: Vec<TyAnnot>,
         return_ty: Option<Box<TyAnnot>>,
     },
-    #[allow(unused)]
     Self_,
     Wildcard,
 }

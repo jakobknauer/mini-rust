@@ -253,7 +253,7 @@ impl<'a> HlrParser<'a> {
 
     fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement, ParserErr> {
         let requirement = match self.current() {
-            Some(Token::Keyword(Keyword::CallableTrait)) => {
+            Some(Token::Keyword(Keyword::FnTrait)) => {
                 self.position += 1;
                 self.expect_token(Token::LParen)?;
 
@@ -972,6 +972,10 @@ impl<'a> HlrParser<'a> {
             Token::Underscore => {
                 self.position += 1;
                 Ok(TyAnnot::Wildcard)
+            }
+            Token::Keyword(Keyword::SelfTy) => {
+                self.position += 1;
+                Ok(TyAnnot::Self_)
             }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }

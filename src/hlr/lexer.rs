@@ -51,14 +51,15 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
 const THREE_CHAR_TOKENS: &[(char, char, char, Token)] = &[('.', '.', '.', Token::Dots)];
 
 const KEYWORDS: &[(&str, Token)] = &[
+    ("Fn", Token::Keyword(Keyword::FnTrait)),
+    ("Self", Token::Keyword(Keyword::SelfTy)),
     ("as", Token::Keyword(Keyword::As)),
     ("break", Token::Keyword(Keyword::Break)),
-    ("for", Token::Keyword(Keyword::For)),
     ("else", Token::Keyword(Keyword::Else)),
     ("enum", Token::Keyword(Keyword::Enum)),
     ("false", Token::BoolLiteral(false)),
     ("fn", Token::Keyword(Keyword::Fn)),
-    ("Fn", Token::Keyword(Keyword::CallableTrait)),
+    ("for", Token::Keyword(Keyword::For)),
     ("if", Token::Keyword(Keyword::If)),
     ("impl", Token::Keyword(Keyword::Impl)),
     ("let", Token::Keyword(Keyword::Let)),

@@ -42,7 +42,7 @@ pub enum Token {
 pub enum Keyword {
     As,
     Break,
-    CallableTrait,
+    FnTrait,
     Else,
     Enum,
     Fn,
@@ -53,6 +53,7 @@ pub enum Keyword {
     Loop,
     Match,
     Return,
+    SelfTy,
     Self_,
     Struct,
     Trait,

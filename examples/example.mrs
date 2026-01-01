@@ -87,3 +87,19 @@ impl bool {
         }
     }
 }
+
+trait Eq {
+    fn eq(&self, other: &Self) -> bool;
+}
+
+impl Eq for i32 {
+    fn eq(&self, other: &Self) -> bool {
+        *self == *other
+    }
+}
+
+impl Eq for bool {
+    fn eq(&self, other: &bool) -> bool {
+        *self == *other
+    }
+}
