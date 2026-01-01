@@ -50,45 +50,6 @@ impl Point {
     }
 }
 
-enum Option<T> {
-    None,
-    Some { item: T },
-}
-
-impl<T> Option<T> {
-    fn unwrap_or(self, default: T) -> T {
-        match self {
-            Some { item: item } => item,
-            None {} => default,
-        }
-    }
-
-    fn map<F, U>(self, f: F) -> Option<U>
-        where F: Fn(T) -> U
-    {
-        match self {
-            Some { item: item } => Some { item: f(item) },
-            None {} => None {},
-        }
-    }
-
-    fn update<F>(&self, f: F)
-        where F: Fn(&T)
-    {
-        match self {
-            Some { item: item } => f(item),
-            None {} => {}
-        }
-    }
-
-    fn as_ref(&self) -> Option<&T> {
-        match self {
-            Some { item: item } => Some { item: item },
-            None {} => None {},
-        }
-    }
-}
-
 trait ToString {
     fn to_string(self) -> *c_char;
 }

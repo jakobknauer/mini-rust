@@ -33,7 +33,7 @@ struct HlrMetadata {
 }
 
 pub fn compile(
-    source: &str,
+    sources: &[String],
     print_pretty: impl Fn(&str),
     print_detail: impl Fn(&str),
     output_paths: &OutputPaths,
@@ -42,7 +42,9 @@ pub fn compile(
 
     print_pretty("Building HLR from source");
     let mut hlr = hlr::Program::default();
-    hlr::parse(source, &mut hlr).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
+    for source in sources {
+        hlr::parse(source, &mut hlr).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
+    }
 
     let mut hlr_meta = HlrMetadata::default();
 
