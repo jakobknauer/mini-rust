@@ -3,7 +3,7 @@
 set -e
 
 # Compile .rs to .ll
-cargo run -- "examples/example.mrs" "examples/build"
+cargo run -- "examples/example.mrs" --build-dir "examples/build"
 
 # Create alternative optimized version of .ll (allows easier debugging of control flow etc.)
 opt-18 -passes=mem2reg,simplifycfg -S "examples/build/example.ll" -o "examples/build/example.ll.opt"

@@ -2,25 +2,26 @@ use std::path::PathBuf;
 
 use colored::Colorize;
 
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(version)]
+struct Cli {
+    input: PathBuf,
+    #[arg(short, long)]
+    build_dir: PathBuf,
+}
+
 fn main() {
-    let version = env!("CARGO_PKG_VERSION");
-    print_pretty(format!("Mini Rust Compiler v{}", version).as_str());
+    let cli = Cli::parse();
+
+    print_pretty(&format!("Mini Rust Compiler v{}", env!("CARGO_PKG_VERSION")));
 
     let (major, minor, patch) = inkwell::support::get_llvm_version();
     println!("Inkwell linked to LLVM version {}.{}.{}", major, minor, patch);
 
-    let Some(input_path) = std::env::args().nth(1) else {
-        print_error("No input file specified");
-        std::process::exit(1);
-    };
-
-    let Some(build_path) = std::env::args().nth(2) else {
-        print_error("No build directory specified");
-        std::process::exit(1);
-    };
-
-    let input_path = PathBuf::from(input_path);
-    let build_path = PathBuf::from(build_path);
+    let input_path = cli.input;
+    let build_path = cli.build_dir;
 
     println!("Loading source from {}", input_path.as_os_str().to_str().unwrap());
 
