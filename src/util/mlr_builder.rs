@@ -321,11 +321,12 @@ impl<'a> MlrBuilder<'a> {
         let gen_params = &self.get_signature().gen_params;
         let env_gen_params = &self.get_signature().env_gen_params;
         let all_gen_params: Vec<_> = gen_params.iter().chain(env_gen_params.iter()).cloned().collect();
+        let self_ty = self.get_signature().associated_ty;
 
         let ty = self
             .ctxt
             .tys
-            .try_resolve_hlr_annot(annot, &all_gen_params, None, true)
+            .try_resolve_hlr_annot(annot, &all_gen_params, self_ty, true)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }

@@ -48,6 +48,11 @@ impl Point {
     fn is_origin(self) -> bool {
         self.x == 0 & self.y == 0
     }
+
+    fn new(x: i32, y: i32) -> Self {
+        let p: Self = Point { x: x, y: y };
+        p
+    }
 }
 
 trait ToString {
