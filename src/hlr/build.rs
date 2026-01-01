@@ -5,21 +5,21 @@ use crate::hlr::{defs::*, lexer, token::Keyword};
 
 pub use crate::hlr::{lexer::LexerErr, token::Token};
 
-pub fn build_program(input: &str) -> Result<Program, ParserErr> {
+pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut parser = HlrParser::new(&tokens[..]);
-    parser.parse_program()
+    parser.parse_program(output)
 }
 
 #[cfg(test)]
-fn build_expr(input: &str) -> Result<Expr, ParserErr> {
+fn parse_expr(input: &str) -> Result<Expr, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_expr(true)
 }
 
 #[cfg(test)]
-fn build_block(input: &str) -> Result<Block, ParserErr> {
+fn parse_block(input: &str) -> Result<Block, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut parser = HlrParser::new(&tokens[..]);
     parser.parse_block()
@@ -115,21 +115,19 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_program(&mut self) -> Result<Program, ParserErr> {
-        let mut program = Program::default();
-
+    fn parse_program(&mut self, output: &mut Program) -> Result<(), ParserErr> {
         while let Some(token) = self.current() {
             match token {
-                Token::Keyword(Keyword::Fn) => program.fns.push(self.parse_function(false)?),
-                Token::Keyword(Keyword::Struct) => program.structs.push(self.parse_struct()?),
-                Token::Keyword(Keyword::Enum) => program.enums.push(self.parse_enum()?),
-                Token::Keyword(Keyword::Impl) => program.impls.push(self.parse_impl()?),
-                Token::Keyword(Keyword::Trait) => program.traits.push(self.parse_trait()?),
+                Token::Keyword(Keyword::Fn) => output.fns.push(self.parse_function(false)?),
+                Token::Keyword(Keyword::Struct) => output.structs.push(self.parse_struct()?),
+                Token::Keyword(Keyword::Enum) => output.enums.push(self.parse_enum()?),
+                Token::Keyword(Keyword::Impl) => output.impls.push(self.parse_impl()?),
+                Token::Keyword(Keyword::Trait) => output.traits.push(self.parse_trait()?),
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
         }
 
-        Ok(program)
+        Ok(())
     }
 
     fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn, ParserErr> {
@@ -1009,8 +1007,9 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Program) {
-            let parsed = build_program(input).expect("Failed to parse HLR");
-            assert_eq!(parsed, expected);
+            let mut program = Program::default();
+            parse(input, &mut program).expect("Failed to parse HLR");
+            assert_eq!(program, expected);
         }
 
         #[test]
@@ -1218,7 +1217,7 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Block) {
-            let parsed = build_block(input).expect("Failed to parse HLR");
+            let parsed = parse_block(input).expect("Failed to parse HLR");
             assert_eq!(parsed, expected);
         }
 
@@ -1303,7 +1302,7 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Expr) {
-            let parsed = build_expr(input).expect("Failed to parse HLR");
+            let parsed = parse_expr(input).expect("Failed to parse HLR");
             assert_eq!(parsed, expected);
         }
 
