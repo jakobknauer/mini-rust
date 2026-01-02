@@ -804,6 +804,19 @@ impl<'a> HlrParser<'a> {
         Ok(ClosureParam { name, ty })
     }
 
+    fn parse_closure_body(&mut self, force_block: bool) -> Result<Block, ParserErr> {
+        if self.current() == Some(&Token::LBrace) || force_block {
+            self.parse_block()
+        } else {
+            let return_expr = self.parse_expr(true)?;
+            let block = Block {
+                return_expr: Some(Box::new(return_expr)),
+                stmts: Vec::new(),
+            };
+            Ok(block)
+        }
+    }
+
     fn parse_ident(&mut self) -> Result<Ident, ParserErr> {
         let ident = self.expect_identifier()?;
 
@@ -945,8 +958,33 @@ impl<'a> HlrParser<'a> {
             }
             Token::LParen => {
                 self.position += 1;
+
+                // Tuple or parenthesized type
+                // () means empty tuple
+                // (T) means type T (no tuple!)
+                // (T,) means tuple with one element of type T
+                // (T, U) means tuple with two elements
+                // (T, U,) meanns tuple with two elements
+
+                let mut inner_tys = Vec::new();
+                let mut trailing_comma = true;
+                while self.current() != Some(&Token::RParen) {
+                    let inner_ty = self.parse_ty_annot()?;
+                    inner_tys.push(inner_ty);
+                    if !self.advance_if(Token::Comma) {
+                        trailing_comma = false;
+                        break;
+                    }
+                }
                 self.expect_token(Token::RParen)?;
-                Ok(TyAnnot::Unit)
+
+                if inner_tys.is_empty() {
+                    Ok(TyAnnot::Unit)
+                } else if inner_tys.len() == 1 && !trailing_comma {
+                    Ok(inner_tys.remove(0))
+                } else {
+                    Ok(TyAnnot::Tuple(inner_tys))
+                }
             }
             Token::Keyword(Keyword::Fn) => {
                 self.position += 1;
@@ -978,19 +1016,6 @@ impl<'a> HlrParser<'a> {
                 Ok(TyAnnot::Self_)
             }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
-        }
-    }
-
-    fn parse_closure_body(&mut self, force_block: bool) -> Result<Block, ParserErr> {
-        if self.current() == Some(&Token::LBrace) || force_block {
-            self.parse_block()
-        } else {
-            let return_expr = self.parse_expr(true)?;
-            let block = Block {
-                return_expr: Some(Box::new(return_expr)),
-                stmts: Vec::new(),
-            };
-            Ok(block)
         }
     }
 }

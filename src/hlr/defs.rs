@@ -219,6 +219,7 @@ pub struct StructPatternField {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TyAnnot {
     Named(String),
+    Tuple(Vec<TyAnnot>),
     Generic(Ident),
     Ref(Box<TyAnnot>),
     Ptr(Box<TyAnnot>),

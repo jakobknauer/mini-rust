@@ -1,7 +1,6 @@
 fn main() -> i32 {
-    let opt = Some { item: 5 };
-    opt.update(|x| *x = *x * 2);
-    opt.unwrap_or(0)
+    let f = |t: (i32,bool)| t;
+    5
 }
 
 fn malloc(size: i32) -> *c_void;

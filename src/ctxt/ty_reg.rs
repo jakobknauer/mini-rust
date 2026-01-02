@@ -327,6 +327,13 @@ impl TyReg {
             }
             Wildcard => allow_wildcards.then(|| self.new_undefined_ty()),
             Self_ => Some(self_ty.expect("self type not available")),
+            Tuple(ty_annots) => {
+                let tys: Vec<Ty> = ty_annots
+                    .iter()
+                    .map(|ty_annot| self.try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(self.register_tuple_ty(tys))
+            }
         }
     }
 
