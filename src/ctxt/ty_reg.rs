@@ -37,6 +37,7 @@ pub enum Named {
 pub enum UnificationError {
     FunctionParamCountMismatch,
     TypeMismatch,
+    TupleLengthMismatch,
 }
 #[derive(Debug)]
 pub struct NotAStruct(pub Ty);
@@ -95,6 +96,11 @@ impl TyReg {
         self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?);
         self.c_char_ty = Some(self.register_named_ty("c_char", TyDef::Primitive(Primitive::CChar))?);
         Ok(())
+    }
+
+    pub fn register_tuple_ty(&mut self, tys: impl Into<Vec<Ty>>) -> Ty {
+        let tuple_ty = TyDef::Tuple(tys.into());
+        self.register_ty(tuple_ty)
     }
 
     pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
@@ -341,6 +347,24 @@ impl TyReg {
         };
 
         match *ty_def {
+            Primitive(primitive) => match primitive {
+                Integer32 => "i32".to_string(),
+                Boolean => "bool".to_string(),
+                Unit => "()".to_string(),
+                CVoid => "c_void".to_string(),
+                CChar => "c_char".to_string(),
+            },
+            Tuple(ref tys) => match &tys[..] {
+                [] => "()".to_string(),
+                [ty] => format!("({},)", self.get_string_rep_with_subst(*ty, substitutions)),
+                _ => format!(
+                    "({})",
+                    tys.iter()
+                        .map(|&ty| self.get_string_rep_with_subst(ty, substitutions))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            },
             Fn {
                 ref param_tys,
                 return_ty,
@@ -363,13 +387,6 @@ impl TyReg {
                 .get(&gen_var)
                 .map(|&ty| self.get_string_rep_with_subst(ty, substitutions))
                 .unwrap_or(self.get_gen_var_name(gen_var).to_string()),
-            Primitive(primitive) => match primitive {
-                Integer32 => "i32".to_string(),
-                Boolean => "bool".to_string(),
-                Unit => "()".to_string(),
-                CVoid => "c_void".to_string(),
-                CChar => "c_char".to_string(),
-            },
             Struct { struct_, ref gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
                 if gen_args.is_empty() {
@@ -534,6 +551,17 @@ impl TyReg {
                     Ok(())
                 }
 
+                (Tuple(tys1), Tuple(tys2)) => {
+                    if tys1.len() != tys2.len() {
+                        return Err(UnificationError::TupleLengthMismatch);
+                    }
+
+                    let pairs = tys1.clone().into_iter().zip(tys2.clone());
+                    for (ty1, ty2) in pairs {
+                        self.unify(ty1, ty2)?;
+                    }
+                    Ok(())
+                }
                 _ => Err(UnificationError::TypeMismatch),
             },
         }
@@ -638,6 +666,14 @@ impl TyReg {
 
                 self.register_closure_ty(new_fn_spec, name, captures_ty)
             }
+            Tuple(ref tys) => {
+                let new_tys = tys
+                    .clone()
+                    .into_iter()
+                    .map(|ty| self.substitute_gen_vars(ty, substitutions))
+                    .collect::<Vec<_>>();
+                self.register_tuple_ty(new_tys)
+            }
         }
     }
 
@@ -706,6 +742,14 @@ impl TyReg {
                 }
 
                 self.register_closure_ty(new_fn_spec, name, captures_ty)
+            }
+            Tuple(ref tys) => {
+                let new_tys = tys
+                    .clone()
+                    .into_iter()
+                    .map(|ty| self.substitute_self_ty(ty, substitute))
+                    .collect::<Vec<_>>();
+                self.register_tuple_ty(new_tys)
             }
         }
     }
@@ -786,6 +830,14 @@ impl TyReg {
             })
             .collect();
         Ok(instantiated_variant_struct_tys)
+    }
+
+    pub fn get_tuple_field_tys(&self, ty: Ty) -> Result<&Vec<Ty>, ()> {
+        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        let &TyDef::Tuple(ref tys) = ty_def else {
+            return Err(());
+        };
+        Ok(tys)
     }
 
     pub fn get_struct_field_names(&mut self, ty: Ty) -> Result<impl Iterator<Item = &str>, NotAStruct> {
@@ -916,6 +968,10 @@ impl TyReg {
                             .iter()
                             .zip(&fn_spec2.env_gen_args)
                             .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                }
+
+                (Tuple(tys1), Tuple(tys2)) => {
+                    tys1.len() == tys2.len() && tys1.iter().zip(tys2).all(|(&ty1, &ty2)| self.tys_eq(ty1, ty2))
                 }
 
                 _ => false,
@@ -1049,6 +1105,14 @@ impl TyReg {
                         .iter()
                         .zip(&fn_spec2.env_gen_args)
                         .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+            }
+
+            (Tuple(tys1), Tuple(tys2)) => {
+                tys1.len() == tys2.len()
+                    && tys1
+                        .iter()
+                        .zip(tys2)
+                        .all(|(ty1, ty2)| self.try_find_instantiation_internal(*ty1, *ty2, instantiation))
             }
 
             (_, _) => false,

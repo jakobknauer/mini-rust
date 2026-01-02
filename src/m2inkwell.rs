@@ -111,6 +111,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             },
             Struct { .. } => self.define_struct(ty),
             Enum { .. } => self.define_enum(ty),
+            Tuple(..) => self.define_tuple_ty(ty),
             Fn { .. } | Ref(..) | Ptr(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
             Closure { captures_ty, .. } => self.get_or_define_ty(captures_ty).unwrap(),
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
@@ -181,6 +182,15 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
 
         iw_enum_struct.set_body(&[discrim_type, data_array_type], false);
         iw_enum_struct.as_any_type_enum()
+    }
+
+    fn define_tuple_ty(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
+        let mr_field_tys = self.mr_ctxt.tys.get_tuple_field_tys(ty).unwrap().clone();
+        let iw_field_tys: Vec<BasicTypeEnum> = mr_field_tys
+            .into_iter()
+            .map(|field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())
+            .collect();
+        self.iw_ctxt.struct_type(&iw_field_tys, false).as_any_type_enum()
     }
 
     fn get_fn(&self, fn_spec: &mr_fns::FnSpecialization) -> Option<FunctionValue<'iw>> {

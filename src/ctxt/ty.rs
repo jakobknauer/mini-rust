@@ -15,6 +15,7 @@ pub struct GenVar(pub usize);
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
     Primitive(Primitive),
+    Tuple(Vec<Ty>),
     Struct {
         struct_: Struct,
         gen_args: Vec<Ty>,
