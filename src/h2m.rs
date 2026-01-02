@@ -168,6 +168,7 @@ impl<'a> H2M<'a> {
                 let op = self.lower_to_op(expr, expected)?;
                 self.builder.insert_use_val(op)
             }
+            Tuple(exprs) => self.build_tuple_val(exprs),
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
@@ -480,6 +481,27 @@ impl<'a> H2M<'a> {
             self.builder.insert_assign_stmt(field_place, field_value)?;
         }
         Ok(())
+    }
+
+    fn build_tuple_val(&mut self, exprs: &[hlr::Expr]) -> H2MResult<mlr::Val> {
+        let exprs = exprs
+            .iter()
+            .map(|expr| self.lower_to_val(expr, None))
+            .collect::<H2MResult<Vec<_>>>()?;
+
+        let expr_tys = exprs
+            .iter()
+            .map(|&expr| self.mlr().get_val_ty(expr))
+            .collect::<Vec<_>>();
+
+        let tuple_ty = self.tys().register_tuple_ty(expr_tys);
+
+        let tuple_place = self.builder.insert_alloc_with_ty(tuple_ty)?;
+        for (field_index, expr) in exprs.into_iter().enumerate() {
+            let field_place = self.builder.insert_field_access_place(tuple_place, field_index)?;
+            self.builder.insert_assign_stmt(field_place, expr)?;
+        }
+        self.builder.insert_use_place_val(tuple_place)
     }
 
     fn build_match_expr(

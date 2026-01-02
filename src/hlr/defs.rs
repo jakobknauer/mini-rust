@@ -102,6 +102,7 @@ pub enum Stmt {
 pub enum Expr {
     Lit(Lit),
     Ident(Ident),
+    Tuple(Vec<Expr>),
     BinaryOp {
         left: Box<Expr>,
         operator: BinaryOperator,

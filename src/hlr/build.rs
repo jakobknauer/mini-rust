@@ -739,9 +739,24 @@ impl<'a> HlrParser<'a> {
             }
             Token::LParen => {
                 self.position += 1;
-                let expr = self.parse_expr(true)?; // Allow top-level struct expression in parens
+
+                let mut inner_exprs = Vec::new();
+                let mut trailing_comma = true;
+                while self.current() != Some(&Token::RParen) {
+                    let inner_expr = self.parse_expr(true)?; // Allow top-level struct expression
+                    inner_exprs.push(inner_expr);
+                    if !self.advance_if(Token::Comma) {
+                        trailing_comma = false;
+                        break;
+                    }
+                }
                 self.expect_token(Token::RParen)?;
-                Ok(expr)
+
+                if inner_exprs.len() == 1 && !trailing_comma {
+                    Ok(inner_exprs.remove(0))
+                } else {
+                    Ok(Expr::Tuple(inner_exprs))
+                }
             }
             Token::LBrace => {
                 let block = self.parse_block()?;
@@ -967,13 +982,6 @@ impl<'a> HlrParser<'a> {
             }
             Token::LParen => {
                 self.position += 1;
-
-                // Tuple or parenthesized type
-                // () means empty tuple
-                // (T) means type T (no tuple!)
-                // (T,) means tuple with one element of type T
-                // (T, U) means tuple with two elements
-                // (T, U,) meanns tuple with two elements
 
                 let mut inner_tys = Vec::new();
                 let mut trailing_comma = true;
