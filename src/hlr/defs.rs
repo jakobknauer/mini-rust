@@ -135,7 +135,7 @@ pub enum Expr {
     Block(Block),
     FieldAccess {
         obj: Box<Expr>,
-        field: Ident,
+        field: FieldDescriptor,
     },
     Match {
         scrutinee: Box<Expr>,
@@ -157,6 +157,12 @@ pub enum Expr {
         return_ty: Option<TyAnnot>,
         body: Block,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FieldDescriptor {
+    Named(Ident),
+    Indexed(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

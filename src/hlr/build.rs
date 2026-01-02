@@ -649,30 +649,39 @@ impl<'a> HlrParser<'a> {
                 };
             } else if self.advance_if(Token::Dot) {
                 // field access or method call
-                let member = self.parse_ident()?;
-
-                if self.advance_if(Token::LParen) {
-                    // method call
-                    let mut arguments = Vec::new();
-                    while self.current() != Some(&Token::RParen) {
-                        let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
-                        arguments.push(argument);
-                        if !self.advance_if(Token::Comma) {
-                            break;
-                        }
-                    }
-                    self.expect_token(Token::RParen)?;
-                    acc = Expr::MethodCall {
-                        obj: Box::new(acc),
-                        method: member,
-                        arguments,
-                    };
-                } else {
-                    // field access
+                if let Some(Token::NumLiteral(n)) = self.current() {
+                    let index = n.parse().unwrap();
+                    self.position += 1;
+                    // indexed field access
                     acc = Expr::FieldAccess {
                         obj: Box::new(acc),
-                        field: member,
+                        field: FieldDescriptor::Indexed(index),
                     };
+                } else {
+                    let member = self.parse_ident()?;
+                    if self.advance_if(Token::LParen) {
+                        // method call
+                        let mut arguments = Vec::new();
+                        while self.current() != Some(&Token::RParen) {
+                            let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
+                            arguments.push(argument);
+                            if !self.advance_if(Token::Comma) {
+                                break;
+                            }
+                        }
+                        self.expect_token(Token::RParen)?;
+                        acc = Expr::MethodCall {
+                            obj: Box::new(acc),
+                            method: member,
+                            arguments,
+                        };
+                    } else {
+                        // named field access
+                        acc = Expr::FieldAccess {
+                            obj: Box::new(acc),
+                            field: FieldDescriptor::Named(member),
+                        };
+                    }
                 }
             } else {
                 break;
@@ -1224,10 +1233,10 @@ mod tests {
                             stmts: vec![],
                             return_expr: Some(Box::new(Expr::FieldAccess {
                                 obj: Box::new(Expr::Self_),
-                                field: Ident {
+                                field: FieldDescriptor::Named(Ident {
                                     ident: "b".to_string(),
                                     gen_args: vec![],
-                                },
+                                }),
                             })),
                         }),
                     }],
@@ -1436,10 +1445,10 @@ mod tests {
                         },
                         arguments: vec![make_ident("arg1"), make_ident("arg2")],
                     }),
-                    field: Ident {
+                    field: FieldDescriptor::Named(Ident {
                         ident: "field".to_string(),
                         gen_args: vec![],
-                    },
+                    }),
                 }),
                 arguments: vec![make_ident("arg3")],
             };
