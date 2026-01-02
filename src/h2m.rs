@@ -650,25 +650,29 @@ impl<'a> H2M<'a> {
             .ok_or_else(|| H2MError::UnresolvableSymbol { name: name.to_string() })
     }
 
-    fn lower_field_access_to_place(&mut self, obj: &hlr::Expr, field: &hlr::FieldDescriptor) -> H2MResult<mlr::Place> {
+    fn lower_field_access_to_place(
+        &mut self,
+        obj: &hlr::Expr,
+        field_desc: &hlr::FieldDescriptor,
+    ) -> H2MResult<mlr::Place> {
         // TODO allow general expressions as base (by lowering to val and then creating a
         // temporary place). This requires some attention to different expressions (temporaries vs.
         // places).
         let obj = self.lower_to_place(obj)?;
         let obj_ty = self.mlr().get_place_ty(obj);
 
-        match field {
+        let field_index = match field_desc {
             hlr::FieldDescriptor::Named(ident) => {
                 if !ident.gen_args.is_empty() {
                     return Err(H2MError::NotAPlace);
                 }
                 let field_name = ident.ident.as_str();
 
-                let field_index = self.typechecker().resolve_struct_field(obj_ty, field_name)?;
-                self.builder.insert_field_access_place(obj, field_index)
+                self.typechecker().resolve_struct_field(obj_ty, field_name)?
             }
-            hlr::FieldDescriptor::Indexed(_) => todo!(),
-        }
+            &hlr::FieldDescriptor::Indexed(index) => index,
+        };
+        self.builder.insert_field_access_place(obj, field_index)
     }
 
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {

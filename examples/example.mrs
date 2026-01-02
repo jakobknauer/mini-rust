@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    let f = |t: (i32, bool)| t.0;
+    let f = |t: (i32, bool)| t.1;
     5
 }
 

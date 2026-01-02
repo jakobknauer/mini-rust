@@ -59,6 +59,13 @@ pub enum TyError {
         ty: Ty,
         variant_name: String,
     },
+    NotAStructOrTuple {
+        ty: Ty,
+    },
+    InvalidTupleIndex {
+        ty: Ty,
+        index: usize,
+    },
     InvalidDereference {
         ty: Ty,
     },

@@ -285,7 +285,17 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_field_access_place(&mut self, base: Place, field_index: usize) -> TyResult<ty::Ty> {
         let base_ty = self.ctxt.mlr.get_place_ty(base);
-        let field_ty = self.ctxt.tys.get_struct_field_ty(base_ty, field_index)?;
+        let base_ty_def = self.ctxt.tys.get_ty_def(base_ty).unwrap();
+
+        let field_ty = match base_ty_def {
+            ty::TyDef::Struct { .. } => self.ctxt.tys.get_struct_field_ty(base_ty, field_index)?,
+            ty::TyDef::Tuple(tys) => *tys.get(field_index).ok_or(TyError::InvalidTupleIndex {
+                ty: base_ty,
+                index: field_index,
+            })?,
+            _ => return TyError::NotAStructOrTuple { ty: base_ty }.into(),
+        };
+
         Ok(field_ty)
     }
 
