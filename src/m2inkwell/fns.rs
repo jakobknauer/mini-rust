@@ -169,7 +169,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn build_unit_value(&mut self) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let mr_unit_ty = self.tys().get_primitive_ty(mr_ty::Primitive::Unit);
+        let mr_unit_ty = self.m2iw.mr_ctxt.tys.register_unit_ty();
         let iw_ty = self.m2iw.get_or_define_ty(mr_unit_ty).ok_or(M2InkwellFnError)?;
         let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| M2InkwellFnError)?;
         Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())

@@ -187,7 +187,7 @@ fn register_function(
             .tys
             .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
             .ok_or(())?,
-        None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
+        None => ctxt.tys.register_unit_ty(),
     };
 
     for constraint in &hlr_fn.constraints {
@@ -216,7 +216,7 @@ fn register_function(
                         .tys
                         .try_resolve_hlr_annot(return_ty, &all_gen_params, associated_ty, false)
                         .ok_or(())?,
-                    None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
+                    None => ctxt.tys.register_unit_ty(),
                 };
                 ctxt.tys.add_callable_constraint(subject, params, return_ty);
             }
@@ -285,7 +285,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                     .tys
                     .try_resolve_hlr_annot(ty, &gen_params, Some(self_type), false)
                     .ok_or(())?,
-                None => ctxt.tys.get_primitive_ty(ctxt::ty::Primitive::Unit),
+                None => ctxt.tys.register_unit_ty(),
             };
 
             let sig = fns::FnSig {

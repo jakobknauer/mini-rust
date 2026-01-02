@@ -38,11 +38,11 @@ impl<'a> h2m::H2M<'a> {
     ) -> H2MResult<fns::Fn> {
         use hlr::BinaryOperator::*;
 
-        let tys = &self.tys();
+        let tys = &mut self.tys();
 
         let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
         let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
-        let unit = tys.get_primitive_ty(ty::Primitive::Unit);
+        let unit = tys.register_unit_ty();
 
         let fn_name = op_match!(tys, operator, left, right,
             (Add,       i32, i32) => "add::<i32>",

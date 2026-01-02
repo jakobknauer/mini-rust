@@ -11,7 +11,6 @@ pub struct TyReg {
 
     i32_ty: Option<Ty>,
     bool_ty: Option<Ty>,
-    unit_ty: Option<Ty>,
     c_void_ty: Option<Ty>,
     c_char_ty: Option<Ty>,
 
@@ -92,7 +91,6 @@ impl TyReg {
     pub fn register_primitive_tys(&mut self) -> Result<(), ()> {
         self.i32_ty = Some(self.register_named_ty("i32", TyDef::Primitive(Primitive::Integer32))?);
         self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?);
-        self.unit_ty = Some(self.register_named_ty("()", TyDef::Primitive(Primitive::Unit))?);
         self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?);
         self.c_char_ty = Some(self.register_named_ty("c_char", TyDef::Primitive(Primitive::CChar))?);
         Ok(())
@@ -101,6 +99,10 @@ impl TyReg {
     pub fn register_tuple_ty(&mut self, tys: impl Into<Vec<Ty>>) -> Ty {
         let tuple_ty = TyDef::Tuple(tys.into());
         self.register_ty(tuple_ty)
+    }
+
+    pub fn register_unit_ty(&mut self) -> Ty {
+        self.register_tuple_ty([])
     }
 
     pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
@@ -298,7 +300,6 @@ impl TyReg {
             Ptr(ty_annot) => self
                 .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
                 .map(|inner| self.register_ptr_ty(inner)),
-            Unit => Some(self.get_primitive_ty(Primitive::Unit)),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys
                     .iter()
@@ -307,7 +308,7 @@ impl TyReg {
 
                 let return_ty = match return_ty {
                     Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars, self_ty, allow_wildcards),
-                    None => Some(self.get_primitive_ty(Primitive::Unit)),
+                    None => Some(self.register_unit_ty()),
                 }?;
 
                 Some(self.register_fn_ty(param_tys, return_ty, false))
@@ -357,7 +358,6 @@ impl TyReg {
             Primitive(primitive) => match primitive {
                 Integer32 => "i32".to_string(),
                 Boolean => "bool".to_string(),
-                Unit => "()".to_string(),
                 CVoid => "c_void".to_string(),
                 CChar => "c_char".to_string(),
             },
@@ -585,7 +585,6 @@ impl TyReg {
         match primitive {
             Primitive::Integer32 => self.i32_ty,
             Primitive::Boolean => self.bool_ty,
-            Primitive::Unit => self.unit_ty,
             Primitive::CVoid => self.c_void_ty,
             Primitive::CChar => self.c_char_ty,
         }
@@ -841,7 +840,7 @@ impl TyReg {
 
     pub fn get_tuple_field_tys(&self, ty: Ty) -> Result<&Vec<Ty>, ()> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Tuple(ref tys) = ty_def else {
+        let TyDef::Tuple(tys) = ty_def else {
             return Err(());
         };
         Ok(tys)

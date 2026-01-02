@@ -45,7 +45,6 @@ pub enum TyDef {
 pub enum Primitive {
     Integer32,
     Boolean,
-    Unit,
     CVoid,
     CChar,
 }

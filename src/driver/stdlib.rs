@@ -34,7 +34,7 @@ macro_rules! register_fn {
 pub fn register_fns(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
     let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
     let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
-    let unit = tys.get_primitive_ty(ty::Primitive::Unit);
+    let unit = tys.register_unit_ty();
 
     register_fn!(fns, "add::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);

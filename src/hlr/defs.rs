@@ -223,7 +223,6 @@ pub enum TyAnnot {
     Generic(Ident),
     Ref(Box<TyAnnot>),
     Ptr(Box<TyAnnot>),
-    Unit,
     Fn {
         param_tys: Vec<TyAnnot>,
         return_ty: Option<Box<TyAnnot>>,

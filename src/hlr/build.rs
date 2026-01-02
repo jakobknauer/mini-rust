@@ -978,9 +978,7 @@ impl<'a> HlrParser<'a> {
                 }
                 self.expect_token(Token::RParen)?;
 
-                if inner_tys.is_empty() {
-                    Ok(TyAnnot::Unit)
-                } else if inner_tys.len() == 1 && !trailing_comma {
+                if inner_tys.len() == 1 && !trailing_comma {
                     Ok(inner_tys.remove(0))
                 } else {
                     Ok(TyAnnot::Tuple(inner_tys))

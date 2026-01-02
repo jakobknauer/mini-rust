@@ -106,7 +106,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             Primitive(ref primitive_type) => match primitive_type {
                 Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
-                Unit | CVoid => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
+                CVoid => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 CChar => self.iw_ctxt.i8_type().as_any_type_enum(),
             },
             Struct { .. } => self.define_struct(ty),
