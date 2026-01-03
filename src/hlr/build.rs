@@ -345,14 +345,18 @@ impl<'a> HlrParser<'a> {
         let gen_params = self.parse_gen_params()?;
         let ty = self.parse_ty_annot()?;
 
-        let (trait_name, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
+        let (trait_name, trait_args, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
             let ty2 = self.parse_ty_annot()?;
-            let TyAnnot::Named(trait_name) = &ty else {
-                return Err(ParserErr::ExpectedTraitName);
-            };
-            (Some(trait_name.clone()), ty2)
+            match ty {
+                TyAnnot::Named(trait_name) => (Some(trait_name), vec![], ty2),
+                TyAnnot::Generic(Ident {
+                    ident: trait_name,
+                    gen_args: trait_args,
+                }) => (Some(trait_name), trait_args, ty2),
+                _ => return Err(ParserErr::ExpectedTraitName),
+            }
         } else {
-            (None, ty)
+            (None, vec![], ty)
         };
 
         self.expect_token(Token::LBrace)?;
@@ -366,6 +370,7 @@ impl<'a> HlrParser<'a> {
         Ok(Impl {
             gen_params,
             trait_name,
+            trait_args,
             ty,
             methods,
         })
@@ -1088,6 +1093,7 @@ mod tests {
                     gen_params: vec![],
                     ty: TyAnnot::Named("Empty".to_string()),
                     trait_name: None,
+                    trait_args: vec![],
                     methods: vec![],
                 }],
                 traits: vec![Trait {
@@ -1217,6 +1223,7 @@ mod tests {
                     gen_params: vec![],
                     ty: TyAnnot::Named("A".to_string()),
                     trait_name: None,
+                    trait_args: vec![],
                     methods: vec![Fn {
                         name: "get_b".to_string(),
                         gen_params: vec![],

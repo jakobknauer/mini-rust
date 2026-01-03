@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::ctxt::{
     fns::Fn,
     impls::{Impl, ImplDef},
-    traits::Trait,
+    traits::{Trait, TraitInstance},
     ty::{GenVar, Ty},
 };
 
@@ -13,14 +13,14 @@ pub struct ImplReg {
 }
 
 impl ImplReg {
-    pub fn register_impl(&mut self, ty: Ty, gen_params: Vec<GenVar>, trait_: Option<Trait>) -> Impl {
+    pub fn register_impl(&mut self, ty: Ty, gen_params: Vec<GenVar>, trait_inst: Option<TraitInstance>) -> Impl {
         let impl_ = Impl(self.impls.len());
         let impl_def = ImplDef {
             gen_params,
             ty,
             methods: Vec::new(),
             methods_by_name: HashMap::new(),
-            trait_,
+            trait_inst,
         };
         self.impls.push(impl_def);
         impl_
@@ -37,20 +37,24 @@ impl ImplReg {
     }
 
     pub fn get_impls_for_trait(&self, trait_: Trait) -> impl Iterator<Item = Impl> {
-        self.get_all_impls()
-            .filter(move |impl_| self.get_impl_def(*impl_).trait_ == Some(trait_))
+        self.get_all_impls().filter(move |impl_| {
+            self.get_impl_def(*impl_)
+                .trait_inst
+                .as_ref()
+                .is_some_and(|trait_inst| trait_inst.trait_ == trait_)
+        })
     }
 
     pub fn get_inherent_impls(&self) -> impl Iterator<Item = Impl> {
         self.get_all_impls()
-            .filter(|impl_| self.get_impl_def(*impl_).trait_.is_none())
+            .filter(|impl_| self.get_impl_def(*impl_).trait_inst.is_none())
     }
 
     pub fn get_impl_def(&self, impl_: Impl) -> &ImplDef {
         self.impls.get(impl_.0).unwrap()
     }
 
-    pub fn get_impl_trait(&self, impl_: Impl) -> Option<Trait> {
-        self.get_impl_def(impl_).trait_
+    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<&TraitInstance> {
+        self.get_impl_def(impl_).trait_inst.as_ref()
     }
 }

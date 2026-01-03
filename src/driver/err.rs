@@ -266,7 +266,7 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
             ctxt.tys.get_string_rep(expected),
             ctxt.tys.get_string_rep(actual)
         ),
-        GenParamCountMismatch {
+        MthdGenParamCountMismatch {
             method,
             expected,
             actual,
@@ -282,11 +282,15 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
             "Receiver type mismatch for method '{}': expected '{}', got '{}'",
             method, expected, actual
         ),
+        ImplGenParamCountMismatch { actual, expected } => format!(
+            "Generic argument count mismatch for implementation: expected {}, got {}",
+            expected, actual
+        ),
     };
 
     format!(
         "Error checking implementation of trait '{}' for type '{}': {}",
-        ctxt.traits.get_trait_name(err.trait_),
+        ctxt.traits.get_trait_name(err.trait_inst.trait_),
         ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).ty),
         desc
     )

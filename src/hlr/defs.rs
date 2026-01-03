@@ -70,6 +70,7 @@ pub struct EnumVariant {
 pub struct Impl {
     pub gen_params: Vec<String>,
     pub trait_name: Option<String>,
+    pub trait_args: Vec<TyAnnot>,
     pub ty: TyAnnot,
     pub methods: Vec<Fn>,
 }

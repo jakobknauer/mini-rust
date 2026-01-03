@@ -111,3 +111,15 @@ impl Eq for bool {
 trait Into<T> {
     fn into(self) -> T;
 }
+
+impl Into<bool> for i32 {
+    fn into(self) -> bool {
+        self != 0
+    }
+}
+
+impl<S> Into<S> for S {
+    fn into(self) -> S {
+        self
+    }
+}

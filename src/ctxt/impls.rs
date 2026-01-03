@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::Fn,
-    traits::Trait,
+    traits::TraitInstance,
     ty::{GenVar, Ty},
 };
 
@@ -15,5 +15,5 @@ pub struct ImplDef {
     pub ty: Ty,
     pub methods: Vec<Fn>,
     pub methods_by_name: HashMap<String, Fn>,
-    pub trait_: Option<Trait>,
+    pub trait_inst: Option<TraitInstance>,
 }
