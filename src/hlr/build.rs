@@ -134,11 +134,7 @@ impl<'a> HlrParser<'a> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 
-        let gen_params = if self.current() == Some(&Token::Smaller) {
-            self.parse_fn_generic_params()?
-        } else {
-            Vec::new()
-        };
+        let gen_params = self.parse_gen_params()?;
 
         self.expect_token(Token::LParen)?;
         let (params, var_args) = self.parse_fn_params(allow_receiver_param)?;
@@ -168,22 +164,6 @@ impl<'a> HlrParser<'a> {
             constraints,
             body,
         })
-    }
-
-    fn parse_fn_generic_params(&mut self) -> Result<Vec<String>, ParserErr> {
-        self.expect_token(Token::Smaller)?;
-
-        let mut params = Vec::new();
-        while let Some(Token::Identifier(_)) = self.current() {
-            let arg = self.expect_identifier()?;
-            params.push(arg);
-
-            if !self.advance_if(Token::Comma) {
-                break;
-            }
-        }
-        self.expect_token(Token::Greater)?;
-        Ok(params)
     }
 
     fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param>, bool), ParserErr> {
@@ -394,8 +374,10 @@ impl<'a> HlrParser<'a> {
     fn parse_trait(&mut self) -> Result<Trait, ParserErr> {
         self.expect_keyword(Keyword::Trait)?;
         let name = self.expect_identifier()?;
-        self.expect_token(Token::LBrace)?;
 
+        let gen_params = self.parse_gen_params()?;
+
+        self.expect_token(Token::LBrace)?;
         let mut methods = Vec::new();
         while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
             let method = self.parse_function(true)?;
@@ -404,9 +386,13 @@ impl<'a> HlrParser<'a> {
             }
             methods.push(method);
         }
-
         self.expect_token(Token::RBrace)?;
-        Ok(Trait { name, methods })
+
+        Ok(Trait {
+            name,
+            gen_params,
+            methods,
+        })
     }
 
     fn parse_gen_params(&mut self) -> Result<Vec<String>, ParserErr> {
@@ -1106,6 +1092,7 @@ mod tests {
                 }],
                 traits: vec![Trait {
                     name: "Empty".to_string(),
+                    gen_params: vec![],
                     methods: vec![],
                 }],
             };

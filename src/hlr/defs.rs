@@ -77,6 +77,7 @@ pub struct Impl {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Trait {
     pub name: String,
+    pub gen_params: Vec<String>,
     pub methods: Vec<Fn>,
 }
 

@@ -263,11 +263,17 @@ fn build_fn_param(
 
 fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     for hlr_trait in &hlr.traits {
-        let trait_ = ctxt.traits.register_trait(&hlr_trait.name);
+        let trait_gen_params: Vec<_> = hlr_trait
+            .gen_params
+            .iter()
+            .map(|gp| ctxt.tys.register_gen_var(gp))
+            .collect();
+
+        let trait_ = ctxt.traits.register_trait(&hlr_trait.name, trait_gen_params.clone());
         let self_type = ctxt.tys.register_trait_self_type(trait_);
 
         for method in &hlr_trait.methods {
-            let gen_params: Vec<_> = method
+            let method_gen_params: Vec<_> = method
                 .gen_params
                 .iter()
                 .map(|gp| ctxt.tys.register_gen_var(gp))
@@ -277,13 +283,13 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 .params
                 .iter()
                 .enumerate()
-                .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &gen_params, Some(self_type), idx == 0))
+                .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &method_gen_params, Some(self_type), idx == 0))
                 .collect::<Result<_, _>>()?;
 
             let return_ty = match &method.return_ty {
                 Some(ty) => ctxt
                     .tys
-                    .try_resolve_hlr_annot(ty, &gen_params, Some(self_type), false)
+                    .try_resolve_hlr_annot(ty, &method_gen_params, Some(self_type), false)
                     .ok_or(())?,
                 None => ctxt.tys.register_unit_ty(),
             };
@@ -292,8 +298,8 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 name: method.name.clone(),
                 associated_ty: None,
                 associated_trait: Some(trait_),
-                gen_params,
-                env_gen_params: Vec::new(),
+                gen_params: method_gen_params,
+                env_gen_params: trait_gen_params.clone(),
                 params,
                 var_args: false,
                 return_ty,

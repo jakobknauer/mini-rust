@@ -107,3 +107,7 @@ impl Eq for bool {
         *self == *other
     }
 }
+
+trait Into<T> {
+    fn into(self) -> i32; // TODO: should be T, but not supported yet
+}

@@ -1,6 +1,7 @@
 use crate::ctxt::{
     fns::FnSig,
     traits::{Trait, TraitDef},
+    ty::GenVar,
 };
 
 #[derive(Default)]
@@ -9,10 +10,11 @@ pub struct TraitReg {
 }
 
 impl TraitReg {
-    pub fn register_trait(&mut self, name: &str) -> Trait {
+    pub fn register_trait(&mut self, name: &str, gen_params: Vec<GenVar>) -> Trait {
         let trait_ = Trait(self.traits.len());
         self.traits.push(TraitDef {
             name: name.to_string(),
+            gen_params,
             methods: Vec::new(),
         });
         trait_
