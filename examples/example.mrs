@@ -109,5 +109,5 @@ impl Eq for bool {
 }
 
 trait Into<T> {
-    fn into(self) -> i32; // TODO: should be T, but not supported yet
+    fn into(self) -> T;
 }

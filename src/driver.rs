@@ -279,17 +279,19 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 .map(|gp| ctxt.tys.register_gen_var(gp))
                 .collect();
 
+            let all_gen_params: Vec<_> = method_gen_params.iter().chain(&trait_gen_params).cloned().collect();
+
             let params = method
                 .params
                 .iter()
                 .enumerate()
-                .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &method_gen_params, Some(self_type), idx == 0))
+                .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &all_gen_params, Some(self_type), idx == 0))
                 .collect::<Result<_, _>>()?;
 
             let return_ty = match &method.return_ty {
                 Some(ty) => ctxt
                     .tys
-                    .try_resolve_hlr_annot(ty, &method_gen_params, Some(self_type), false)
+                    .try_resolve_hlr_annot(ty, &all_gen_params, Some(self_type), false)
                     .ok_or(())?,
                 None => ctxt.tys.register_unit_ty(),
             };
