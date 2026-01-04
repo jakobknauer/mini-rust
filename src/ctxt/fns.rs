@@ -1,6 +1,6 @@
 use crate::ctxt::{
     mlr,
-    traits::Trait,
+    traits::{Trait, TraitInstance},
     ty::{GenVar, Ty},
 };
 
@@ -58,7 +58,7 @@ pub struct FnSpecialization {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TraitMethod {
-    pub trait_: Trait,
+    pub trait_instance: TraitInstance,
     pub method_idx: usize,
     pub impl_ty: Ty,
     pub gen_args: Vec<Ty>,

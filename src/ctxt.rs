@@ -123,28 +123,45 @@ impl Ctxt {
         substitutions: &HashMap<ty::GenVar, ty::Ty>,
     ) -> fns::FnSpecialization {
         let &fns::TraitMethod {
-            trait_,
+            ref trait_instance,
             method_idx,
             impl_ty,
             ref gen_args,
         } = trait_method;
-
         let impl_ty = self.tys.substitute_gen_vars(impl_ty, substitutions);
 
-        let (impl_def, impl_instantiation) = self
-            .impls
-            .get_impls_for_trait(trait_)
-            .map(|impl_| self.impls.get_impl_def(impl_))
-            .filter_map(|impl_def| {
-                self.tys
-                    .try_find_instantiation(impl_ty, impl_def.ty, &impl_def.gen_params)
-                    .ok()
-                    .map(|inst| (impl_def, inst))
-            })
-            .next()
-            .unwrap();
+        // Find all impls for the trait + base ty, ignoring gen args for the trait
+        let impls_for_trait: Vec<_> = self.impls.get_impls_for_trait(trait_instance.trait_).collect();
+        let matching_impl_insts: Vec<_> = impls_for_trait
+            .into_iter()
+            .filter_map(|impl_| {
+                let impl_def: impls::ImplDef = self.impls.get_impl_def(impl_).clone();
 
-        let trait_method_name = self.traits.get_trait_method_name(trait_, method_idx);
+                let inst = self
+                    .tys
+                    .try_find_instantiation(impl_ty, impl_def.ty, &impl_def.gen_params)
+                    .ok()?;
+
+                let substitutions: HashMap<ty::GenVar, ty::Ty> =
+                    impl_def.gen_params.iter().cloned().zip(inst.iter().cloned()).collect();
+
+                let instantiated_impl_trait_instance =
+                    self.subst_trait_instance(impl_def.trait_inst.as_ref().unwrap(), &substitutions);
+
+                let matches = instantiated_impl_trait_instance
+                    .gen_args
+                    .iter()
+                    .zip(trait_instance.gen_args.iter())
+                    .all(|(gen_arg1, gen_arg2)| self.tys.tys_eq(*gen_arg1, *gen_arg2));
+
+                if matches { Some((impl_def, inst)) } else { None }
+            })
+            .collect();
+
+        assert_eq!(matching_impl_insts.len(), 1);
+        let (impl_def, impl_instantiation) = &matching_impl_insts[0];
+
+        let trait_method_name = self.traits.get_trait_method_name(trait_instance.trait_, method_idx);
 
         let new_gen_args = gen_args
             .iter()
@@ -154,7 +171,23 @@ impl Ctxt {
         fns::FnSpecialization {
             fn_: impl_def.methods_by_name[trait_method_name],
             gen_args: new_gen_args,
-            env_gen_args: impl_instantiation,
+            env_gen_args: impl_instantiation.clone(),
+        }
+    }
+
+    fn subst_trait_instance(
+        &mut self,
+        trait_instance: &traits::TraitInstance,
+        substitutions: &HashMap<ty::GenVar, ty::Ty>,
+    ) -> traits::TraitInstance {
+        let new_gen_args = trait_instance
+            .gen_args
+            .iter()
+            .map(|&ty| self.tys.substitute_gen_vars(ty, substitutions))
+            .collect();
+        traits::TraitInstance {
+            trait_: trait_instance.trait_,
+            gen_args: new_gen_args,
         }
     }
 

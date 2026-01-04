@@ -1,6 +1,7 @@
 fn main() -> i32 {
-    let f = |t: (i32, bool)| t.0;
-    f((17, true))
+    let b: bool = 5.into();
+    let x: i32 = 5.into();
+    0
 }
 
 fn malloc(size: i32) -> *c_void;

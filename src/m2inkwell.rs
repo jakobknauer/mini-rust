@@ -117,7 +117,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             Alias(_) => unreachable!("type_ should be canonicalized before this point"),
             GenVar(gen_var) => unreachable!(
                 "generic type variable '{}' should be substituted before this point",
-                gen_var.0
+                self.mr_ctxt.tys.get_gen_var_name(gen_var)
             ),
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
         };

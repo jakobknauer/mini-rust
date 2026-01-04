@@ -258,10 +258,34 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
                 TraitMethod(ref trait_method) => {
                     let base_ty_name = self.ctxt.tys.get_string_rep(trait_method.impl_ty);
-                    let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_);
-                    let method_name =
-                        &self.ctxt.traits.get_trait_def(trait_method.trait_).methods[trait_method.method_idx].name;
-                    write!(self.writer, "({} as {})::{}", base_ty_name, trait_name, method_name)
+                    let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_instance.trait_);
+
+                    let trait_gen_args = if trait_method.trait_instance.gen_args.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "<{}>",
+                            trait_method
+                                .trait_instance
+                                .gen_args
+                                .iter()
+                                .map(|ty| self.ctxt.tys.get_string_rep(*ty))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
+
+                    let method_name = &self
+                        .ctxt
+                        .traits
+                        .get_trait_def(trait_method.trait_instance.trait_)
+                        .methods[trait_method.method_idx]
+                        .name;
+                    write!(
+                        self.writer,
+                        "({} as {}{})::{}",
+                        base_ty_name, trait_name, trait_gen_args, method_name
+                    )
                 }
                 Const(ref constant) => match *constant {
                     Int(i) => write!(self.writer, "const {}", i),

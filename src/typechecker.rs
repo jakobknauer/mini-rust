@@ -12,8 +12,14 @@ pub struct Typechecker<'a> {
 }
 
 pub enum MethodResolution {
-    Inherent { fn_: fns::Fn, env_gen_args: Vec<ty::Ty> },
-    Trait { trait_: traits::Trait, method_idx: usize },
+    Inherent {
+        fn_: fns::Fn,
+        env_gen_args: Vec<ty::Ty>,
+    },
+    Trait {
+        trait_instance: traits::TraitInstance,
+        method_idx: usize,
+    },
 }
 
 impl<'a> Typechecker<'a> {
@@ -80,7 +86,8 @@ impl<'a> Typechecker<'a> {
         match *stmt_def {
             Assign { place, value } => self.check_assign_stmt(place, value)?,
             Return { value } => self.check_return_stmt(value)?,
-            Alloc { .. } | Block(..) | If(_) | Loop { .. } | Break => (),
+            If(if_) => self.check_if_stmt(if_)?,
+            Alloc { .. } | Block(..) | Loop { .. } | Break => (),
         }
 
         Ok(())
@@ -245,11 +252,13 @@ impl<'a> Typechecker<'a> {
         let signature = self
             .ctxt
             .traits
-            .get_trait_method_sig(trait_method.trait_, trait_method.method_idx);
+            .get_trait_method_sig(trait_method.trait_instance.trait_, trait_method.method_idx);
+
+        let trait_def = self.ctxt.traits.get_trait_def(trait_method.trait_instance.trait_);
 
         if signature.gen_params.len() != trait_method.gen_args.len() {
             return TyError::TraitMethodGenericArgCountMismatch {
-                trait_: trait_method.trait_,
+                trait_: trait_method.trait_instance.trait_,
                 method_index: trait_method.method_idx,
                 impl_ty: trait_method.impl_ty,
                 expected: signature.gen_params.len(),
@@ -264,12 +273,18 @@ impl<'a> Typechecker<'a> {
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
+        let trait_gen_var_substitutions = trait_def
+            .gen_params
+            .iter()
+            .cloned()
+            .zip(trait_method.trait_instance.gen_args.iter().cloned());
         let gen_var_substitutions = signature
             .gen_params
             .iter()
             .cloned()
-            .zip(trait_method.gen_args.iter().cloned())
-            .collect();
+            .zip(trait_method.gen_args.iter().cloned());
+        let gen_var_substitutions = trait_gen_var_substitutions.chain(gen_var_substitutions).collect();
+
         let substituted_fn_ty = self.ctxt.tys.substitute_self_ty(fn_ty, trait_method.impl_ty);
         let substituted_fn_ty = self
             .ctxt
@@ -379,6 +394,16 @@ impl<'a> Typechecker<'a> {
             })
     }
 
+    fn check_if_stmt(&mut self, if_: If) -> TyResult<()> {
+        let condition_ty = self.ctxt.mlr.get_op_ty(if_.cond);
+        self.ctxt
+            .tys
+            .unify(condition_ty, self.ctxt.tys.get_primitive_ty(ty::Primitive::Boolean))
+            .map_err(|_| TyError::IfConditionNotBoolean { actual: condition_ty })?;
+
+        Ok(())
+    }
+
     pub fn resolve_struct_field(&mut self, struct_ty: ty::Ty, field_name: &str) -> TyResult<usize> {
         let field_index = self.ctxt.tys.get_struct_field_index_by_name(struct_ty, field_name)?;
         Ok(field_index)
@@ -479,7 +504,7 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn resolve_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<MethodResolution> {
+    pub fn resolve_method(&mut self, base_ty: ty::Ty, method_name: &str) -> TyResult<MethodResolution> {
         if let Some(inherent) = self.resolve_inherent_method(base_ty, method_name)? {
             Ok(inherent)
         } else if let Some(trait_method) = self.resolve_trait_method(base_ty, method_name)? {
@@ -524,7 +549,7 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn resolve_trait_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
+    fn resolve_trait_method(&mut self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
         let candidate_trait_methods: Vec<_> = self
             .ctxt
             .traits
@@ -534,10 +559,20 @@ impl<'a> Typechecker<'a> {
 
         match &candidate_trait_methods[..] {
             [] => Ok(None),
-            [(trait_, method_idx)] => Ok(Some(MethodResolution::Trait {
-                trait_: *trait_,
-                method_idx: *method_idx,
-            })),
+            [(trait_, method_idx)] => {
+                let trait_def = self.ctxt.traits.get_trait_def(*trait_);
+                let n_gen_params = trait_def.gen_params.len();
+                let gen_args = (0..n_gen_params).map(|_| self.ctxt.tys.new_undefined_ty()).collect();
+
+                let trait_instance = traits::TraitInstance {
+                    trait_: *trait_,
+                    gen_args,
+                };
+                Ok(Some(MethodResolution::Trait {
+                    trait_instance,
+                    method_idx: *method_idx,
+                }))
+            }
             [_, _, ..] => TyError::AmbiguousMethod {
                 base_ty,
                 method_name: method_name.to_string(),
