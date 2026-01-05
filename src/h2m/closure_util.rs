@@ -98,7 +98,7 @@ impl<'a> super::H2M<'a> {
         fns::FnSig {
             name,
             associated_ty: None,
-            associated_trait: None,
+            associated_trait_inst: None,
             gen_params: Vec::new(),
             env_gen_params,
             params,

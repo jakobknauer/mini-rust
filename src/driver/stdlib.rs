@@ -13,7 +13,7 @@ macro_rules! register_fn {
             fns::FnSig {
                 name: $name.to_string(),
                 associated_ty: None,
-                associated_trait: None,
+                associated_trait_inst: None,
                 gen_params: vec![],
                 env_gen_params: vec![],
                 params: vec![
@@ -67,7 +67,7 @@ fn register_size_of(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
         fns::FnSig {
             name: "size_of".to_string(),
             associated_ty: None,
-            associated_trait: None,
+            associated_trait_inst: None,
             gen_params: vec![tys.register_gen_var("T")],
             env_gen_params: vec![],
             params: vec![],

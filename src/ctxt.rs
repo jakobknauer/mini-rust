@@ -33,8 +33,8 @@ impl Ctxt {
 
         let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
             let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
-            if let Some(assoc_trait) = signature.associated_trait {
-                let assoc_trait_name = self.traits.get_trait_name(assoc_trait);
+            if let Some(assoc_trait_inst) = &signature.associated_trait_inst {
+                let assoc_trait_name = self.traits.get_trait_name(assoc_trait_inst.trait_);
                 format!("({} as {})::", assoc_ty_name, assoc_trait_name)
             } else {
                 format!("{}::", assoc_ty_name)
@@ -108,7 +108,7 @@ impl Ctxt {
         fns::FnSig {
             name: signature.name.clone(),
             associated_ty: signature.associated_ty,
-            associated_trait: signature.associated_trait,
+            associated_trait_inst: signature.associated_trait_inst.clone(),
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
             params: specialized_params,

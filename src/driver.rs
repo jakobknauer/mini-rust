@@ -169,7 +169,7 @@ fn register_function(
     hlr_fn: &hlr::Fn,
     ctxt: &mut ctxt::Ctxt,
     associated_ty: Option<ty::Ty>,
-    associated_trait: Option<traits::Trait>,
+    associated_trait_inst: Option<traits::TraitInstance>,
     env_gen_params: Vec<ty::GenVar>,
 ) -> Result<fns::Fn, ()> {
     let gen_params: Vec<_> = hlr_fn
@@ -230,7 +230,7 @@ fn register_function(
     let signature = fns::FnSig {
         name: hlr_fn.name.clone(),
         associated_ty,
-        associated_trait,
+        associated_trait_inst,
         gen_params,
         env_gen_params,
         params,
@@ -300,10 +300,18 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 None => ctxt.tys.register_unit_ty(),
             };
 
+            let trait_instance = traits::TraitInstance {
+                trait_,
+                gen_args: method_gen_params
+                    .iter()
+                    .map(|&gp| ctxt.tys.register_gen_var_ty(gp))
+                    .collect(),
+            };
+
             let sig = fns::FnSig {
                 name: method.name.clone(),
                 associated_ty: None,
-                associated_trait: Some(trait_),
+                associated_trait_inst: Some(trait_instance),
                 gen_params: method_gen_params,
                 env_gen_params: trait_gen_params.clone(),
                 params,
@@ -348,13 +356,12 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
         } else {
             None
         };
-        let trait_ = trait_inst.as_ref().map(|ti| ti.trait_);
 
-        let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst);
+        let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst.clone());
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for method in &hlr_impl.methods {
-            let fn_ = register_function(method, ctxt, Some(ty), trait_, gen_params.clone())?;
+            let fn_ = register_function(method, ctxt, Some(ty), trait_inst.clone(), gen_params.clone())?;
             ctxt.impls.register_method(impl_, fn_, &method.name);
         }
     }
