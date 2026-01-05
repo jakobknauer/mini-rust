@@ -18,7 +18,7 @@ pub struct M2InkwellFn<'a, 'iw, 'mr> {
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
     entry_block: Option<BasicBlock<'iw>>,
     after_loop_blocks: VecDeque<BasicBlock<'iw>>,
-    substitutions: HashMap<mr_ty::GenVar, mr_ty::Ty>,
+    subst: mr_ty::GenVarSubst,
 }
 
 #[derive(Debug)]
@@ -42,13 +42,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let locs = HashMap::new();
         let iw_fn = m2iw.get_fn(&specialization).unwrap();
         let after_loop_blocks = VecDeque::new();
-        let substitutions = m2iw
-            .mr_ctxt
-            .fns
-            .get_substitutions_for_specialization(&specialization)
-            .iter()
-            .map(|(&k, &v)| (k, v))
-            .collect();
+        let subst = m2iw.mr_ctxt.fns.get_subst_for_fn_spec(&specialization);
 
         Some(Self {
             m2iw,
@@ -58,7 +52,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             locs,
             entry_block: None,
             after_loop_blocks,
-            substitutions,
+            subst,
         })
     }
 
@@ -392,7 +386,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let fn_spec = self
             .m2iw
             .mr_ctxt
-            .specialize_trait_method_call(&trait_method, &self.substitutions);
+            .specialize_trait_method_call(&trait_method, &self.subst);
         self.build_global_function(&fn_spec)
     }
 
@@ -498,6 +492,6 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
     }
 
     fn substitute(&mut self, ty: mr_ty::Ty) -> mr_ty::Ty {
-        self.m2iw.mr_ctxt.tys.substitute_gen_vars(ty, &self.substitutions)
+        self.m2iw.mr_ctxt.tys.substitute_gen_vars(ty, &self.subst)
     }
 }

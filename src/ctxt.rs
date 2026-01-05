@@ -9,14 +9,14 @@ mod impl_reg;
 mod trait_reg;
 mod ty_reg;
 
-use std::collections::HashMap;
-
 pub use fn_reg::FnReg;
 pub use impl_reg::ImplReg;
 pub use trait_reg::TraitReg;
 pub use ty_reg::*;
 
 use mlr::Mlr;
+
+use crate::ctxt::ty::GenVarSubst;
 
 #[derive(Default)]
 pub struct Ctxt {
@@ -109,18 +109,18 @@ impl Ctxt {
 
     pub fn get_specialized_fn_sig(&mut self, fn_spec: &fns::FnSpecialization) -> fns::FnSig {
         let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
-        let substitutions = self.fns.get_substitutions_for_specialization(fn_spec);
+        let subst = self.fns.get_subst_for_fn_spec(fn_spec);
 
         let specialized_params = signature
             .params
             .iter()
             .map(|param| fns::FnParam {
                 kind: param.kind.clone(),
-                ty: self.tys.substitute_gen_vars(param.ty, &substitutions),
+                ty: self.tys.substitute_gen_vars(param.ty, &subst),
             })
             .collect();
 
-        let specialized_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &substitutions);
+        let specialized_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &subst);
 
         fns::FnSig {
             name: signature.name.clone(),
@@ -137,7 +137,7 @@ impl Ctxt {
     pub fn specialize_trait_method_call(
         &mut self,
         trait_method: &fns::TraitMethod,
-        substitutions: &HashMap<ty::GenVar, ty::Ty>,
+        subst: &GenVarSubst,
     ) -> fns::FnSpecialization {
         let &fns::TraitMethod {
             ref trait_instance,
@@ -145,7 +145,7 @@ impl Ctxt {
             impl_ty,
             ref gen_args,
         } = trait_method;
-        let impl_ty = self.tys.substitute_gen_vars(impl_ty, substitutions);
+        let impl_ty = self.tys.substitute_gen_vars(impl_ty, subst);
 
         let impls_for_trait: Vec<_> = self.impls.get_impls_for_trait(trait_instance.trait_).collect();
         let matching_impl_insts: Vec<_> = impls_for_trait
@@ -158,11 +158,10 @@ impl Ctxt {
                     .try_find_instantiation(impl_ty, impl_def.ty, &impl_def.gen_params)
                     .ok()?;
 
-                let substitutions: HashMap<ty::GenVar, ty::Ty> =
-                    impl_def.gen_params.iter().cloned().zip(inst.iter().cloned()).collect();
+                let subst = GenVarSubst::new(&impl_def.gen_params, &inst).unwrap();
 
                 let instantiated_impl_trait_instance =
-                    self.subst_trait_instance(impl_def.trait_inst.as_ref().unwrap(), &substitutions);
+                    self.subst_trait_instance(impl_def.trait_inst.as_ref().unwrap(), &subst);
 
                 let matches = instantiated_impl_trait_instance
                     .gen_args
@@ -181,7 +180,7 @@ impl Ctxt {
 
         let new_gen_args = gen_args
             .iter()
-            .map(|&ty| self.tys.substitute_gen_vars(ty, substitutions))
+            .map(|&ty| self.tys.substitute_gen_vars(ty, subst))
             .collect();
 
         fns::FnSpecialization {
@@ -191,15 +190,11 @@ impl Ctxt {
         }
     }
 
-    fn subst_trait_instance(
-        &mut self,
-        trait_instance: &traits::TraitInst,
-        substitutions: &HashMap<ty::GenVar, ty::Ty>,
-    ) -> traits::TraitInst {
+    fn subst_trait_instance(&mut self, trait_instance: &traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
         let new_gen_args = trait_instance
             .gen_args
             .iter()
-            .map(|&ty| self.tys.substitute_gen_vars(ty, substitutions))
+            .map(|&ty| self.tys.substitute_gen_vars(ty, subst))
             .collect();
         traits::TraitInst {
             trait_: trait_instance.trait_,

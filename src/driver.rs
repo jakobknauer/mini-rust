@@ -432,7 +432,7 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
             continue;
         }
 
-        let subst = ctxt.fns.get_substitutions_for_specialization(&current);
+        let subst = ctxt.fns.get_subst_for_fn_spec(&current);
 
         let fn_specs = ctxt.fns.get_called_specializations(current.fn_).iter().map(|fn_spec| {
             let new_gen_args = fn_spec

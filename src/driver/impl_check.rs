@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::ctxt::{
     self,
@@ -81,12 +81,7 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
     let impl_def = ctxt.impls.get_impl_def(impl_);
 
-    let trait_gen_params_subst: HashMap<_, _> = trait_def
-        .gen_params
-        .iter()
-        .cloned()
-        .zip(trait_inst.gen_args.iter().cloned())
-        .collect();
+    let trait_gen_params_subst = ctxt::ty::GenVarSubst::new(&trait_def.gen_params, &trait_inst.gen_args).unwrap();
 
     for &method in &impl_def.methods {
         let impl_method_sig = ctxt.fns.get_sig(method).unwrap();
@@ -144,7 +139,7 @@ fn check_method_sig(
     impl_method_sig: &ctxt::fns::FnSig,
     trait_method_sig: &ctxt::fns::FnSig,
     impl_ty: ctxt::ty::Ty,
-    trait_gen_params_subst: &HashMap<ctxt::ty::GenVar, ctxt::ty::Ty>,
+    trait_gen_params_subst: &ctxt::ty::GenVarSubst,
 ) -> Result<(), ImplCheckErrorKind> {
     // Compare method gen params
     if impl_method_sig.gen_params.len() != trait_method_sig.gen_params.len() {
@@ -154,17 +149,12 @@ fn check_method_sig(
             actual: impl_method_sig.gen_params.len(),
         });
     }
+
     // Create substitution of method generic params
-    let mthd_gen_params_subst = trait_method_sig
-        .gen_params
-        .iter()
-        .cloned()
-        .zip(impl_method_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp)));
-    let all_gen_params_subst: HashMap<_, _> = trait_gen_params_subst
-        .iter()
-        .map(|(&gv, &ty)| (gv, ty))
-        .chain(mthd_gen_params_subst)
-        .collect();
+    let fresh_vars = impl_method_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp));
+    let mthd_gen_params_subst = ctxt::ty::GenVarSubst::new(&trait_method_sig.gen_params, fresh_vars).unwrap();
+
+    let all_gen_params_subst = ctxt::ty::GenVarSubst::compose(trait_gen_params_subst.clone(), mthd_gen_params_subst);
 
     // Compare receiver
     if impl_method_sig.has_receiver() != trait_method_sig.has_receiver() {

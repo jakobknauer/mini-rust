@@ -207,7 +207,7 @@ impl<'a> Typechecker<'a> {
             .into();
         }
 
-        let substitutions = self.ctxt.fns.get_substitutions_for_specialization(fn_specialization);
+        let subst = self.ctxt.fns.get_subst_for_fn_spec(fn_specialization);
 
         for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_specialization.gen_args) {
             let requirements: Vec<_> = self.ctxt.tys.get_requirements_for(gen_var).cloned().collect();
@@ -219,9 +219,9 @@ impl<'a> Typechecker<'a> {
                     ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
                         let param_tys: Vec<_> = param_tys
                             .iter()
-                            .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &substitutions))
+                            .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &subst))
                             .collect();
-                        let return_ty = self.ctxt.tys.substitute_gen_vars(return_ty, &substitutions);
+                        let return_ty = self.ctxt.tys.substitute_gen_vars(return_ty, &subst);
                         self.ctxt.tys.add_callable_obligation(gen_arg, param_tys, return_ty)
                     }
                 }
@@ -243,7 +243,7 @@ impl<'a> Typechecker<'a> {
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
-        let fn_spec_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &substitutions);
+        let fn_spec_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
 
         Ok(fn_spec_ty)
     }
@@ -273,23 +273,13 @@ impl<'a> Typechecker<'a> {
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
-        let trait_gen_var_substitutions = trait_def
-            .gen_params
-            .iter()
-            .cloned()
-            .zip(trait_method.trait_instance.gen_args.iter().cloned());
-        let gen_var_substitutions = signature
-            .gen_params
-            .iter()
-            .cloned()
-            .zip(trait_method.gen_args.iter().cloned());
-        let gen_var_substitutions = trait_gen_var_substitutions.chain(gen_var_substitutions).collect();
+        let trait_gen_var_subst =
+            ty::GenVarSubst::new(&trait_def.gen_params, &trait_method.trait_instance.gen_args).unwrap();
+        let gen_var_subst = ty::GenVarSubst::new(&signature.gen_params, &trait_method.gen_args).unwrap();
+        let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
 
         let substituted_fn_ty = self.ctxt.tys.substitute_self_ty(fn_ty, trait_method.impl_ty);
-        let substituted_fn_ty = self
-            .ctxt
-            .tys
-            .substitute_gen_vars(substituted_fn_ty, &gen_var_substitutions);
+        let substituted_fn_ty = self.ctxt.tys.substitute_gen_vars(substituted_fn_ty, &all_gen_var_subst);
 
         Ok(substituted_fn_ty)
     }
@@ -529,7 +519,7 @@ impl<'a> Typechecker<'a> {
                     .tys
                     .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
                     .ok()
-                    .map(|substitution| (impl_def, substitution))
+                    .map(|inst| (impl_def, inst))
             })
             .flat_map(|(impl_def, subst)| impl_def.methods_by_name.get(method_name).map(|&method| (method, subst)))
             .filter(|&(method, _)| self.ctxt.fns.get_sig(method).unwrap().has_receiver())

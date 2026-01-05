@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::ctxt::{fns, traits};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -91,4 +93,36 @@ pub enum ConstraintRequirement {
 pub enum Obligation {
     ImplementsTrait { ty: Ty, trait_: traits::Trait },
     Callable { ty: Ty, param_tys: Vec<Ty>, return_ty: Ty },
+}
+
+#[derive(Clone)]
+pub struct GenVarSubst(HashMap<GenVar, Ty>);
+
+impl GenVarSubst {
+    pub fn new<G, T>(gen_vars: G, tys: T) -> Option<GenVarSubst>
+    where
+        G: IntoIterator<Item: std::borrow::Borrow<GenVar>, IntoIter: ExactSizeIterator>,
+        T: IntoIterator<Item: std::borrow::Borrow<Ty>, IntoIter: ExactSizeIterator>,
+    {
+        use std::borrow::Borrow;
+
+        let gen_vars = gen_vars.into_iter();
+        let tys = tys.into_iter();
+        if gen_vars.len() != tys.len() {
+            return None;
+        }
+
+        let pairs = gen_vars.zip(tys).map(|(gv, ty)| (*gv.borrow(), *ty.borrow())).collect();
+
+        Some(GenVarSubst(pairs))
+    }
+
+    pub fn get(&self, gen_var: GenVar) -> Option<Ty> {
+        self.0.get(&gen_var).copied()
+    }
+
+    pub fn compose(self, other: GenVarSubst) -> GenVarSubst {
+        let pairs = self.0.into_iter().chain(other.0).collect();
+        GenVarSubst(pairs)
+    }
 }

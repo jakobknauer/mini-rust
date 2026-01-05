@@ -33,6 +33,7 @@ pub enum Named {
 }
 
 #[derive(Debug)]
+#[expect(clippy::enum_variant_names)]
 pub enum UnificationError {
     FunctionParamCountMismatch,
     TypeMismatch,
@@ -342,7 +343,7 @@ impl TyReg {
         self.get_string_rep_with_subst(ty, &HashMap::new())
     }
 
-    pub fn get_string_rep_with_subst(&self, ty: Ty, substitutions: &HashMap<GenVar, Ty>) -> String {
+    pub fn get_string_rep_with_subst(&self, ty: Ty, subst: &HashMap<GenVar, Ty>) -> String {
         use self::Primitive::*;
         use TyDef::*;
 
@@ -363,11 +364,11 @@ impl TyReg {
             },
             Tuple(ref tys) => match &tys[..] {
                 [] => "()".to_string(),
-                [ty] => format!("({},)", self.get_string_rep_with_subst(*ty, substitutions)),
+                [ty] => format!("({},)", self.get_string_rep_with_subst(*ty, subst)),
                 _ => format!(
                     "({})",
                     tys.iter()
-                        .map(|&ty| self.get_string_rep_with_subst(ty, substitutions))
+                        .map(|&ty| self.get_string_rep_with_subst(ty, subst))
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
@@ -379,20 +380,20 @@ impl TyReg {
             } => {
                 let mut param_names: Vec<_> = param_tys
                     .iter()
-                    .map(|&pt| self.get_string_rep_with_subst(pt, substitutions))
+                    .map(|&pt| self.get_string_rep_with_subst(pt, subst))
                     .collect();
                 if var_args {
                     param_names.push("...".to_string());
                 }
-                let return_name = self.get_string_rep_with_subst(return_ty, substitutions);
+                let return_name = self.get_string_rep_with_subst(return_ty, subst);
                 format!("fn({}) -> {}", param_names.join(", "), return_name)
             }
-            Ref(ty) => format!("&{}", self.get_string_rep_with_subst(ty, substitutions)),
-            Ptr(ty) => format!("*{}", self.get_string_rep_with_subst(ty, substitutions)),
-            Alias(ty) => self.get_string_rep_with_subst(ty, substitutions),
-            GenVar(gen_var) => substitutions
+            Ref(ty) => format!("&{}", self.get_string_rep_with_subst(ty, subst)),
+            Ptr(ty) => format!("*{}", self.get_string_rep_with_subst(ty, subst)),
+            Alias(ty) => self.get_string_rep_with_subst(ty, subst),
+            GenVar(gen_var) => subst
                 .get(&gen_var)
-                .map(|&ty| self.get_string_rep_with_subst(ty, substitutions))
+                .map(|&ty| self.get_string_rep_with_subst(ty, subst))
                 .unwrap_or(self.get_gen_var_name(gen_var).to_string()),
             Struct { struct_, ref gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
@@ -401,7 +402,7 @@ impl TyReg {
                 }
                 let gen_arg_names = gen_args
                     .iter()
-                    .map(|&ga| self.get_string_rep_with_subst(ga, substitutions))
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", struct_name, gen_arg_names)
@@ -413,7 +414,7 @@ impl TyReg {
                 }
                 let gen_arg_names = gen_args
                     .iter()
-                    .map(|&ga| self.get_string_rep_with_subst(ga, substitutions))
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", enum_name, gen_arg_names)
@@ -598,7 +599,7 @@ impl TyReg {
             .map(|(enum_, enum_def)| (Enum(enum_), enum_def))
     }
 
-    pub fn substitute_gen_vars(&mut self, ty: Ty, substitutions: &HashMap<GenVar, Ty>) -> Ty {
+    pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
         use TyDef::*;
 
         let ty = self.canonicalize(ty);
@@ -608,8 +609,8 @@ impl TyReg {
 
         match *ty_def {
             GenVar(gen_var) => {
-                if let Some(replacement_ty) = substitutions.get(&gen_var) {
-                    *replacement_ty
+                if let Some(replacement_ty) = subst.get(gen_var) {
+                    replacement_ty
                 } else {
                     ty
                 }
@@ -622,24 +623,24 @@ impl TyReg {
                 let new_param_tys = param_tys
                     .clone()
                     .into_iter()
-                    .map(|pt| self.substitute_gen_vars(pt, substitutions))
+                    .map(|pt| self.substitute_gen_vars(pt, subst))
                     .collect::<Vec<_>>();
-                let new_return_ty = self.substitute_gen_vars(return_ty, substitutions);
+                let new_return_ty = self.substitute_gen_vars(return_ty, subst);
                 self.register_fn_ty(new_param_tys, new_return_ty, var_args)
             }
             Ref(inner_ty) => {
-                let new_inner_ty = self.substitute_gen_vars(inner_ty, substitutions);
+                let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
                 self.register_ref_ty(new_inner_ty)
             }
             Ptr(inner_ty) => {
-                let new_inner_ty = self.substitute_gen_vars(inner_ty, substitutions);
+                let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
                 self.register_ptr_ty(new_inner_ty)
             }
             Struct { struct_, ref gen_args } => {
                 let new_gen_args = gen_args
                     .clone()
                     .iter()
-                    .map(|&ga| self.substitute_gen_vars(ga, substitutions))
+                    .map(|&ga| self.substitute_gen_vars(ga, subst))
                     .collect::<Vec<_>>();
                 self.instantiate_struct(struct_, new_gen_args).unwrap()
             }
@@ -647,7 +648,7 @@ impl TyReg {
                 let new_gen_args = gen_args
                     .clone()
                     .iter()
-                    .map(|&ga| self.substitute_gen_vars(ga, substitutions))
+                    .map(|&ga| self.substitute_gen_vars(ga, subst))
                     .collect::<Vec<_>>();
                 self.instantiate_enum(enum_, new_gen_args).unwrap()
             }
@@ -662,13 +663,13 @@ impl TyReg {
                 let name = name.clone();
                 let mut new_fn_spec = fn_spec.clone();
                 for gen_arg in &mut new_fn_spec.gen_args {
-                    *gen_arg = self.substitute_gen_vars(*gen_arg, substitutions);
+                    *gen_arg = self.substitute_gen_vars(*gen_arg, subst);
                 }
                 for env_gen_arg in &mut new_fn_spec.env_gen_args {
-                    *env_gen_arg = self.substitute_gen_vars(*env_gen_arg, substitutions);
+                    *env_gen_arg = self.substitute_gen_vars(*env_gen_arg, subst);
                 }
 
-                let captures_ty = self.substitute_gen_vars(captures_ty, substitutions);
+                let captures_ty = self.substitute_gen_vars(captures_ty, subst);
 
                 self.register_closure_ty(new_fn_spec, name, captures_ty)
             }
@@ -676,7 +677,7 @@ impl TyReg {
                 let new_tys = tys
                     .clone()
                     .into_iter()
-                    .map(|ty| self.substitute_gen_vars(ty, substitutions))
+                    .map(|ty| self.substitute_gen_vars(ty, subst))
                     .collect::<Vec<_>>();
                 self.register_tuple_ty(new_tys)
             }
@@ -771,13 +772,8 @@ impl TyReg {
             .expect("struct definition should be registered");
         let field_ty = struct_def.fields[index].ty;
 
-        let substitutions = struct_def
-            .gen_params
-            .iter()
-            .cloned()
-            .zip(gen_args.iter().cloned())
-            .collect();
-        let instantiated_field_ty = self.substitute_gen_vars(field_ty, &substitutions);
+        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
+        let instantiated_field_ty = self.substitute_gen_vars(field_ty, &subst);
 
         Ok(instantiated_field_ty)
     }
@@ -791,17 +787,14 @@ impl TyReg {
         let struct_def = self
             .get_struct_def(struct_)
             .expect("struct definition should be registered");
-        let substitutions = struct_def
-            .gen_params
-            .iter()
-            .cloned()
-            .zip(gen_args.iter().cloned())
+        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
+
+        let field_tys: Vec<Ty> = struct_def.fields.iter().map(|field| field.ty).collect();
+        let instantiated_field_tys: Vec<Ty> = field_tys
+            .into_iter()
+            .map(|field_ty| self.substitute_gen_vars(field_ty, &subst))
             .collect();
-        let fields = struct_def.fields.clone();
-        let instantiated_field_tys: Vec<Ty> = fields
-            .iter()
-            .map(|field| self.substitute_gen_vars(field.ty, &substitutions))
-            .collect();
+
         Ok(instantiated_field_tys)
     }
 

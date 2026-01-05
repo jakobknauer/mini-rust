@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{Fn, FnMlr, FnSig, FnSpecialization, TraitMethod},
-    ty::{GenVar, Ty},
+    ty::GenVarSubst,
 };
 
 #[derive(Default)]
@@ -73,19 +73,11 @@ impl FnReg {
         self.called_trait_methods.get(&caller).unwrap()
     }
 
-    pub fn get_substitutions_for_specialization(&self, fn_specialization: &FnSpecialization) -> HashMap<GenVar, Ty> {
+    pub fn get_subst_for_fn_spec(&self, fn_specialization: &FnSpecialization) -> GenVarSubst {
         let sig = self.get_sig(fn_specialization.fn_).unwrap();
-        let gen_param_substitutions = sig
-            .gen_params
-            .iter()
-            .cloned()
-            .zip(fn_specialization.gen_args.iter().cloned());
-        let env_gen_param_substitutions = sig
-            .env_gen_params
-            .iter()
-            .cloned()
-            .zip(fn_specialization.env_gen_args.iter().cloned());
-        env_gen_param_substitutions.chain(gen_param_substitutions).collect()
+        let gen_param_subst = GenVarSubst::new(&sig.gen_params, &fn_specialization.gen_args).unwrap();
+        let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, &fn_specialization.env_gen_args).unwrap();
+        GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 
     pub fn get_fn_name(&self, method: Fn) -> &str {
