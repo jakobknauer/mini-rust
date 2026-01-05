@@ -57,26 +57,70 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         let mlr = self.mlr.expect("self.mlr should not be empty");
 
-        let name = if let Some(assoc_ty) = signature.associated_ty {
-            format!("{}::{}", self.ctxt.tys.get_string_rep(assoc_ty), signature.name)
+        // Print signature similar to printing of fn_spec in src/ctxt.rs
+
+        let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
+            let assoc_ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
+            if let Some(assoc_trait_inst) = &signature.associated_trait_inst {
+                let assoc_trait_name = self.ctxt.traits.get_trait_name(assoc_trait_inst.trait_);
+                let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "<{}>",
+                        assoc_trait_inst
+                            .gen_args
+                            .iter()
+                            .map(|&ty| self.ctxt.tys.get_string_rep(ty))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+
+                format!(
+                    "<{} as {}{}>::",
+                    assoc_ty_name, assoc_trait_name, assoc_trait_gen_params
+                )
+            } else {
+                format!("{}::", assoc_ty_name)
+            }
         } else {
-            signature.name.to_string()
+            "".to_string()
         };
 
-        write!(self.writer, "fn {}", name)?;
+        let env_gen_args = if signature.env_gen_params.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                "{{{}}}",
+                signature
+                    .env_gen_params
+                    .iter()
+                    .map(|&gv| self.ctxt.tys.get_gen_var_name(gv))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
 
-        for (i, &gen_param) in signature.gen_params.iter().enumerate() {
-            if i == 0 {
-                write!(self.writer, "<")?;
-            } else {
-                write!(self.writer, ", ")?;
-            }
-            let gen_param_name = self.ctxt.tys.get_gen_var_name(gen_param);
-            write!(self.writer, "{}", gen_param_name)?;
-        }
-        if !signature.gen_params.is_empty() {
-            write!(self.writer, ">")?;
-        }
+        let gen_args = if signature.gen_params.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                "<{}>",
+                signature
+                    .gen_params
+                    .iter()
+                    .map(|&gv| self.ctxt.tys.get_gen_var_name(gv))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+
+        write!(
+            self.writer,
+            "{}{}{}{}",
+            assoc_ty, signature.name, env_gen_args, gen_args
+        )?;
 
         write!(self.writer, "(")?;
         for (i, (param, param_loc)) in signature.params.iter().zip(&mlr.param_locs).enumerate() {
@@ -150,13 +194,11 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.indent()?;
                     writeln!(self.writer, "else")?;
                     self.print_stmt(if_.else_)
-                    // writeln!(self.writer)
                 }
                 Loop { body } => {
                     self.indent()?;
                     writeln!(self.writer, "loop")?;
                     self.print_stmt(body)
-                    // writeln!(self.writer)
                 }
             },
             None => writeln!(self.writer, "<stmt id {}>", stmt.0),
@@ -283,7 +325,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         .name;
                     write!(
                         self.writer,
-                        "({} as {}{})::{}",
+                        "<{} as {}{}>::{}",
                         base_ty_name, trait_name, trait_gen_args, method_name
                     )
                 }

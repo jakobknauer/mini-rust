@@ -35,7 +35,24 @@ impl Ctxt {
             let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
             if let Some(assoc_trait_inst) = &signature.associated_trait_inst {
                 let assoc_trait_name = self.traits.get_trait_name(assoc_trait_inst.trait_);
-                format!("({} as {})::", assoc_ty_name, assoc_trait_name)
+                let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "<{}>",
+                        assoc_trait_inst
+                            .gen_args
+                            .iter()
+                            .map(|&ty| self.tys.get_string_rep(ty))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+
+                format!(
+                    "<{} as {}{}>::",
+                    assoc_ty_name, assoc_trait_name, assoc_trait_gen_params
+                )
             } else {
                 format!("{}::", assoc_ty_name)
             }
