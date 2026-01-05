@@ -147,7 +147,6 @@ impl Ctxt {
         } = trait_method;
         let impl_ty = self.tys.substitute_gen_vars(impl_ty, substitutions);
 
-        // Find all impls for the trait + base ty, ignoring gen args for the trait
         let impls_for_trait: Vec<_> = self.impls.get_impls_for_trait(trait_instance.trait_).collect();
         let matching_impl_insts: Vec<_> = impls_for_trait
             .into_iter()
@@ -194,15 +193,15 @@ impl Ctxt {
 
     fn subst_trait_instance(
         &mut self,
-        trait_instance: &traits::TraitInstance,
+        trait_instance: &traits::TraitInst,
         substitutions: &HashMap<ty::GenVar, ty::Ty>,
-    ) -> traits::TraitInstance {
+    ) -> traits::TraitInst {
         let new_gen_args = trait_instance
             .gen_args
             .iter()
             .map(|&ty| self.tys.substitute_gen_vars(ty, substitutions))
             .collect();
-        traits::TraitInstance {
+        traits::TraitInst {
             trait_: trait_instance.trait_,
             gen_args: new_gen_args,
         }

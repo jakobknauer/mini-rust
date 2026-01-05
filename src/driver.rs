@@ -10,7 +10,7 @@ use std::{
 use crate::{
     ctxt::{
         self, fns, impls,
-        traits::{self, TraitInstance},
+        traits::{self, TraitInst},
         ty,
     },
     driver::{
@@ -169,7 +169,7 @@ fn register_function(
     hlr_fn: &hlr::Fn,
     ctxt: &mut ctxt::Ctxt,
     associated_ty: Option<ty::Ty>,
-    associated_trait_inst: Option<traits::TraitInstance>,
+    associated_trait_inst: Option<traits::TraitInst>,
     env_gen_params: Vec<ty::GenVar>,
 ) -> Result<fns::Fn, ()> {
     let gen_params: Vec<_> = hlr_fn
@@ -300,7 +300,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 None => ctxt.tys.register_unit_ty(),
             };
 
-            let trait_instance = traits::TraitInstance {
+            let trait_instance = traits::TraitInst {
                 trait_,
                 gen_args: method_gen_params
                     .iter()
@@ -351,7 +351,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
                     .map(|arg| ctxt.tys.try_resolve_hlr_annot(arg, &gen_params, None, false).ok_or(()))
                     .collect::<Result<_, _>>()?;
 
-                let trait_inst = TraitInstance {
+                let trait_inst = TraitInst {
                     trait_,
                     gen_args: trait_args,
                 };

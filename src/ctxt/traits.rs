@@ -13,7 +13,7 @@ pub struct TraitDef {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TraitInstance {
+pub struct TraitInst {
     pub trait_: Trait,
     pub gen_args: Vec<Ty>,
 }

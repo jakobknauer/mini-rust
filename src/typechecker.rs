@@ -17,7 +17,7 @@ pub enum MethodResolution {
         env_gen_args: Vec<ty::Ty>,
     },
     Trait {
-        trait_instance: traits::TraitInstance,
+        trait_instance: traits::TraitInst,
         method_idx: usize,
     },
 }
@@ -564,7 +564,7 @@ impl<'a> Typechecker<'a> {
                 let n_gen_params = trait_def.gen_params.len();
                 let gen_args = (0..n_gen_params).map(|_| self.ctxt.tys.new_undefined_ty()).collect();
 
-                let trait_instance = traits::TraitInstance {
+                let trait_instance = traits::TraitInst {
                     trait_: *trait_,
                     gen_args,
                 };

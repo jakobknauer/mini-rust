@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::ctxt::{
     fns::Fn,
     impls::{Impl, ImplDef},
-    traits::{Trait, TraitInstance},
+    traits::{Trait, TraitInst},
     ty::{GenVar, Ty},
 };
 
@@ -13,7 +13,7 @@ pub struct ImplReg {
 }
 
 impl ImplReg {
-    pub fn register_impl(&mut self, ty: Ty, gen_params: Vec<GenVar>, trait_inst: Option<TraitInstance>) -> Impl {
+    pub fn register_impl(&mut self, ty: Ty, gen_params: Vec<GenVar>, trait_inst: Option<TraitInst>) -> Impl {
         let impl_ = Impl(self.impls.len());
         let impl_def = ImplDef {
             gen_params,
@@ -54,7 +54,7 @@ impl ImplReg {
         self.impls.get(impl_.0).unwrap()
     }
 
-    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<&TraitInstance> {
+    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<&TraitInst> {
         self.get_impl_def(impl_).trait_inst.as_ref()
     }
 }

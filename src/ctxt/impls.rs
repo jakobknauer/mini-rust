@@ -2,12 +2,17 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::Fn,
-    traits::TraitInstance,
+    traits::TraitInst,
     ty::{GenVar, Ty},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Impl(pub usize);
+
+pub struct ImplInst {
+    pub impl_: Impl,
+    pub gen_args: Vec<Ty>,
+}
 
 #[derive(Debug, Clone)]
 pub struct ImplDef {
@@ -15,5 +20,5 @@ pub struct ImplDef {
     pub ty: Ty,
     pub methods: Vec<Fn>,
     pub methods_by_name: HashMap<String, Fn>,
-    pub trait_inst: Option<TraitInstance>,
+    pub trait_inst: Option<TraitInst>,
 }

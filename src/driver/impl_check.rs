@@ -3,12 +3,12 @@ use std::collections::{HashMap, HashSet};
 use crate::ctxt::{
     self,
     impls::Impl,
-    traits::{Trait, TraitInstance},
+    traits::{Trait, TraitInst},
 };
 
 pub struct ImplCheckError {
     pub impl_: Impl,
-    pub trait_inst: TraitInstance,
+    pub trait_inst: TraitInst,
     pub kind: ImplCheckErrorKind,
 }
 
@@ -59,7 +59,7 @@ pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
     Ok(())
 }
 
-fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInstance) -> Result<(), ImplCheckError> {
+fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) -> Result<(), ImplCheckError> {
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
     if trait_def.gen_params.len() != trait_inst.gen_args.len() {
         return Err(ImplCheckError {

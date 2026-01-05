@@ -1,6 +1,6 @@
 use crate::ctxt::{
     mlr,
-    traits::TraitInstance,
+    traits::TraitInst,
     ty::{GenVar, Ty},
 };
 
@@ -15,7 +15,7 @@ pub struct FnSig {
     pub associated_ty: Option<Ty>,
     /// The trait of which the function is an associated method, if any.
     /// At the moment, this is only used for printing names.
-    pub associated_trait_inst: Option<TraitInstance>,
+    pub associated_trait_inst: Option<TraitInst>,
     /// The generic parameters appearing in the function signature
     pub gen_params: Vec<GenVar>,
     /// Generic used in the functions' body that do not appear in the signature,
@@ -58,7 +58,7 @@ pub struct FnSpecialization {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TraitMethod {
-    pub trait_instance: TraitInstance,
+    pub trait_instance: TraitInst,
     pub method_idx: usize,
     pub impl_ty: Ty,
     pub gen_args: Vec<Ty>,
