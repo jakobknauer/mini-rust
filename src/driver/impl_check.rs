@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
 use crate::ctxt::{
-    self,
+    self, fns,
     impls::Impl,
     traits::{Trait, TraitInst},
+    ty,
 };
 
 pub struct ImplCheckError {
@@ -22,14 +23,14 @@ pub enum ImplCheckErrorKind {
     },
     ArgTypeMismatch {
         method: String,
-        expected: ctxt::ty::Ty,
-        actual: ctxt::ty::Ty,
+        expected: ty::Ty,
+        actual: ty::Ty,
         arg_idx: usize,
     },
     ReturnTypeMismatch {
         method: String,
-        expected: ctxt::ty::Ty,
-        actual: ctxt::ty::Ty,
+        expected: ty::Ty,
+        actual: ty::Ty,
     },
     MthdGenParamCountMismatch {
         method: String,
@@ -81,7 +82,10 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
     let impl_def = ctxt.impls.get_impl_def(impl_);
 
-    let trait_gen_params_subst = ctxt::ty::GenVarSubst::new(&trait_def.gen_params, &trait_inst.gen_args).unwrap();
+    // Substitution of the generic params of the trait with the arguments of the impl.
+    // E.g. if we have a trait `trait Into<T>` and an impl `impl Into<u32> for Foo`,
+    // then we have to substitute `T` with `u32`.
+    let trait_gen_params_subst = ty::GenVarSubst::new(&trait_def.gen_params, &trait_inst.gen_args).unwrap();
 
     for &method in &impl_def.methods {
         let impl_method_sig = ctxt.fns.get_sig(method).unwrap();
@@ -136,10 +140,10 @@ fn check_method_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Resu
 
 fn check_method_sig(
     tys: &mut ctxt::TyReg,
-    impl_method_sig: &ctxt::fns::FnSig,
-    trait_method_sig: &ctxt::fns::FnSig,
-    impl_ty: ctxt::ty::Ty,
-    trait_gen_params_subst: &ctxt::ty::GenVarSubst,
+    impl_method_sig: &fns::FnSig,
+    trait_method_sig: &fns::FnSig,
+    impl_ty: ty::Ty,
+    trait_gen_params_subst: &ty::GenVarSubst,
 ) -> Result<(), ImplCheckErrorKind> {
     // Compare method gen params
     if impl_method_sig.gen_params.len() != trait_method_sig.gen_params.len() {
@@ -150,11 +154,14 @@ fn check_method_sig(
         });
     }
 
-    // Create substitution of method generic params
-    let fresh_vars = impl_method_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp));
-    let mthd_gen_params_subst = ctxt::ty::GenVarSubst::new(&trait_method_sig.gen_params, fresh_vars).unwrap();
+    // Substitution of the generic params of the trait method with the generic params of the impl.
+    // This is necessary because the generic params of the impl are different from those of the
+    // trait (even if they have the same name).
+    let impl_gen_vars = impl_method_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp));
+    let mthd_gen_params_subst = ty::GenVarSubst::new(&trait_method_sig.gen_params, impl_gen_vars).unwrap();
 
-    let all_gen_params_subst = ctxt::ty::GenVarSubst::compose(trait_gen_params_subst.clone(), mthd_gen_params_subst);
+    // Concat with the substitutions for the concrete trait instantiation of the impl
+    let all_gen_params_subst = ty::GenVarSubst::compose(trait_gen_params_subst.clone(), mthd_gen_params_subst);
 
     // Compare receiver
     if impl_method_sig.has_receiver() != trait_method_sig.has_receiver() {
@@ -174,6 +181,12 @@ fn check_method_sig(
         });
     }
 
+    // Little helper closure to avoid code duplication
+    let do_substitutions = |tys: &mut ctxt::TyReg, ty: ty::Ty| {
+        let ty = tys.substitute_gen_vars(ty, &all_gen_params_subst);
+        tys.substitute_self_ty(ty, impl_ty)
+    };
+
     // Compare params
     for (idx, (expected, actual)) in trait_method_sig
         .params
@@ -181,28 +194,24 @@ fn check_method_sig(
         .zip(impl_method_sig.params.iter())
         .enumerate()
     {
-        let expected_with_self_substituted = tys.substitute_self_ty(expected.ty, impl_ty);
-        let expected_with_gen_params_substituted =
-            tys.substitute_gen_vars(expected_with_self_substituted, &all_gen_params_subst);
+        let subst_expected = do_substitutions(tys, expected.ty);
 
-        if !tys.tys_eq(expected_with_gen_params_substituted, actual.ty) {
+        if !tys.tys_eq(subst_expected, actual.ty) {
             return Err(ImplCheckErrorKind::ArgTypeMismatch {
                 method: impl_method_sig.name.to_string(),
                 arg_idx: idx,
-                expected: expected_with_gen_params_substituted,
+                expected: subst_expected,
                 actual: actual.ty,
             });
         }
     }
 
     // Compare return type
-    let return_type_with_self_substituted = tys.substitute_self_ty(trait_method_sig.return_ty, impl_ty);
-    let return_type_with_gen_params_substituted =
-        tys.substitute_gen_vars(return_type_with_self_substituted, &all_gen_params_subst);
-    if !tys.tys_eq(return_type_with_gen_params_substituted, impl_method_sig.return_ty) {
+    let subst_return_ty = do_substitutions(tys, trait_method_sig.return_ty);
+    if !tys.tys_eq(subst_return_ty, impl_method_sig.return_ty) {
         return Err(ImplCheckErrorKind::ReturnTypeMismatch {
             method: impl_method_sig.name.to_string(),
-            expected: return_type_with_gen_params_substituted,
+            expected: subst_return_ty,
             actual: impl_method_sig.return_ty,
         });
     }
