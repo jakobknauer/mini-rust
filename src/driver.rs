@@ -339,23 +339,25 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
             .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None, false)
             .ok_or(())?;
 
-        let trait_inst = if let Some(trait_name) = &hlr_impl.trait_name {
-            let trait_ = ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
+        let trait_inst = hlr_impl
+            .trait_name
+            .as_ref()
+            .map(|trait_name| {
+                let trait_ = ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
 
-            let trait_args = hlr_impl
-                .trait_args
-                .iter()
-                .map(|arg| ctxt.tys.try_resolve_hlr_annot(arg, &gen_params, None, false).ok_or(()))
-                .collect::<Result<_, _>>()?;
+                let trait_args = hlr_impl
+                    .trait_args
+                    .iter()
+                    .map(|arg| ctxt.tys.try_resolve_hlr_annot(arg, &gen_params, None, false).ok_or(()))
+                    .collect::<Result<_, _>>()?;
 
-            let trait_inst = TraitInstance {
-                trait_,
-                gen_args: trait_args,
-            };
-            Some(trait_inst)
-        } else {
-            None
-        };
+                let trait_inst = TraitInstance {
+                    trait_,
+                    gen_args: trait_args,
+                };
+                Ok(trait_inst)
+            })
+            .transpose()?;
 
         let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst.clone());
         hlr_meta.impl_ids.insert(idx, impl_);
