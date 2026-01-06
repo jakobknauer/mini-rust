@@ -317,12 +317,10 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         )
                     };
 
-                    let method_name = &self
+                    let method_name = self
                         .ctxt
                         .traits
-                        .get_trait_def(trait_method.trait_inst.trait_)
-                        .methods[trait_method.method_idx]
-                        .name;
+                        .get_trait_method_name(trait_method.trait_inst.trait_, trait_method.method_idx);
                     write!(
                         self.writer,
                         "<{} as {}{}>::{}",
