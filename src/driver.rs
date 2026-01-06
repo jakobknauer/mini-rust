@@ -312,7 +312,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                 None => ctxt.tys.register_unit_ty(),
             };
 
-            let trait_instance = traits::TraitInst {
+            let trait_inst = traits::TraitInst {
                 trait_,
                 gen_args: method_gen_params
                     .iter()
@@ -323,7 +323,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
             let sig = fns::FnSig {
                 name: method.name.clone(),
                 associated_ty: None,
-                associated_trait_inst: Some(trait_instance),
+                associated_trait_inst: Some(trait_inst),
                 gen_params: method_gen_params,
                 env_gen_params: trait_gen_params.clone(),
                 params,
@@ -469,7 +469,7 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
         let called_trait_methods = ctxt.fns.get_called_trait_methods(current.fn_).to_vec();
         let trait_fn_specs = called_trait_methods
             .into_iter()
-            .map(|trait_method| ctxt.specialize_trait_method_call(&trait_method, &subst));
+            .map(|trait_method| ctxt.resolve_trait_method_to_fn(&trait_method, &subst));
         open.extend(trait_fn_specs);
 
         closed.insert(current);

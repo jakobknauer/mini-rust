@@ -300,15 +300,15 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 }
                 TraitMethod(ref trait_method) => {
                     let base_ty_name = self.ctxt.tys.get_string_rep(trait_method.impl_ty);
-                    let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_instance.trait_);
+                    let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_inst.trait_);
 
-                    let trait_gen_args = if trait_method.trait_instance.gen_args.is_empty() {
+                    let trait_gen_args = if trait_method.trait_inst.gen_args.is_empty() {
                         "".to_string()
                     } else {
                         format!(
                             "<{}>",
                             trait_method
-                                .trait_instance
+                                .trait_inst
                                 .gen_args
                                 .iter()
                                 .map(|ty| self.ctxt.tys.get_string_rep(*ty))
@@ -320,7 +320,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let method_name = &self
                         .ctxt
                         .traits
-                        .get_trait_def(trait_method.trait_instance.trait_)
+                        .get_trait_def(trait_method.trait_inst.trait_)
                         .methods[trait_method.method_idx]
                         .name;
                     write!(

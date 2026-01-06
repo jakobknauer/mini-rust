@@ -603,6 +603,7 @@ impl TyReg {
             .map(|(enum_, enum_def)| (Enum(enum_), enum_def))
     }
 
+    #[must_use]
     pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
         use TyDef::*;
 

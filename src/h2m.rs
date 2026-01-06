@@ -322,18 +322,15 @@ impl<'a> H2M<'a> {
 
                 (self.builder.insert_fn_spec_op(fn_spec)?, by_ref)
             }
-            MethodResolution::Trait {
-                trait_instance,
-                method_idx,
-            } => {
-                let sig = self.traits().get_trait_method_sig(trait_instance.trait_, method_idx);
+            MethodResolution::Trait { trait_inst, method_idx } => {
+                let sig = self.traits().get_trait_method_sig(trait_inst.trait_, method_idx);
                 let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
 
                 let n_gen_params = sig.gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
 
                 let trait_method = fns::TraitMethod {
-                    trait_instance,
+                    trait_inst,
                     method_idx,
                     impl_ty: base_ty,
                     gen_args,

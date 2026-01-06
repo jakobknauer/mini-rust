@@ -386,7 +386,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let fn_spec = self
             .m2iw
             .mr_ctxt
-            .specialize_trait_method_call(&trait_method, &self.subst);
+            .resolve_trait_method_to_fn(&trait_method, &self.subst);
         self.build_global_function(&fn_spec)
     }
 

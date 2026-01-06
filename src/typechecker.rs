@@ -17,7 +17,7 @@ pub enum MethodResolution {
         env_gen_args: Vec<ty::Ty>,
     },
     Trait {
-        trait_instance: traits::TraitInst,
+        trait_inst: traits::TraitInst,
         method_idx: usize,
     },
 }
@@ -256,13 +256,13 @@ impl<'a> Typechecker<'a> {
         let signature = self
             .ctxt
             .traits
-            .get_trait_method_sig(trait_method.trait_instance.trait_, trait_method.method_idx);
+            .get_trait_method_sig(trait_method.trait_inst.trait_, trait_method.method_idx);
 
-        let trait_def = self.ctxt.traits.get_trait_def(trait_method.trait_instance.trait_);
+        let trait_def = self.ctxt.traits.get_trait_def(trait_method.trait_inst.trait_);
 
         if signature.gen_params.len() != trait_method.gen_args.len() {
             return TyError::TraitMethodGenericArgCountMismatch {
-                trait_: trait_method.trait_instance.trait_,
+                trait_: trait_method.trait_inst.trait_,
                 method_index: trait_method.method_idx,
                 impl_ty: trait_method.impl_ty,
                 expected: signature.gen_params.len(),
@@ -278,7 +278,7 @@ impl<'a> Typechecker<'a> {
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
         let trait_gen_var_subst =
-            ty::GenVarSubst::new(&trait_def.gen_params, &trait_method.trait_instance.gen_args).unwrap();
+            ty::GenVarSubst::new(&trait_def.gen_params, &trait_method.trait_inst.gen_args).unwrap();
         let gen_var_subst = ty::GenVarSubst::new(&signature.gen_params, &trait_method.gen_args).unwrap();
         let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
 
@@ -558,12 +558,12 @@ impl<'a> Typechecker<'a> {
                 let n_gen_params = trait_def.gen_params.len();
                 let gen_args = (0..n_gen_params).map(|_| self.ctxt.tys.new_undefined_ty()).collect();
 
-                let trait_instance = traits::TraitInst {
+                let trait_inst = traits::TraitInst {
                     trait_: *trait_,
                     gen_args,
                 };
                 Ok(Some(MethodResolution::Trait {
-                    trait_instance,
+                    trait_inst,
                     method_idx: *method_idx,
                 }))
             }

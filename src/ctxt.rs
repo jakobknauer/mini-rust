@@ -124,7 +124,9 @@ impl Ctxt {
 
         fns::FnSig {
             name: signature.name.clone(),
+            // TODO subst associated_ty?
             associated_ty: signature.associated_ty,
+            // TODO subst associated_trait_inst?
             associated_trait_inst: signature.associated_trait_inst.clone(),
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
@@ -134,90 +136,102 @@ impl Ctxt {
         }
     }
 
-    pub fn specialize_trait_method_call(
+    pub fn resolve_trait_method_to_fn(
         &mut self,
         trait_method: &fns::TraitMethod,
         subst: &GenVarSubst,
     ) -> fns::FnSpecialization {
-        let &fns::TraitMethod {
-            ref trait_instance,
-            method_idx,
-            impl_ty,
-            ref gen_args,
-        } = trait_method;
-        let impl_ty = self.tys.substitute_gen_vars(impl_ty, subst);
+        let trait_method = self.subst_trait_method(trait_method, subst);
 
-        let impls_for_trait: Vec<_> = self.impls.get_impls_for_trait(trait_instance.trait_).collect();
-        let matching_impl_insts: Vec<_> = impls_for_trait
-            .into_iter()
-            .filter_map(|impl_| {
-                let impl_def: impls::ImplDef = self.impls.get_impl_def(impl_).clone();
-
-                let inst = self
-                    .tys
-                    .try_find_instantiation(impl_ty, impl_def.ty, &impl_def.gen_params)
-                    .ok()?;
-
-                let subst = GenVarSubst::new(&impl_def.gen_params, &inst).unwrap();
-
-                let instantiated_impl_trait_instance =
-                    self.subst_trait_instance(impl_def.trait_inst.as_ref().unwrap(), &subst);
-
-                let matches = instantiated_impl_trait_instance
-                    .gen_args
-                    .iter()
-                    .zip(trait_instance.gen_args.iter())
-                    .all(|(gen_arg1, gen_arg2)| self.tys.tys_eq(*gen_arg1, *gen_arg2));
-
-                if matches { Some((impl_def, inst)) } else { None }
-            })
+        let matching_impl_insts: Vec<_> = self
+            .get_impl_insts_for_ty_and_trait_inst(trait_method.impl_ty, &trait_method.trait_inst)
             .collect();
 
+        // TODO proper error handling
         assert_eq!(matching_impl_insts.len(), 1);
-        let (impl_def, impl_instantiation) = &matching_impl_insts[0];
+        let [impl_inst] = matching_impl_insts.try_into().unwrap();
 
-        let trait_method_name = self.traits.get_trait_method_name(trait_instance.trait_, method_idx);
+        let trait_method_name = self
+            .traits
+            .get_trait_method_name(trait_method.trait_inst.trait_, trait_method.method_idx);
 
-        let new_gen_args = gen_args
-            .iter()
-            .map(|&ty| self.tys.substitute_gen_vars(ty, subst))
-            .collect();
+        let impl_def = self.impls.get_impl_def(impl_inst.impl_);
+        let fn_ = impl_def.methods_by_name[trait_method_name];
 
         fns::FnSpecialization {
-            fn_: impl_def.methods_by_name[trait_method_name],
-            gen_args: new_gen_args,
-            env_gen_args: impl_instantiation.clone(),
+            fn_,
+            gen_args: trait_method.gen_args,
+            env_gen_args: impl_inst.gen_args,
         }
     }
 
-    fn subst_trait_instance(&mut self, trait_instance: &traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
-        let new_gen_args = trait_instance
-            .gen_args
-            .iter()
-            .map(|&ty| self.tys.substitute_gen_vars(ty, subst))
-            .collect();
-        traits::TraitInst {
-            trait_: trait_instance.trait_,
-            gen_args: new_gen_args,
-        }
+    fn get_impl_insts_for_ty_and_trait(
+        &self,
+        ty: ty::Ty,
+        trait_: traits::Trait,
+    ) -> impl Iterator<Item = impls::ImplInst> + use<'_> {
+        self.impls.get_impls_for_trait(trait_).filter_map(move |impl_| {
+            let impl_def = self.impls.get_impl_def(impl_).clone();
+
+            let gen_args = self
+                .tys
+                .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
+                .ok()?;
+
+            let impl_inst = impls::ImplInst { impl_, gen_args };
+            Some(impl_inst)
+        })
     }
 
-    pub fn ty_implements_trait_inst(&self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
+    fn get_impl_insts_for_ty_and_trait_inst(
+        &mut self,
+        ty: ty::Ty,
+        trait_inst: &traits::TraitInst,
+    ) -> impl Iterator<Item = impls::ImplInst> {
+        let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(ty, trait_inst.trait_).collect();
+
+        impl_insts.into_iter().filter(move |impl_inst| {
+            let impl_def = self.impls.get_impl_def(impl_inst.impl_).clone();
+            let subst = GenVarSubst::new(&impl_def.gen_params, &impl_inst.gen_args).unwrap();
+
+            let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.as_ref().unwrap(), &subst);
+
+            inst_impl_trait_inst
+                .gen_args
+                .iter()
+                .zip(trait_inst.gen_args.iter())
+                .all(|(gen_arg1, gen_arg2)| self.tys.tys_eq(*gen_arg1, *gen_arg2))
+        })
+    }
+
+    fn subst_trait_inst(&mut self, trait_inst: &traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
+        let mut trait_inst = trait_inst.clone();
+        for gen_arg in &mut trait_inst.gen_args {
+            *gen_arg = self.tys.substitute_gen_vars(*gen_arg, subst);
+        }
+        trait_inst
+    }
+
+    fn subst_trait_method(&mut self, trait_method: &fns::TraitMethod, subst: &GenVarSubst) -> fns::TraitMethod {
+        let mut trait_method = trait_method.clone();
+        trait_method.impl_ty = self.tys.substitute_gen_vars(trait_method.impl_ty, subst);
+        trait_method.trait_inst = self.subst_trait_inst(&trait_method.trait_inst, subst);
+        for gen_arg in &mut trait_method.gen_args {
+            *gen_arg = self.tys.substitute_gen_vars(*gen_arg, subst);
+        }
+        trait_method
+    }
+
+    pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
         if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
+            // TODO consider trait_inst.gen_args
             && self.tys.implements_trait_constraint_exists(gen_var, trait_inst.trait_)
         {
             return true;
         }
 
-        self.impls
-            .get_impls_for_trait(trait_inst.trait_)
-            .map(|impl_| self.impls.get_impl_def(impl_))
-            .filter_map(|impl_def| {
-                self.tys
-                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
-                    .ok()
-            })
+        self.get_impl_insts_for_ty_and_trait_inst(ty, &trait_inst)
             .next()
             .is_some()
     }
@@ -230,16 +244,7 @@ impl Ctxt {
             return true;
         }
 
-        self.impls
-            .get_impls_for_trait(trait_)
-            .map(|impl_| self.impls.get_impl_def(impl_))
-            .filter_map(|impl_def| {
-                self.tys
-                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
-                    .ok()
-            })
-            .next()
-            .is_some()
+        self.get_impl_insts_for_ty_and_trait(ty, trait_).next().is_some()
     }
 
     pub fn ty_is_callable(&mut self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {

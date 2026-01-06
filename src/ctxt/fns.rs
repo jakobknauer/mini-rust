@@ -58,7 +58,7 @@ pub struct FnSpecialization {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TraitMethod {
-    pub trait_instance: TraitInst,
+    pub trait_inst: TraitInst,
     pub method_idx: usize,
     pub impl_ty: Ty,
     pub gen_args: Vec<Ty>,

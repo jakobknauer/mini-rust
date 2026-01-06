@@ -124,3 +124,13 @@ impl<S> Into<S> for S {
         self
     }
 }
+
+trait Id<T> {
+    fn id(self, t: T) -> T;
+}
+
+impl<S> Id<S> for S {
+    fn id(self, t: S) -> S {
+        t
+    }
+}

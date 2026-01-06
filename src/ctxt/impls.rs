@@ -9,6 +9,12 @@ use crate::ctxt::{
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Impl(pub usize);
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ImplInst {
+    pub impl_: Impl,
+    pub gen_args: Vec<Ty>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ImplDef {
     pub gen_params: Vec<GenVar>,
