@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{fns, traits::Trait, ty::*},
+    ctxt::{
+        fns,
+        traits::{Trait, TraitInst},
+        ty::*,
+    },
     hlr,
 };
 
@@ -1118,10 +1122,10 @@ impl TyReg {
         }
     }
 
-    pub fn add_implements_trait_constraint(&mut self, subject: GenVar, trait_: Trait) {
+    pub fn add_implements_trait_constraint(&mut self, subject: GenVar, trait_inst: TraitInst) {
         self.constraints.push(Constraint {
             subject,
-            requirement: ConstraintRequirement::Trait(trait_),
+            requirement: ConstraintRequirement::Trait(trait_inst),
         });
     }
 
@@ -1138,7 +1142,8 @@ impl TyReg {
     pub fn implements_trait_constraint_exists(&self, gen_var: GenVar, trait_: Trait) -> bool {
         self.constraints
             .iter()
-            .any(|c| c.subject == gen_var && c.requirement == ConstraintRequirement::Trait(trait_))
+            .any(|c| c.subject == gen_var &&
+                matches!(c.requirement , ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_))
     }
 
     pub fn try_get_callable_obligation(&self, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
@@ -1187,8 +1192,8 @@ impl TyReg {
         })
     }
 
-    pub fn add_implements_trait_obligation(&mut self, ty: Ty, trait_: Trait) {
-        self.obligations.push(Obligation::ImplementsTrait { ty, trait_ });
+    pub fn add_implements_trait_obligation(&mut self, ty: Ty, trait_inst: TraitInst) {
+        self.obligations.push(Obligation::ImplementsTrait { ty, trait_inst });
     }
 
     pub fn add_callable_obligation(&mut self, ty: Ty, param_tys: Vec<Ty>, return_ty: Ty) {

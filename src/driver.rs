@@ -202,9 +202,21 @@ fn register_function(
             .ok_or(())?;
 
         match &constraint.requirement {
-            hlr::ConstraintRequirement::Trait(trait_) => {
-                let trait_ = ctxt.traits.resolve_trait_name(trait_).ok_or(())?;
-                ctxt.tys.add_implements_trait_constraint(subject, trait_);
+            hlr::ConstraintRequirement::Trait { trait_name, trait_args } => {
+                let trait_ = ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
+                let trait_args = trait_args
+                    .iter()
+                    .map(|arg| {
+                        ctxt.tys
+                            .try_resolve_hlr_annot(arg, &all_gen_params, associated_ty, false)
+                            .ok_or(())
+                    })
+                    .collect::<Result<_, _>>()?;
+                let trait_inst = TraitInst {
+                    trait_,
+                    gen_args: trait_args,
+                };
+                ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
             }
             hlr::ConstraintRequirement::Callable { params, return_ty } => {
                 let params = params

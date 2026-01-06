@@ -213,8 +213,12 @@ impl<'a> Typechecker<'a> {
             let requirements: Vec<_> = self.ctxt.tys.get_requirements_for(gen_var).cloned().collect();
             for requirement in requirements {
                 match requirement {
-                    ty::ConstraintRequirement::Trait(trait_) => {
-                        self.ctxt.tys.add_implements_trait_obligation(gen_arg, trait_)
+                    ty::ConstraintRequirement::Trait(trait_inst) => {
+                        let mut trait_inst = trait_inst.clone();
+                        for gen_arg in &mut trait_inst.gen_args {
+                            *gen_arg = self.ctxt.tys.substitute_gen_vars(*gen_arg, &subst);
+                        }
+                        self.ctxt.tys.add_implements_trait_obligation(gen_arg, trait_inst)
                     }
                     ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
                         let param_tys: Vec<_> = param_tys

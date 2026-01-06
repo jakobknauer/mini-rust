@@ -33,7 +33,10 @@ pub struct Constraint {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConstraintRequirement {
-    Trait(String),
+    Trait {
+        trait_name: String,
+        trait_args: Vec<TyAnnot>,
+    },
     Callable {
         params: Vec<TyAnnot>,
         return_ty: Option<TyAnnot>,

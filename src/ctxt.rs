@@ -202,6 +202,26 @@ impl Ctxt {
         }
     }
 
+    pub fn ty_implements_trait_inst(&self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
+        let ty_def = self.tys.get_ty_def(ty);
+        if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
+            && self.tys.implements_trait_constraint_exists(gen_var, trait_inst.trait_)
+        {
+            return true;
+        }
+
+        self.impls
+            .get_impls_for_trait(trait_inst.trait_)
+            .map(|impl_| self.impls.get_impl_def(impl_))
+            .filter_map(|impl_def| {
+                self.tys
+                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
+                    .ok()
+            })
+            .next()
+            .is_some()
+    }
+
     pub fn ty_implements_trait(&self, ty: ty::Ty, trait_: traits::Trait) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
         if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def

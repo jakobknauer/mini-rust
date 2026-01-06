@@ -7,11 +7,13 @@ pub struct ObligationCheckError {
 pub fn check_obligations(ctxt: &mut ctxt::Ctxt) -> Result<(), ObligationCheckError> {
     let obligations = ctxt.tys.get_all_obligations().to_vec();
 
-    for obligation in obligations {
-        match obligation {
-            Obligation::ImplementsTrait { ty, trait_, .. } => {
-                if !ctxt.ty_implements_trait(ty, trait_) {
-                    return Err(ObligationCheckError { obligation });
+    for obligation in &obligations {
+        match *obligation {
+            Obligation::ImplementsTrait { ty, ref trait_inst } => {
+                if !ctxt.ty_implements_trait_inst(ty, trait_inst.clone()) {
+                    return Err(ObligationCheckError {
+                        obligation: obligation.clone(),
+                    });
                 }
             }
             Obligation::Callable {
@@ -29,7 +31,9 @@ pub fn check_obligations(ctxt: &mut ctxt::Ctxt) -> Result<(), ObligationCheckErr
                 {
                     continue;
                 } else {
-                    return Err(ObligationCheckError { obligation });
+                    return Err(ObligationCheckError {
+                        obligation: obligation.clone(),
+                    });
                 }
             }
         }

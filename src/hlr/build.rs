@@ -256,9 +256,24 @@ impl<'a> HlrParser<'a> {
                 ConstraintRequirement::Callable { params, return_ty }
             }
             Some(Token::Identifier(trait_)) => {
-                let trait_ = trait_.clone();
+                let trait_name = trait_.clone();
                 self.position += 1;
-                ConstraintRequirement::Trait(trait_)
+
+                let trait_args = if self.advance_if(Token::Smaller) {
+                    let mut gen_args = Vec::new();
+                    while self.current() != Some(&Token::Greater) {
+                        gen_args.push(self.parse_ty_annot()?);
+                        if !self.advance_if(Token::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_token(Token::Greater)?;
+                    gen_args
+                } else {
+                    vec![]
+                };
+
+                ConstraintRequirement::Trait { trait_name, trait_args }
             }
             _ => return Err(ParserErr::UnexpectedToken(self.current().unwrap().clone())),
         };

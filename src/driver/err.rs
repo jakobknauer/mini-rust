@@ -298,10 +298,16 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
 
 pub fn print_obligation_check_error(err: ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
     match err.obligation {
-        Obligation::ImplementsTrait { ty, trait_ } => format!(
-            "Obligation check error:  type '{}' does not implement trait '{}'",
+        Obligation::ImplementsTrait { ty, trait_inst } => format!(
+            "Obligation check error:  type '{}' does not implement trait '{}<{}>'",
             ctxt.tys.get_string_rep(ty),
-            ctxt.traits.get_trait_name(trait_),
+            ctxt.traits.get_trait_name(trait_inst.trait_),
+            trait_inst
+                .gen_args
+                .iter()
+                .map(|ty| ctxt.tys.get_string_rep(*ty))
+                .collect::<Vec<String>>()
+                .join(", "),
         ),
         Obligation::Callable {
             ty,

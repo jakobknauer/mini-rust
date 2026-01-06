@@ -85,13 +85,13 @@ pub struct Constraint {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ConstraintRequirement {
-    Trait(traits::Trait),
+    Trait(traits::TraitInst),
     Callable { param_tys: Vec<Ty>, return_ty: Ty },
 }
 
 #[derive(Clone)]
 pub enum Obligation {
-    ImplementsTrait { ty: Ty, trait_: traits::Trait },
+    ImplementsTrait { ty: Ty, trait_inst: traits::TraitInst },
     Callable { ty: Ty, param_tys: Vec<Ty>, return_ty: Ty },
 }
 
