@@ -1149,8 +1149,22 @@ impl TyReg {
 
     pub fn implements_trait_inst_constraint_exists(&self, gen_var: GenVar, trait_inst: &TraitInst) -> bool {
         self.constraints.iter().any(|c| {
-            c.subject == gen_var
-                && matches!(c.requirement , ConstraintRequirement::Trait(ref trait_inst_2) if trait_inst_2 == trait_inst)
+            if c.subject != gen_var {
+                return false;
+            }
+
+            match &c.requirement {
+                ConstraintRequirement::Trait(trait_inst_2) => {
+                    trait_inst.trait_ == trait_inst_2.trait_
+                        && trait_inst.gen_args.len() == trait_inst_2.gen_args.len()
+                        && trait_inst
+                            .gen_args
+                            .iter()
+                            .zip(&trait_inst_2.gen_args)
+                            .all(|(&gen_arg1, &gen_arg2)| self.tys_eq(gen_arg1, gen_arg2))
+                }
+                _ => false,
+            }
         })
     }
 

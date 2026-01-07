@@ -253,6 +253,10 @@ impl<'a> Typechecker<'a> {
     }
 
     fn infer_ty_of_trait_method(&mut self, trait_method: &fns::TraitMethod) -> TyResult<ty::Ty> {
+        self.ctxt
+            .tys
+            .add_implements_trait_inst_obligation(trait_method.impl_ty, trait_method.trait_inst.clone());
+
         let signature = self
             .ctxt
             .traits
