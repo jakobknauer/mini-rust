@@ -408,7 +408,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
             let call_site = self
                 .iw_builder
                 .build_indirect_call(fn_ty, fn_ptr, &args, "closure_call_site")?;
-            let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
+            let output = call_site.try_as_basic_value().unwrap_basic();
             Ok(output)
         } else {
             let fn_ptr = self.build_op(callable)?.into_pointer_value();
@@ -420,7 +420,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 .collect::<Vec<_>>();
 
             let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
-            let output = call_site.try_as_basic_value().left().ok_or(M2InkwellFnError)?;
+            let output = call_site.try_as_basic_value().unwrap_basic();
             Ok(output)
         }
     }
