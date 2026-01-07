@@ -91,7 +91,7 @@ pub enum ConstraintRequirement {
 
 #[derive(Clone)]
 pub enum Obligation {
-    ImplementsTrait { ty: Ty, trait_inst: traits::TraitInst },
+    ImplementsTraitInst { ty: Ty, trait_inst: traits::TraitInst },
     Callable { ty: Ty, param_tys: Vec<Ty>, return_ty: Ty },
 }
 

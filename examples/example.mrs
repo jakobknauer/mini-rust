@@ -1,7 +1,16 @@
 fn main() -> i32 {
-    let b: bool = 5.into();
-    let x: i32 = 5.into();
+    let a: i32 = convert(3);
+    let b: bool = convert(3);
+    let c: i32 = convert(true);
+    let d: bool = convert(true);
+
     0
+}
+
+fn convert<A, B>(x: A) -> B
+    where A: Into<B>
+{
+    x.into()
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -119,18 +128,14 @@ impl Into<bool> for i32 {
     }
 }
 
-impl<S> Into<S> for S {
-    fn into(self) -> S {
-        self
+impl Into<i32> for bool {
+    fn into(self) -> i32 {
+        if self { 1 } else { 0 }
     }
 }
 
-trait Id<T> {
-    fn id(self, t: T) -> T;
-}
-
-impl<S> Id<S> for S {
-    fn id(self, t: S) -> S {
-        t
+impl<S> Into<S> for S {
+    fn into(self) -> S {
+        self
     }
 }

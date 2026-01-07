@@ -222,16 +222,15 @@ impl Ctxt {
         trait_method
     }
 
-    pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
+    pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: &traits::TraitInst) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
         if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
-            // TODO consider trait_inst.gen_args
-            && self.tys.implements_trait_constraint_exists(gen_var, trait_inst.trait_)
+            && self.tys.implements_trait_inst_constraint_exists(gen_var, trait_inst)
         {
             return true;
         }
 
-        self.get_impl_insts_for_ty_and_trait_inst(ty, &trait_inst)
+        self.get_impl_insts_for_ty_and_trait_inst(ty, trait_inst)
             .next()
             .is_some()
     }

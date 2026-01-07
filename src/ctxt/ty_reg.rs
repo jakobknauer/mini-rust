@@ -1147,6 +1147,13 @@ impl TyReg {
                 matches!(c.requirement , ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_))
     }
 
+    pub fn implements_trait_inst_constraint_exists(&self, gen_var: GenVar, trait_inst: &TraitInst) -> bool {
+        self.constraints.iter().any(|c| {
+            c.subject == gen_var
+                && matches!(c.requirement , ConstraintRequirement::Trait(ref trait_inst_2) if trait_inst_2 == trait_inst)
+        })
+    }
+
     pub fn try_get_callable_obligation(&self, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
         self.obligations
             .iter()
@@ -1193,8 +1200,9 @@ impl TyReg {
         })
     }
 
-    pub fn add_implements_trait_obligation(&mut self, ty: Ty, trait_inst: TraitInst) {
-        self.obligations.push(Obligation::ImplementsTrait { ty, trait_inst });
+    pub fn add_implements_trait_inst_obligation(&mut self, ty: Ty, trait_inst: TraitInst) {
+        self.obligations
+            .push(Obligation::ImplementsTraitInst { ty, trait_inst });
     }
 
     pub fn add_callable_obligation(&mut self, ty: Ty, param_tys: Vec<Ty>, return_ty: Ty) {

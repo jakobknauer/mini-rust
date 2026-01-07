@@ -218,7 +218,7 @@ impl<'a> Typechecker<'a> {
                         for gen_arg in &mut trait_inst.gen_args {
                             *gen_arg = self.ctxt.tys.substitute_gen_vars(*gen_arg, &subst);
                         }
-                        self.ctxt.tys.add_implements_trait_obligation(gen_arg, trait_inst)
+                        self.ctxt.tys.add_implements_trait_inst_obligation(gen_arg, trait_inst)
                     }
                     ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
                         let param_tys: Vec<_> = param_tys
