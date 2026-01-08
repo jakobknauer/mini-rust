@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{FnSpecialization, TraitMethod},
+    fns::{FnInst, TraitMethod},
     ty::Ty,
 };
 
@@ -57,7 +57,7 @@ pub enum ValDef {
 
 #[derive(Debug, Clone)]
 pub enum OpDef {
-    Fn(FnSpecialization),
+    Fn(FnInst),
     TraitMethod(TraitMethod),
     Const(Const),
     Copy(Place),
@@ -202,7 +202,7 @@ impl Mlr {
                 self.ops
                     .iter_mut()
                     .filter_map(|op_def| match op_def {
-                        OpDef::Fn(FnSpecialization { gen_args, .. }) => Some(gen_args),
+                        OpDef::Fn(FnInst { gen_args, .. }) => Some(gen_args),
                         _ => None,
                     })
                     .flatten(),

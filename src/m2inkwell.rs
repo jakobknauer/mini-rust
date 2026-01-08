@@ -16,9 +16,9 @@ use crate::{
     m2inkwell::fns::M2InkwellFn,
 };
 
-pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> String {
+pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = M2Inkwell::new(&iw_ctxt, mr_ctxt, fn_specs);
+    let mut generator = M2Inkwell::new(&iw_ctxt, mr_ctxt, fn_insts);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -33,21 +33,21 @@ struct M2Inkwell<'iw, 'mr> {
 
     mr_ctxt: &'mr mut mr_ctxt::Ctxt,
 
-    fn_specs: Vec<mr_fns::FnSpecialization>,
+    fn_insts: Vec<mr_fns::FnInst>,
 
     types: HashMap<mr_tys::Ty, AnyTypeEnum<'iw>>,
-    functions: HashMap<mr_fns::FnSpecialization, FunctionValue<'iw>>,
+    functions: HashMap<mr_fns::FnInst, FunctionValue<'iw>>,
     structs: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
     enums: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
 }
 
 impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
-    fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mut mr_ctxt::Ctxt, fn_specs: Vec<mr_fns::FnSpecialization>) -> Self {
+    fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         M2Inkwell {
             iw_ctxt,
             iw_module,
-            fn_specs,
+            fn_insts,
             mr_ctxt,
             types: HashMap::new(),
             functions: HashMap::new(),
@@ -62,8 +62,8 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
     }
 
     fn declare_functions(&mut self) {
-        for fn_spec in self.fn_specs.clone() {
-            let sig = self.mr_ctxt.get_specialized_fn_sig(&fn_spec);
+        for fn_inst in self.fn_insts.clone() {
+            let sig = self.mr_ctxt.get_fn_inst_sig(&fn_inst);
 
             let param_types: Vec<_> = sig
                 .params
@@ -73,19 +73,19 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
             let iw_fn_type = return_type.fn_type(&param_types, sig.var_args);
 
-            let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
+            let fn_name = self.mr_ctxt.get_fn_inst_name(&fn_inst);
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
-            self.functions.insert(fn_spec, fn_value);
+            self.functions.insert(fn_inst, fn_value);
         }
     }
 
     fn define_functions(&mut self) {
-        for fn_spec in self.fn_specs.clone() {
-            let Some(mut fn_gen) = M2InkwellFn::new(self, fn_spec.clone()) else {
+        for fn_inst in self.fn_insts.clone() {
+            let Some(mut fn_gen) = M2InkwellFn::new(self, fn_inst.clone()) else {
                 continue;
             };
             if fn_gen.build_fn().is_err() {
-                let fn_name = self.mr_ctxt.get_fn_spec_name(&fn_spec);
+                let fn_name = self.mr_ctxt.get_fn_inst_name(&fn_inst);
                 eprintln!("Failed to define function {fn_name}");
             }
         }
@@ -193,9 +193,9 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
         self.iw_ctxt.struct_type(&iw_field_tys, false).as_any_type_enum()
     }
 
-    fn get_fn(&self, fn_spec: &mr_fns::FnSpecialization) -> Option<FunctionValue<'iw>> {
-        for (fn_spec_2, &fn_value) in &self.functions {
-            if self.mr_ctxt.fn_specs_eq(fn_spec, fn_spec_2) {
+    fn get_fn(&self, fn_inst: &mr_fns::FnInst) -> Option<FunctionValue<'iw>> {
+        for (fn_inst_2, &fn_value) in &self.functions {
+            if self.mr_ctxt.fn_insts_eq(fn_inst, fn_inst_2) {
                 return Some(fn_value);
             }
         }

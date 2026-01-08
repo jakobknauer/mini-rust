@@ -70,11 +70,11 @@ pub fn compile(
         print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
     }
 
-    print_pretty("Collecting monomorphized function specializations");
-    let fn_specs = monomorphize_functions(&mut ctxt).map_err(|_| "Error determining concrete specializations")?;
+    print_pretty("Monomorphizing functions");
+    let fn_insts = monomorphize_functions(&mut ctxt).map_err(|_| "Error monomorphizing functions")?;
 
     print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = m2inkwell::mlr_to_llvm_ir(&mut ctxt, fn_specs.into_iter().collect());
+    let llvm_ir = m2inkwell::mlr_to_llvm_ir(&mut ctxt, fn_insts.into_iter().collect());
 
     if let Some(llvm_ir_path) = output_paths.llvm_ir {
         print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -429,9 +429,9 @@ fn print_functions(ctxt: &ctxt::Ctxt, path: &Path) -> Result<(), ()> {
     Ok(())
 }
 
-fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecialization>, ()> {
+fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnInst>, ()> {
     let mut open = VecDeque::new();
-    open.push_back(fns::FnSpecialization {
+    open.push_back(fns::FnInst {
         fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
         gen_args: Vec::new(),
         env_gen_args: Vec::new(),
@@ -444,33 +444,33 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnSpecia
             continue;
         }
 
-        let subst = ctxt.fns.get_subst_for_fn_spec(&current);
+        let subst = ctxt.fns.get_subst_for_fn_inst(&current);
 
-        let fn_specs = ctxt.fns.get_called_specializations(current.fn_).iter().map(|fn_spec| {
-            let new_gen_args = fn_spec
+        let fn_insts = ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
+            let new_gen_args = fn_inst
                 .gen_args
                 .iter()
                 .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
                 .collect();
-            let new_env_gen_args = fn_spec
+            let new_env_gen_args = fn_inst
                 .env_gen_args
                 .iter()
                 .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
                 .collect();
 
-            fns::FnSpecialization {
-                fn_: fn_spec.fn_,
+            fns::FnInst {
+                fn_: fn_inst.fn_,
                 gen_args: new_gen_args,
                 env_gen_args: new_env_gen_args,
             }
         });
-        open.extend(fn_specs);
+        open.extend(fn_insts);
 
         let called_trait_methods = ctxt.fns.get_called_trait_methods(current.fn_).to_vec();
-        let trait_fn_specs = called_trait_methods
+        let trait_fn_insts = called_trait_methods
             .into_iter()
             .map(|trait_method| ctxt.resolve_trait_method_to_fn(&trait_method, &subst));
-        open.extend(trait_fn_specs);
+        open.extend(trait_fn_insts);
 
         closed.insert(current);
     }

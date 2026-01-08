@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{Fn, FnMlr, FnSig, FnSpecialization, TraitMethod},
+    fns::{Fn, FnInst, FnMlr, FnSig, TraitMethod},
     ty::GenVarSubst,
 };
 
@@ -11,7 +11,7 @@ pub struct FnReg {
     fn_names: HashMap<String, Fn>,
     defs: HashMap<Fn, FnMlr>,
 
-    called_specializations: HashMap<Fn, Vec<FnSpecialization>>,
+    called_fn_insts: HashMap<Fn, Vec<FnInst>>,
     called_trait_methods: HashMap<Fn, Vec<TraitMethod>>,
 }
 
@@ -27,7 +27,7 @@ impl FnReg {
         }
 
         self.sigs.push(signature);
-        self.called_specializations.insert(fn_, Vec::new());
+        self.called_fn_insts.insert(fn_, Vec::new());
         self.called_trait_methods.insert(fn_, Vec::new());
 
         Ok(fn_)
@@ -57,26 +57,26 @@ impl FnReg {
         (0..self.sigs.len()).map(Fn)
     }
 
-    pub fn specialize_fn(&mut self, caller: Fn, fn_spec: FnSpecialization) {
-        self.called_specializations.entry(caller).or_default().push(fn_spec);
+    pub fn register_fn_inst_call(&mut self, caller: Fn, fn_inst: FnInst) {
+        self.called_fn_insts.entry(caller).or_default().push(fn_inst);
     }
 
     pub fn specialize_trait_method(&mut self, caller: Fn, trait_method: TraitMethod) {
         self.called_trait_methods.entry(caller).or_default().push(trait_method);
     }
 
-    pub fn get_called_specializations(&self, caller: Fn) -> &Vec<FnSpecialization> {
-        self.called_specializations.get(&caller).unwrap()
+    pub fn get_called_fn_insts(&self, caller: Fn) -> &Vec<FnInst> {
+        self.called_fn_insts.get(&caller).unwrap()
     }
 
     pub fn get_called_trait_methods(&self, caller: Fn) -> &Vec<TraitMethod> {
         self.called_trait_methods.get(&caller).unwrap()
     }
 
-    pub fn get_subst_for_fn_spec(&self, fn_specialization: &FnSpecialization) -> GenVarSubst {
-        let sig = self.get_sig(fn_specialization.fn_).unwrap();
-        let gen_param_subst = GenVarSubst::new(&sig.gen_params, &fn_specialization.gen_args).unwrap();
-        let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, &fn_specialization.env_gen_args).unwrap();
+    pub fn get_subst_for_fn_inst(&self, fn_inst: &FnInst) -> GenVarSubst {
+        let sig = self.get_sig(fn_inst.fn_).unwrap();
+        let gen_param_subst = GenVarSubst::new(&sig.gen_params, &fn_inst.gen_args).unwrap();
+        let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, &fn_inst.env_gen_args).unwrap();
         GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 

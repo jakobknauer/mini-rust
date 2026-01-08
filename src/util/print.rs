@@ -57,7 +57,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         let mlr = self.mlr.expect("self.mlr should not be empty");
 
-        // Print signature similar to printing of fn_spec in src/ctxt.rs
+        // Print signature similar to printing of fn_inst in src/ctxt.rs
 
         let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
             let assoc_ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
@@ -294,8 +294,8 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match *op_def {
             Some(operand) => match *operand {
-                Fn(ref fn_spec) => {
-                    let fn_name = self.ctxt.get_fn_spec_name(fn_spec);
+                Fn(ref fn_inst) => {
+                    let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
                     write!(self.writer, "fn {}", fn_name)
                 }
                 TraitMethod(ref trait_method) => {

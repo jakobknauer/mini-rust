@@ -50,7 +50,7 @@ pub enum FnParamKind {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct FnSpecialization {
+pub struct FnInst {
     pub fn_: Fn,
     pub gen_args: Vec<Ty>,
     pub env_gen_args: Vec<Ty>,

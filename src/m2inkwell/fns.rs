@@ -12,7 +12,7 @@ use crate::ctxt::{self as mr_ctxt, fns as mr_fns, mlr, ty as mr_ty};
 
 pub struct M2InkwellFn<'a, 'iw, 'mr> {
     m2iw: &'a mut super::M2Inkwell<'iw, 'mr>,
-    specialization: mr_fns::FnSpecialization,
+    fn_inst: mr_fns::FnInst,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
@@ -33,20 +33,20 @@ impl From<BuilderError> for M2InkwellFnError {
 pub type M2InkwellFnResult<T> = Result<T, M2InkwellFnError>;
 
 impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
-    pub fn new(m2iw: &'a mut super::M2Inkwell<'iw, 'mr>, specialization: mr_fns::FnSpecialization) -> Option<Self> {
-        if !m2iw.mr_ctxt.fns.is_fn_defined(specialization.fn_) {
+    pub fn new(m2iw: &'a mut super::M2Inkwell<'iw, 'mr>, fn_inst: mr_fns::FnInst) -> Option<Self> {
+        if !m2iw.mr_ctxt.fns.is_fn_defined(fn_inst.fn_) {
             return None;
         }
 
         let builder = m2iw.iw_ctxt.create_builder();
         let locs = HashMap::new();
-        let iw_fn = m2iw.get_fn(&specialization).unwrap();
+        let iw_fn = m2iw.get_fn(&fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();
-        let subst = m2iw.mr_ctxt.fns.get_subst_for_fn_spec(&specialization);
+        let subst = m2iw.mr_ctxt.fns.get_subst_for_fn_inst(&fn_inst);
 
         Some(Self {
             m2iw,
-            specialization,
+            fn_inst,
             iw_fn,
             iw_builder: builder,
             locs,
@@ -136,7 +136,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
     fn mlr_def(&self) -> &mr_fns::FnMlr {
         self.fns()
-            .get_fn_def(self.specialization.fn_)
+            .get_fn_def(self.fn_inst.fn_)
             .expect("MLR for function should be defined")
     }
 
@@ -345,7 +345,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let op = self.mlr().get_op_def(op);
 
         match *op {
-            Fn(ref fn_spec) => self.build_global_function(&fn_spec.clone()),
+            Fn(ref fn_inst) => self.build_global_function(&fn_inst.clone()),
             TraitMethod(ref trait_method) => self.build_trait_method(trait_method.clone()),
             Const(ref constant) => self.build_constant(constant.clone()),
             Copy(place) => {
@@ -357,34 +357,34 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_global_function(&mut self, fn_spec: &mr_fns::FnSpecialization) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let substituted_gen_args = fn_spec
+    fn build_global_function(&mut self, fn_inst: &mr_fns::FnInst) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+        let substituted_gen_args = fn_inst
             .gen_args
             .iter()
             .map(|&arg| self.substitute(arg))
             .collect::<Vec<_>>();
-        let substituted_env_gen_args = fn_spec
+        let substituted_env_gen_args = fn_inst
             .env_gen_args
             .iter()
             .map(|&arg| self.substitute(arg))
             .collect::<Vec<_>>();
-        let substituted_fn_spec = mr_fns::FnSpecialization {
-            fn_: fn_spec.fn_,
+        let substituted_fn_inst = mr_fns::FnInst {
+            fn_: fn_inst.fn_,
             gen_args: substituted_gen_args,
             env_gen_args: substituted_env_gen_args,
         };
 
         let result = self
             .m2iw
-            .get_fn(&substituted_fn_spec)
+            .get_fn(&substituted_fn_inst)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
             .ok_or(M2InkwellFnError)?;
         Ok(result)
     }
 
     fn build_trait_method(&mut self, trait_method: mr_fns::TraitMethod) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let fn_spec = self.m2iw.mr_ctxt.resolve_trait_method_to_fn(&trait_method, &self.subst);
-        self.build_global_function(&fn_spec)
+        let fn_inst = self.m2iw.mr_ctxt.resolve_trait_method_to_fn(&trait_method, &self.subst);
+        self.build_global_function(&fn_inst)
     }
 
     fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
@@ -393,10 +393,10 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         let callable_ty_def = self.tys().get_ty_def(callable_ty).unwrap().clone();
 
         if let mr_ty::TyDef::Closure {
-            fn_spec, captures_ty, ..
+            fn_inst, captures_ty, ..
         } = callable_ty_def
         {
-            let fn_ptr = self.build_global_function(&fn_spec)?.into_pointer_value();
+            let fn_ptr = self.build_global_function(&fn_inst)?.into_pointer_value();
             let captures: BasicMetadataValueEnum<'iw> = self.build_op(callable)?.into();
 
             let fn_ty = self.get_closure_fn_ty(callable, captures_ty)?;

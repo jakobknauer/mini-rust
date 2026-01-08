@@ -107,7 +107,7 @@ impl<'a> super::H2M<'a> {
         }
     }
 
-    pub fn generate_closure_fn_spec(&mut self, signature: fns::FnSig) -> H2MResult<fns::FnSpecialization> {
+    pub fn generate_closure_fn_inst(&mut self, signature: fns::FnSig) -> H2MResult<fns::FnInst> {
         let env_gen_args = signature
             .env_gen_params
             .iter()
@@ -116,22 +116,22 @@ impl<'a> super::H2M<'a> {
 
         let fn_ = self.fns().register_fn(signature, false).unwrap();
 
-        let fn_spec = fns::FnSpecialization {
+        let fn_inst = fns::FnInst {
             fn_,
             gen_args: Vec::new(),
             env_gen_args,
         };
 
         let target_fn = self.builder.target_fn();
-        self.fns().specialize_fn(target_fn, fn_spec.clone());
+        self.fns().register_fn_inst_call(target_fn, fn_inst.clone());
 
-        Ok(fn_spec)
+        Ok(fn_inst)
     }
 
-    pub fn generate_closure_ty(&mut self, fn_spec: fns::FnSpecialization, captures_ty: ty::Ty) -> ty::Ty {
+    pub fn generate_closure_ty(&mut self, fn_inst: fns::FnInst, captures_ty: ty::Ty) -> ty::Ty {
         let closure_name = format!("Closure:{}.{}", self.builder.get_signature().name, self.closure_counter);
         self.closure_counter += 1;
-        self.tys().register_closure_ty(fn_spec, closure_name, captures_ty)
+        self.tys().register_closure_ty(fn_inst, closure_name, captures_ty)
     }
 
     pub fn fill_captures_fields(

@@ -314,13 +314,13 @@ impl<'a> H2M<'a> {
                 let n_gen_params = sig.gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
 
-                let fn_spec = fns::FnSpecialization {
+                let fn_inst = fns::FnInst {
                     fn_,
                     gen_args,
                     env_gen_args,
                 };
 
-                (self.builder.insert_fn_spec_op(fn_spec)?, by_ref)
+                (self.builder.insert_fn_inst_op(fn_inst)?, by_ref)
             }
             MethodResolution::Trait { trait_inst, method_idx } => {
                 let sig = self.traits().get_trait_method_sig(trait_inst.trait_, method_idx);
@@ -593,10 +593,10 @@ impl<'a> H2M<'a> {
         let captures_ty = self.generate_captures_ty()?;
         let param_names = params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
         let fn_sig = self.generate_closure_fn_sig(&param_names, &param_tys, return_ty, captures_ty);
-        let fn_spec = self.generate_closure_fn_spec(fn_sig)?;
-        let fn_ = fn_spec.fn_;
+        let fn_inst = self.generate_closure_fn_inst(fn_sig)?;
+        let fn_ = fn_inst.fn_;
 
-        let closure_ty = self.generate_closure_ty(fn_spec, captures_ty);
+        let closure_ty = self.generate_closure_ty(fn_inst, captures_ty);
 
         let current_bindings = self.builder.get_flattened_scope();
         let captured_values =

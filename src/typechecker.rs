@@ -68,7 +68,7 @@ impl<'a> Typechecker<'a> {
         let op_def = self.ctxt.mlr.get_op_def(op);
 
         let ty = match *op_def {
-            Fn(ref fn_spec) => self.infer_ty_of_fn(&fn_spec.clone()),
+            Fn(ref fn_inst) => self.infer_ty_of_fn(&fn_inst.clone()),
             TraitMethod(ref trait_method) => self.infer_ty_of_trait_method(&trait_method.clone()),
             Const(ref constant) => self.infer_ty_of_constant(&constant.clone()),
             Copy(place) => self.infer_place_ty(place),
@@ -191,25 +191,25 @@ impl<'a> Typechecker<'a> {
         Ok(int_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_specialization: &fns::FnSpecialization) -> TyResult<ty::Ty> {
+    fn infer_ty_of_fn(&mut self, fn_inst: &fns::FnInst) -> TyResult<ty::Ty> {
         let signature = self
             .ctxt
             .fns
-            .get_sig(fn_specialization.fn_)
+            .get_sig(fn_inst.fn_)
             .expect("function signature should be registered");
 
-        if signature.gen_params.len() != fn_specialization.gen_args.len() {
+        if signature.gen_params.len() != fn_inst.gen_args.len() {
             return TyError::FnGenericArgCountMismatch {
-                fn_: fn_specialization.fn_,
+                fn_: fn_inst.fn_,
                 expected: signature.gen_params.len(),
-                actual: fn_specialization.gen_args.len(),
+                actual: fn_inst.gen_args.len(),
             }
             .into();
         }
 
-        let subst = self.ctxt.fns.get_subst_for_fn_spec(fn_specialization);
+        let subst = self.ctxt.fns.get_subst_for_fn_inst(fn_inst);
 
-        for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_specialization.gen_args) {
+        for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_inst.gen_args) {
             let requirements: Vec<_> = self.ctxt.tys.get_requirements_for(gen_var).cloned().collect();
             for requirement in requirements {
                 match requirement {
@@ -232,11 +232,11 @@ impl<'a> Typechecker<'a> {
             }
         }
 
-        if signature.env_gen_params.len() != fn_specialization.env_gen_args.len() {
+        if signature.env_gen_params.len() != fn_inst.env_gen_args.len() {
             return TyError::FnEnvGenericArgCountMismatch {
-                fn_: fn_specialization.fn_,
+                fn_: fn_inst.fn_,
                 expected: signature.env_gen_params.len(),
-                actual: fn_specialization.env_gen_args.len(),
+                actual: fn_inst.env_gen_args.len(),
             }
             .into();
         }
@@ -247,9 +247,9 @@ impl<'a> Typechecker<'a> {
             .tys
             .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
 
-        let fn_spec_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
+        let fn_inst_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
 
-        Ok(fn_spec_ty)
+        Ok(fn_inst_ty)
     }
 
     fn infer_ty_of_trait_method(&mut self, trait_method: &fns::TraitMethod) -> TyResult<ty::Ty> {
@@ -517,7 +517,7 @@ impl<'a> Typechecker<'a> {
     }
 
     fn resolve_inherent_method(&self, base_ty: ty::Ty, method_name: &str) -> TyResult<Option<MethodResolution>> {
-        let candidate_fn_specs: Vec<_> = self
+        let candidate_fn_insts: Vec<_> = self
             .ctxt
             .impls
             .get_inherent_impls()
@@ -533,7 +533,7 @@ impl<'a> Typechecker<'a> {
             .filter(|&(method, _)| self.ctxt.fns.get_sig(method).unwrap().has_receiver())
             .collect();
 
-        match &candidate_fn_specs[..] {
+        match &candidate_fn_insts[..] {
             [] => Ok(None),
             [(fn_, subst)] => Ok(Some(MethodResolution::Inherent {
                 fn_: *fn_,

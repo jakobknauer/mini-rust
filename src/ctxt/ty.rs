@@ -37,7 +37,7 @@ pub enum TyDef {
     GenVar(GenVar),
     TraitSelf(traits::Trait),
     Closure {
-        fn_spec: fns::FnSpecialization,
+        fn_inst: fns::FnInst,
         name: String,
         captures_ty: Ty,
     },

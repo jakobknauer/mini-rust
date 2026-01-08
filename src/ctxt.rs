@@ -28,8 +28,8 @@ pub struct Ctxt {
 }
 
 impl Ctxt {
-    pub fn get_fn_spec_name(&self, fn_spec: &fns::FnSpecialization) -> String {
-        let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
+    pub fn get_fn_inst_name(&self, fn_inst: &fns::FnInst) -> String {
+        let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
 
         let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
             let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
@@ -60,12 +60,12 @@ impl Ctxt {
             "".to_string()
         };
 
-        let env_gen_args = if fn_spec.env_gen_args.is_empty() {
+        let env_gen_args = if fn_inst.env_gen_args.is_empty() {
             "".to_string()
         } else {
             format!(
                 "{{{}}}",
-                fn_spec
+                fn_inst
                     .env_gen_args
                     .iter()
                     .map(|&ty| self.tys.get_string_rep(ty))
@@ -74,12 +74,12 @@ impl Ctxt {
             )
         };
 
-        let gen_args = if fn_spec.gen_args.is_empty() {
+        let gen_args = if fn_inst.gen_args.is_empty() {
             "".to_string()
         } else {
             format!(
                 "<{}>",
-                fn_spec
+                fn_inst
                     .gen_args
                     .iter()
                     .map(|&ty| self.tys.get_string_rep(ty))
@@ -91,27 +91,27 @@ impl Ctxt {
         format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
     }
 
-    pub fn fn_specs_eq(&self, fn_spec1: &fns::FnSpecialization, fn_spec2: &fns::FnSpecialization) -> bool {
-        fn_spec1.fn_ == fn_spec2.fn_
-            && fn_spec1.gen_args.len() == fn_spec2.gen_args.len()
-            && fn_spec1
+    pub fn fn_insts_eq(&self, fn_inst1: &fns::FnInst, fn_inst2: &fns::FnInst) -> bool {
+        fn_inst1.fn_ == fn_inst2.fn_
+            && fn_inst1.gen_args.len() == fn_inst2.gen_args.len()
+            && fn_inst1
                 .gen_args
                 .iter()
-                .zip(fn_spec2.gen_args.iter())
+                .zip(fn_inst2.gen_args.iter())
                 .all(|(a, b)| self.tys.tys_eq(*a, *b))
-            && fn_spec1.env_gen_args.len() == fn_spec2.env_gen_args.len()
-            && fn_spec1
+            && fn_inst1.env_gen_args.len() == fn_inst2.env_gen_args.len()
+            && fn_inst1
                 .env_gen_args
                 .iter()
-                .zip(fn_spec2.env_gen_args.iter())
+                .zip(fn_inst2.env_gen_args.iter())
                 .all(|(a, b)| self.tys.tys_eq(*a, *b))
     }
 
-    pub fn get_specialized_fn_sig(&mut self, fn_spec: &fns::FnSpecialization) -> fns::FnSig {
-        let signature = self.fns.get_sig(fn_spec.fn_).unwrap();
-        let subst = self.fns.get_subst_for_fn_spec(fn_spec);
+    pub fn get_fn_inst_sig(&mut self, fn_inst: &fns::FnInst) -> fns::FnSig {
+        let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
+        let subst = self.fns.get_subst_for_fn_inst(fn_inst);
 
-        let specialized_params = signature
+        let inst_params = signature
             .params
             .iter()
             .map(|param| fns::FnParam {
@@ -120,7 +120,7 @@ impl Ctxt {
             })
             .collect();
 
-        let specialized_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &subst);
+        let inst_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &subst);
 
         fns::FnSig {
             name: signature.name.clone(),
@@ -130,17 +130,13 @@ impl Ctxt {
             associated_trait_inst: signature.associated_trait_inst.clone(),
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
-            params: specialized_params,
+            params: inst_params,
             var_args: signature.var_args,
-            return_ty: specialized_return_ty,
+            return_ty: inst_return_ty,
         }
     }
 
-    pub fn resolve_trait_method_to_fn(
-        &mut self,
-        trait_method: &fns::TraitMethod,
-        subst: &GenVarSubst,
-    ) -> fns::FnSpecialization {
+    pub fn resolve_trait_method_to_fn(&mut self, trait_method: &fns::TraitMethod, subst: &GenVarSubst) -> fns::FnInst {
         let trait_method = self.subst_trait_method(trait_method, subst);
 
         let matching_impl_insts: Vec<_> = self
@@ -158,7 +154,7 @@ impl Ctxt {
         let impl_def = self.impls.get_impl_def(impl_inst.impl_);
         let fn_ = impl_def.methods_by_name[trait_method_name];
 
-        fns::FnSpecialization {
+        fns::FnInst {
             fn_,
             gen_args: trait_method.gen_args,
             env_gen_args: impl_inst.gen_args,
@@ -260,9 +256,9 @@ impl Ctxt {
             && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
         {
             Some((param_tys, return_ty, false))
-        } else if let Some(ty::TyDef::Closure { fn_spec, .. }) = self.tys.get_ty_def(ty) {
-            let fn_spec = fn_spec.clone();
-            let signature = self.get_specialized_fn_sig(&fn_spec);
+        } else if let Some(ty::TyDef::Closure { fn_inst, .. }) = self.tys.get_ty_def(ty) {
+            let fn_inst = fn_inst.clone();
+            let signature = self.get_fn_inst_sig(&fn_inst);
             Some((
                 signature.params.iter().skip(1).map(|p| p.ty).collect(),
                 signature.return_ty,
