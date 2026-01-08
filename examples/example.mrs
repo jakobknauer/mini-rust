@@ -1,18 +1,18 @@
 fn main() -> i32 {
-    printf("false_() && true_()\n");
-    let result = false_() && true_();
+    printf("false_() || true_()\n");
+    let result = false_() || true_();
     printf("result: %s\n", result.to_string());
 
-    printf("true_() && false_()\n");
-    let result = true_() && false_();
+    printf("true_() || false_()\n");
+    let result = true_() || false_();
     printf("result: %s\n", result.to_string());
 
-    printf("true_() && true_()\n");
-    let result = true_() && true_();
+    printf("true_() || true_()\n");
+    let result = true_() || true_();
     printf("result: %s\n", result.to_string());
 
-    printf("false_() && false_()\n");
-    let result = false_() && false_();
+    printf("false_() || false_()\n");
+    let result = false_() || false_();
     printf("result: %s\n", result.to_string());
 
     0

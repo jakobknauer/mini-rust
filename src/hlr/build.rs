@@ -587,7 +587,8 @@ impl<'a> HlrParser<'a> {
     }
 
     parse_left_associative!(parse_disjunction, parse_conjunction, [
-        Token::Pipe => BinaryOperator::BitOr
+        Token::Pipe => BinaryOperator::BitOr,
+        Token::PipePipe => BinaryOperator::LogicalOr
     ]);
 
     parse_left_associative!(parse_conjunction, parse_equality_expr, [

@@ -258,21 +258,23 @@ impl<'a> H2M<'a> {
         operator: &hlr::BinaryOperator,
         right: &hlr::Expr,
     ) -> H2MResult<mlr::Val> {
-        if operator == &hlr::BinaryOperator::LogicalAnd {
-            return self.build_logical_and(left, right);
+        match operator {
+            hlr::BinaryOperator::LogicalAnd => self.build_logical_and(left, right),
+            hlr::BinaryOperator::LogicalOr => self.build_logical_or(left, right),
+            _ => {
+                let left_op = self.lower_to_op(left, None)?;
+                let right_op = self.lower_to_op(right, None)?;
+
+                let op = {
+                    let left_ty = self.mlr().get_op_ty(left_op);
+                    let right_ty = self.mlr().get_op_ty(right_op);
+                    let fn_ = self.resolve_operator(operator, (left_ty, right_ty))?;
+                    self.builder.insert_fn_op(fn_)?
+                };
+
+                self.builder.insert_call_val(op, vec![left_op, right_op])
+            }
         }
-
-        let left_op = self.lower_to_op(left, None)?;
-        let right_op = self.lower_to_op(right, None)?;
-
-        let op = {
-            let left_ty = self.mlr().get_op_ty(left_op);
-            let right_ty = self.mlr().get_op_ty(right_op);
-            let fn_ = self.resolve_operator(operator, (left_ty, right_ty))?;
-            self.builder.insert_fn_op(fn_)?
-        };
-
-        self.builder.insert_call_val(op, vec![left_op, right_op])
     }
 
     fn build_logical_and(&mut self, left: &hlr::Expr, right: &hlr::Expr) -> H2MResult<mlr::Val> {
@@ -282,16 +284,45 @@ impl<'a> H2M<'a> {
         let left_op = self.lower_to_op(left, None)?;
 
         self.builder.start_new_block();
-        let right_op = self.lower_to_op(right, None)?;
-        let right_val = self.builder.insert_use_val(right_op)?;
-        self.builder.insert_assign_stmt(result_place, right_val)?;
+        {
+            let right_op = self.lower_to_op(right, None)?;
+            let right_val = self.builder.insert_use_val(right_op)?;
+            self.builder.insert_assign_stmt(result_place, right_val)?;
+        }
         let then_block = self.builder.release_current_block();
 
         self.builder.start_new_block();
-        // insert false
-        let false_op = self.builder.insert_bool_op(false)?;
-        let false_val = self.builder.insert_use_val(false_op)?;
-        self.builder.insert_assign_stmt(result_place, false_val)?;
+        {
+            let false_op = self.builder.insert_bool_op(false)?;
+            let false_val = self.builder.insert_use_val(false_op)?;
+            self.builder.insert_assign_stmt(result_place, false_val)?;
+        }
+        let else_block = self.builder.release_current_block();
+
+        self.builder.insert_if_stmt(left_op, then_block, else_block)?;
+        self.builder.insert_use_place_val(result_place)
+    }
+
+    fn build_logical_or(&mut self, left: &hlr::Expr, right: &hlr::Expr) -> H2MResult<mlr::Val> {
+        let bool_ty = self.tys().get_primitive_ty(ty::Primitive::Boolean);
+        let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
+
+        let left_op = self.lower_to_op(left, None)?;
+
+        self.builder.start_new_block();
+        {
+            let true_op = self.builder.insert_bool_op(true)?;
+            let true_val = self.builder.insert_use_val(true_op)?;
+            self.builder.insert_assign_stmt(result_place, true_val)?;
+        }
+        let then_block = self.builder.release_current_block();
+
+        self.builder.start_new_block();
+        {
+            let right_op = self.lower_to_op(right, None)?;
+            let right_val = self.builder.insert_use_val(right_op)?;
+            self.builder.insert_assign_stmt(result_place, right_val)?;
+        }
         let else_block = self.builder.release_current_block();
 
         self.builder.insert_if_stmt(left_op, then_block, else_block)?;
