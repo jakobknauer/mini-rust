@@ -84,8 +84,6 @@ impl FnReg {
     }
 
     pub fn get_fn_name(&self, fn_: Fn) -> &str {
-        self.get_sig(fn_)
-            .map(|sig| sig.name.as_str())
-            .unwrap_or("<unknown fn>")
+        self.get_sig(fn_).map(|sig| sig.name.as_str()).unwrap_or("<unknown fn>")
     }
 }

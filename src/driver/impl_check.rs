@@ -115,11 +115,7 @@ fn check_mthd_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result
     let trait_def = ctxt.traits.get_trait_def(trait_);
 
     let trait_mthd_names: HashSet<&str> = trait_def.mthds.iter().map(|mthd| mthd.name.as_str()).collect();
-    let impl_mthd_names: HashSet<&str> = impl_def
-        .mthds
-        .iter()
-        .map(|&mthd| ctxt.fns.get_fn_name(mthd))
-        .collect();
+    let impl_mthd_names: HashSet<&str> = impl_def.mthds.iter().map(|&mthd| ctxt.fns.get_fn_name(mthd)).collect();
 
     let missing_mthds: Vec<&str> = trait_mthd_names.difference(&impl_mthd_names).cloned().collect();
     if !missing_mthds.is_empty() {
