@@ -193,12 +193,7 @@ impl TyReg {
         self.register_ty(trait_self)
     }
 
-    pub fn register_closure_ty(
-        &mut self,
-        fn_inst: fns::FnInst,
-        name: impl Into<String>,
-        captures_ty: Ty,
-    ) -> Ty {
+    pub fn register_closure_ty(&mut self, fn_inst: fns::FnInst, name: impl Into<String>, captures_ty: Ty) -> Ty {
         let closure = TyDef::Closure {
             fn_inst,
             name: name.into(),
