@@ -136,27 +136,31 @@ impl Ctxt {
         }
     }
 
-    pub fn resolve_trait_method_to_fn(&mut self, trait_method: &fns::TraitMethod, subst: &GenVarSubst) -> fns::FnInst {
-        let trait_method = self.subst_trait_method(trait_method, subst);
+    pub fn resolve_trait_mthd_to_fn(
+        &mut self,
+        trait_mthd_inst: &fns::TraitMthdInst,
+        subst: &GenVarSubst,
+    ) -> fns::FnInst {
+        let trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
 
         let matching_impl_insts: Vec<_> = self
-            .get_impl_insts_for_ty_and_trait_inst(trait_method.impl_ty, &trait_method.trait_inst)
+            .get_impl_insts_for_ty_and_trait_inst(trait_mthd_inst.impl_ty, &trait_mthd_inst.trait_inst)
             .collect();
 
         // TODO proper error handling
         assert_eq!(matching_impl_insts.len(), 1);
         let [impl_inst] = matching_impl_insts.try_into().unwrap();
 
-        let trait_method_name = self
+        let trait_mthd_name = self
             .traits
-            .get_trait_method_name(trait_method.trait_inst.trait_, trait_method.method_idx);
+            .get_trait_mthd_name(trait_mthd_inst.trait_inst.trait_, trait_mthd_inst.mthd_idx);
 
         let impl_def = self.impls.get_impl_def(impl_inst.impl_);
-        let fn_ = impl_def.methods_by_name[trait_method_name];
+        let fn_ = impl_def.mthds_by_name[trait_mthd_name];
 
         fns::FnInst {
             fn_,
-            gen_args: trait_method.gen_args,
+            gen_args: trait_mthd_inst.gen_args,
             env_gen_args: impl_inst.gen_args,
         }
     }
@@ -208,14 +212,18 @@ impl Ctxt {
         trait_inst
     }
 
-    fn subst_trait_method(&mut self, trait_method: &fns::TraitMethod, subst: &GenVarSubst) -> fns::TraitMethod {
-        let mut trait_method = trait_method.clone();
-        trait_method.impl_ty = self.tys.substitute_gen_vars(trait_method.impl_ty, subst);
-        trait_method.trait_inst = self.subst_trait_inst(&trait_method.trait_inst, subst);
-        for gen_arg in &mut trait_method.gen_args {
+    fn subst_trait_mthd_inst(
+        &mut self,
+        trait_mthd_inst: &fns::TraitMthdInst,
+        subst: &GenVarSubst,
+    ) -> fns::TraitMthdInst {
+        let mut trait_mthd_inst = trait_mthd_inst.clone();
+        trait_mthd_inst.impl_ty = self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst);
+        trait_mthd_inst.trait_inst = self.subst_trait_inst(&trait_mthd_inst.trait_inst, subst);
+        for gen_arg in &mut trait_mthd_inst.gen_args {
             *gen_arg = self.tys.substitute_gen_vars(*gen_arg, subst);
         }
-        trait_method
+        trait_mthd_inst
     }
 
     pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: &traits::TraitInst) -> bool {

@@ -288,23 +288,18 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
         let trait_ = ctxt.traits.register_trait(&hlr_trait.name, trait_gen_params.clone());
         let self_type = ctxt.tys.register_trait_self_type(trait_);
 
-        for method in &hlr_trait.methods {
-            let method_gen_params: Vec<_> = method
-                .gen_params
-                .iter()
-                .map(|gp| ctxt.tys.register_gen_var(gp))
-                .collect();
+        for mthd in &hlr_trait.mthds {
+            let mthd_gen_params: Vec<_> = mthd.gen_params.iter().map(|gp| ctxt.tys.register_gen_var(gp)).collect();
+            let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_gen_params).cloned().collect();
 
-            let all_gen_params: Vec<_> = method_gen_params.iter().chain(&trait_gen_params).cloned().collect();
-
-            let params = method
+            let params = mthd
                 .params
                 .iter()
                 .enumerate()
                 .map(|(idx, param)| build_fn_param(&mut ctxt.tys, param, &all_gen_params, Some(self_type), idx == 0))
                 .collect::<Result<_, _>>()?;
 
-            let return_ty = match &method.return_ty {
+            let return_ty = match &mthd.return_ty {
                 Some(ty) => ctxt
                     .tys
                     .try_resolve_hlr_annot(ty, &all_gen_params, Some(self_type), false)
@@ -314,24 +309,24 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
 
             let trait_inst = traits::TraitInst {
                 trait_,
-                gen_args: method_gen_params
+                gen_args: mthd_gen_params
                     .iter()
                     .map(|&gp| ctxt.tys.register_gen_var_ty(gp))
                     .collect(),
             };
 
             let sig = fns::FnSig {
-                name: method.name.clone(),
+                name: mthd.name.clone(),
                 associated_ty: None,
                 associated_trait_inst: Some(trait_inst),
-                gen_params: method_gen_params,
+                gen_params: mthd_gen_params,
                 env_gen_params: trait_gen_params.clone(),
                 params,
                 var_args: false,
                 return_ty,
             };
 
-            ctxt.traits.register_method(trait_, sig);
+            ctxt.traits.register_mthd(trait_, sig);
         }
     }
 
@@ -374,9 +369,9 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
         let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst.clone());
         hlr_meta.impl_ids.insert(idx, impl_);
 
-        for method in &hlr_impl.methods {
-            let fn_ = register_function(method, ctxt, Some(ty), trait_inst.clone(), gen_params.clone())?;
-            ctxt.impls.register_method(impl_, fn_, &method.name);
+        for mthd in &hlr_impl.mthds {
+            let fn_ = register_function(mthd, ctxt, Some(ty), trait_inst.clone(), gen_params.clone())?;
+            ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
         }
     }
 
@@ -403,14 +398,14 @@ fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrM
     for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
         let impl_ = hlr_meta.impl_ids[&idx];
         let impl_def = ctxt.impls.get_impl_def(impl_);
-        let impl_methods = impl_def.methods.clone();
+        let impl_mthds = impl_def.mthds.clone();
 
-        for (hlr_method, target_fn) in hlr_impl.methods.iter().zip(impl_methods) {
-            let Some(body) = &hlr_method.body else {
+        for (hlr_mthd, target_fn) in hlr_impl.mthds.iter().zip(impl_mthds) {
+            let Some(body) = &hlr_mthd.body else {
                 continue;
             };
             h2m::hlr_to_mlr(ctxt, body, target_fn)
-                .map_err(|err| err::print_mlr_builder_error(&hlr_method.name, err, ctxt))?;
+                .map_err(|err| err::print_mlr_builder_error(&hlr_mthd.name, err, ctxt))?;
         }
     }
 
@@ -466,10 +461,10 @@ fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnInst>,
         });
         open.extend(fn_insts);
 
-        let called_trait_methods = ctxt.fns.get_called_trait_methods(current.fn_).to_vec();
-        let trait_fn_insts = called_trait_methods
+        let called_trait_mthd_insts = ctxt.fns.get_called_trait_mthd_insts(current.fn_).to_vec();
+        let trait_fn_insts = called_trait_mthd_insts
             .into_iter()
-            .map(|trait_method| ctxt.resolve_trait_method_to_fn(&trait_method, &subst));
+            .map(|trait_mthd_inst| ctxt.resolve_trait_mthd_to_fn(&trait_mthd_inst, &subst));
         open.extend(trait_fn_insts);
 
         closed.insert(current);

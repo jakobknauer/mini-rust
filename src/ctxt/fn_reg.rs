@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{Fn, FnInst, FnMlr, FnSig, TraitMethod},
+    fns::{Fn, FnInst, FnMlr, FnSig, TraitMthdInst},
     ty::GenVarSubst,
 };
 
@@ -12,7 +12,7 @@ pub struct FnReg {
     defs: HashMap<Fn, FnMlr>,
 
     called_fn_insts: HashMap<Fn, Vec<FnInst>>,
-    called_trait_methods: HashMap<Fn, Vec<TraitMethod>>,
+    called_trait_mthd_insts: HashMap<Fn, Vec<TraitMthdInst>>,
 }
 
 impl FnReg {
@@ -28,7 +28,7 @@ impl FnReg {
 
         self.sigs.push(signature);
         self.called_fn_insts.insert(fn_, Vec::new());
-        self.called_trait_methods.insert(fn_, Vec::new());
+        self.called_trait_mthd_insts.insert(fn_, Vec::new());
 
         Ok(fn_)
     }
@@ -57,20 +57,23 @@ impl FnReg {
         (0..self.sigs.len()).map(Fn)
     }
 
-    pub fn register_fn_inst_call(&mut self, caller: Fn, fn_inst: FnInst) {
+    pub fn register_fn_call(&mut self, caller: Fn, fn_inst: FnInst) {
         self.called_fn_insts.entry(caller).or_default().push(fn_inst);
     }
 
-    pub fn specialize_trait_method(&mut self, caller: Fn, trait_method: TraitMethod) {
-        self.called_trait_methods.entry(caller).or_default().push(trait_method);
+    pub fn register_trait_mthd_call(&mut self, caller: Fn, trait_mthd_inst: TraitMthdInst) {
+        self.called_trait_mthd_insts
+            .entry(caller)
+            .or_default()
+            .push(trait_mthd_inst);
     }
 
     pub fn get_called_fn_insts(&self, caller: Fn) -> &Vec<FnInst> {
         self.called_fn_insts.get(&caller).unwrap()
     }
 
-    pub fn get_called_trait_methods(&self, caller: Fn) -> &Vec<TraitMethod> {
-        self.called_trait_methods.get(&caller).unwrap()
+    pub fn get_called_trait_mthd_insts(&self, caller: Fn) -> &Vec<TraitMthdInst> {
+        self.called_trait_mthd_insts.get(&caller).unwrap()
     }
 
     pub fn get_subst_for_fn_inst(&self, fn_inst: &FnInst) -> GenVarSubst {
@@ -80,8 +83,8 @@ impl FnReg {
         GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 
-    pub fn get_fn_name(&self, method: Fn) -> &str {
-        self.get_sig(method)
+    pub fn get_fn_name(&self, fn_: Fn) -> &str {
+        self.get_sig(fn_)
             .map(|sig| sig.name.as_str())
             .unwrap_or("<unknown fn>")
     }

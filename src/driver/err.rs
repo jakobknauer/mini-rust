@@ -15,7 +15,7 @@ pub fn print_parser_err(err: &hlr::ParserErr, _: &str) -> String {
         UndelimitedStmt => "Parser error: Undelimited statement".to_string(),
         InvalidLiteral => "Parser error: Invalid literal".to_string(),
         UnexpectedEOF => "Parser error: Unexpected end of file".to_string(),
-        TraitMethodWithBody => "Parser error: Trait method with body".to_string(),
+        TraitMthdWithBody => "Parser error: Trait method with body".to_string(),
         ExpectedTraitName => "Parser error: Expected trait name".to_string(),
         UnexpectedReceiverArg => "Parser error: Unexpected receiver argument".to_string(),
     }
@@ -185,25 +185,25 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(op_ty),
             ctxt.tys.get_string_rep(target_ty)
         ),
-        AmbiguousMethod { base_ty, method_name } => format!(
+        AmbiguousMthd { base_ty, mthd_name } => format!(
             "Ambiguous method name '{}' for type '{}'",
-            method_name,
+            mthd_name,
             ctxt.tys.get_string_rep(base_ty),
         ),
-        MethodResolutionFailed { base_ty, method_name } => format!(
+        MthdResolutionFailed { base_ty, mthd_name } => format!(
             "Could not resolve method '{}' for type '{}'",
-            method_name,
+            mthd_name,
             ctxt.tys.get_string_rep(base_ty),
         ),
-        TraitMethodGenericArgCountMismatch {
+        TraitMthdGenericArgCountMismatch {
             trait_,
-            method_index,
+            mthd_idx: mthd_dix,
             impl_ty,
             expected,
             actual,
         } => format!(
             "Generic argument count mismatch for trait method '{}' in type '{}': expected {}, got {}",
-            ctxt.traits.get_trait_method_name(trait_, method_index),
+            ctxt.traits.get_trait_mthd_name(trait_, mthd_dix),
             ctxt.tys.get_string_rep(impl_ty),
             expected,
             actual
@@ -234,53 +234,37 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
     use ImplCheckErrorKind::*;
 
     let desc = match err.kind {
-        MissingMethods(items) => format!("Missing methods: {}", items.join(", ")),
-        ExtraMethods(items) => format!("Extra methods: {}", items.join(", ")),
-        ParamCountMismatch {
-            method,
-            expected,
-            actual,
-        } => format!(
+        MissingMthds(items) => format!("Missing methods: {}", items.join(", ")),
+        ExtraMthds(items) => format!("Extra methods: {}", items.join(", ")),
+        ParamCountMismatch { mthd, expected, actual } => format!(
             "Argument count mismatch for method '{}': expected {}, got {}",
-            method, expected, actual
+            mthd, expected, actual
         ),
         ArgTypeMismatch {
-            method,
+            mthd,
             arg_idx,
             expected,
             actual,
         } => format!(
             "Argument {} type mismatch for method '{}': expected '{}', got '{}'",
             arg_idx,
-            method,
+            mthd,
             ctxt.tys.get_string_rep(expected),
             ctxt.tys.get_string_rep(actual)
         ),
-        ReturnTypeMismatch {
-            method,
-            expected,
-            actual,
-        } => format!(
+        ReturnTypeMismatch { mthd, expected, actual } => format!(
             "Return type mismatch for method '{}': expected '{}', got '{}'",
-            method,
+            mthd,
             ctxt.tys.get_string_rep(expected),
             ctxt.tys.get_string_rep(actual)
         ),
-        MthdGenParamCountMismatch {
-            method,
-            expected,
-            actual,
-        } => format!(
+        MthdGenParamCountMismatch { mthd, expected, actual } => format!(
             "Generic argument count mismatch for method '{}': expected {}, got {}",
-            method, expected, actual
+            mthd, expected, actual
         ),
-        ReceiverMismatch {
-            method,
-            expected,
-            actual,
-        } => format!(
+        ReceiverMismatch { mthd, expected, actual } => format!(
             "Receiver type mismatch for method '{}': expected '{}', got '{}'",
-            method, expected, actual
+            mthd, expected, actual
         ),
         ImplGenParamCountMismatch { actual, expected } => format!(
             "Generic argument count mismatch for implementation: expected {}, got {}",

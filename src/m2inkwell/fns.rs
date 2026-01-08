@@ -346,7 +346,7 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
 
         match *op {
             Fn(ref fn_inst) => self.build_global_function(&fn_inst.clone()),
-            TraitMethod(ref trait_method) => self.build_trait_method(trait_method.clone()),
+            TraitMthd(ref trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst.clone()),
             Const(ref constant) => self.build_constant(constant.clone()),
             Copy(place) => {
                 let place_ptr = self.build_place(place)?;
@@ -382,8 +382,14 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(result)
     }
 
-    fn build_trait_method(&mut self, trait_method: mr_fns::TraitMethod) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let fn_inst = self.m2iw.mr_ctxt.resolve_trait_method_to_fn(&trait_method, &self.subst);
+    fn build_trait_mthd_inst(
+        &mut self,
+        trait_mthd_inst: mr_fns::TraitMthdInst,
+    ) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
+        let fn_inst = self
+            .m2iw
+            .mr_ctxt
+            .resolve_trait_mthd_to_fn(&trait_mthd_inst, &self.subst);
         self.build_global_function(&fn_inst)
     }
 

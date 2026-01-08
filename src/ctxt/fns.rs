@@ -57,9 +57,9 @@ pub struct FnInst {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TraitMethod {
+pub struct TraitMthdInst {
     pub trait_inst: TraitInst,
-    pub method_idx: usize,
+    pub mthd_idx: usize,
     pub impl_ty: Ty,
     pub gen_args: Vec<Ty>,
 }

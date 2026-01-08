@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use crate::{
     ctxt::{self, fns, mlr, ty},
     hlr,
-    typechecker::{self, MethodResolution},
+    typechecker::{self, MthdResolution},
     util::mlr_builder::MlrBuilder,
 };
 
@@ -172,7 +172,7 @@ impl<'a> H2M<'a> {
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
-            MethodCall { obj, method, arguments } => self.build_method_call(obj, method, arguments),
+            MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments),
             Struct { name, fields } => self.build_struct_or_enum_val(name, fields),
             If {
                 condition,
@@ -302,17 +302,17 @@ impl<'a> H2M<'a> {
         self.builder.insert_call_val(callee, args)
     }
 
-    fn build_method_call(&mut self, obj: &hlr::Expr, method: &hlr::Ident, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
+    fn build_mthd_call(&mut self, obj: &hlr::Expr, mthd: &hlr::Ident, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
 
-        let (callee, by_ref) = match self.typechecker().resolve_method(base_ty, &method.ident)? {
-            MethodResolution::Inherent { fn_, env_gen_args } => {
+        let (callee, by_ref) = match self.typechecker().resolve_mthd(base_ty, &mthd.ident)? {
+            MthdResolution::Inherent { fn_, env_gen_args } => {
                 let sig = self.fns().get_sig(fn_).unwrap();
                 let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
 
                 let n_gen_params = sig.gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&mthd.gen_args, n_gen_params)?;
 
                 let fn_inst = fns::FnInst {
                     fn_,
@@ -322,21 +322,21 @@ impl<'a> H2M<'a> {
 
                 (self.builder.insert_fn_inst_op(fn_inst)?, by_ref)
             }
-            MethodResolution::Trait { trait_inst, method_idx } => {
-                let sig = self.traits().get_trait_method_sig(trait_inst.trait_, method_idx);
+            MthdResolution::Trait { trait_inst, mthd_idx } => {
+                let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
                 let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
 
                 let n_gen_params = sig.gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&method.gen_args, n_gen_params)?;
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&mthd.gen_args, n_gen_params)?;
 
-                let trait_method = fns::TraitMethod {
+                let trait_mthd_inst = fns::TraitMthdInst {
                     trait_inst,
-                    method_idx,
+                    mthd_idx,
                     impl_ty: base_ty,
                     gen_args,
                 };
 
-                (self.builder.insert_trait_method_op(trait_method)?, by_ref)
+                (self.builder.insert_trait_mthd_op(trait_mthd_inst)?, by_ref)
             }
         };
 

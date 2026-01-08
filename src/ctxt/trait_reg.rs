@@ -15,13 +15,13 @@ impl TraitReg {
         self.traits.push(TraitDef {
             name: name.to_string(),
             gen_params,
-            methods: Vec::new(),
+            mthds: Vec::new(),
         });
         trait_
     }
 
-    pub fn register_method(&mut self, trait_: Trait, sig: FnSig) {
-        self.traits[trait_.0].methods.push(sig);
+    pub fn register_mthd(&mut self, trait_: Trait, sig: FnSig) {
+        self.traits[trait_.0].mthds.push(sig);
     }
 
     pub fn resolve_trait_name(&self, trait_name: &str) -> Option<Trait> {
@@ -39,24 +39,24 @@ impl TraitReg {
         self.traits.get(trait_.0).unwrap().name.as_str()
     }
 
-    pub fn get_trait_method_name(&self, trait_: Trait, method_index: usize) -> &str {
-        self.traits.get(trait_.0).unwrap().methods[method_index].name.as_str()
+    pub fn get_trait_mthd_name(&self, trait_: Trait, mthd_idx: usize) -> &str {
+        self.traits.get(trait_.0).unwrap().mthds[mthd_idx].name.as_str()
     }
 
-    pub fn get_trait_methods_with_receiver_and_name(&self, method_name: &str) -> impl Iterator<Item = (Trait, usize)> {
+    pub fn get_trait_mthd_with_receiver_and_name(&self, mthd_name: &str) -> impl Iterator<Item = (Trait, usize)> {
         self.traits
             .iter()
             .enumerate()
             .filter_map(move |(trait_idx, trait_def)| {
                 trait_def
-                    .methods
+                    .mthds
                     .iter()
-                    .position(|method| method.name == method_name && method.has_receiver())
-                    .map(|method_idx| (Trait(trait_idx), method_idx))
+                    .position(|mthd| mthd.name == mthd_name && mthd.has_receiver())
+                    .map(|mthd_idx| (Trait(trait_idx), mthd_idx))
             })
     }
 
-    pub fn get_trait_method_sig(&self, trait_: Trait, method_idx: usize) -> &FnSig {
-        &self.traits[trait_.0].methods[method_idx]
+    pub fn get_trait_mthd_sig(&self, trait_: Trait, mthd_idx: usize) -> &FnSig {
+        &self.traits[trait_.0].mthds[mthd_idx]
     }
 }

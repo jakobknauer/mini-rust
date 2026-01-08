@@ -123,7 +123,7 @@ impl<'a> super::H2M<'a> {
         };
 
         let target_fn = self.builder.target_fn();
-        self.fns().register_fn_inst_call(target_fn, fn_inst.clone());
+        self.fns().register_fn_call(target_fn, fn_inst.clone());
 
         Ok(fn_inst)
     }

@@ -18,18 +18,18 @@ impl ImplReg {
         let impl_def = ImplDef {
             gen_params,
             ty,
-            methods: Vec::new(),
-            methods_by_name: HashMap::new(),
+            mthds: Vec::new(),
+            mthds_by_name: HashMap::new(),
             trait_inst,
         };
         self.impls.push(impl_def);
         impl_
     }
 
-    pub fn register_method(&mut self, impl_: Impl, method: Fn, name: &str) {
+    pub fn register_mthd(&mut self, impl_: Impl, mthd: Fn, name: &str) {
         let impl_ = self.impls.get_mut(impl_.0).unwrap();
-        impl_.methods.push(method);
-        impl_.methods_by_name.insert(name.to_string(), method);
+        impl_.mthds.push(mthd);
+        impl_.mthds_by_name.insert(name.to_string(), mthd);
     }
 
     pub fn get_all_impls(&self) -> impl Iterator<Item = Impl> {

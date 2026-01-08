@@ -104,17 +104,17 @@ pub enum TyError {
     DereferenceOfCVoidPtr {
         ty: Ty,
     },
-    AmbiguousMethod {
+    AmbiguousMthd {
         base_ty: Ty,
-        method_name: String,
+        mthd_name: String,
     },
-    MethodResolutionFailed {
+    MthdResolutionFailed {
         base_ty: Ty,
-        method_name: String,
+        mthd_name: String,
     },
-    TraitMethodGenericArgCountMismatch {
+    TraitMthdGenericArgCountMismatch {
         trait_: Trait,
-        method_index: usize,
+        mthd_idx: usize,
         impl_ty: Ty,
         expected: usize,
         actual: usize,

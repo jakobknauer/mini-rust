@@ -19,7 +19,7 @@ pub struct ImplInst {
 pub struct ImplDef {
     pub gen_params: Vec<GenVar>,
     pub ty: Ty,
-    pub methods: Vec<Fn>,
-    pub methods_by_name: HashMap<String, Fn>,
+    pub mthds: Vec<Fn>,
+    pub mthds_by_name: HashMap<String, Fn>,
     pub trait_inst: Option<TraitInst>,
 }

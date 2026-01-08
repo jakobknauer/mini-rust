@@ -75,14 +75,14 @@ pub struct Impl {
     pub trait_name: Option<String>,
     pub trait_args: Vec<TyAnnot>,
     pub ty: TyAnnot,
-    pub methods: Vec<Fn>,
+    pub mthds: Vec<Fn>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Trait {
     pub name: String,
     pub gen_params: Vec<String>,
-    pub methods: Vec<Fn>,
+    pub mthds: Vec<Fn>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -121,9 +121,9 @@ pub enum Expr {
         callee: Box<Expr>,
         arguments: Vec<Expr>,
     },
-    MethodCall {
+    MthdCall {
         obj: Box<Expr>,
-        method: Ident,
+        mthd: Ident,
         arguments: Vec<Expr>,
     },
     Struct {

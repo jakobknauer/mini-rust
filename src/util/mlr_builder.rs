@@ -242,16 +242,16 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> H2MResult<mlr::Op> {
-        self.ctxt.fns.register_fn_inst_call(self.target_fn, fn_inst.clone());
+        self.ctxt.fns.register_fn_call(self.target_fn, fn_inst.clone());
         let op = mlr::OpDef::Fn(fn_inst);
         self.insert_op(op)
     }
 
-    pub fn insert_trait_method_op(&mut self, trait_method: fns::TraitMethod) -> Result<mlr::Op, H2MError> {
+    pub fn insert_trait_mthd_op(&mut self, trait_mthd_inst: fns::TraitMthdInst) -> Result<mlr::Op, H2MError> {
         self.ctxt
             .fns
-            .specialize_trait_method(self.target_fn, trait_method.clone());
-        let op = mlr::OpDef::TraitMethod(trait_method);
+            .register_trait_mthd_call(self.target_fn, trait_mthd_inst.clone());
+        let op = mlr::OpDef::TraitMthd(trait_mthd_inst);
         self.insert_op(op)
     }
 

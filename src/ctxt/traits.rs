@@ -9,7 +9,7 @@ pub struct Trait(pub usize);
 pub struct TraitDef {
     pub name: String,
     pub gen_params: Vec<GenVar>,
-    pub methods: Vec<FnSig>,
+    pub mthds: Vec<FnSig>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

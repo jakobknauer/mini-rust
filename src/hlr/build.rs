@@ -32,7 +32,7 @@ pub enum ParserErr {
     UndelimitedStmt,
     InvalidLiteral,
     UnexpectedEOF,
-    TraitMethodWithBody,
+    TraitMthdWithBody,
     ExpectedTraitName,
     UnexpectedReceiverArg,
 }
@@ -376,9 +376,9 @@ impl<'a> HlrParser<'a> {
 
         self.expect_token(Token::LBrace)?;
 
-        let mut methods = Vec::new();
+        let mut mthds = Vec::new();
         while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
-            methods.push(self.parse_function(true)?);
+            mthds.push(self.parse_function(true)?);
         }
 
         self.expect_token(Token::RBrace)?;
@@ -387,7 +387,7 @@ impl<'a> HlrParser<'a> {
             trait_name,
             trait_args,
             ty,
-            methods,
+            mthds,
         })
     }
 
@@ -398,20 +398,20 @@ impl<'a> HlrParser<'a> {
         let gen_params = self.parse_gen_params()?;
 
         self.expect_token(Token::LBrace)?;
-        let mut methods = Vec::new();
+        let mut mthds = Vec::new();
         while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
-            let method = self.parse_function(true)?;
-            if method.body.is_some() {
-                return Err(ParserErr::TraitMethodWithBody);
+            let mthd = self.parse_function(true)?;
+            if mthd.body.is_some() {
+                return Err(ParserErr::TraitMthdWithBody);
             }
-            methods.push(method);
+            mthds.push(mthd);
         }
         self.expect_token(Token::RBrace)?;
 
         Ok(Trait {
             name,
             gen_params,
-            methods,
+            mthds,
         })
     }
 
@@ -676,9 +676,9 @@ impl<'a> HlrParser<'a> {
                             }
                         }
                         self.expect_token(Token::RParen)?;
-                        acc = Expr::MethodCall {
+                        acc = Expr::MthdCall {
                             obj: Box::new(acc),
-                            method: member,
+                            mthd: member,
                             arguments,
                         };
                     } else {
@@ -1109,12 +1109,12 @@ mod tests {
                     ty: TyAnnot::Named("Empty".to_string()),
                     trait_name: None,
                     trait_args: vec![],
-                    methods: vec![],
+                    mthds: vec![],
                 }],
                 traits: vec![Trait {
                     name: "Empty".to_string(),
                     gen_params: vec![],
-                    methods: vec![],
+                    mthds: vec![],
                 }],
             };
 
@@ -1239,7 +1239,7 @@ mod tests {
                     ty: TyAnnot::Named("A".to_string()),
                     trait_name: None,
                     trait_args: vec![],
-                    methods: vec![Fn {
+                    mthds: vec![Fn {
                         name: "get_b".to_string(),
                         gen_params: vec![],
                         params: vec![Param::Receiver],
@@ -1451,12 +1451,12 @@ mod tests {
             let input = "(function(arg0).method(arg1, arg2).field)(arg3)";
             let expected = Expr::Call {
                 callee: Box::new(Expr::FieldAccess {
-                    obj: Box::new(Expr::MethodCall {
+                    obj: Box::new(Expr::MthdCall {
                         obj: Box::new(Expr::Call {
                             callee: Box::new(make_ident("function")),
                             arguments: vec![make_ident("arg0")],
                         }),
-                        method: Ident {
+                        mthd: Ident {
                             ident: "method".to_string(),
                             gen_args: vec![],
                         },

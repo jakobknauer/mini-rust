@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{FnInst, TraitMethod},
+    fns::{FnInst, TraitMthdInst},
     ty::Ty,
 };
 
@@ -58,7 +58,7 @@ pub enum ValDef {
 #[derive(Debug, Clone)]
 pub enum OpDef {
     Fn(FnInst),
-    TraitMethod(TraitMethod),
+    TraitMthd(TraitMthdInst),
     Const(Const),
     Copy(Place),
 }

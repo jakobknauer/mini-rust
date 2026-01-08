@@ -298,16 +298,16 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
                     write!(self.writer, "fn {}", fn_name)
                 }
-                TraitMethod(ref trait_method) => {
-                    let base_ty_name = self.ctxt.tys.get_string_rep(trait_method.impl_ty);
-                    let trait_name = self.ctxt.traits.get_trait_name(trait_method.trait_inst.trait_);
+                TraitMthd(ref trait_mthd) => {
+                    let base_ty_name = self.ctxt.tys.get_string_rep(trait_mthd.impl_ty);
+                    let trait_name = self.ctxt.traits.get_trait_name(trait_mthd.trait_inst.trait_);
 
-                    let trait_gen_args = if trait_method.trait_inst.gen_args.is_empty() {
+                    let trait_gen_args = if trait_mthd.trait_inst.gen_args.is_empty() {
                         "".to_string()
                     } else {
                         format!(
                             "<{}>",
-                            trait_method
+                            trait_mthd
                                 .trait_inst
                                 .gen_args
                                 .iter()
@@ -317,14 +317,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         )
                     };
 
-                    let method_name = self
+                    let mthd_name = self
                         .ctxt
                         .traits
-                        .get_trait_method_name(trait_method.trait_inst.trait_, trait_method.method_idx);
+                        .get_trait_mthd_name(trait_mthd.trait_inst.trait_, trait_mthd.mthd_idx);
                     write!(
                         self.writer,
                         "<{} as {}{}>::{}",
-                        base_ty_name, trait_name, trait_gen_args, method_name
+                        base_ty_name, trait_name, trait_gen_args, mthd_name
                     )
                 }
                 Const(ref constant) => match *constant {
