@@ -21,7 +21,7 @@ macro_rules! op_match {
             )*
             _ => {
                 return H2MError::OperatorResolutionFailed {
-                    operator: format!("{{$operator:?}}"),
+                    operator: format!("{:?}", $operator),
                     operand_tys: ($left, $right),
                 }
                 .into();

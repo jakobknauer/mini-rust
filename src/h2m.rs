@@ -258,6 +258,10 @@ impl<'a> H2M<'a> {
         operator: &hlr::BinaryOperator,
         right: &hlr::Expr,
     ) -> H2MResult<mlr::Val> {
+        if operator == &hlr::BinaryOperator::LogicalAnd {
+            return self.build_logical_and(left, right);
+        }
+
         let left_op = self.lower_to_op(left, None)?;
         let right_op = self.lower_to_op(right, None)?;
 
@@ -269,6 +273,29 @@ impl<'a> H2M<'a> {
         };
 
         self.builder.insert_call_val(op, vec![left_op, right_op])
+    }
+
+    fn build_logical_and(&mut self, left: &hlr::Expr, right: &hlr::Expr) -> H2MResult<mlr::Val> {
+        let bool_ty = self.tys().get_primitive_ty(ty::Primitive::Boolean);
+        let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
+
+        let left_op = self.lower_to_op(left, None)?;
+
+        self.builder.start_new_block();
+        let right_op = self.lower_to_op(right, None)?;
+        let right_val = self.builder.insert_use_val(right_op)?;
+        self.builder.insert_assign_stmt(result_place, right_val)?;
+        let then_block = self.builder.release_current_block();
+
+        self.builder.start_new_block();
+        // insert false
+        let false_op = self.builder.insert_bool_op(false)?;
+        let false_val = self.builder.insert_use_val(false_op)?;
+        self.builder.insert_assign_stmt(result_place, false_val)?;
+        let else_block = self.builder.release_current_block();
+
+        self.builder.insert_if_stmt(left_op, then_block, else_block)?;
+        self.builder.insert_use_place_val(result_place)
     }
 
     fn build_assignment(&mut self, target: &hlr::Expr, value: &hlr::Expr) -> H2MResult<mlr::Val> {
@@ -394,8 +421,7 @@ impl<'a> H2M<'a> {
         let else_block = self.builder.release_current_block();
 
         self.builder.insert_if_stmt(cond, then_block, else_block)?;
-        let result_op = self.builder.insert_copy_op(result_place)?;
-        self.builder.insert_use_val(result_op)
+        self.builder.insert_use_place_val(result_place)
     }
 
     fn build_loop(&mut self, body: &hlr::Block) -> H2MResult<mlr::Val> {

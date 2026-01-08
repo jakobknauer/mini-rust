@@ -194,6 +194,7 @@ pub enum Lit {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BinaryOperator {
     Add,
+    LogicalAnd,
     Subtract,
     Multiply,
     Divide,
