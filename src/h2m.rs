@@ -170,6 +170,7 @@ impl<'a> H2M<'a> {
             }
             Tuple(exprs) => self.build_tuple_val(exprs),
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
+            UnaryOp { operator, operand } => self.build_unary_op(operator, operand),
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
             MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments),
@@ -268,13 +269,22 @@ impl<'a> H2M<'a> {
                 let op = {
                     let left_ty = self.mlr().get_op_ty(left_op);
                     let right_ty = self.mlr().get_op_ty(right_op);
-                    let fn_ = self.resolve_operator(operator, (left_ty, right_ty))?;
+                    let fn_ = self.resolve_binary_operator(operator, (left_ty, right_ty))?;
                     self.builder.insert_fn_op(fn_)?
                 };
 
                 self.builder.insert_call_val(op, vec![left_op, right_op])
             }
         }
+    }
+
+    fn build_unary_op(&mut self, operator: &hlr::UnaryOperator, operand: &hlr::Expr) -> Result<mlr::Val, H2MError> {
+        let operand = self.lower_to_op(operand, None)?;
+        let operand_ty = self.mlr().get_op_ty(operand);
+
+        let fn_ = self.resolve_unary_operator(operator, operand_ty)?;
+        let op = self.builder.insert_fn_op(fn_)?;
+        self.builder.insert_call_val(op, vec![operand])
     }
 
     fn build_logical_and(&mut self, left: &hlr::Expr, right: &hlr::Expr) -> H2MResult<mlr::Val> {
@@ -597,7 +607,7 @@ impl<'a> H2M<'a> {
         // resolve equality function for discriminant comparisons once
         let eq_fn = {
             let i32 = self.tys().get_primitive_ty(ty::Primitive::Integer32);
-            let eq_fn = self.resolve_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
+            let eq_fn = self.resolve_binary_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
             self.builder.insert_fn_op(eq_fn)?
         };
 

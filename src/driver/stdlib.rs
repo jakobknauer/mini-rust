@@ -57,6 +57,9 @@ pub fn register_fns(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
     register_fn!(fns, "le::<i32>", (a: i32, b: i32) -> bool);
     register_fn!(fns, "ge::<i32>", (a: i32, b: i32) -> bool);
 
+    register_fn!(fns, "not::<bool>", (a: bool) -> bool);
+    register_fn!(fns, "neg::<i32>", (a: i32) -> i32);
+
     register_size_of(tys, fns)?;
 
     Ok(())

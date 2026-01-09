@@ -113,6 +113,10 @@ pub enum Expr {
         operator: BinaryOperator,
         right: Box<Expr>,
     },
+    UnaryOp {
+        operator: UnaryOperator,
+        operand: Box<Expr>,
+    },
     Assign {
         target: Box<Expr>,
         value: Box<Expr>,
@@ -208,6 +212,12 @@ pub enum BinaryOperator {
     BitAnd,
     LogicalAnd,
     LogicalOr,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Not,
+    Negative,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

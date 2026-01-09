@@ -34,6 +34,7 @@ const ONE_CHAR_TOKENS: &[(char, Token)] = &[
     ('<', Token::Smaller),
     ('>', Token::Greater),
     ('_', Token::Underscore),
+    ('!', Token::Bang),
 ];
 
 const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[

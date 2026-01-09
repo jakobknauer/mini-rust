@@ -631,6 +631,18 @@ impl<'a> HlrParser<'a> {
             Ok(Expr::AddrOf {
                 base: Box::new(Expr::AddrOf { base: Box::new(base) }),
             })
+        } else if self.advance_if(Token::Bang) {
+            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+            Ok(Expr::UnaryOp {
+                operand: Box::new(base),
+                operator: UnaryOperator::Not,
+            })
+        } else if self.advance_if(Token::Minus) {
+            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+            Ok(Expr::UnaryOp {
+                operand: Box::new(base),
+                operator: UnaryOperator::Negative,
+            })
         } else {
             self.parse_function_call_and_field_access(allow_top_level_struct_expr)
         }

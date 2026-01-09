@@ -31,7 +31,7 @@ macro_rules! op_match {
 }
 
 impl<'a> h2m::H2M<'a> {
-    pub fn resolve_operator(
+    pub fn resolve_binary_operator(
         &mut self,
         operator: &hlr::BinaryOperator,
         (left, right): (ty::Ty, ty::Ty),
@@ -66,6 +66,33 @@ impl<'a> h2m::H2M<'a> {
             (LessThanOrEqual,    i32, i32) => "le::<i32>",
             (GreaterThanOrEqual, i32, i32) => "ge::<i32>",
         );
+
+        self.fns().get_fn_by_name(fn_name).ok_or(H2MError::MissingOperatorImpl {
+            name: fn_name.to_string(),
+        })
+    }
+
+    pub fn resolve_unary_operator(&mut self, operator: &hlr::UnaryOperator, operand: ty::Ty) -> H2MResult<fns::Fn> {
+        use hlr::UnaryOperator::*;
+
+        let tys = &mut self.tys();
+
+        let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
+        let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
+
+        let operand = tys.canonicalize(operand);
+
+        let fn_name = match operator {
+            Negative if operand == i32 => "neg::<i32>",
+            Not if operand == bool => "not::<bool>",
+            _ => {
+                return H2MError::OperatorResolutionFailed {
+                    operator: format!("{:?}", operator),
+                    operand_tys: (operand, operand),
+                }
+                .into();
+            }
+        };
 
         self.fns().get_fn_by_name(fn_name).ok_or(H2MError::MissingOperatorImpl {
             name: fn_name.to_string(),
