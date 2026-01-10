@@ -62,6 +62,9 @@ pub enum TyError {
     NotAStructOrTuple {
         ty: Ty,
     },
+    NotATuple {
+        ty: Ty,
+    },
     InvalidTupleIndex {
         ty: Ty,
         index: usize,

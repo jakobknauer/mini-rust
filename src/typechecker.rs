@@ -22,6 +22,11 @@ pub enum MthdResolution {
     },
 }
 
+pub struct FieldAccessResolution {
+    pub num_derefs: usize,
+    pub field_index: usize,
+}
+
 impl<'a> Typechecker<'a> {
     pub fn new(ctxt: &'a mut ctxt::Ctxt, fn_: fns::Fn) -> Self {
         Typechecker { ctxt, fn_ }
@@ -402,9 +407,44 @@ impl<'a> Typechecker<'a> {
         Ok(())
     }
 
-    pub fn resolve_struct_field(&mut self, struct_ty: ty::Ty, field_name: &str) -> TyResult<usize> {
-        let field_index = self.ctxt.tys.get_struct_field_index_by_name(struct_ty, field_name)?;
-        Ok(field_index)
+    pub fn resolve_struct_field(&mut self, mut obj_ty: ty::Ty, field_name: &str) -> TyResult<FieldAccessResolution> {
+        let mut obj_ty_def = self.ctxt.tys.get_ty_def(obj_ty).unwrap();
+        let mut num_derefs = 0;
+
+        while let ty::TyDef::Ptr(base_ty) | ty::TyDef::Ref(base_ty) = obj_ty_def {
+            obj_ty = *base_ty;
+            obj_ty_def = self.ctxt.tys.get_ty_def(obj_ty).unwrap();
+            num_derefs += 1;
+        }
+
+        let field_index = self.ctxt.tys.get_struct_field_index_by_name(obj_ty, field_name)?;
+
+        let result = FieldAccessResolution {
+            field_index,
+            num_derefs,
+        };
+        Ok(result)
+    }
+
+    pub fn resolve_tuple_field(&mut self, mut obj_ty: ty::Ty, field_index: usize) -> TyResult<FieldAccessResolution> {
+        let mut obj_ty_def = self.ctxt.tys.get_ty_def(obj_ty).unwrap();
+        let mut num_derefs = 0;
+
+        while let ty::TyDef::Ptr(base_ty) | ty::TyDef::Ref(base_ty) = obj_ty_def {
+            obj_ty = *base_ty;
+            obj_ty_def = self.ctxt.tys.get_ty_def(obj_ty).unwrap();
+            num_derefs += 1;
+        }
+
+        if !matches!(obj_ty_def, ty::TyDef::Tuple(_)) {
+            return TyError::NotATuple { ty: obj_ty }.into();
+        }
+
+        let result = FieldAccessResolution {
+            field_index,
+            num_derefs,
+        };
+        Ok(result)
     }
 
     pub fn resolve_struct_fields<'b>(

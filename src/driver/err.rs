@@ -130,6 +130,12 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             variant_name
         ),
         NotAStructOrTuple { ty } => format!("Type '{}' is not a struct or tuple type", ctxt.tys.get_string_rep(ty)),
+        NotATuple { ty } => format!("Type '{}' is not a tuple type", ctxt.tys.get_string_rep(ty)),
+        InvalidTupleIndex { ty, index } => format!(
+            "Tuple type '{}' does not have a field at index '{}'",
+            ctxt.tys.get_string_rep(ty),
+            index
+        ),
         InvalidDereference { ty } => format!(
             "Cannot dereference type '{}', which is not a reference or pointer type",
             ctxt.tys.get_string_rep(ty)
@@ -221,11 +227,6 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             ctxt.tys.get_string_rep(gen_arg),
         ),
         ClosureMismatchWithExpected => "Closure type cannot be unified with expected type".to_string(),
-        InvalidTupleIndex { ty, index } => format!(
-            "Tuple type '{}' does not have a field at index '{}'",
-            ctxt.tys.get_string_rep(ty),
-            index
-        ),
     };
     format!("Type error in function '{}': {}", fn_name, msg)
 }

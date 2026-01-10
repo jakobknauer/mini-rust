@@ -744,13 +744,10 @@ impl<'a> H2M<'a> {
         obj: &hlr::Expr,
         field_desc: &hlr::FieldDescriptor,
     ) -> H2MResult<mlr::Place> {
-        // TODO allow general expressions as base (by lowering to val and then creating a
-        // temporary place). This requires some attention to different expressions (temporaries vs.
-        // places).
-        let obj = self.lower_to_place(obj)?;
+        let mut obj = self.lower_to_place(obj)?;
         let obj_ty = self.mlr().get_place_ty(obj);
 
-        let field_index = match field_desc {
+        let field_resolution = match field_desc {
             hlr::FieldDescriptor::Named(ident) => {
                 if !ident.gen_args.is_empty() {
                     return Err(H2MError::NotAPlace);
@@ -759,9 +756,16 @@ impl<'a> H2M<'a> {
 
                 self.typechecker().resolve_struct_field(obj_ty, field_name)?
             }
-            &hlr::FieldDescriptor::Indexed(index) => index,
+            &hlr::FieldDescriptor::Indexed(index) => self.typechecker().resolve_tuple_field(obj_ty, index)?,
         };
-        self.builder.insert_field_access_place(obj, field_index)
+
+        for _ in 0..field_resolution.num_derefs {
+            let obj_op = self.builder.insert_copy_op(obj)?;
+            obj = self.builder.insert_deref_place(obj_op)?;
+        }
+
+        self.builder
+            .insert_field_access_place(obj, field_resolution.field_index)
     }
 
     fn lower_deref_to_place(&mut self, base: &hlr::Expr) -> H2MResult<mlr::Place> {

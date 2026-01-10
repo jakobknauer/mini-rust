@@ -1,6 +1,13 @@
 fn main() -> i32 {
-    printf("!false = %s\n", (!false).to_string());
-    printf("-5 = %d\n", -5);
+    let point = (1, 2);
+    let r_point = &point;
+    let rr_point = &r_point;
+    let rrr_point = &rr_point;
+    
+    printf("%d\n", point.1);
+    printf("%d\n", r_point.1);
+    printf("%d\n", rr_point.1);
+    printf("%d\n", rrr_point.1);
 
     0
 }
