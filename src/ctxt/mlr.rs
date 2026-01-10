@@ -53,6 +53,7 @@ pub enum ValDef {
     AddrOf(Place),
     As { op: Op, target_ty: Ty },
     SizeOf(Ty),
+    PtrOffset(Op, Op),
 }
 
 #[derive(Debug, Clone)]

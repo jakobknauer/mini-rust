@@ -65,6 +65,12 @@ pub enum TyError {
     NotATuple {
         ty: Ty,
     },
+    NotAPtrTy {
+        ty: Ty,
+    },
+    NotAnIntTy {
+        ty: Ty,
+    },
     InvalidTupleIndex {
         ty: Ty,
         index: usize,

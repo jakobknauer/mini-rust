@@ -131,6 +131,8 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
         ),
         NotAStructOrTuple { ty } => format!("Type '{}' is not a struct or tuple type", ctxt.tys.get_string_rep(ty)),
         NotATuple { ty } => format!("Type '{}' is not a tuple type", ctxt.tys.get_string_rep(ty)),
+        NotAPtrTy { ty } => format!("Type '{}' is not a pointer type", ctxt.tys.get_string_rep(ty)),
+        NotAnIntTy { ty } => format!("Type '{}' is not an integer type", ctxt.tys.get_string_rep(ty)),
         InvalidTupleIndex { ty, index } => format!(
             "Tuple type '{}' does not have a field at index '{}'",
             ctxt.tys.get_string_rep(ty),

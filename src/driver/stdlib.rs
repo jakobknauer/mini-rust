@@ -4,6 +4,7 @@ use crate::{
         fns::{self},
         ty,
     },
+    h2m::H2MError,
     util::mlr_builder::MlrBuilder,
 };
 
@@ -106,5 +107,80 @@ pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
     };
 
     ctxt.fns.add_fn_def(size_of_fn, mlr);
+    Ok(())
+}
+
+pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+    // Create an impl with signature impl<T> for *T
+    // That has one method, name offset(&self, offset: i32) -> Self
+
+    let var = ctxt.tys.register_gen_var("T");
+    let var_ty = ctxt.tys.register_gen_var_ty(var);
+    let ptr_ty = ctxt.tys.register_ptr_ty(var_ty);
+    let ref_ptr_ty = ctxt.tys.register_ref_ty(ptr_ty);
+
+    let impl_ = ctxt.impls.register_impl(ptr_ty, vec![var], None);
+    let fn_ = ctxt.fns.register_fn(
+        fns::FnSig {
+            name: "offset".to_string(),
+            associated_ty: Some(ptr_ty),
+            associated_trait_inst: None,
+            gen_params: vec![],
+            env_gen_params: vec![var],
+            params: vec![
+                ctxt::fns::FnParam {
+                    kind: ctxt::fns::FnParamKind::SelfByRef,
+                    ty: ref_ptr_ty,
+                },
+                ctxt::fns::FnParam {
+                    kind: ctxt::fns::FnParamKind::Regular("offset".to_string()),
+                    ty: ctxt.tys.get_primitive_ty(ty::Primitive::Integer32),
+                },
+            ],
+            var_args: false,
+            return_ty: ptr_ty,
+        },
+        true,
+    )?;
+    ctxt.impls.register_mthd(impl_, fn_, "offset");
+
+    Ok(())
+}
+
+pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), H2MError> {
+    let fn_ = ctxt.fns.get_fn_by_name("offset").unwrap();
+    let mut builder = MlrBuilder::new(fn_, ctxt);
+    let mut param_locs = Vec::new();
+
+    let signature = builder.get_signature();
+    let params = signature.params.clone();
+    for fns::FnParam { ty, .. } in params {
+        let loc = builder.insert_typed_loc(ty).unwrap();
+        param_locs.push(loc);
+    }
+
+    let body = {
+        builder.start_new_block();
+
+        let self_loc = param_locs[0];
+        let self_place = builder.insert_loc_place(self_loc).unwrap();
+        let self_op = builder.insert_copy_op(self_place).unwrap();
+        let deref_self = builder.insert_deref_place(self_op).unwrap();
+        let deref_self_op = builder.insert_copy_op(deref_self).unwrap();
+
+        let offset_loc = param_locs[1];
+        let offset_place = builder.insert_loc_place(offset_loc).unwrap();
+        let offset_op = builder.insert_copy_op(offset_place).unwrap();
+
+        let offset_val = builder.insert_ptr_offset_val(deref_self_op, offset_op)?;
+
+        builder.insert_return_stmt(offset_val).unwrap();
+
+        builder.release_current_block()
+    };
+
+    let mlr = fns::FnMlr { body, param_locs };
+
+    ctxt.fns.add_fn_def(fn_, mlr);
     Ok(())
 }

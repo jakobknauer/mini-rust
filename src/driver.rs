@@ -334,6 +334,8 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
 }
 
 fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+    stdlib::register_impl_for_ptr(ctxt)?;
+
     for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
         let gen_params: Vec<_> = hlr_impl
             .gen_params
@@ -380,6 +382,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
 
 fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
     stdlib::define_size_of(ctxt)?;
+    stdlib::define_impl_for_ptr(ctxt).map_err(|err| err::print_mlr_builder_error("offset", err, ctxt))?;
 
     for (idx, hlr_fn) in hlr.fns.iter().enumerate() {
         let Some(body) = &hlr_fn.body else {

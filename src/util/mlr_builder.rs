@@ -119,6 +119,11 @@ impl<'a> MlrBuilder<'a> {
         self.insert_val(val_def)
     }
 
+    pub fn insert_ptr_offset_val(&mut self, ptr: mlr::Op, offset_op: mlr::Op) -> H2MResult<mlr::Val> {
+        let val = mlr::ValDef::PtrOffset(ptr, offset_op);
+        self.insert_val(val)
+    }
+
     fn insert_stmt(&mut self, stmt_def: mlr::StmtDef) -> H2MResult<mlr::Stmt> {
         let stmt = self.ctxt.mlr.insert_stmt(stmt_def);
         self.typechecker().check_stmt_ty(stmt)?;

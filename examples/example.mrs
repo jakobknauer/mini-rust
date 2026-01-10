@@ -1,25 +1,33 @@
 fn main() -> i32 {
-    let point = (1, 2);
-    let r_point = &point;
-    let rr_point = &r_point;
-    let rrr_point = &rr_point;
-    
-    printf("%d\n", point.1);
-    printf("%d\n", r_point.1);
-    printf("%d\n", rr_point.1);
-    printf("%d\n", rrr_point.1);
+    let points: *Point = alloc_n(10);
+
+    let n = 0;
+    loop {
+        if n == 10 {
+            break;
+        }
+
+        points.offset(n).x = n;
+        points.offset(n).y = n;
+        n = n + 1;
+    }
+
+    let n = 0;
+    let result = 0;
+    loop {
+        if n == 10 {
+            break;
+        }
+
+        result = result + points.offset(n).x * points.offset(n).y;
+        n = n + 1;
+    }
+
+    printf("result = %d\n", result);
+
+    delete(points);
 
     0
-}
-
-fn false_() -> bool {
-    printf("\tfalse_()\n");
-    false
-}
-
-fn true_() -> bool {
-    printf("\ttrue_()\n");
-    true
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -28,8 +36,11 @@ fn free(alloc: *c_void);
 fn printf(format: *c_char, ...) -> i32;
 fn scanf(format: *c_char, ...) -> i32;
 
-fn new<T>() -> *T {
+fn alloc<T>() -> *T {
     malloc(size_of::<T>()) as *T
+}
+fn alloc_n<T>(n: i32) -> *T {
+    malloc(n * size_of::<T>()) as *T
 }
 fn delete<T>(ref: *T) {
     free(ref as *c_void)

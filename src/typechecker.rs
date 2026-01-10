@@ -43,6 +43,7 @@ impl<'a> Typechecker<'a> {
             AddrOf(place) => self.infer_ty_of_addr_of_place(place),
             As { op, target_ty } => self.infer_ty_of_as_expr(op, target_ty),
             SizeOf(..) => self.infer_ty_of_size_of_expr(),
+            PtrOffset(op, offset) => self.infer_ty_of_ptr_offset_expr(op, offset),
         }?;
 
         self.ctxt.mlr.set_val_ty(val, ty);
@@ -191,9 +192,27 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn infer_ty_of_size_of_expr(&self) -> Result<ty::Ty, TyError> {
+    fn infer_ty_of_size_of_expr(&self) -> TyResult<ty::Ty> {
         let int_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32);
         Ok(int_ty)
+    }
+
+    fn infer_ty_of_ptr_offset_expr(&self, op: Op, offset: Op) -> TyResult<ty::Ty> {
+        let op_ty = self.ctxt.mlr.get_op_ty(op);
+        let op_ty_def = self.ctxt.tys.get_ty_def(op_ty).unwrap();
+
+        if !matches!(op_ty_def, ty::TyDef::Ptr(_)) {
+            return TyError::NotAPtrTy { ty: op_ty }.into();
+        }
+
+        let offset_ty = self.ctxt.mlr.get_op_ty(offset);
+        let offset_ty_def = self.ctxt.tys.get_ty_def(offset_ty).unwrap();
+
+        if !matches!(offset_ty_def, ty::TyDef::Primitive(ty::Primitive::Integer32)) {
+            return TyError::NotAnIntTy { ty: offset_ty }.into();
+        }
+
+        Ok(op_ty)
     }
 
     fn infer_ty_of_fn(&mut self, fn_inst: &fns::FnInst) -> TyResult<ty::Ty> {
