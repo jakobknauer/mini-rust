@@ -181,6 +181,7 @@ impl<'a> H2M<'a> {
                 else_block,
             } => self.build_if(condition, then_block, else_block.as_ref(), expected),
             Loop { body } => self.build_loop(body),
+            While { condition, body } => self.build_while(condition, body),
             Block(block) => self.build_block(block, expected),
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected),
             AddrOf { base } => self.build_addr_of_val(base),
@@ -468,6 +469,39 @@ impl<'a> H2M<'a> {
     fn build_loop(&mut self, body: &hlr::Block) -> H2MResult<mlr::Val> {
         self.builder.start_new_block();
         self.build_block(body, None)?;
+        let body = self.builder.release_current_block();
+        self.builder.insert_loop_stmt(body)?;
+
+        let unit = self.builder.insert_unit_op()?;
+        self.builder.insert_use_val(unit)
+    }
+
+    fn build_while(&mut self, condition: &hlr::Expr, body: &hlr::Block) -> H2MResult<mlr::Val> {
+        self.builder.start_new_block();
+
+        // build 'if condition, then break'
+        let cond = self.lower_to_op(condition, None)?;
+        let cond_ty = self.mlr().get_op_ty(cond);
+        self.typechecker().assert_while_condition_ty(cond_ty)?;
+
+        {
+            self.builder.start_new_block();
+        }
+        let then_block = self.builder.release_current_block();
+
+        {
+            self.builder.start_new_block();
+            self.builder.insert_break_stmt()?;
+        }
+        let else_block = self.builder.release_current_block();
+
+        self.builder.insert_if_stmt(cond, then_block, else_block)?;
+
+        // build actual loop body
+        self.builder.push_scope();
+        self.build_block(body, None)?;
+        self.builder.pop_scope();
+
         let body = self.builder.release_current_block();
         self.builder.insert_loop_stmt(body)?;
 

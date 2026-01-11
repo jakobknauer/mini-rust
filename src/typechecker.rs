@@ -637,4 +637,11 @@ impl<'a> Typechecker<'a> {
             .into(),
         }
     }
+
+    pub fn assert_while_condition_ty(&mut self, condition_ty: ty::Ty) -> TyResult<()> {
+        self.ctxt
+            .tys
+            .unify(condition_ty, self.ctxt.tys.get_primitive_ty(ty::Primitive::Boolean))
+            .map_err(|_| TyError::WhileConditionNotBoolean { actual: condition_ty })
+    }
 }

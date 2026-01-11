@@ -16,10 +16,7 @@ fn vec_new<T>() -> Vec<T> {
 
 fn copy_n<T>(src: *T, dst: *T, n: i32) {
     let i = 0;
-    loop {
-        if i == n {
-            break;
-        }
+    while i < n {
         *dst.offset(i) = *src.offset(i);
         i = i + 1;
     }

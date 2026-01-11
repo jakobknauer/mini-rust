@@ -59,4 +59,5 @@ pub enum Keyword {
     Struct,
     Trait,
     Where,
+    While,
 }

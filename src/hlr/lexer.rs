@@ -72,6 +72,7 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("trait", Token::Keyword(Keyword::Trait)),
     ("true", Token::BoolLiteral(true)),
     ("where", Token::Keyword(Keyword::Where)),
+    ("while", Token::Keyword(Keyword::While)),
 ];
 
 impl<'a> Lexer<'a> {

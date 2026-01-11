@@ -142,6 +142,10 @@ pub enum Expr {
     Loop {
         body: Block,
     },
+    While {
+        condition: Box<Expr>,
+        body: Block,
+    },
     Block(Block),
     FieldAccess {
         obj: Box<Expr>,

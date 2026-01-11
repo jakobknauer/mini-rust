@@ -507,6 +507,10 @@ impl<'a> HlrParser<'a> {
                 let expr = self.parse_loop()?;
                 Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
             }
+            Some(Token::Keyword(Keyword::While)) => {
+                let expr = self.parse_while()?;
+                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
+            }
             Some(Token::Keyword(Keyword::Match)) => {
                 let expr = self.parse_match()?;
                 Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
@@ -784,6 +788,7 @@ impl<'a> HlrParser<'a> {
             }
             Token::Keyword(Keyword::If) => self.parse_if_expr(),
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
+            Token::Keyword(Keyword::While) => self.parse_while(),
             Token::Keyword(Keyword::Match) => self.parse_match(),
             Token::Keyword(Keyword::Self_) => {
                 self.position += 1;
@@ -904,6 +909,16 @@ impl<'a> HlrParser<'a> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
         Ok(Expr::Loop { body })
+    }
+
+    fn parse_while(&mut self) -> Result<Expr, ParserErr> {
+        self.expect_keyword(Keyword::While)?;
+        let condition = self.parse_expr(false)?; // Don't allow top-level struct in while condition
+        let body = self.parse_block()?;
+        Ok(Expr::While {
+            condition: Box::new(condition),
+            body,
+        })
     }
 
     fn parse_match(&mut self) -> Result<Expr, ParserErr> {

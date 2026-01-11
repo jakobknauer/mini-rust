@@ -93,6 +93,10 @@ fn print_ty_error(fn_name: &str, err: TyError, ctxt: &ctxt::Ctxt) -> String {
             "If condition must be of type 'bool', got '{}'",
             ctxt.tys.get_string_rep(actual)
         ),
+        WhileConditionNotBoolean { actual } => format!(
+            "While condition must be of type 'bool', got '{}'",
+            ctxt.tys.get_string_rep(actual)
+        ),
         IfBranchTyMismatch { then_ty, else_ty } => format!(
             "If branches must have the same type: then is '{}', else is '{}'",
             ctxt.tys.get_string_rep(then_ty),

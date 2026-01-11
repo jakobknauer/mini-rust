@@ -29,6 +29,9 @@ pub enum TyError {
     IfConditionNotBoolean {
         actual: Ty,
     },
+    WhileConditionNotBoolean {
+        actual: Ty,
+    },
     IfBranchTyMismatch {
         then_ty: Ty,
         else_ty: Ty,

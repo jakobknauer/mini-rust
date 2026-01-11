@@ -135,10 +135,10 @@ impl<'a> MlrBuilder<'a> {
         Ok(stmt)
     }
 
-    pub fn insert_if_stmt(&mut self, cond: mlr::Op, then_: mlr::Stmt, else_: mlr::Stmt) -> H2MResult<mlr::Stmt> {
+    pub fn insert_if_stmt(&mut self, cond: mlr::Op, then: mlr::Stmt, else_: mlr::Stmt) -> H2MResult<mlr::Stmt> {
         let if_ = mlr::StmtDef::If(mlr::If {
             cond,
-            then: then_,
+            then,
             else_,
         });
         self.insert_stmt(if_)
