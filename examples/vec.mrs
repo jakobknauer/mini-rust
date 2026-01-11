@@ -1,0 +1,68 @@
+struct Vec<T> {
+    ptr: *T,
+    len: i32,
+    cap: i32,
+}
+
+fn vec_new<T>() -> Vec<T> {
+    let init_cap = 8;
+    let ptr = alloc_n::<T>(init_cap);
+    Vec {
+        ptr: ptr,
+        len: 0,
+        cap: init_cap,
+    }
+}
+
+fn copy_n<T>(src: *T, dst: *T, n: i32) {
+    let i = 0;
+    loop {
+        if i == n {
+            break;
+        }
+        *dst.offset(i) = *src.offset(i);
+        i = i + 1;
+    }
+}
+
+impl<T> Vec<T> {
+    fn push(&self, val: T) {
+        if self.len == self.cap {
+            self.cap = self.cap * 2;
+
+            let new_ptr = alloc_n(self.cap);
+            copy_n(self.ptr, new_ptr, self.len);
+
+            delete(self.ptr);
+            self.ptr = new_ptr;
+        }
+
+        *self.ptr.offset(self.len) = val;
+        self.len = self.len + 1;
+    }
+
+    fn len(&self) -> i32 { self.len }
+
+    fn get(&self, idx: i32) -> Option<&T> {
+        if idx >= self.len || idx < 0 {
+            None {}
+        } else {
+            Some { item: &*self.ptr.offset(idx) }
+        }
+    }
+
+    fn pop(&self) -> Option<T> {
+        if self.len == 0 {
+            None {}
+        } else {
+            self.len = self.len - 1;
+            Some { item: *self.ptr.offset(self.len) }
+        }
+    }
+
+    fn drop(&self) {
+        self.len = 0;
+        self.cap = 0;
+        delete(self.ptr);
+    }
+}
