@@ -1,5 +1,6 @@
 pub mod fns;
 pub mod impls;
+pub mod language_items;
 pub mod mlr;
 pub mod traits;
 pub mod ty;
@@ -25,6 +26,7 @@ pub struct Ctxt {
     pub mlr: Mlr,
     pub impls: ImplReg,
     pub traits: TraitReg,
+    pub language_items: language_items::LanguageItems,
 }
 
 impl Ctxt {

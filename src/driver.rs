@@ -155,7 +155,7 @@ fn set_struct_fields<'a>(
 }
 
 fn register_functions(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
-    stdlib::register_fns(&mut ctxt.tys, &mut ctxt.fns)?;
+    stdlib::register_fns(ctxt)?;
 
     for (idx, function) in hlr.fns.iter().enumerate() {
         let fn_ = register_function(function, ctxt, None, None, Vec::new())?;

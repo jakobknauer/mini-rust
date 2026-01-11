@@ -32,10 +32,13 @@ macro_rules! register_fn {
     };
 }
 
-pub fn register_fns(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
+pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+    let tys = &mut ctxt.tys;
     let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
     let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
     let unit = tys.register_unit_ty();
+
+    let fns = &mut ctxt.fns;
 
     register_fn!(fns, "add::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);
@@ -61,33 +64,32 @@ pub fn register_fns(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), 
     register_fn!(fns, "not::<bool>", (a: bool) -> bool);
     register_fn!(fns, "neg::<i32>", (a: i32) -> i32);
 
-    register_size_of(tys, fns)?;
+    register_size_of(ctxt)?;
 
     Ok(())
 }
 
-fn register_size_of(tys: &mut ctxt::TyReg, fns: &mut ctxt::FnReg) -> Result<(), ()> {
-    fns.register_fn(
+fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+    let fn_ = ctxt.fns.register_fn(
         fns::FnSig {
             name: "size_of".to_string(),
             associated_ty: None,
             associated_trait_inst: None,
-            gen_params: vec![tys.register_gen_var("T")],
+            gen_params: vec![ctxt.tys.register_gen_var("T")],
             env_gen_params: vec![],
             params: vec![],
             var_args: false,
-            return_ty: tys.get_primitive_ty(ty::Primitive::Integer32),
+            return_ty: ctxt.tys.get_primitive_ty(ty::Primitive::Integer32),
         },
         true,
     )?;
+    ctxt.language_items.size_of = Some(fn_);
     Ok(())
 }
 
 pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
-    let size_of_fn = ctxt
-        .fns
-        .get_fn_by_name("size_of")
-        .ok_or("function size_of not registered")?;
+    let size_of_fn = ctxt.language_items.size_of.ok_or("function size_of not registered")?;
+
     let mut builder = MlrBuilder::new(size_of_fn, ctxt);
 
     let body = {
@@ -111,9 +113,6 @@ pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
 }
 
 pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
-    // Create an impl with signature impl<T> for *T
-    // That has one method, name offset(&self, offset: i32) -> Self
-
     let var = ctxt.tys.register_gen_var("T");
     let var_ty = ctxt.tys.register_gen_var_ty(var);
     let ptr_ty = ctxt.tys.register_ptr_ty(var_ty);
@@ -144,11 +143,13 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     )?;
     ctxt.impls.register_mthd(impl_, fn_, "offset");
 
+    ctxt.language_items.ptr_offset = Some(fn_);
+
     Ok(())
 }
 
 pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), H2MError> {
-    let fn_ = ctxt.fns.get_fn_by_name("offset").unwrap();
+    let fn_ = ctxt.language_items.ptr_offset.unwrap();
     let mut builder = MlrBuilder::new(fn_, ctxt);
     let mut param_locs = Vec::new();
 
