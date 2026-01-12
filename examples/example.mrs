@@ -86,9 +86,9 @@ impl ToString for *c_char {
 impl bool {
     fn then_some<T>(self, item: T) -> Option<T> {
         if self {
-            Some { item: item }
+            Option::Some { item: item }
         } else {
-            None {}
+            Option::None {}
         }
     }
 }

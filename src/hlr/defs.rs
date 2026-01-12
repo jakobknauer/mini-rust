@@ -92,6 +92,40 @@ pub struct Block {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Path {
+    pub segments: Vec<PathSegment>,
+}
+
+impl std::fmt::Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.segments
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join("::")
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PathSegment {
+    Ident(String),
+    Generic(GenPathSegment),
+}
+
+impl std::fmt::Display for PathSegment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PathSegment::Ident(ident) => write!(f, "{}", ident),
+            PathSegment::Generic(segment) => write!(f, "{}", segment),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     Let {
         name: String,
@@ -106,7 +140,7 @@ pub enum Stmt {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Lit(Lit),
-    Ident(Ident),
+    Ident(GenPathSegment),
     Tuple(Vec<Expr>),
     BinaryOp {
         left: Box<Expr>,
@@ -127,11 +161,11 @@ pub enum Expr {
     },
     MthdCall {
         obj: Box<Expr>,
-        mthd: Ident,
+        mthd: GenPathSegment,
         arguments: Vec<Expr>,
     },
     Struct {
-        name: Ident,
+        ty_path: Path,
         fields: Vec<(String, Expr)>,
     },
     If {
@@ -175,7 +209,7 @@ pub enum Expr {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FieldDescriptor {
-    Named(Ident),
+    Named(GenPathSegment),
     Indexed(usize),
 }
 
@@ -186,9 +220,24 @@ pub struct ClosureParam {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Ident {
+pub struct GenPathSegment {
     pub ident: String,
     pub gen_args: Vec<TyAnnot>,
+}
+
+impl std::fmt::Display for GenPathSegment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}<{}>",
+            self.ident,
+            self.gen_args
+                .iter()
+                .map(|annot| format!("{}", annot))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -248,7 +297,7 @@ pub struct StructPatternField {
 pub enum TyAnnot {
     Named(String),
     Tuple(Vec<TyAnnot>),
-    Generic(Ident),
+    Generic(GenPathSegment),
     Ref(Box<TyAnnot>),
     Ptr(Box<TyAnnot>),
     Fn {
@@ -257,4 +306,31 @@ pub enum TyAnnot {
     },
     Self_,
     Wildcard,
+}
+
+impl std::fmt::Display for TyAnnot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TyAnnot::Named(name) => write!(f, "{}", name),
+            TyAnnot::Tuple(ty_annots) => write!(
+                f,
+                "({})",
+                ty_annots.iter().map(|ty| ty.to_string()).collect::<Vec<_>>().join(", ")
+            ),
+            TyAnnot::Generic(gen_path_segment) => write!(f, "{}", gen_path_segment),
+            TyAnnot::Ref(ty_annot) => write!(f, "&{}", ty_annot),
+            TyAnnot::Ptr(ty_annot) => write!(f, "*{}", ty_annot),
+            TyAnnot::Fn { param_tys, return_ty } => write!(
+                f,
+                "fn({}) -> {}",
+                param_tys.iter().map(|ty| ty.to_string()).collect::<Vec<_>>().join(", "),
+                match return_ty {
+                    Some(ty) => ty.to_string(),
+                    None => "()".to_string(),
+                }
+            ),
+            TyAnnot::Self_ => write!(f, "Self"),
+            TyAnnot::Wildcard => write!(f, "_"),
+        }
+    }
 }

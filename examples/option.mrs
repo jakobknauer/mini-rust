@@ -15,8 +15,8 @@ impl<T> Option<T> {
         where F: Fn(T) -> U
     {
         match self {
-            Some { item: item } => Some { item: f(item) },
-            None {} => None {},
+            Some { item: item } => Option::Some { item: f(item) },
+            None {} => Option::None {},
         }
     }
 
@@ -31,8 +31,8 @@ impl<T> Option<T> {
 
     fn as_ref(&self) -> Option<&T> {
         match self {
-            Some { item: item } => Some { item: item },
-            None {} => None {},
+            Some { item: item } => Option::Some { item: item },
+            None {} => Option::None {},
         }
     }
 }

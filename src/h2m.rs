@@ -174,7 +174,7 @@ impl<'a> H2M<'a> {
             Assign { target, value } => self.build_assignment(target, value),
             Call { callee, arguments } => self.build_call(callee, arguments),
             MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments),
-            Struct { name, fields } => self.build_struct_or_enum_val(name, fields),
+            Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields),
             If {
                 condition,
                 then_block,
@@ -214,7 +214,7 @@ impl<'a> H2M<'a> {
 
         match expr {
             Lit(lit) => self.build_literal(lit),
-            Ident(hlr::Ident { ident, gen_args }) => self.lower_ident_to_op(ident, gen_args),
+            Ident(hlr::GenPathSegment { ident, gen_args }) => self.lower_ident_to_op(ident, gen_args),
             FieldAccess { .. } | Deref { .. } | Self_ => {
                 let place = self.lower_to_place(expr)?;
                 self.builder.insert_copy_op(place)
@@ -371,7 +371,12 @@ impl<'a> H2M<'a> {
         self.builder.insert_call_val(callee, args)
     }
 
-    fn build_mthd_call(&mut self, obj: &hlr::Expr, mthd: &hlr::Ident, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
+    fn build_mthd_call(
+        &mut self,
+        obj: &hlr::Expr,
+        mthd: &hlr::GenPathSegment,
+        args: &[hlr::Expr],
+    ) -> H2MResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
 
@@ -509,24 +514,10 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_val(unit)
     }
 
-    fn build_struct_or_enum_val(&mut self, ident: &hlr::Ident, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
-        if let Some(struct_) = self.tys().get_struct_by_name(&ident.ident) {
-            let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
-            let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&ident.gen_args, n_gen_params)?;
-
-            let ty = self.tys().instantiate_struct(struct_, gen_args)?;
-            self.build_struct_val(ty, fields)
-        } else if let Some((enum_, variant_index)) = self.builder.try_resolve_enum_variant(&ident.ident) {
-            let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
-            let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&ident.gen_args, n_gen_params)?;
-
-            let ty = self.tys().instantiate_enum(enum_, gen_args)?;
-            self.build_enum_val(ty, &variant_index, fields)
-        } else {
-            H2MError::UnresolvableStructOrEnum {
-                ty_name: ident.ident.to_string(),
-            }
-            .into()
+    fn build_struct_or_enum_val(&mut self, ty_path: &hlr::Path, fields: &[(String, hlr::Expr)]) -> H2MResult<mlr::Val> {
+        match self.resolve_path_to_struct_or_enum_variant(ty_path)? {
+            StructOrEnumResolution::Struct(ty) => self.build_struct_val(ty, fields),
+            StructOrEnumResolution::EnumVariant(ty, variant_index) => self.build_enum_val(ty, variant_index, fields),
         }
     }
 
@@ -539,7 +530,7 @@ impl<'a> H2M<'a> {
     fn build_enum_val(
         &mut self,
         ty: ty::Ty,
-        variant_index: &usize,
+        variant_index: usize,
         fields: &[(String, hlr::Expr)],
     ) -> H2MResult<mlr::Val> {
         // Create empty enum value
@@ -547,7 +538,7 @@ impl<'a> H2M<'a> {
 
         // Fill discriminant
         let discriminant_place = self.builder.insert_enum_discriminant_place(base_place)?;
-        let discriminant_op = self.builder.insert_int_op(*variant_index as i64)?;
+        let discriminant_op = self.builder.insert_int_op(variant_index as i64)?;
         let discriminant_value = self.builder.insert_use_val(discriminant_op)?;
         self.builder
             .insert_assign_stmt(discriminant_place, discriminant_value)?;
@@ -555,8 +546,8 @@ impl<'a> H2M<'a> {
         // Fill fields
         let variant_place = self
             .builder
-            .insert_project_to_variant_place(base_place, *variant_index)?;
-        let variant_ty = self.builder.typechecker().get_enum_variant_ty(ty, *variant_index)?;
+            .insert_project_to_variant_place(base_place, variant_index)?;
+        let variant_ty = self.builder.typechecker().get_enum_variant_ty(ty, variant_index)?;
         self.build_struct_field_init_stmts(variant_ty, fields, variant_place)?;
 
         self.builder.insert_use_place_val(base_place)
@@ -857,4 +848,77 @@ impl<'a> H2M<'a> {
 
         self.builder.insert_field_access_place(self.captures_place?, index).ok()
     }
+
+    fn resolve_path_to_struct_or_enum_variant(&mut self, path: &hlr::Path) -> H2MResult<StructOrEnumResolution> {
+        match path.segments.as_slice() {
+            [ident] => {
+                let (struct_, gen_args) = match ident {
+                    hlr::PathSegment::Ident(ident) => {
+                        let struct_ = self
+                            .tys()
+                            .get_struct_by_name(ident)
+                            .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
+                        let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
+                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
+                        (struct_, gen_args)
+                    }
+                    hlr::PathSegment::Generic(gen_path_segment) => {
+                        let struct_ = self.tys().get_struct_by_name(&gen_path_segment.ident).unwrap();
+                        let gen_args = gen_path_segment
+                            .gen_args
+                            .iter()
+                            .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                            .collect::<H2MResult<_>>()?;
+                        (struct_, gen_args)
+                    }
+                };
+                let ty = self.tys().instantiate_struct(struct_, gen_args)?;
+                Ok(StructOrEnumResolution::Struct(ty))
+            }
+            [enum_, variant_name] => {
+                let (enum_, gen_args) = match enum_ {
+                    hlr::PathSegment::Ident(ident) => {
+                        let enum_ = self
+                            .tys()
+                            .get_enum_by_name(ident)
+                            .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
+                        let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
+                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
+                        (enum_, gen_args)
+                    }
+                    hlr::PathSegment::Generic(gen_path_segment) => {
+                        let struct_ = self.tys().get_enum_by_name(&gen_path_segment.ident).unwrap();
+                        let gen_args = gen_path_segment
+                            .gen_args
+                            .iter()
+                            .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                            .collect::<H2MResult<_>>()?;
+                        (struct_, gen_args)
+                    }
+                };
+                let ty = self.tys().instantiate_enum(enum_, gen_args)?;
+
+                let hlr::PathSegment::Ident(variant_name) = &variant_name else {
+                    return Err(H2MError::UnresolvableStructOrEnum { path: path.clone() });
+                };
+
+                let variant_index = self
+                    .tys()
+                    .get_enum_def(enum_)
+                    .unwrap()
+                    .variants
+                    .iter()
+                    .position(|variant| &variant.name == variant_name)
+                    .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
+
+                Ok(StructOrEnumResolution::EnumVariant(ty, variant_index))
+            }
+            _ => Err(H2MError::UnresolvableStructOrEnum { path: path.clone() }),
+        }
+    }
+}
+
+enum StructOrEnumResolution {
+    Struct(ty::Ty),
+    EnumVariant(ty::Ty, usize),
 }

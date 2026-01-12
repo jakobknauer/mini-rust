@@ -1,4 +1,4 @@
-use crate::{ctxt::ty::Ty, typechecker::TyError};
+use crate::{ctxt::ty::Ty, hlr::Path, typechecker::TyError};
 
 pub type H2MResult<T> = Result<T, H2MError>;
 
@@ -9,7 +9,7 @@ pub enum H2MError {
     NotAPlace,
     TyErr(TyError),
     OperatorResolutionFailed { operator: String, operand_tys: (Ty, Ty) },
-    UnresolvableStructOrEnum { ty_name: String },
+    UnresolvableStructOrEnum { path: Path },
     UnresolvableTyAnnot,
     VarArgsNotSupported,
     NonMatchableScrutinee { ty: Ty },

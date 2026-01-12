@@ -42,18 +42,18 @@ impl<T> Vec<T> {
 
     fn get(&self, idx: i32) -> Option<&T> {
         if idx >= self.len || idx < 0 {
-            None {}
+            Option::None {}
         } else {
-            Some { item: &*self.ptr.offset(idx) }
+            Option::Some { item: &*self.ptr.offset(idx) }
         }
     }
 
     fn pop(&self) -> Option<T> {
         if self.len == 0 {
-            None {}
+            Option::None {}
         } else {
             self.len = self.len - 1;
-            Some { item: *self.ptr.offset(self.len) }
+            Option::Some { item: *self.ptr.offset(self.len) }
         }
     }
 

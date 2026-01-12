@@ -301,17 +301,6 @@ impl<'a> MlrBuilder<'a> {
             .and_then(|loc| self.insert_loc_place(loc).ok())
     }
 
-    pub fn try_resolve_enum_variant(&self, variant_name: &str) -> Option<(ty::Enum, usize)> {
-        for (enum_, enum_def) in self.ctxt.tys.get_all_enums() {
-            for (idx, variant) in enum_def.variants.iter().enumerate() {
-                if variant.name == variant_name {
-                    return Some((enum_, idx));
-                }
-            }
-        }
-        None
-    }
-
     pub fn resolve_hlr_ty_annot_or_insert_new_type(&mut self, annot: Option<&hlr::TyAnnot>) -> H2MResult<ty::Ty> {
         annot
             .map(|annot| self.resolve_hlr_ty_annot(annot))

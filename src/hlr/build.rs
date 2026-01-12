@@ -71,6 +71,10 @@ impl<'a> HlrParser<'a> {
         self.input.get(self.position)
     }
 
+    fn next(&self) -> Option<&Token> {
+        self.input.get(self.position + 1)
+    }
+
     fn expect_keyword(&mut self, keyword: Keyword) -> Result<(), ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
@@ -109,6 +113,15 @@ impl<'a> HlrParser<'a> {
             && *t == token
         {
             self.position += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn advance_if_turbofish(&mut self) -> bool {
+        if self.current() == Some(&Token::ColonColon) && self.next() == Some(&Token::Smaller) {
+            self.position += 2;
             true
         } else {
             false
@@ -364,7 +377,7 @@ impl<'a> HlrParser<'a> {
             let ty2 = self.parse_ty_annot()?;
             match ty {
                 TyAnnot::Named(trait_name) => (Some(trait_name), vec![], ty2),
-                TyAnnot::Generic(Ident {
+                TyAnnot::Generic(GenPathSegment {
                     ident: trait_name,
                     gen_args: trait_args,
                 }) => (Some(trait_name), trait_args, ty2),
@@ -740,7 +753,7 @@ impl<'a> HlrParser<'a> {
                 Ok(Expr::Lit(Lit::CString(value)))
             }
             Token::Identifier(..) => {
-                let ident = self.parse_ident()?;
+                let path = self.parse_path()?;
 
                 if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
                     // parse struct expr
@@ -756,9 +769,15 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    Ok(Expr::Struct { name: ident, fields })
+                    Ok(Expr::Struct { ty_path: path, fields })
                 } else {
-                    Ok(Expr::Ident(ident))
+                    match &path.segments[0] {
+                        PathSegment::Ident(ident) => Ok(Expr::Ident(GenPathSegment {
+                            ident: ident.clone(),
+                            gen_args: vec![],
+                        })),
+                        PathSegment::Generic(gen_path_segment) => Ok(Expr::Ident(gen_path_segment.clone())),
+                    }
                 }
             }
             Token::LParen => {
@@ -866,7 +885,7 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_ident(&mut self) -> Result<Ident, ParserErr> {
+    fn parse_ident(&mut self) -> Result<GenPathSegment, ParserErr> {
         let ident = self.expect_identifier()?;
 
         let gen_args = if self.advance_if(Token::ColonColon) {
@@ -885,8 +904,38 @@ impl<'a> HlrParser<'a> {
             vec![]
         };
 
-        let ident = Ident { ident, gen_args };
+        let ident = GenPathSegment { ident, gen_args };
         Ok(ident)
+    }
+
+    fn parse_path(&mut self) -> Result<Path, ParserErr> {
+        let mut segments = Vec::new();
+
+        loop {
+            let ident = self.expect_identifier()?;
+
+            let segment = if self.advance_if_turbofish() {
+                let mut gen_args = Vec::new();
+                while self.current() != Some(&Token::Greater) {
+                    let gen_arg = self.parse_ty_annot()?;
+                    gen_args.push(gen_arg);
+                    if !self.advance_if(Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect_token(Token::Greater)?;
+                PathSegment::Generic(GenPathSegment { ident, gen_args })
+            } else {
+                PathSegment::Ident(ident)
+            };
+
+            segments.push(segment);
+            if !self.advance_if(Token::ColonColon) {
+                break;
+            }
+        }
+
+        Ok(Path { segments })
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
@@ -994,7 +1043,7 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::Greater)?;
-                    Ok(TyAnnot::Generic(Ident { ident, gen_args }))
+                    Ok(TyAnnot::Generic(GenPathSegment { ident, gen_args }))
                 } else {
                     Ok(TyAnnot::Named(ident))
                 }
@@ -1075,7 +1124,7 @@ mod tests {
     use super::*;
 
     fn make_ident(name: &str) -> Expr {
-        Expr::Ident(Ident {
+        Expr::Ident(GenPathSegment {
             ident: name.to_string(),
             gen_args: vec![],
         })
@@ -1279,7 +1328,7 @@ mod tests {
                             stmts: vec![],
                             return_expr: Some(Box::new(Expr::FieldAccess {
                                 obj: Box::new(Expr::Self_),
-                                field: FieldDescriptor::Named(Ident {
+                                field: FieldDescriptor::Named(GenPathSegment {
                                     ident: "b".to_string(),
                                     gen_args: vec![],
                                 }),
@@ -1420,17 +1469,15 @@ mod tests {
                 }"#;
 
             let expected = Expr::Struct {
-                name: Ident {
-                    ident: "Circle".to_string(),
-                    gen_args: vec![],
+                ty_path: Path {
+                    segments: vec![PathSegment::Ident("Circle".to_string())],
                 },
                 fields: vec![
                     (
                         "center".to_string(),
                         Expr::Struct {
-                            name: Ident {
-                                ident: "Point".to_string(),
-                                gen_args: vec![],
+                            ty_path: Path {
+                                segments: vec![PathSegment::Ident("Point".to_string())],
                             },
                             fields: vec![
                                 ("x".to_string(), Expr::Lit(Lit::Int(1))),
@@ -1485,13 +1532,13 @@ mod tests {
                             callee: Box::new(make_ident("function")),
                             arguments: vec![make_ident("arg0")],
                         }),
-                        mthd: Ident {
+                        mthd: GenPathSegment {
                             ident: "method".to_string(),
                             gen_args: vec![],
                         },
                         arguments: vec![make_ident("arg1"), make_ident("arg2")],
                     }),
-                    field: FieldDescriptor::Named(Ident {
+                    field: FieldDescriptor::Named(GenPathSegment {
                         ident: "field".to_string(),
                         gen_args: vec![],
                     }),

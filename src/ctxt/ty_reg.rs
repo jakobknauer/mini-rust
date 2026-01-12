@@ -246,6 +246,13 @@ impl TyReg {
         }
     }
 
+    pub fn get_enum_by_name(&self, name: &str) -> Option<Enum> {
+        match self.named_tys.get(name) {
+            Some(&Named::Enum(enum_)) => Some(enum_),
+            _ => None,
+        }
+    }
+
     pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
         self.structs.get(struct_.0)
     }
@@ -589,13 +596,6 @@ impl TyReg {
             Primitive::CChar => self.c_char_ty,
         }
         .expect("primitive type should be registered")
-    }
-
-    pub fn get_all_enums(&self) -> impl Iterator<Item = (Enum, &EnumDef)> {
-        self.enums
-            .iter()
-            .enumerate()
-            .map(|(enum_, enum_def)| (Enum(enum_), enum_def))
     }
 
     #[must_use]
