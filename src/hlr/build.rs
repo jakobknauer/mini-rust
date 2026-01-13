@@ -1121,10 +1121,7 @@ mod tests {
 
     fn make_ident(name: &str) -> Expr {
         Expr::Path(Path {
-            segments: vec![PathSegment::Generic(GenPathSegment {
-                ident: name.to_string(),
-                gen_args: vec![],
-            })],
+            segments: vec![PathSegment::Ident(name.to_string())],
         })
     }
 
