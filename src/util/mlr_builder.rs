@@ -267,8 +267,11 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_unit_op(&mut self) -> H2MResult<mlr::Op> {
-        let op = mlr::OpDef::Const(mlr::Const::Unit);
-        self.insert_op(op)
+        let unit_ty = self.tys().register_unit_ty();
+        let unit_loc = self.insert_typed_loc(unit_ty)?;
+        self.insert_alloc_stmt(unit_loc)?;
+        let unit_place = self.insert_loc_place(unit_loc)?;
+        self.insert_copy_op(unit_place)
     }
 
     pub fn insert_c_char_op(&mut self, c_char: u8) -> H2MResult<mlr::Op> {

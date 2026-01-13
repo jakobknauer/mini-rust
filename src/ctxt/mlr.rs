@@ -78,7 +78,6 @@ pub enum PlaceDef {
 pub enum Const {
     Int(i64),
     Bool(bool),
-    Unit,
     CChar(u8),
     CString(Vec<u8>),
 }

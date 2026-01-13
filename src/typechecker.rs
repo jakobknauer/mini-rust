@@ -105,7 +105,6 @@ impl<'a> Typechecker<'a> {
         let ty = match constant {
             Int(_) => ty::Primitive::Integer32,
             Bool(_) => ty::Primitive::Boolean,
-            Unit => return Ok(self.ctxt.tys.register_unit_ty()),
             CChar(_) => ty::Primitive::CChar,
             CString(..) => {
                 let c_char_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::CChar);

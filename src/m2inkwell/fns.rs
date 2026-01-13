@@ -162,13 +162,6 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
         Ok(address)
     }
 
-    fn build_unit_value(&mut self) -> M2InkwellFnResult<BasicValueEnum<'iw>> {
-        let mr_unit_ty = self.m2iw.mr_ctxt.tys.register_unit_ty();
-        let iw_ty = self.m2iw.get_or_define_ty(mr_unit_ty).ok_or(M2InkwellFnError)?;
-        let iw_struct_type: StructType = iw_ty.try_into().map_err(|_| M2InkwellFnError)?;
-        Ok(iw_struct_type.const_named_struct(&[]).as_basic_value_enum())
-    }
-
     fn build_entry_block(&mut self) -> M2InkwellFnResult<BasicBlock<'iw>> {
         let entry_block = self.m2iw.iw_ctxt.append_basic_block(self.iw_fn, "entry");
         self.entry_block = Some(entry_block);
@@ -346,7 +339,6 @@ impl<'a, 'iw, 'mr> M2InkwellFn<'a, 'iw, 'mr> {
                 let bool_ty = self.m2iw.iw_ctxt.bool_type();
                 bool_ty.const_int(b as u64, false).as_basic_value_enum()
             }
-            Unit => self.build_unit_value()?,
             CChar(c) => {
                 let char_ty = self.m2iw.iw_ctxt.i8_type();
                 char_ty.const_int(c as u64, false).as_basic_value_enum()
