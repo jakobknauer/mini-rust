@@ -164,7 +164,7 @@ impl<'a> H2M<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Lit(..) | Ident { .. } | FieldAccess { .. } | Deref { .. } | Self_ => {
+            Lit(..) | Path { .. } | FieldAccess { .. } | Deref { .. } | Self_ => {
                 let op = self.lower_to_op(expr, expected)?;
                 self.builder.insert_use_val(op)
             }
@@ -198,7 +198,7 @@ impl<'a> H2M<'a> {
         use hlr::Expr::*;
 
         match expr {
-            Ident(ident) if ident.gen_args.is_empty() => self.lower_ident_to_place(&ident.ident),
+            Path(path) => self.lower_path_to_place(path),
             FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field),
             Deref { base } => self.lower_deref_to_place(base),
             Self_ => {
@@ -214,7 +214,7 @@ impl<'a> H2M<'a> {
 
         match expr {
             Lit(lit) => self.build_literal(lit),
-            Ident(hlr::GenPathSegment { ident, gen_args }) => self.lower_ident_to_op(ident, gen_args),
+            Path(path) => self.lower_path_to_op(path),
             FieldAccess { .. } | Deref { .. } | Self_ => {
                 let place = self.lower_to_place(expr)?;
                 self.builder.insert_copy_op(place)
@@ -237,20 +237,32 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn lower_ident_to_op(&mut self, ident: &str, gen_args: &[hlr::TyAnnot]) -> H2MResult<mlr::Op> {
-        if gen_args.is_empty()
-            && let Some(place) = self.resolve_name_to_place(ident)
-        {
-            self.builder.insert_copy_op(place)
-        } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
-            let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
-            let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-            self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())
-        } else {
-            Err(H2MError::UnresolvableSymbol {
-                name: ident.to_string(),
-            })
+    fn lower_path_to_op(&mut self, path: &hlr::Path) -> H2MResult<mlr::Op> {
+        match path.segments.as_slice() {
+            [hlr::PathSegment::Ident(ident)] => {
+                if let Some(place) = self.resolve_name_to_place(ident) {
+                    self.builder.insert_copy_op(place)
+                } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
+                    let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+                    let gen_args = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
+                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())
+                } else {
+                    Err(H2MError::UnresolvablePath { path: path.clone() })
+                }
+            }
+            [hlr::PathSegment::Generic(gen_path_segment)] => {
+                if let Some(fn_) = self.fns().get_fn_by_name(&gen_path_segment.ident) {
+                    let gen_args = gen_path_segment
+                        .gen_args
+                        .iter()
+                        .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                        .collect::<H2MResult<_>>()?;
+                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())
+                } else {
+                    Err(H2MError::UnresolvablePath { path: path.clone() })
+                }
+            }
+            _ => Err(H2MError::UnresolvablePath { path: path.clone() }),
         }
     }
 
@@ -759,9 +771,13 @@ impl<'a> H2M<'a> {
         Ok(())
     }
 
-    fn lower_ident_to_place(&mut self, name: &str) -> H2MResult<mlr::Place> {
-        self.resolve_name_to_place(name)
-            .ok_or_else(|| H2MError::UnresolvableSymbol { name: name.to_string() })
+    fn lower_path_to_place(&mut self, path: &hlr::Path) -> H2MResult<mlr::Place> {
+        match path.segments.as_slice() {
+            [hlr::PathSegment::Ident(ident)] => self.resolve_name_to_place(ident).ok_or(H2MError::UnresolvableSymbol {
+                name: ident.to_string(),
+            }),
+            _ => Err(H2MError::NotAPlace),
+        }
     }
 
     fn lower_field_access_to_place(

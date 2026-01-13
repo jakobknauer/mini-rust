@@ -755,7 +755,7 @@ impl<'a> HlrParser<'a> {
             Token::Identifier(..) => {
                 let path = self.parse_path()?;
 
-                if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
+                let expr = if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
                     // parse struct expr
                     let mut fields = Vec::new();
                     while let Some(Token::Identifier(field_name)) = self.current() {
@@ -769,16 +769,12 @@ impl<'a> HlrParser<'a> {
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    Ok(Expr::Struct { ty_path: path, fields })
+                    Expr::Struct { ty_path: path, fields }
                 } else {
-                    match &path.segments[0] {
-                        PathSegment::Ident(ident) => Ok(Expr::Ident(GenPathSegment {
-                            ident: ident.clone(),
-                            gen_args: vec![],
-                        })),
-                        PathSegment::Generic(gen_path_segment) => Ok(Expr::Ident(gen_path_segment.clone())),
-                    }
-                }
+                    Expr::Path(path)
+                };
+
+                Ok(expr)
             }
             Token::LParen => {
                 self.position += 1;
@@ -1124,9 +1120,11 @@ mod tests {
     use super::*;
 
     fn make_ident(name: &str) -> Expr {
-        Expr::Ident(GenPathSegment {
-            ident: name.to_string(),
-            gen_args: vec![],
+        Expr::Path(Path {
+            segments: vec![PathSegment::Generic(GenPathSegment {
+                ident: name.to_string(),
+                gen_args: vec![],
+            })],
         })
     }
 

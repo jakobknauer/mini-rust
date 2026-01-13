@@ -10,6 +10,7 @@ pub enum H2MError {
     TyErr(TyError),
     OperatorResolutionFailed { operator: String, operand_tys: (Ty, Ty) },
     UnresolvableStructOrEnum { path: Path },
+    UnresolvablePath { path: Path },
     UnresolvableTyAnnot,
     VarArgsNotSupported,
     NonMatchableScrutinee { ty: Ty },

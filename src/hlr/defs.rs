@@ -140,7 +140,7 @@ pub enum Stmt {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Lit(Lit),
-    Ident(GenPathSegment),
+    Path(Path),
     Tuple(Vec<Expr>),
     BinaryOp {
         left: Box<Expr>,

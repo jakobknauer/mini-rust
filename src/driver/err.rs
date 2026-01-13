@@ -43,6 +43,7 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::C
         UnresolvableStructOrEnum { path } => {
             format!("Cannot resolve path '{}' to struct or enum variant", path)
         }
+        UnresolvablePath { path } => format!("Cannot resolve path '{}' to value", path),
         UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
         VarArgsNotSupported => "Cannot build MLR for variadic function".to_string(),
         NonMatchableScrutinee { ty } => format!(
