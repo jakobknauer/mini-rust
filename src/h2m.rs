@@ -383,22 +383,24 @@ impl<'a> H2M<'a> {
         self.builder.insert_call_val(callee, args)
     }
 
-    fn build_mthd_call(
-        &mut self,
-        obj: &hlr::Expr,
-        mthd: &hlr::GenPathSegment,
-        args: &[hlr::Expr],
-    ) -> H2MResult<mlr::Val> {
+    fn build_mthd_call(&mut self, obj: &hlr::Expr, mthd: &hlr::PathSegment, args: &[hlr::Expr]) -> H2MResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
 
-        let (callee, by_ref) = match self.typechecker().resolve_mthd(base_ty, &mthd.ident)? {
+        let (ident, gen_args) = match mthd {
+            hlr::PathSegment::Ident(ident) => (ident, None),
+            hlr::PathSegment::Generic(gen_path_segment) => {
+                (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
+            }
+        };
+
+        let (callee, by_ref) = match self.typechecker().resolve_mthd(base_ty, ident)? {
             MthdResolution::Inherent { fn_, env_gen_args } => {
                 let sig = self.fns().get_sig(fn_).unwrap();
                 let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
 
                 let n_gen_params = sig.gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&mthd.gen_args, n_gen_params)?;
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
 
                 let fn_inst = fns::FnInst {
                     fn_,
@@ -413,7 +415,7 @@ impl<'a> H2M<'a> {
                 let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
 
                 let n_gen_params = sig.gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(&mthd.gen_args, n_gen_params)?;
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
 
                 let trait_mthd_inst = fns::TraitMthdInst {
                     trait_inst,
@@ -789,11 +791,10 @@ impl<'a> H2M<'a> {
         let obj_ty = self.mlr().get_place_ty(obj);
 
         let field_resolution = match field_desc {
-            hlr::FieldDescriptor::Named(ident) => {
-                if !ident.gen_args.is_empty() {
+            hlr::FieldDescriptor::Named(path) => {
+                let hlr::PathSegment::Ident(field_name) = path else {
                     return Err(H2MError::NotAPlace);
-                }
-                let field_name = ident.ident.as_str();
+                };
 
                 self.typechecker().resolve_struct_field(obj_ty, field_name)?
             }
@@ -816,16 +817,15 @@ impl<'a> H2M<'a> {
 
     fn resolve_gen_args_or_insert_fresh_variables(
         &mut self,
-        gen_args: &[hlr::TyAnnot],
+        gen_args: Option<&[hlr::TyAnnot]>,
         n_expected: usize,
     ) -> H2MResult<Vec<ty::Ty>> {
-        if gen_args.is_empty() {
-            Ok((0..n_expected).map(|_| self.tys().new_undefined_ty()).collect())
-        } else {
-            gen_args
+        match gen_args {
+            Some(gen_args) => gen_args
                 .iter()
                 .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-                .collect::<H2MResult<_>>()
+                .collect::<H2MResult<_>>(),
+            None => Ok((0..n_expected).map(|_| self.tys().new_undefined_ty()).collect()),
         }
     }
 

@@ -695,7 +695,7 @@ impl<'a> HlrParser<'a> {
                         field: FieldDescriptor::Indexed(index),
                     };
                 } else {
-                    let member = self.parse_ident()?;
+                    let member = self.parse_path_segment()?;
                     if self.advance_if(Token::LParen) {
                         // method call
                         let mut arguments = Vec::new();
@@ -881,12 +881,26 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_ident(&mut self) -> Result<GenPathSegment, ParserErr> {
+    fn parse_path(&mut self) -> Result<Path, ParserErr> {
+        let mut segments = Vec::new();
+
+        loop {
+            let segment = self.parse_path_segment()?;
+            segments.push(segment);
+
+            if !self.advance_if(Token::ColonColon) {
+                break;
+            }
+        }
+
+        Ok(Path { segments })
+    }
+
+    fn parse_path_segment(&mut self) -> Result<PathSegment, ParserErr> {
         let ident = self.expect_identifier()?;
 
-        let gen_args = if self.advance_if(Token::ColonColon) {
+        let segment = if self.advance_if_turbofish() {
             let mut gen_args = Vec::new();
-            self.expect_token(Token::Smaller)?;
             while self.current() != Some(&Token::Greater) {
                 let gen_arg = self.parse_ty_annot()?;
                 gen_args.push(gen_arg);
@@ -895,43 +909,12 @@ impl<'a> HlrParser<'a> {
                 }
             }
             self.expect_token(Token::Greater)?;
-            gen_args
+            PathSegment::Generic(GenPathSegment { ident, gen_args })
         } else {
-            vec![]
+            PathSegment::Ident(ident)
         };
 
-        let ident = GenPathSegment { ident, gen_args };
-        Ok(ident)
-    }
-
-    fn parse_path(&mut self) -> Result<Path, ParserErr> {
-        let mut segments = Vec::new();
-
-        loop {
-            let ident = self.expect_identifier()?;
-
-            let segment = if self.advance_if_turbofish() {
-                let mut gen_args = Vec::new();
-                while self.current() != Some(&Token::Greater) {
-                    let gen_arg = self.parse_ty_annot()?;
-                    gen_args.push(gen_arg);
-                    if !self.advance_if(Token::Comma) {
-                        break;
-                    }
-                }
-                self.expect_token(Token::Greater)?;
-                PathSegment::Generic(GenPathSegment { ident, gen_args })
-            } else {
-                PathSegment::Ident(ident)
-            };
-
-            segments.push(segment);
-            if !self.advance_if(Token::ColonColon) {
-                break;
-            }
-        }
-
-        Ok(Path { segments })
+        Ok(segment)
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
@@ -1323,10 +1306,7 @@ mod tests {
                             stmts: vec![],
                             return_expr: Some(Box::new(Expr::FieldAccess {
                                 obj: Box::new(Expr::Self_),
-                                field: FieldDescriptor::Named(GenPathSegment {
-                                    ident: "b".to_string(),
-                                    gen_args: vec![],
-                                }),
+                                field: FieldDescriptor::Named(PathSegment::Ident("b".to_string())),
                             })),
                         }),
                     }],
@@ -1527,16 +1507,10 @@ mod tests {
                             callee: Box::new(make_ident("function")),
                             arguments: vec![make_ident("arg0")],
                         }),
-                        mthd: GenPathSegment {
-                            ident: "method".to_string(),
-                            gen_args: vec![],
-                        },
+                        mthd: PathSegment::Ident("method".to_string()),
                         arguments: vec![make_ident("arg1"), make_ident("arg2")],
                     }),
-                    field: FieldDescriptor::Named(GenPathSegment {
-                        ident: "field".to_string(),
-                        gen_args: vec![],
-                    }),
+                    field: FieldDescriptor::Named(PathSegment::Ident("field".to_string())),
                 }),
                 arguments: vec![make_ident("arg3")],
             };

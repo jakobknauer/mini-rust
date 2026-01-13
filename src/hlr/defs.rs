@@ -126,6 +126,26 @@ impl std::fmt::Display for PathSegment {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GenPathSegment {
+    pub ident: String,
+    pub gen_args: Vec<TyAnnot>,
+}
+
+impl std::fmt::Display for GenPathSegment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}<{}>",
+            self.ident,
+            self.gen_args
+                .iter()
+                .map(|annot| format!("{}", annot))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     Let {
         name: String,
@@ -161,7 +181,7 @@ pub enum Expr {
     },
     MthdCall {
         obj: Box<Expr>,
-        mthd: GenPathSegment,
+        mthd: PathSegment,
         arguments: Vec<Expr>,
     },
     Struct {
@@ -209,7 +229,7 @@ pub enum Expr {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FieldDescriptor {
-    Named(GenPathSegment),
+    Named(PathSegment),
     Indexed(usize),
 }
 
@@ -217,27 +237,6 @@ pub enum FieldDescriptor {
 pub struct ClosureParam {
     pub name: String,
     pub ty: Option<TyAnnot>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GenPathSegment {
-    pub ident: String,
-    pub gen_args: Vec<TyAnnot>,
-}
-
-impl std::fmt::Display for GenPathSegment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}<{}>",
-            self.ident,
-            self.gen_args
-                .iter()
-                .map(|annot| format!("{}", annot))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
