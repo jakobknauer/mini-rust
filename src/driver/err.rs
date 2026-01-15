@@ -50,6 +50,7 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::C
             "Match scrutinee has type '{}', which is not matchable",
             ctxt.tys.get_string_rep(ty)
         ),
+        NoSelfOutsideOfMethod => "No 'self' outside of method".to_string(),
     }
 }
 

@@ -188,10 +188,15 @@ pub enum Expr {
         ty_path: Path,
         fields: Vec<(String, Expr)>,
     },
+    FieldAccess {
+        obj: Box<Expr>,
+        field: FieldDescriptor,
+    },
+    Block(Block),
     If {
-        condition: Box<Expr>,
-        then_block: Block,
-        else_block: Option<Block>,
+        cond: Box<Expr>,
+        then: Block,
+        else_: Option<Block>,
     },
     Loop {
         body: Block,
@@ -199,11 +204,6 @@ pub enum Expr {
     While {
         condition: Box<Expr>,
         body: Block,
-    },
-    Block(Block),
-    FieldAccess {
-        obj: Box<Expr>,
-        field: FieldDescriptor,
     },
     Match {
         scrutinee: Box<Expr>,

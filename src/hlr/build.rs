@@ -927,9 +927,9 @@ impl<'a> HlrParser<'a> {
             None
         };
         Ok(Expr::If {
-            condition: Box::new(condition),
-            then_block,
-            else_block,
+            cond: Box::new(condition),
+            then: then_block,
+            else_: else_block,
         })
     }
 
@@ -1364,16 +1364,16 @@ mod tests {
                         body: Block {
                             stmts: vec![
                                 Stmt::Expr(Expr::If {
-                                    condition: Box::new(Expr::BinaryOp {
+                                    cond: Box::new(Expr::BinaryOp {
                                         left: Box::new(make_ident("n")),
                                         operator: BinaryOperator::Equal,
                                         right: Box::new(Expr::Lit(Lit::Int(1))),
                                     }),
-                                    then_block: Block {
+                                    then: Block {
                                         stmts: vec![Stmt::Break],
                                         return_expr: None,
                                     },
-                                    else_block: None,
+                                    else_: None,
                                 }),
                                 Stmt::Expr(Expr::Assign {
                                     target: Box::new(make_ident("result")),
@@ -1483,12 +1483,12 @@ mod tests {
             }"#;
 
             let expected = Expr::If {
-                condition: Box::new(make_ident("condition")),
-                then_block: Block {
+                cond: Box::new(make_ident("condition")),
+                then: Block {
                     stmts: vec![],
                     return_expr: Some(Box::new(Expr::Lit(Lit::Int(42)))),
                 },
-                else_block: Some(Block {
+                else_: Some(Block {
                     stmts: vec![],
                     return_expr: Some(Box::new(Expr::Lit(Lit::Int(0)))),
                 }),

@@ -165,15 +165,9 @@ impl<'a> H2M<'a> {
     fn lower(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<Lowered> {
         use hlr::Expr::*;
 
-        let lowered: Lowered = match expr {
+        let lowered = match expr {
             Lit(lit) => self.build_literal(lit)?.into(),
             Path(path) => self.lower_path(path)?,
-            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field)?.into(),
-            Deref { base } => self.lower_deref_to_place(base)?.into(),
-            Self_ => {
-                let loc = self.builder.get_receiver_loc().unwrap();
-                self.builder.insert_loc_place(loc)?.into()
-            }
             Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
             UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
@@ -181,19 +175,16 @@ impl<'a> H2M<'a> {
             Call { callee, arguments } => self.build_call(callee, arguments)?.into(),
             MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments)?.into(),
             Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields)?.into(),
-            If {
-                condition,
-                then_block,
-                else_block,
-            } => self
-                .build_if(condition, then_block, else_block.as_ref(), expected)?
-                .into(),
+            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field)?.into(),
+            Block(block) => self.build_block(block, expected)?.into(),
+            If { cond, then, else_ } => self.build_if(cond, then, else_.as_ref(), expected)?.into(),
             Loop { body } => self.build_loop(body)?.into(),
             While { condition, body } => self.build_while(condition, body)?.into(),
-            Block(block) => self.build_block(block, expected)?.into(),
             Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected)?.into(),
+            Deref { base } => self.lower_deref_to_place(base)?.into(),
             AddrOf { base } => self.build_addr_of_val(base)?.into(),
             As { expr, target_ty } => self.build_as_expr(expr, target_ty)?.into(),
+            Self_ => self.build_self_place()?.into(),
             Closure {
                 params,
                 body,
@@ -669,6 +660,11 @@ impl<'a> H2M<'a> {
         let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_hlr_ty_annot(target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
+    }
+
+    fn build_self_place(&mut self) -> H2MResult<mlr::Place> {
+        let loc = self.builder.get_receiver_loc().ok_or(H2MError::NoSelfOutsideOfMethod)?;
+        self.builder.insert_loc_place(loc)
     }
 
     fn build_closure(
