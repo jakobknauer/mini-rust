@@ -349,13 +349,13 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
             .ok_or(())?;
 
         let trait_inst = hlr_impl
-            .trait_name
+            .trait_annot
             .as_ref()
-            .map(|trait_name| {
-                let trait_ = ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
+            .map(|trait_annot| {
+                let trait_ = ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
 
-                let trait_args = hlr_impl
-                    .trait_args
+                let trait_args = trait_annot
+                    .args
                     .iter()
                     .map(|arg| ctxt.tys.try_resolve_hlr_annot(arg, &gen_params, None, false).ok_or(()))
                     .collect::<Result<_, _>>()?;

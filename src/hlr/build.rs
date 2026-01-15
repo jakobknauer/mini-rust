@@ -373,18 +373,30 @@ impl<'a> HlrParser<'a> {
         let gen_params = self.parse_gen_params()?;
         let ty = self.parse_ty_annot()?;
 
-        let (trait_name, trait_args, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
+        let (trait_annot, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
             let ty2 = self.parse_ty_annot()?;
             match ty {
-                TyAnnot::Named(trait_name) => (Some(trait_name), vec![], ty2),
+                TyAnnot::Named(trait_name) => (
+                    Some(TraitAnnot {
+                        name: trait_name,
+                        args: vec![],
+                    }),
+                    ty2,
+                ),
                 TyAnnot::Generic(GenPathSegment {
                     ident: trait_name,
                     gen_args: trait_args,
-                }) => (Some(trait_name), trait_args, ty2),
+                }) => (
+                    Some(TraitAnnot {
+                        name: trait_name,
+                        args: trait_args,
+                    }),
+                    ty2,
+                ),
                 _ => return Err(ParserErr::ExpectedTraitName),
             }
         } else {
-            (None, vec![], ty)
+            (None, ty)
         };
 
         self.expect_token(Token::LBrace)?;
@@ -397,8 +409,7 @@ impl<'a> HlrParser<'a> {
         self.expect_token(Token::RBrace)?;
         Ok(Impl {
             gen_params,
-            trait_name,
-            trait_args,
+            trait_annot,
             ty,
             mthds,
         })
@@ -1163,8 +1174,7 @@ mod tests {
                 impls: vec![Impl {
                     gen_params: vec![],
                     ty: TyAnnot::Named("Empty".to_string()),
-                    trait_name: None,
-                    trait_args: vec![],
+                    trait_annot: None,
                     mthds: vec![],
                 }],
                 traits: vec![Trait {
@@ -1293,8 +1303,7 @@ mod tests {
                 impls: vec![Impl {
                     gen_params: vec![],
                     ty: TyAnnot::Named("A".to_string()),
-                    trait_name: None,
-                    trait_args: vec![],
+                    trait_annot: None,
                     mthds: vec![Fn {
                         name: "get_b".to_string(),
                         gen_params: vec![],

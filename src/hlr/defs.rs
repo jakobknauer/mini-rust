@@ -72,10 +72,15 @@ pub struct EnumVariant {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Impl {
     pub gen_params: Vec<String>,
-    pub trait_name: Option<String>,
-    pub trait_args: Vec<TyAnnot>,
+    pub trait_annot: Option<TraitAnnot>,
     pub ty: TyAnnot,
     pub mthds: Vec<Fn>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct TraitAnnot {
+    pub name: String,
+    pub args: Vec<TyAnnot>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
