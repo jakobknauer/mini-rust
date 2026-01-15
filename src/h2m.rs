@@ -2,6 +2,7 @@ pub mod opt;
 
 mod closure_util;
 mod err;
+mod lowered;
 mod match_util;
 mod ops;
 
@@ -18,6 +19,7 @@ use crate::{
 };
 
 pub use err::{H2MError, H2MResult};
+use lowered::Lowered;
 
 pub fn hlr_to_mlr(ctxt: &mut ctxt::Ctxt, hlr_body: &hlr::Block, target_fn: fns::Fn) -> H2MResult<()> {
     hlr_to_mlr_with_external_scope(ctxt, hlr_body, target_fn, HashMap::new(), None)?;
@@ -160,70 +162,58 @@ impl<'a> H2M<'a> {
         Ok(output)
     }
 
-    fn lower_to_val(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
+    fn lower(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<Lowered> {
         use hlr::Expr::*;
 
-        match expr {
-            Lit(..) | Path { .. } | FieldAccess { .. } | Deref { .. } | Self_ => {
-                let op = self.lower_to_op(expr, expected)?;
-                self.builder.insert_use_val(op)
+        let lowered: Lowered = match expr {
+            Lit(lit) => self.build_literal(lit)?.into(),
+            Path(path) => self.lower_path(path)?,
+            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field)?.into(),
+            Deref { base } => self.lower_deref_to_place(base)?.into(),
+            Self_ => {
+                let loc = self.builder.get_receiver_loc().unwrap();
+                self.builder.insert_loc_place(loc)?.into()
             }
-            Tuple(exprs) => self.build_tuple_val(exprs),
-            BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right),
-            UnaryOp { operator, operand } => self.build_unary_op(operator, operand),
-            Assign { target, value } => self.build_assignment(target, value),
-            Call { callee, arguments } => self.build_call(callee, arguments),
-            MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments),
-            Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields),
+            Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
+            BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
+            UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
+            Assign { target, value } => self.build_assignment(target, value)?.into(),
+            Call { callee, arguments } => self.build_call(callee, arguments)?.into(),
+            MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments)?.into(),
+            Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields)?.into(),
             If {
                 condition,
                 then_block,
                 else_block,
-            } => self.build_if(condition, then_block, else_block.as_ref(), expected),
-            Loop { body } => self.build_loop(body),
-            While { condition, body } => self.build_while(condition, body),
-            Block(block) => self.build_block(block, expected),
-            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected),
-            AddrOf { base } => self.build_addr_of_val(base),
-            As { expr, target_ty } => self.build_as_expr(expr, target_ty),
+            } => self
+                .build_if(condition, then_block, else_block.as_ref(), expected)?
+                .into(),
+            Loop { body } => self.build_loop(body)?.into(),
+            While { condition, body } => self.build_while(condition, body)?.into(),
+            Block(block) => self.build_block(block, expected)?.into(),
+            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected)?.into(),
+            AddrOf { base } => self.build_addr_of_val(base)?.into(),
+            As { expr, target_ty } => self.build_as_expr(expr, target_ty)?.into(),
             Closure {
                 params,
                 body,
                 return_ty,
-            } => self.build_closure(params, return_ty, body, expected),
-        }
+            } => self.build_closure(params, return_ty, body, expected)?.into(),
+        };
+
+        Ok(lowered)
+    }
+
+    fn lower_to_val(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
+        self.lower(expr, expected)?.into_val(&mut self.builder)
     }
 
     fn lower_to_place(&mut self, expr: &hlr::Expr) -> H2MResult<mlr::Place> {
-        use hlr::Expr::*;
-
-        match expr {
-            Path(path) => self.lower_path_to_place(path),
-            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field),
-            Deref { base } => self.lower_deref_to_place(base),
-            Self_ => {
-                let loc = self.builder.get_receiver_loc().unwrap();
-                self.builder.insert_loc_place(loc)
-            }
-            _ => Ok(assign_to_fresh_alloc!(self, self.lower_to_val(expr, None)?)),
-        }
+        self.lower(expr, None)?.into_place(&mut self.builder)
     }
 
     fn lower_to_op(&mut self, expr: &hlr::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Op> {
-        use hlr::Expr::*;
-
-        match expr {
-            Lit(lit) => self.build_literal(lit),
-            Path(path) => self.lower_path_to_op(path),
-            FieldAccess { .. } | Deref { .. } | Self_ => {
-                let place = self.lower_to_place(expr)?;
-                self.builder.insert_copy_op(place)
-            }
-            _ => {
-                let val_place = assign_to_fresh_alloc!(self, self.lower_to_val(expr, expected)?);
-                self.builder.insert_copy_op(val_place)
-            }
-        }
+        self.lower(expr, expected)?.into_op(&mut self.builder)
     }
 
     fn build_literal(&mut self, lit: &hlr::Lit) -> H2MResult<mlr::Op> {
@@ -237,17 +227,17 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn lower_path_to_op(&mut self, path: &hlr::Path) -> H2MResult<mlr::Op> {
-        match path.segments.as_slice() {
+    fn lower_path(&mut self, path: &hlr::Path) -> H2MResult<Lowered> {
+        let lowered: Lowered = match path.segments.as_slice() {
             [hlr::PathSegment::Ident(ident)] => {
                 if let Some(place) = self.resolve_name_to_place(ident) {
-                    self.builder.insert_copy_op(place)
+                    place.into()
                 } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
                     let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
                     let gen_args = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
-                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())
+                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                 } else {
-                    Err(H2MError::UnresolvablePath { path: path.clone() })
+                    return Err(H2MError::UnresolvablePath { path: path.clone() });
                 }
             }
             [hlr::PathSegment::Generic(gen_path_segment)] => {
@@ -257,13 +247,15 @@ impl<'a> H2M<'a> {
                         .iter()
                         .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
                         .collect::<H2MResult<_>>()?;
-                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())
+                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                 } else {
-                    Err(H2MError::UnresolvablePath { path: path.clone() })
+                    return Err(H2MError::UnresolvablePath { path: path.clone() });
                 }
             }
-            _ => Err(H2MError::UnresolvablePath { path: path.clone() }),
-        }
+            _ => return Err(H2MError::UnresolvablePath { path: path.clone() }),
+        };
+
+        Ok(lowered)
     }
 
     fn build_binary_op(
@@ -771,15 +763,6 @@ impl<'a> H2M<'a> {
     fn build_break_stmt(&mut self) -> H2MResult<()> {
         self.builder.insert_break_stmt()?;
         Ok(())
-    }
-
-    fn lower_path_to_place(&mut self, path: &hlr::Path) -> H2MResult<mlr::Place> {
-        match path.segments.as_slice() {
-            [hlr::PathSegment::Ident(ident)] => self.resolve_name_to_place(ident).ok_or(H2MError::UnresolvableSymbol {
-                name: ident.to_string(),
-            }),
-            _ => Err(H2MError::NotAPlace),
-        }
     }
 
     fn lower_field_access_to_place(

@@ -1,4 +1,4 @@
-- Improve HIR -> MIR lowering
+- ~~Improve HIR -> MIR lowering~~
     - Use only one lowering function, returning Lowered
         ```Rust
         enum Lowered {
