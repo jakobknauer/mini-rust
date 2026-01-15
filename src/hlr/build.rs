@@ -864,6 +864,19 @@ impl<'a> HlrParser<'a> {
                     body,
                 })
             }
+            Token::Smaller => {
+                self.position += 1;
+                let ty = self.parse_ty_annot()?;
+                self.expect_keyword(Keyword::As)?;
+                let trait_ = self.parse_trait_annot()?;
+                self.expect_token(Token::Greater)?;
+                self.expect_token(Token::ColonColon)?;
+                let path = self.parse_path()?;
+
+                let qual_path = QualifiedPath { ty, trait_, path };
+
+                Ok(Expr::QualifiedPath(qual_path))
+            }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
@@ -1105,6 +1118,21 @@ impl<'a> HlrParser<'a> {
                 Ok(TyAnnot::Self_)
             }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
+        }
+    }
+
+    fn parse_trait_annot(&mut self) -> Result<TraitAnnot, ParserErr> {
+        let ty_annot = self.parse_ty_annot()?;
+        match ty_annot {
+            TyAnnot::Named(ident) => Ok(TraitAnnot {
+                name: ident,
+                args: vec![],
+            }),
+            TyAnnot::Generic(GenPathSegment { ident, gen_args }) => Ok(TraitAnnot {
+                name: ident,
+                args: gen_args,
+            }),
+            _ => Err(ParserErr::ExpectedTraitName),
         }
     }
 }

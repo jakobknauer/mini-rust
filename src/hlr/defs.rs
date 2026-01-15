@@ -77,10 +77,29 @@ pub struct Impl {
     pub mthds: Vec<Fn>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraitAnnot {
     pub name: String,
     pub args: Vec<TyAnnot>,
+}
+
+impl std::fmt::Display for TraitAnnot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.args.is_empty() {
+            write!(f, "{}", self.name)
+        } else {
+            write!(
+                f,
+                "{}<{}>",
+                self.name,
+                self.args
+                    .iter()
+                    .map(|annot| format!("{}", annot))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -112,6 +131,19 @@ impl std::fmt::Display for Path {
                 .collect::<Vec<_>>()
                 .join("::")
         )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QualifiedPath {
+    pub ty: TyAnnot,
+    pub trait_: TraitAnnot,
+    pub path: Path,
+}
+
+impl std::fmt::Display for QualifiedPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{} as {}>::{}", self.ty, self.trait_, self.path)
     }
 }
 
@@ -166,6 +198,7 @@ pub enum Stmt {
 pub enum Expr {
     Lit(Lit),
     Path(Path),
+    QualifiedPath(QualifiedPath),
     Tuple(Vec<Expr>),
     BinaryOp {
         left: Box<Expr>,

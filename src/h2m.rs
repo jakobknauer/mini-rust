@@ -168,6 +168,7 @@ impl<'a> H2M<'a> {
         let lowered = match expr {
             Lit(lit) => self.build_literal(lit)?.into(),
             Path(path) => self.lower_path(path)?,
+            QualifiedPath(_) => todo!("lower QualifiedPath"),
             Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
             UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
