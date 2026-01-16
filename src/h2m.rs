@@ -12,7 +12,7 @@ mod macros;
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{self, fns, mlr, ty},
+    ctxt::{self, fns, mlr, traits, ty},
     hlr,
     typechecker::{self, MthdResolution},
     util::mlr_builder::MlrBuilder,
@@ -168,7 +168,7 @@ impl<'a> H2M<'a> {
         let lowered = match expr {
             Lit(lit) => self.build_literal(lit)?.into(),
             Path(path) => self.lower_path(path)?,
-            QualifiedPath(_) => todo!("lower QualifiedPath"),
+            QualifiedPath(qual_path) => self.lower_qualified_path(qual_path)?,
             Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
             BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
             UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
@@ -795,6 +795,45 @@ impl<'a> H2M<'a> {
         self.builder.insert_deref_place(base_op)
     }
 
+    fn lower_qualified_path(&mut self, qual_path: &hlr::QualifiedPath) -> H2MResult<Lowered> {
+        let ty = self.builder.resolve_hlr_ty_annot(&qual_path.ty)?;
+        let trait_inst = self.resolve_trait_annot(&qual_path.trait_)?;
+
+        let (mthd_idx, gen_args) = match qual_path.path.segments.as_slice() {
+            [hlr::PathSegment::Ident(ident)] => {
+                let trait_mthd_idx = self.traits().resolve_trait_method(trait_inst.trait_, ident).unwrap();
+                (trait_mthd_idx, vec![])
+            }
+            [hlr::PathSegment::Generic(gen_path_segment)] => {
+                let trait_mthd_idx = self
+                    .traits()
+                    .resolve_trait_method(trait_inst.trait_, &gen_path_segment.ident)
+                    .unwrap();
+                let gen_args = gen_path_segment
+                    .gen_args
+                    .iter()
+                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                    .collect::<H2MResult<_>>()?;
+                (trait_mthd_idx, gen_args)
+            }
+            _ => {
+                return Err(H2MError::UnresolvablePath {
+                    path: qual_path.path.clone(),
+                });
+            }
+        };
+
+        let trait_mthd_inst = fns::TraitMthdInst {
+            trait_inst,
+            mthd_idx,
+            impl_ty: ty,
+            gen_args,
+        };
+        let op = self.builder.insert_trait_mthd_op(trait_mthd_inst)?;
+
+        Ok(Lowered::Op(op))
+    }
+
     fn resolve_gen_args_or_insert_fresh_variables(
         &mut self,
         gen_args: Option<&[hlr::TyAnnot]>,
@@ -911,6 +950,27 @@ impl<'a> H2M<'a> {
             }
             _ => Err(H2MError::UnresolvableStructOrEnum { path: path.clone() }),
         }
+    }
+
+    fn resolve_trait_annot(&mut self, trait_annot: &hlr::TraitAnnot) -> H2MResult<traits::TraitInst> {
+        let trait_ = self
+            .traits()
+            .resolve_trait_name(&trait_annot.name)
+            .ok_or(H2MError::UnresolvableTraitAnnot {
+                trait_name: trait_annot.name.clone(),
+            })?;
+
+        let trait_args = trait_annot
+            .args
+            .iter()
+            .map(|arg| self.builder.resolve_hlr_ty_annot(arg))
+            .collect::<Result<_, _>>()?;
+
+        let trait_inst = traits::TraitInst {
+            trait_,
+            gen_args: trait_args,
+        };
+        Ok(trait_inst)
     }
 }
 

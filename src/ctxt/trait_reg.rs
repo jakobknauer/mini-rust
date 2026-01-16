@@ -59,4 +59,12 @@ impl TraitReg {
     pub fn get_trait_mthd_sig(&self, trait_: Trait, mthd_idx: usize) -> &FnSig {
         &self.traits[trait_.0].mthds[mthd_idx]
     }
+
+    pub fn resolve_trait_method(&self, trait_: Trait, ident: &str) -> Option<usize> {
+        self.traits
+            .get(trait_.0)?
+            .mthds
+            .iter()
+            .position(|mthd| mthd.name == ident)
+    }
 }

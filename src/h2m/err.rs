@@ -15,6 +15,7 @@ pub enum H2MError {
     VarArgsNotSupported,
     NonMatchableScrutinee { ty: Ty },
     NoSelfOutsideOfMethod,
+    UnresolvableTraitAnnot { trait_name: String },
 }
 
 impl<T> From<H2MError> for H2MResult<T> {
