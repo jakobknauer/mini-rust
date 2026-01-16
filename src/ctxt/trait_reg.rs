@@ -43,7 +43,11 @@ impl TraitReg {
         self.traits.get(trait_.0).unwrap().mthds[mthd_idx].name.as_str()
     }
 
-    pub fn get_trait_mthd_with_receiver_and_name(&self, mthd_name: &str) -> impl Iterator<Item = (Trait, usize)> {
+    pub fn get_trait_mthd_with_name(
+        &self,
+        mthd_name: &str,
+        must_have_receiver: bool,
+    ) -> impl Iterator<Item = (Trait, usize)> {
         self.traits
             .iter()
             .enumerate()
@@ -51,7 +55,7 @@ impl TraitReg {
                 trait_def
                     .mthds
                     .iter()
-                    .position(|mthd| mthd.name == mthd_name && mthd.has_receiver())
+                    .position(|mthd| mthd.name == mthd_name && (!must_have_receiver || mthd.has_receiver()))
                     .map(|mthd_idx| (Trait(trait_idx), mthd_idx))
             })
     }

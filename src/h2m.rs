@@ -378,7 +378,7 @@ impl<'a> H2M<'a> {
             }
         };
 
-        let (callee, by_ref) = match self.typechecker().resolve_mthd(base_ty, ident)? {
+        let (callee, by_ref) = match self.typechecker().resolve_mthd(base_ty, ident, true)? {
             MthdResolution::Inherent { fn_, env_gen_args } => {
                 let sig = self.fns().get_sig(fn_).unwrap();
                 let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
@@ -797,41 +797,92 @@ impl<'a> H2M<'a> {
 
     fn lower_qualified_path(&mut self, qual_path: &hlr::QualifiedPath) -> H2MResult<Lowered> {
         let ty = self.builder.resolve_hlr_ty_annot(&qual_path.ty)?;
-        let trait_inst = self.resolve_trait_annot(&qual_path.trait_)?;
 
-        let (mthd_idx, gen_args) = match qual_path.path.segments.as_slice() {
-            [hlr::PathSegment::Ident(ident)] => {
-                let trait_mthd_idx = self.traits().resolve_trait_method(trait_inst.trait_, ident).unwrap();
-                (trait_mthd_idx, vec![])
-            }
-            [hlr::PathSegment::Generic(gen_path_segment)] => {
-                let trait_mthd_idx = self
-                    .traits()
-                    .resolve_trait_method(trait_inst.trait_, &gen_path_segment.ident)
-                    .unwrap();
-                let gen_args = gen_path_segment
-                    .gen_args
-                    .iter()
-                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<_>>()?;
-                (trait_mthd_idx, gen_args)
-            }
-            _ => {
-                return Err(H2MError::UnresolvablePath {
-                    path: qual_path.path.clone(),
-                });
-            }
-        };
+        if let Some(trait_) = &qual_path.trait_ {
+            let trait_inst = self.resolve_trait_annot(trait_)?;
 
-        let trait_mthd_inst = fns::TraitMthdInst {
-            trait_inst,
-            mthd_idx,
-            impl_ty: ty,
-            gen_args,
-        };
-        let op = self.builder.insert_trait_mthd_op(trait_mthd_inst)?;
+            let (mthd_idx, gen_args) = match qual_path.path.segments.as_slice() {
+                [hlr::PathSegment::Ident(ident)] => {
+                    let trait_mthd_idx = self.traits().resolve_trait_method(trait_inst.trait_, ident).unwrap();
+                    (trait_mthd_idx, vec![])
+                }
+                [hlr::PathSegment::Generic(gen_path_segment)] => {
+                    let trait_mthd_idx = self
+                        .traits()
+                        .resolve_trait_method(trait_inst.trait_, &gen_path_segment.ident)
+                        .unwrap();
+                    let gen_args = gen_path_segment
+                        .gen_args
+                        .iter()
+                        .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                        .collect::<H2MResult<_>>()?;
+                    (trait_mthd_idx, gen_args)
+                }
+                _ => {
+                    return Err(H2MError::UnresolvablePath {
+                        path: qual_path.path.clone(),
+                    });
+                }
+            };
 
-        Ok(Lowered::Op(op))
+            let trait_mthd_inst = fns::TraitMthdInst {
+                trait_inst,
+                mthd_idx,
+                impl_ty: ty,
+                gen_args,
+            };
+            let op = self.builder.insert_trait_mthd_op(trait_mthd_inst)?;
+
+            Ok(Lowered::Op(op))
+        } else {
+            let (fn_name, gen_args) = match qual_path.path.segments.as_slice() {
+                [hlr::PathSegment::Ident(ident)] => (ident, None),
+                [hlr::PathSegment::Generic(gen_path_segment)] => {
+                    let fn_name = &gen_path_segment.ident;
+                    let gen_args = Some(gen_path_segment.gen_args.as_slice());
+                    (fn_name, gen_args)
+                }
+                _ => {
+                    return Err(H2MError::UnresolvablePath {
+                        path: qual_path.path.clone(),
+                    });
+                }
+            };
+
+            let mthd = match self.typechecker().resolve_mthd(ty, fn_name, false)? {
+                MthdResolution::Inherent { fn_, env_gen_args } => {
+                    let sig = self.fns().get_sig(fn_).unwrap();
+
+                    let n_gen_params = sig.gen_params.len();
+                    let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
+
+                    let fn_inst = fns::FnInst {
+                        fn_,
+                        gen_args,
+                        env_gen_args,
+                    };
+
+                    self.builder.insert_fn_inst_op(fn_inst)?
+                }
+                MthdResolution::Trait { trait_inst, mthd_idx } => {
+                    let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
+
+                    let n_gen_params = sig.gen_params.len();
+                    let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
+
+                    let trait_mthd_inst = fns::TraitMthdInst {
+                        trait_inst,
+                        mthd_idx,
+                        impl_ty: ty,
+                        gen_args,
+                    };
+
+                    self.builder.insert_trait_mthd_op(trait_mthd_inst)?
+                }
+            };
+
+            Ok(Lowered::Op(mthd))
+        }
     }
 
     fn resolve_gen_args_or_insert_fresh_variables(

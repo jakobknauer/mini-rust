@@ -137,13 +137,17 @@ impl std::fmt::Display for Path {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QualifiedPath {
     pub ty: TyAnnot,
-    pub trait_: TraitAnnot,
+    pub trait_: Option<TraitAnnot>,
     pub path: Path,
 }
 
 impl std::fmt::Display for QualifiedPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<{} as {}>::{}", self.ty, self.trait_, self.path)
+        if let Some(trait_) = &self.trait_ {
+            write!(f, "<{} as {}>::{}", self.ty, trait_, self.path)
+        } else {
+            write!(f, "<{}>::{}", self.ty, self.path)
+        }
     }
 }
 

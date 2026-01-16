@@ -4,16 +4,6 @@ struct Vec<T> {
     cap: i32,
 }
 
-fn vec_new<T>() -> Vec<T> {
-    let init_cap = 8;
-    let ptr = alloc_n::<T>(init_cap);
-    Vec {
-        ptr: ptr,
-        len: 0,
-        cap: init_cap,
-    }
-}
-
 fn copy_n<T>(src: *T, dst: *T, n: i32) {
     let i = 0;
     while i < n {
@@ -23,6 +13,16 @@ fn copy_n<T>(src: *T, dst: *T, n: i32) {
 }
 
 impl<T> Vec<T> {
+    fn new() -> Vec<T> {
+        let init_cap = 8;
+        let ptr = alloc_n::<T>(init_cap);
+        Vec {
+            ptr: ptr,
+            len: 0,
+            cap: init_cap,
+        }
+    }
+
     fn push(&self, val: T) {
         if self.len == self.cap {
             self.cap = self.cap * 2;

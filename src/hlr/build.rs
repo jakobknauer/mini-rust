@@ -867,8 +867,13 @@ impl<'a> HlrParser<'a> {
             Token::Smaller => {
                 self.position += 1;
                 let ty = self.parse_ty_annot()?;
-                self.expect_keyword(Keyword::As)?;
-                let trait_ = self.parse_trait_annot()?;
+
+                let trait_ = if self.advance_if(Token::Keyword(Keyword::As)) {
+                    Some(self.parse_trait_annot()?)
+                } else {
+                    None
+                };
+
                 self.expect_token(Token::Greater)?;
                 self.expect_token(Token::ColonColon)?;
                 let path = self.parse_path()?;

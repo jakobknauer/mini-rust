@@ -560,10 +560,15 @@ impl<'a> Typechecker<'a> {
         Ok(ty)
     }
 
-    pub fn resolve_mthd(&mut self, base_ty: ty::Ty, mthd_name: &str) -> TyResult<MthdResolution> {
-        if let Some(inherent) = self.resolve_inherent_mthd(base_ty, mthd_name)? {
+    pub fn resolve_mthd(
+        &mut self,
+        base_ty: ty::Ty,
+        mthd_name: &str,
+        must_have_receiver: bool,
+    ) -> TyResult<MthdResolution> {
+        if let Some(inherent) = self.resolve_inherent_mthd(base_ty, mthd_name, must_have_receiver)? {
             Ok(inherent)
-        } else if let Some(trait_mthd) = self.resolve_trait_mthd(base_ty, mthd_name)? {
+        } else if let Some(trait_mthd) = self.resolve_trait_mthd(base_ty, mthd_name, must_have_receiver)? {
             Ok(trait_mthd)
         } else {
             TyError::MthdResolutionFailed {
@@ -574,7 +579,12 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn resolve_inherent_mthd(&self, base_ty: ty::Ty, mthd_name: &str) -> TyResult<Option<MthdResolution>> {
+    fn resolve_inherent_mthd(
+        &self,
+        base_ty: ty::Ty,
+        mthd_name: &str,
+        must_have_receiver: bool,
+    ) -> TyResult<Option<MthdResolution>> {
         let candidate_fn_insts: Vec<_> = self
             .ctxt
             .impls
@@ -588,7 +598,7 @@ impl<'a> Typechecker<'a> {
                     .map(|inst| (impl_def, inst))
             })
             .flat_map(|(impl_def, subst)| impl_def.mthds_by_name.get(mthd_name).map(|&mthd| (mthd, subst)))
-            .filter(|&(mthd, _)| self.ctxt.fns.get_sig(mthd).unwrap().has_receiver())
+            .filter(|&(mthd, _)| !must_have_receiver || self.ctxt.fns.get_sig(mthd).unwrap().has_receiver())
             .collect();
 
         match &candidate_fn_insts[..] {
@@ -605,11 +615,16 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn resolve_trait_mthd(&mut self, base_ty: ty::Ty, mthd_name: &str) -> TyResult<Option<MthdResolution>> {
+    fn resolve_trait_mthd(
+        &mut self,
+        base_ty: ty::Ty,
+        mthd_name: &str,
+        must_have_receiver: bool,
+    ) -> TyResult<Option<MthdResolution>> {
         let candidate_trait_mthds: Vec<_> = self
             .ctxt
             .traits
-            .get_trait_mthd_with_receiver_and_name(mthd_name)
+            .get_trait_mthd_with_name(mthd_name, must_have_receiver)
             .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(base_ty, trait_))
             .collect();
 
