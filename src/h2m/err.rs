@@ -1,4 +1,8 @@
-use crate::{ctxt::ty::Ty, hlr::Path, typechecker::TyError};
+use crate::{
+    ctxt::{NotATypeName, ty::Ty},
+    hlr::Path,
+    typechecker::TyError,
+};
 
 pub type H2MResult<T> = Result<T, H2MError>;
 
@@ -16,6 +20,8 @@ pub enum H2MError {
     NonMatchableScrutinee { ty: Ty },
     NoSelfOutsideOfMethod,
     UnresolvableTraitAnnot { trait_name: String },
+    NotATypeName(String),
+    NotAGenericType(Ty),
 }
 
 impl<T> From<H2MError> for H2MResult<T> {
@@ -30,5 +36,11 @@ where
 {
     fn from(val: E) -> Self {
         H2MError::TyErr(TyError::from(val))
+    }
+}
+
+impl From<NotATypeName> for H2MError {
+    fn from(val: NotATypeName) -> Self {
+        H2MError::NotATypeName(val.0)
     }
 }

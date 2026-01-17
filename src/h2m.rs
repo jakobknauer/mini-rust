@@ -244,6 +244,52 @@ impl<'a> H2M<'a> {
                     return Err(H2MError::UnresolvablePath { path: path.clone() });
                 }
             }
+            [ty_path, mthd_name] => {
+                let ty = self.resolve_path_segment_to_ty(ty_path)?;
+
+                let (fn_name, gen_args) = match mthd_name {
+                    hlr::PathSegment::Ident(ident) => (ident, None),
+                    hlr::PathSegment::Generic(gen_path_segment) => {
+                        let fn_name = &gen_path_segment.ident;
+                        let gen_args = Some(gen_path_segment.gen_args.as_slice());
+                        (fn_name, gen_args)
+                    }
+                };
+
+                let mthd = match self.typechecker().resolve_mthd(ty, fn_name, false)? {
+                    MthdResolution::Inherent { fn_, env_gen_args } => {
+                        let sig = self.fns().get_sig(fn_).unwrap();
+
+                        let n_gen_params = sig.gen_params.len();
+                        let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
+
+                        let fn_inst = fns::FnInst {
+                            fn_,
+                            gen_args,
+                            env_gen_args,
+                        };
+
+                        self.builder.insert_fn_inst_op(fn_inst)?
+                    }
+                    MthdResolution::Trait { trait_inst, mthd_idx } => {
+                        let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
+
+                        let n_gen_params = sig.gen_params.len();
+                        let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
+
+                        let trait_mthd_inst = fns::TraitMthdInst {
+                            trait_inst,
+                            mthd_idx,
+                            impl_ty: ty,
+                            gen_args,
+                        };
+
+                        self.builder.insert_trait_mthd_op(trait_mthd_inst)?
+                    }
+                };
+
+                Lowered::Op(mthd)
+            }
             _ => return Err(H2MError::UnresolvablePath { path: path.clone() }),
         };
 
@@ -1022,6 +1068,38 @@ impl<'a> H2M<'a> {
             gen_args: trait_args,
         };
         Ok(trait_inst)
+    }
+
+    fn resolve_path_segment_to_ty(&mut self, ty_path: &hlr::PathSegment) -> H2MResult<ty::Ty> {
+        use ctxt::Named::*;
+
+        let (ty_name, gen_args) = match ty_path {
+            hlr::PathSegment::Ident(ident) => (ident, None),
+            hlr::PathSegment::Generic(gen_path_segment) => (&gen_path_segment.ident, Some(&gen_path_segment.gen_args)),
+        };
+
+        let gen_args: Option<Vec<ty::Ty>> = gen_args
+            .map(|gen_args| {
+                gen_args
+                    .iter()
+                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
+                    .collect::<H2MResult<_>>()
+            })
+            .transpose()?;
+
+        // TODO allow generic variables
+        let named_ty = *self.tys().get_ty_by_name(ty_name)?;
+
+        let ty = match (named_ty, gen_args) {
+            (Ty(ty), None) => ty,
+            (Ty(ty), Some(_)) => return H2MError::NotAGenericType(ty).into(),
+            (Struct(struct_), None) => self.tys().instantiate_struct(struct_, [])?,
+            (Struct(struct_), Some(gen_args)) => self.tys().instantiate_struct(struct_, gen_args)?,
+            (Enum(enum_), None) => self.tys().instantiate_enum(enum_, [])?,
+            (Enum(enum_), Some(gen_args)) => self.tys().instantiate_enum(enum_, gen_args)?,
+        };
+
+        Ok(ty)
     }
 }
 

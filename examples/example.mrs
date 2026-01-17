@@ -1,12 +1,12 @@
 fn main() -> i32 {
     // assoc fn call    
-    let vec = <Vec<i32>>::new();
+    let vec = Vec::<i32>::new();
 
     // inherent mthd call
-    <Vec<i32>>::push(&vec, 3);
+    Vec::<i32>::push(&vec, 3);
 
     // trait method call
-    let b = <i32>::eq(&vec.len(), &1);
+    let b = i32::eq(&vec.len(), &1);
 
     // equivalent (in this case), but more explicit
     let b = <i32 as Eq>::eq(&vec.len(), &1);

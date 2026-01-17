@@ -52,6 +52,8 @@ pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::C
         ),
         NoSelfOutsideOfMethod => "No 'self' outside of method".to_string(),
         UnresolvableTraitAnnot { trait_name } => format!("Cannot resolve trait name '{}'", trait_name),
+        NotATypeName(ty_name) => format!("'{}' is not a type name", ty_name),
+        NotAGenericType(ty) => format!("'{}' is not a generic type", ctxt.tys.get_string_rep(ty)),
     }
 }
 
