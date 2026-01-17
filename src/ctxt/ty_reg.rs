@@ -1036,16 +1036,6 @@ impl TyReg {
                 unreachable!("Types should have been canonicalized");
             }
 
-            // (_, &GenVar(gen_var)) if instantiation.contains_key(&gen_var) => {
-            //     let substitute = instantiation.get(&gen_var).unwrap();
-            //     if let Some(substitute) = substitute {
-            //         self.tys_eq(*substitute, target)
-            //     } else {
-            //         instantiation.insert(gen_var, Some(target));
-            //         true
-            //     }
-            // }
-
             (GenVar(var1), GenVar(var2)) => var1 == var2,
 
             (&Primitive(a), &Primitive(b)) => a == b,

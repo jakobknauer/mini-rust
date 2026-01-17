@@ -2,6 +2,6 @@
 - ~~Explicit call of trait functions using the `<Type as Trait>::func()` syntax~~
 - ~~Associated functions (should almost immediately follow from the previous point)~~
 - Non-destructive Ty::eq
-- Correct handling of undefined types in try_find_instantiation
+- ~~Correct handling of undefined types in try_find_instantiation~~
 - Reduce code duplication in h2m.rs (related to Method resolution)
 - Associated types
