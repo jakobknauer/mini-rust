@@ -446,6 +446,11 @@ impl TyReg {
         &self.gen_var_names[gen_param.0]
     }
 
+    /// Unify two types
+    ///
+    /// TODO: Instead of unifying immediately, this function should only gather types to be unified
+    /// and then do the unification at the end. Otherwise, the `TyReg` is possibly poisoned once a
+    /// unification fails.
     pub fn unify(&mut self, ty1: Ty, ty2: Ty) -> Result<(), UnificationError> {
         use TyDef::*;
 
@@ -1004,6 +1009,9 @@ impl TyReg {
         use TyDef::*;
 
         let Some(target_def) = self.get_ty_def(target) else {
+            // TODO: This should actually return true by defining target as the generic type.
+            // However, this must be done in a way that is compatible with the rest of the code,
+            // in particular we cannot do this immediately, but only after checking the whole type.
             return false;
         };
         let Some(generic_def) = self.get_ty_def(generic) else {
