@@ -1010,13 +1010,24 @@ impl TyReg {
     ) -> bool {
         use TyDef::*;
 
-        let Some(target_def) = self.get_ty_def(target) else {
-            // TODO: This should actually return true by defining target as the generic type.
-            // However, this must be done in a way that is compatible with the rest of the code,
-            // in particular we cannot do this immediately, but only after checking the whole type.
+        let Some(generic_def) = self.get_ty_def(generic) else {
+            // TODO should this case panic instead?
             return false;
         };
-        let Some(generic_def) = self.get_ty_def(generic) else {
+
+        if let &GenVar(gen_var) = generic_def
+            && instantiation.contains_key(&gen_var)
+        {
+            let substitute = instantiation.get(&gen_var).unwrap();
+            if let Some(substitute) = substitute {
+                return self.tys_eq(*substitute, target);
+            } else {
+                instantiation.insert(gen_var, Some(target));
+                return true;
+            }
+        }
+
+        let Some(target_def) = self.get_ty_def(target) else {
             return false;
         };
 
@@ -1025,15 +1036,15 @@ impl TyReg {
                 unreachable!("Types should have been canonicalized");
             }
 
-            (_, &GenVar(gen_var)) if instantiation.contains_key(&gen_var) => {
-                let substitute = instantiation.get(&gen_var).unwrap();
-                if let Some(substitute) = substitute {
-                    self.tys_eq(*substitute, target)
-                } else {
-                    instantiation.insert(gen_var, Some(target));
-                    true
-                }
-            }
+            // (_, &GenVar(gen_var)) if instantiation.contains_key(&gen_var) => {
+            //     let substitute = instantiation.get(&gen_var).unwrap();
+            //     if let Some(substitute) = substitute {
+            //         self.tys_eq(*substitute, target)
+            //     } else {
+            //         instantiation.insert(gen_var, Some(target));
+            //         true
+            //     }
+            // }
 
             (GenVar(var1), GenVar(var2)) => var1 == var2,
 
