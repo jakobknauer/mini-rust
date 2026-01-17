@@ -110,7 +110,7 @@ impl<'a> super::H2M<'a> {
             let field_place = self.builder.insert_field_access_place(variant_place, field_index)?;
             let field_ty = self.mlr().get_place_ty(field_place);
             if by_ref {
-                let field_ref_ty = self.tys().register_ref_ty(field_ty);
+                let field_ref_ty = self.tys().ref_(field_ty);
 
                 let field_addr = self.builder.insert_addr_of_val(field_place)?;
                 let assign_loc = self.mlr().insert_typed_loc(field_ref_ty);

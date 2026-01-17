@@ -226,7 +226,7 @@ impl<'a> H2M<'a> {
                     place.into()
                 } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
                     let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
-                    let gen_args = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
+                    let gen_args = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                     self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                 } else {
                     return Err(H2MError::UnresolvablePath { path: path.clone() });
@@ -331,7 +331,7 @@ impl<'a> H2M<'a> {
     }
 
     fn build_logical_and(&mut self, left: &hlr::Expr, right: &hlr::Expr) -> H2MResult<mlr::Val> {
-        let bool_ty = self.tys().get_primitive_ty(ty::Primitive::Boolean);
+        let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
         let left_op = self.lower_to_op(left, None)?;
@@ -357,7 +357,7 @@ impl<'a> H2M<'a> {
     }
 
     fn build_logical_or(&mut self, left: &hlr::Expr, right: &hlr::Expr) -> H2MResult<mlr::Val> {
-        let bool_ty = self.tys().get_primitive_ty(ty::Primitive::Boolean);
+        let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
         let left_op = self.lower_to_op(left, None)?;
@@ -630,7 +630,7 @@ impl<'a> H2M<'a> {
             .map(|&expr| self.mlr().get_val_ty(expr))
             .collect::<Vec<_>>();
 
-        let tuple_ty = self.tys().register_tuple_ty(expr_tys);
+        let tuple_ty = self.tys().tuple(expr_tys);
 
         let tuple_place = self.builder.insert_alloc_with_ty(tuple_ty)?;
         for (field_index, expr) in exprs.into_iter().enumerate() {
@@ -675,7 +675,7 @@ impl<'a> H2M<'a> {
 
         // resolve equality function for discriminant comparisons once
         let eq_fn = {
-            let i32 = self.tys().get_primitive_ty(ty::Primitive::Integer32);
+            let i32 = self.tys().primitive(ty::Primitive::Integer32);
             let eq_fn = self.resolve_binary_operator(&hlr::BinaryOperator::Equal, (i32, i32))?;
             self.builder.insert_fn_op(eq_fn)?
         };
@@ -762,7 +762,7 @@ impl<'a> H2M<'a> {
     fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&hlr::TyAnnot>, value: &hlr::Expr) -> H2MResult<()> {
         let annot_ty = match ty_annot {
             Some(ty_annot) => self.builder.resolve_hlr_ty_annot(ty_annot)?,
-            None => self.tys().new_undefined_ty(),
+            None => self.tys().undef_ty(),
         };
         let loc = self.mlr().insert_typed_loc(annot_ty);
         self.builder.insert_alloc_stmt(loc)?;
@@ -941,7 +941,7 @@ impl<'a> H2M<'a> {
                 .iter()
                 .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
                 .collect::<H2MResult<_>>(),
-            None => Ok((0..n_expected).map(|_| self.tys().new_undefined_ty()).collect()),
+            None => Ok((0..n_expected).map(|_| self.tys().undef_ty()).collect()),
         }
     }
 
@@ -991,7 +991,7 @@ impl<'a> H2M<'a> {
                             .get_struct_by_name(ident)
                             .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
                         let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
-                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
+                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                         (struct_, gen_args)
                     }
                     hlr::PathSegment::Generic(gen_path_segment) => {
@@ -1004,7 +1004,7 @@ impl<'a> H2M<'a> {
                         (struct_, gen_args)
                     }
                 };
-                let ty = self.tys().instantiate_struct(struct_, gen_args)?;
+                let ty = self.tys().inst_struct(struct_, gen_args)?;
                 Ok(StructOrEnumResolution::Struct(ty))
             }
             [enum_, variant_name] => {
@@ -1015,7 +1015,7 @@ impl<'a> H2M<'a> {
                             .get_enum_by_name(ident)
                             .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
                         let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
-                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().new_undefined_ty()).collect();
+                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                         (enum_, gen_args)
                     }
                     hlr::PathSegment::Generic(gen_path_segment) => {
@@ -1028,7 +1028,7 @@ impl<'a> H2M<'a> {
                         (struct_, gen_args)
                     }
                 };
-                let ty = self.tys().instantiate_enum(enum_, gen_args)?;
+                let ty = self.tys().inst_enum(enum_, gen_args)?;
 
                 let hlr::PathSegment::Ident(variant_name) = &variant_name else {
                     return Err(H2MError::UnresolvableStructOrEnum { path: path.clone() });
@@ -1089,12 +1089,12 @@ impl<'a> H2M<'a> {
             (Struct(struct_), gen_args) => {
                 let n_gen_args = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
-                self.tys().instantiate_struct(struct_, gen_args)?
+                self.tys().inst_struct(struct_, gen_args)?
             }
             (Enum(enum_), gen_args) => {
                 let n_gen_args = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
-                self.tys().instantiate_enum(enum_, gen_args)?
+                self.tys().inst_enum(enum_, gen_args)?
             }
         };
 

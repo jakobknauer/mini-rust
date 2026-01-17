@@ -107,13 +107,13 @@ impl<'a> Typechecker<'a> {
             Bool(_) => ty::Primitive::Boolean,
             CChar(_) => ty::Primitive::CChar,
             CString(..) => {
-                let c_char_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::CChar);
-                let ptr_to_c_char_ty = self.ctxt.tys.register_ptr_ty(c_char_ty);
+                let c_char_ty = self.ctxt.tys.primitive(ty::Primitive::CChar);
+                let ptr_to_c_char_ty = self.ctxt.tys.ptr(c_char_ty);
                 return Ok(ptr_to_c_char_ty);
             }
         };
 
-        let ty = self.ctxt.tys.get_primitive_ty(ty);
+        let ty = self.ctxt.tys.primitive(ty);
 
         Ok(ty)
     }
@@ -155,7 +155,7 @@ impl<'a> Typechecker<'a> {
 
     fn infer_ty_of_addr_of_place(&mut self, place: Place) -> TyResult<ty::Ty> {
         let place_ty = self.ctxt.mlr.get_place_ty(place);
-        let ref_ty = self.ctxt.tys.register_ref_ty(place_ty);
+        let ref_ty = self.ctxt.tys.ref_(place_ty);
         Ok(ref_ty)
     }
 
@@ -191,8 +191,8 @@ impl<'a> Typechecker<'a> {
         }
     }
 
-    fn infer_ty_of_size_of_expr(&self) -> TyResult<ty::Ty> {
-        let int_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32);
+    fn infer_ty_of_size_of_expr(&mut self) -> TyResult<ty::Ty> {
+        let int_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         Ok(int_ty)
     }
 
@@ -265,10 +265,7 @@ impl<'a> Typechecker<'a> {
         }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let fn_ty = self
-            .ctxt
-            .tys
-            .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
+        let fn_ty = self.ctxt.tys.fn_(param_tys, signature.return_ty, signature.var_args);
 
         let fn_inst_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
 
@@ -299,10 +296,7 @@ impl<'a> Typechecker<'a> {
         }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let fn_ty = self
-            .ctxt
-            .tys
-            .register_fn_ty(param_tys, signature.return_ty, signature.var_args);
+        let fn_ty = self.ctxt.tys.fn_(param_tys, signature.return_ty, signature.var_args);
 
         let trait_gen_var_subst =
             ty::GenVarSubst::new(&trait_def.gen_params, &trait_mthd_inst.trait_inst.gen_args).unwrap();
@@ -335,14 +329,14 @@ impl<'a> Typechecker<'a> {
         Ok(field_ty)
     }
 
-    fn infer_ty_of_enum_discriminant(&self, base: Place) -> TyResult<ty::Ty> {
+    fn infer_ty_of_enum_discriminant(&mut self, base: Place) -> TyResult<ty::Ty> {
         let base_ty = self.ctxt.mlr.get_place_ty(base);
         if !self.ctxt.tys.is_enum_ty(base_ty) {
             return TyError::NotAnEnum { ty: base_ty }.into();
         }
 
         // the discriminant is always an integer
-        let int_ty = self.ctxt.tys.get_primitive_ty(ty::Primitive::Integer32);
+        let int_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         Ok(int_ty)
     }
 
@@ -416,10 +410,11 @@ impl<'a> Typechecker<'a> {
     }
 
     fn check_if_stmt(&mut self, if_: If) -> TyResult<()> {
+        let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         let condition_ty = self.ctxt.mlr.get_op_ty(if_.cond);
         self.ctxt
             .tys
-            .unify(condition_ty, self.ctxt.tys.get_primitive_ty(ty::Primitive::Boolean))
+            .unify(condition_ty, bool_ty)
             .map_err(|_| TyError::IfConditionNotBoolean { actual: condition_ty })?;
 
         Ok(())
@@ -633,7 +628,7 @@ impl<'a> Typechecker<'a> {
             [(trait_, mthd_idx)] => {
                 let trait_def = self.ctxt.traits.get_trait_def(*trait_);
                 let n_gen_params = trait_def.gen_params.len();
-                let gen_args = (0..n_gen_params).map(|_| self.ctxt.tys.new_undefined_ty()).collect();
+                let gen_args = (0..n_gen_params).map(|_| self.ctxt.tys.undef_ty()).collect();
 
                 let trait_inst = traits::TraitInst {
                     trait_: *trait_,
@@ -653,9 +648,10 @@ impl<'a> Typechecker<'a> {
     }
 
     pub fn assert_while_condition_ty(&mut self, condition_ty: ty::Ty) -> TyResult<()> {
+        let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         self.ctxt
             .tys
-            .unify(condition_ty, self.ctxt.tys.get_primitive_ty(ty::Primitive::Boolean))
+            .unify(condition_ty, bool_ty)
             .map_err(|_| TyError::WhileConditionNotBoolean { actual: condition_ty })
     }
 }

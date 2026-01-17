@@ -48,7 +48,7 @@ impl<'a> super::H2M<'a> {
         // later)
         let gen_args: Vec<_> = surrounding_gen_vars
             .iter()
-            .map(|&gen_var| self.tys().register_gen_var_ty(gen_var))
+            .map(|&gen_var| self.tys().gen_var(gen_var))
             .collect();
 
         let captures_struct = self
@@ -56,7 +56,7 @@ impl<'a> super::H2M<'a> {
             .register_struct_with_existing_gen_vars(&captures_struct_name, surrounding_gen_vars)
             .unwrap();
 
-        let captures_ty = self.tys().instantiate_struct(captures_struct, gen_args)?;
+        let captures_ty = self.tys().inst_struct(captures_struct, gen_args)?;
 
         Ok(captures_ty)
     }
@@ -111,7 +111,7 @@ impl<'a> super::H2M<'a> {
         let env_gen_args = signature
             .env_gen_params
             .iter()
-            .map(|&gen_var| self.tys().register_gen_var_ty(gen_var))
+            .map(|&gen_var| self.tys().gen_var(gen_var))
             .collect();
 
         let fn_ = self.fns().register_fn(signature, false).unwrap();
@@ -131,7 +131,7 @@ impl<'a> super::H2M<'a> {
     pub fn generate_closure_ty(&mut self, fn_inst: fns::FnInst, captures_ty: ty::Ty) -> ty::Ty {
         let closure_name = format!("Closure:{}.{}", self.builder.get_signature().name, self.closure_counter);
         self.closure_counter += 1;
-        self.tys().register_closure_ty(fn_inst, closure_name, captures_ty)
+        self.tys().closure(fn_inst, closure_name, captures_ty)
     }
 
     pub fn fill_captures_fields(

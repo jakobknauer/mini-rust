@@ -13,11 +13,6 @@ use crate::{
 pub struct TyReg {
     tys: Vec<Option<TyDef>>,
 
-    i32_ty: Option<Ty>,
-    bool_ty: Option<Ty>,
-    c_void_ty: Option<Ty>,
-    c_char_ty: Option<Ty>,
-
     structs: Vec<StructDef>,
     enums: Vec<EnumDef>,
     gen_var_names: Vec<String>,
@@ -79,7 +74,7 @@ impl TyReg {
         ty
     }
 
-    pub fn new_undefined_ty(&mut self) -> Ty {
+    pub fn undef_ty(&mut self) -> Ty {
         let ty = Ty(self.tys.len());
         self.tys.push(None);
         ty
@@ -96,20 +91,25 @@ impl TyReg {
     }
 
     pub fn register_primitive_tys(&mut self) -> Result<(), ()> {
-        self.i32_ty = Some(self.register_named_ty("i32", TyDef::Primitive(Primitive::Integer32))?);
-        self.bool_ty = Some(self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?);
-        self.c_void_ty = Some(self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?);
-        self.c_char_ty = Some(self.register_named_ty("c_char", TyDef::Primitive(Primitive::CChar))?);
+        self.register_named_ty("i32", TyDef::Primitive(Primitive::Integer32))?;
+        self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?;
+        self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?;
+        self.register_named_ty("c_char", TyDef::Primitive(Primitive::CChar))?;
         Ok(())
     }
 
-    pub fn register_tuple_ty(&mut self, tys: impl Into<Vec<Ty>>) -> Ty {
+    pub fn primitive(&mut self, primitive: Primitive) -> Ty {
+        let ty_def = TyDef::Primitive(primitive);
+        self.register_ty(ty_def)
+    }
+
+    pub fn tuple(&mut self, tys: impl Into<Vec<Ty>>) -> Ty {
         let tuple_ty = TyDef::Tuple(tys.into());
         self.register_ty(tuple_ty)
     }
 
-    pub fn register_unit_ty(&mut self) -> Ty {
-        self.register_tuple_ty([])
+    pub fn unit(&mut self) -> Ty {
+        self.tuple([])
     }
 
     pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
@@ -160,7 +160,7 @@ impl TyReg {
         Ok(enum_)
     }
 
-    pub fn register_fn_ty(&mut self, param_tys: impl Into<Vec<Ty>>, return_ty: Ty, var_args: bool) -> Ty {
+    pub fn fn_(&mut self, param_tys: impl Into<Vec<Ty>>, return_ty: Ty, var_args: bool) -> Ty {
         let fn_ty = TyDef::Fn {
             param_tys: param_tys.into(),
             var_args,
@@ -169,17 +169,17 @@ impl TyReg {
         self.register_ty(fn_ty)
     }
 
-    pub fn register_ref_ty(&mut self, inner_ty: Ty) -> Ty {
+    pub fn ref_(&mut self, inner_ty: Ty) -> Ty {
         let ref_ty = TyDef::Ref(inner_ty);
         self.register_ty(ref_ty)
     }
 
-    pub fn register_ptr_ty(&mut self, inner_ty: Ty) -> Ty {
+    pub fn ptr(&mut self, inner_ty: Ty) -> Ty {
         let ptr_ty = TyDef::Ptr(inner_ty);
         self.register_ty(ptr_ty)
     }
 
-    pub fn register_gen_var_ty(&mut self, gen_var: GenVar) -> Ty {
+    pub fn gen_var(&mut self, gen_var: GenVar) -> Ty {
         let gen_var_ty = TyDef::GenVar(gen_var);
         self.register_ty(gen_var_ty)
     }
@@ -190,12 +190,12 @@ impl TyReg {
         gen_var
     }
 
-    pub fn register_trait_self_type(&mut self, trait_: Trait) -> Ty {
+    pub fn trait_self(&mut self, trait_: Trait) -> Ty {
         let trait_self = TyDef::TraitSelf(trait_);
         self.register_ty(trait_self)
     }
 
-    pub fn register_closure_ty(&mut self, fn_inst: fns::FnInst, name: impl Into<String>, captures_ty: Ty) -> Ty {
+    pub fn closure(&mut self, fn_inst: fns::FnInst, name: impl Into<String>, captures_ty: Ty) -> Ty {
         let closure = TyDef::Closure {
             fn_inst,
             name: name.into(),
@@ -204,7 +204,7 @@ impl TyReg {
         self.register_ty(closure)
     }
 
-    pub fn instantiate_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
+    pub fn inst_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         let gen_args = gen_args.into();
 
@@ -220,7 +220,7 @@ impl TyReg {
         Ok(self.register_ty(struct_ty))
     }
 
-    pub fn instantiate_enum(&mut self, enum_: Enum, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
+    pub fn inst_enum(&mut self, enum_: Enum, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
         let gen_args = gen_args.into();
 
@@ -293,22 +293,22 @@ impl TyReg {
         match annot {
             Named(name) => {
                 if let Some(gv) = gen_vars.iter().find(|&&GenVar(gv)| self.gen_var_names[gv] == *name) {
-                    let ty = self.register_gen_var_ty(*gv);
+                    let ty = self.gen_var(*gv);
                     return Some(ty);
                 }
 
                 match *self.named_tys.get(name)? {
                     self::Named::Ty(ty) => Some(ty),
-                    self::Named::Struct(struct_) => self.instantiate_struct(struct_, []).ok(),
-                    self::Named::Enum(enum_) => self.instantiate_enum(enum_, []).ok(),
+                    self::Named::Struct(struct_) => self.inst_struct(struct_, []).ok(),
+                    self::Named::Enum(enum_) => self.inst_enum(enum_, []).ok(),
                 }
             }
             Ref(ty_annot) => self
                 .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
-                .map(|inner| self.register_ref_ty(inner)),
+                .map(|inner| self.ref_(inner)),
             Ptr(ty_annot) => self
                 .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
-                .map(|inner| self.register_ptr_ty(inner)),
+                .map(|inner| self.ptr(inner)),
             Fn { param_tys, return_ty } => {
                 let param_tys: Vec<Ty> = param_tys
                     .iter()
@@ -317,10 +317,10 @@ impl TyReg {
 
                 let return_ty = match return_ty {
                     Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars, self_ty, allow_wildcards),
-                    None => Some(self.register_unit_ty()),
+                    None => Some(self.unit()),
                 }?;
 
-                Some(self.register_fn_ty(param_tys, return_ty, false))
+                Some(self.fn_(param_tys, return_ty, false))
             }
             Generic(ident) => {
                 let gen_args: Vec<Ty> = ident
@@ -330,19 +330,19 @@ impl TyReg {
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.named_tys.get(&ident.ident)? {
-                    self::Named::Struct(struct_) => self.instantiate_struct(struct_, gen_args).ok(),
-                    self::Named::Enum(enum_) => self.instantiate_enum(enum_, gen_args).ok(),
+                    self::Named::Struct(struct_) => self.inst_struct(struct_, gen_args).ok(),
+                    self::Named::Enum(enum_) => self.inst_enum(enum_, gen_args).ok(),
                     self::Named::Ty(..) => None,
                 }
             }
-            Wildcard => allow_wildcards.then(|| self.new_undefined_ty()),
+            Wildcard => allow_wildcards.then(|| self.undef_ty()),
             Self_ => Some(self_ty.expect("self type not available")),
             Tuple(ty_annots) => {
                 let tys: Vec<Ty> = ty_annots
                     .iter()
                     .map(|ty_annot| self.try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
-                Some(self.register_tuple_ty(tys))
+                Some(self.tuple(tys))
             }
         }
     }
@@ -595,16 +595,6 @@ impl TyReg {
         ty
     }
 
-    pub fn get_primitive_ty(&self, primitive: Primitive) -> Ty {
-        match primitive {
-            Primitive::Integer32 => self.i32_ty,
-            Primitive::Boolean => self.bool_ty,
-            Primitive::CVoid => self.c_void_ty,
-            Primitive::CChar => self.c_char_ty,
-        }
-        .expect("primitive type should be registered")
-    }
-
     #[must_use]
     pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
         use TyDef::*;
@@ -633,15 +623,15 @@ impl TyReg {
                     .map(|pt| self.substitute_gen_vars(pt, subst))
                     .collect::<Vec<_>>();
                 let new_return_ty = self.substitute_gen_vars(return_ty, subst);
-                self.register_fn_ty(new_param_tys, new_return_ty, var_args)
+                self.fn_(new_param_tys, new_return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
-                self.register_ref_ty(new_inner_ty)
+                self.ref_(new_inner_ty)
             }
             Ptr(inner_ty) => {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
-                self.register_ptr_ty(new_inner_ty)
+                self.ptr(new_inner_ty)
             }
             Struct { struct_, ref gen_args } => {
                 let new_gen_args = gen_args
@@ -649,7 +639,7 @@ impl TyReg {
                     .iter()
                     .map(|&ga| self.substitute_gen_vars(ga, subst))
                     .collect::<Vec<_>>();
-                self.instantiate_struct(struct_, new_gen_args).unwrap()
+                self.inst_struct(struct_, new_gen_args).unwrap()
             }
             Enum { enum_, ref gen_args } => {
                 let new_gen_args = gen_args
@@ -657,7 +647,7 @@ impl TyReg {
                     .iter()
                     .map(|&ga| self.substitute_gen_vars(ga, subst))
                     .collect::<Vec<_>>();
-                self.instantiate_enum(enum_, new_gen_args).unwrap()
+                self.inst_enum(enum_, new_gen_args).unwrap()
             }
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
@@ -678,7 +668,7 @@ impl TyReg {
 
                 let captures_ty = self.substitute_gen_vars(captures_ty, subst);
 
-                self.register_closure_ty(new_fn_inst, name, captures_ty)
+                self.closure(new_fn_inst, name, captures_ty)
             }
             Tuple(ref tys) => {
                 let new_tys = tys
@@ -686,7 +676,7 @@ impl TyReg {
                     .into_iter()
                     .map(|ty| self.substitute_gen_vars(ty, subst))
                     .collect::<Vec<_>>();
-                self.register_tuple_ty(new_tys)
+                self.tuple(new_tys)
             }
         }
     }
@@ -712,15 +702,15 @@ impl TyReg {
                     .map(|pt| self.substitute_self_ty(pt, substitute))
                     .collect::<Vec<_>>();
                 let new_return_ty = self.substitute_self_ty(return_ty, substitute);
-                self.register_fn_ty(new_param_tys, new_return_ty, var_args)
+                self.fn_(new_param_tys, new_return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
-                self.register_ref_ty(new_inner_ty)
+                self.ref_(new_inner_ty)
             }
             Ptr(inner_ty) => {
                 let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
-                self.register_ptr_ty(new_inner_ty)
+                self.ptr(new_inner_ty)
             }
             Struct { struct_, ref gen_args } => {
                 let new_gen_args = gen_args
@@ -728,7 +718,7 @@ impl TyReg {
                     .iter()
                     .map(|&ga| self.substitute_self_ty(ga, substitute))
                     .collect::<Vec<_>>();
-                self.instantiate_struct(struct_, new_gen_args).unwrap()
+                self.inst_struct(struct_, new_gen_args).unwrap()
             }
             Enum { enum_, ref gen_args } => {
                 let new_gen_args = gen_args
@@ -736,7 +726,7 @@ impl TyReg {
                     .iter()
                     .map(|&ga| self.substitute_self_ty(ga, substitute))
                     .collect::<Vec<_>>();
-                self.instantiate_enum(enum_, new_gen_args).unwrap()
+                self.inst_enum(enum_, new_gen_args).unwrap()
             }
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
@@ -755,7 +745,7 @@ impl TyReg {
                     *env_gen_arg = self.substitute_self_ty(*env_gen_arg, substitute);
                 }
 
-                self.register_closure_ty(new_fn_inst, name, captures_ty)
+                self.closure(new_fn_inst, name, captures_ty)
             }
             Tuple(ref tys) => {
                 let new_tys = tys
@@ -763,7 +753,7 @@ impl TyReg {
                     .into_iter()
                     .map(|ty| self.substitute_self_ty(ty, substitute))
                     .collect::<Vec<_>>();
-                self.register_tuple_ty(new_tys)
+                self.tuple(new_tys)
             }
         }
     }
@@ -813,9 +803,7 @@ impl TyReg {
 
         let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
         let base_variant_struct_ty = enum_def.variants[variant_index].struct_;
-        let instantiated_variant_struct_ty = self
-            .instantiate_struct(base_variant_struct_ty, gen_args.clone())
-            .unwrap();
+        let instantiated_variant_struct_ty = self.inst_struct(base_variant_struct_ty, gen_args.clone()).unwrap();
         Ok(instantiated_variant_struct_ty)
     }
 
@@ -832,7 +820,7 @@ impl TyReg {
             .into_iter()
             .map(|variant_ty| {
                 let gen_args = gen_args.clone();
-                self.instantiate_struct(variant_ty, gen_args).unwrap()
+                self.inst_struct(variant_ty, gen_args).unwrap()
             })
             .collect();
         Ok(instantiated_variant_struct_tys)

@@ -153,7 +153,7 @@ fn check_mthd_sig(
     // Substitution of the generic params of the trait method with the generic params of the impl.
     // This is necessary because the generic params of the impl are different from those of the
     // trait (even if they have the same name).
-    let impl_gen_vars = impl_mthd_sig.gen_params.iter().map(|&gp| tys.register_gen_var_ty(gp));
+    let impl_gen_vars = impl_mthd_sig.gen_params.iter().map(|&gp| tys.gen_var(gp));
     let mthd_gen_params_subst = ty::GenVarSubst::new(&trait_mthd_sig.gen_params, impl_gen_vars).unwrap();
 
     // Concat with the substitutions for the concrete trait instantiation of the impl

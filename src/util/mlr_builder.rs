@@ -151,7 +151,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_fresh_alloc(&mut self) -> H2MResult<mlr::Place> {
-        let undef = self.ctxt.tys.new_undefined_ty();
+        let undef = self.ctxt.tys.undef_ty();
         self.insert_alloc_with_ty(undef)
     }
 
@@ -267,7 +267,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_unit_op(&mut self) -> H2MResult<mlr::Op> {
-        let unit_ty = self.tys().register_unit_ty();
+        let unit_ty = self.tys().unit();
         let unit_loc = self.insert_typed_loc(unit_ty)?;
         self.insert_alloc_stmt(unit_loc)?;
         let unit_place = self.insert_loc_place(unit_loc)?;
@@ -307,7 +307,7 @@ impl<'a> MlrBuilder<'a> {
     pub fn resolve_hlr_ty_annot_or_insert_new_type(&mut self, annot: Option<&hlr::TyAnnot>) -> H2MResult<ty::Ty> {
         annot
             .map(|annot| self.resolve_hlr_ty_annot(annot))
-            .unwrap_or_else(|| Ok(self.tys().new_undefined_ty()))
+            .unwrap_or_else(|| Ok(self.tys().undef_ty()))
     }
 
     pub fn resolve_hlr_ty_annot(&mut self, annot: &hlr::TyAnnot) -> H2MResult<ty::Ty> {

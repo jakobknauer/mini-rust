@@ -34,9 +34,9 @@ macro_rules! register_fn {
 
 pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let tys = &mut ctxt.tys;
-    let i32 = tys.get_primitive_ty(ty::Primitive::Integer32);
-    let bool = tys.get_primitive_ty(ty::Primitive::Boolean);
-    let unit = tys.register_unit_ty();
+    let i32 = tys.primitive(ty::Primitive::Integer32);
+    let bool = tys.primitive(ty::Primitive::Boolean);
+    let unit = tys.unit();
 
     let fns = &mut ctxt.fns;
 
@@ -79,7 +79,7 @@ fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
             env_gen_params: vec![],
             params: vec![],
             var_args: false,
-            return_ty: ctxt.tys.get_primitive_ty(ty::Primitive::Integer32),
+            return_ty: ctxt.tys.primitive(ty::Primitive::Integer32),
         },
         true,
     )?;
@@ -96,7 +96,7 @@ pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
         builder.start_new_block();
 
         let gen_var = builder.get_signature().gen_params[0];
-        let gen_var_ty = builder.tys().register_gen_var_ty(gen_var);
+        let gen_var_ty = builder.tys().gen_var(gen_var);
         let size_of_val = builder.insert_size_of_val(gen_var_ty).unwrap();
         builder.insert_return_stmt(size_of_val).unwrap();
 
@@ -114,9 +114,9 @@ pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
 
 pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let var = ctxt.tys.register_gen_var("T");
-    let var_ty = ctxt.tys.register_gen_var_ty(var);
-    let ptr_ty = ctxt.tys.register_ptr_ty(var_ty);
-    let ref_ptr_ty = ctxt.tys.register_ref_ty(ptr_ty);
+    let var_ty = ctxt.tys.gen_var(var);
+    let ptr_ty = ctxt.tys.ptr(var_ty);
+    let ref_ptr_ty = ctxt.tys.ref_(ptr_ty);
 
     let impl_ = ctxt.impls.register_impl(ptr_ty, vec![var], None);
     let fn_ = ctxt.fns.register_fn(
@@ -133,7 +133,7 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
                 },
                 ctxt::fns::FnParam {
                     kind: ctxt::fns::FnParamKind::Regular("offset".to_string()),
-                    ty: ctxt.tys.get_primitive_ty(ty::Primitive::Integer32),
+                    ty: ctxt.tys.primitive(ty::Primitive::Integer32),
                 },
             ],
             var_args: false,

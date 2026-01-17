@@ -191,7 +191,7 @@ fn register_function(
             .tys
             .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
             .ok_or(())?,
-        None => ctxt.tys.register_unit_ty(),
+        None => ctxt.tys.unit(),
     };
 
     for constraint in &hlr_fn.constraints {
@@ -232,7 +232,7 @@ fn register_function(
                         .tys
                         .try_resolve_hlr_annot(return_ty, &all_gen_params, associated_ty, false)
                         .ok_or(())?,
-                    None => ctxt.tys.register_unit_ty(),
+                    None => ctxt.tys.unit(),
                 };
                 ctxt.tys.add_callable_constraint(subject, params, return_ty);
             }
@@ -271,7 +271,7 @@ fn build_fn_param(
         }),
         hlr::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
             kind: fns::FnParamKind::SelfByRef,
-            ty: self_ty.map(|self_ty| tys.register_ref_ty(self_ty)).ok_or(())?,
+            ty: self_ty.map(|self_ty| tys.ref_(self_ty)).ok_or(())?,
         }),
         _ => Err(()),
     }
@@ -286,7 +286,7 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
             .collect();
 
         let trait_ = ctxt.traits.register_trait(&hlr_trait.name, trait_gen_params.clone());
-        let self_type = ctxt.tys.register_trait_self_type(trait_);
+        let self_type = ctxt.tys.trait_self(trait_);
 
         for mthd in &hlr_trait.mthds {
             let mthd_gen_params: Vec<_> = mthd.gen_params.iter().map(|gp| ctxt.tys.register_gen_var(gp)).collect();
@@ -304,15 +304,12 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
                     .tys
                     .try_resolve_hlr_annot(ty, &all_gen_params, Some(self_type), false)
                     .ok_or(())?,
-                None => ctxt.tys.register_unit_ty(),
+                None => ctxt.tys.unit(),
             };
 
             let trait_inst = traits::TraitInst {
                 trait_,
-                gen_args: mthd_gen_params
-                    .iter()
-                    .map(|&gp| ctxt.tys.register_gen_var_ty(gp))
-                    .collect(),
+                gen_args: mthd_gen_params.iter().map(|&gp| ctxt.tys.gen_var(gp)).collect(),
             };
 
             let sig = fns::FnSig {
