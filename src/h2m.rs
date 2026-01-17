@@ -1075,17 +1075,10 @@ impl<'a> H2M<'a> {
 
         let (ty_name, gen_args) = match ty_path {
             hlr::PathSegment::Ident(ident) => (ident, None),
-            hlr::PathSegment::Generic(gen_path_segment) => (&gen_path_segment.ident, Some(&gen_path_segment.gen_args)),
+            hlr::PathSegment::Generic(gen_path_segment) => {
+                (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
+            }
         };
-
-        let gen_args: Option<Vec<ty::Ty>> = gen_args
-            .map(|gen_args| {
-                gen_args
-                    .iter()
-                    .map(|annot| self.builder.resolve_hlr_ty_annot(annot))
-                    .collect::<H2MResult<_>>()
-            })
-            .transpose()?;
 
         // TODO allow generic variables
         let named_ty = *self.tys().get_ty_by_name(ty_name)?;
@@ -1093,10 +1086,16 @@ impl<'a> H2M<'a> {
         let ty = match (named_ty, gen_args) {
             (Ty(ty), None) => ty,
             (Ty(ty), Some(_)) => return H2MError::NotAGenericType(ty).into(),
-            (Struct(struct_), None) => self.tys().instantiate_struct(struct_, [])?,
-            (Struct(struct_), Some(gen_args)) => self.tys().instantiate_struct(struct_, gen_args)?,
-            (Enum(enum_), None) => self.tys().instantiate_enum(enum_, [])?,
-            (Enum(enum_), Some(gen_args)) => self.tys().instantiate_enum(enum_, gen_args)?,
+            (Struct(struct_), gen_args) => {
+                let n_gen_args = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
+                self.tys().instantiate_struct(struct_, gen_args)?
+            }
+            (Enum(enum_), gen_args) => {
+                let n_gen_args = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
+                self.tys().instantiate_enum(enum_, gen_args)?
+            }
         };
 
         Ok(ty)
