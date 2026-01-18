@@ -148,3 +148,7 @@ impl Into<i32> for bool {
         if self { 1 } else { 0 }
     }
 }
+
+trait Iterator {
+    type Item;
+}

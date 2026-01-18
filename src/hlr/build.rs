@@ -421,14 +421,28 @@ impl<'a> HlrParser<'a> {
 
         let gen_params = self.parse_gen_params()?;
 
-        self.expect_token(Token::LBrace)?;
         let mut mthds = Vec::new();
-        while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
-            let mthd = self.parse_function(true)?;
-            if mthd.body.is_some() {
-                return Err(ParserErr::TraitMthdWithBody);
+        let mut assoc_ty_names = Vec::new();
+
+        self.expect_token(Token::LBrace)?;
+        loop {
+            match self.current() {
+                Some(Token::Keyword(Keyword::Type)) => {
+                    self.position += 1;
+                    assoc_ty_names.push(self.expect_identifier()?);
+                    self.expect_token(Token::Semicolon)?;
+                }
+                Some(Token::Keyword(Keyword::Fn)) => {
+                    let mthd = self.parse_function(true)?;
+                    if mthd.body.is_some() {
+                        return Err(ParserErr::TraitMthdWithBody);
+                    }
+                    mthds.push(mthd);
+                }
+                Some(Token::RBrace) => break,
+                Some(token) => return Err(ParserErr::UnexpectedToken(token.clone())),
+                None => return Err(ParserErr::UnexpectedEOF),
             }
-            mthds.push(mthd);
         }
         self.expect_token(Token::RBrace)?;
 
@@ -436,6 +450,7 @@ impl<'a> HlrParser<'a> {
             name,
             gen_params,
             mthds,
+            assoc_ty_names,
         })
     }
 

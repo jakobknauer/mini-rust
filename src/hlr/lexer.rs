@@ -71,6 +71,7 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("struct", Token::Keyword(Keyword::Struct)),
     ("trait", Token::Keyword(Keyword::Trait)),
     ("true", Token::BoolLiteral(true)),
+    ("type", Token::Keyword(Keyword::Type)),
     ("where", Token::Keyword(Keyword::Where)),
     ("while", Token::Keyword(Keyword::While)),
 ];

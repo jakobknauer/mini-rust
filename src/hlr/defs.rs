@@ -107,6 +107,7 @@ pub struct Trait {
     pub name: String,
     pub gen_params: Vec<String>,
     pub mthds: Vec<Fn>,
+    pub assoc_ty_names: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
