@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{
-    ctxt::{
-        fns,
-        traits::{self, Trait, TraitInst},
-        ty::*,
-    },
-    hlr,
+use crate::ctxt::{
+    fns,
+    traits::{self, Trait, TraitInst},
+    ty::*,
 };
 
 #[derive(Default)]
@@ -288,75 +285,6 @@ impl TyReg {
     pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
         let ty_def = self.get_ty_def(base_ty);
         matches!(ty_def, Some(TyDef::Primitive(Primitive::CVoid)))
-    }
-
-    pub fn try_resolve_hlr_annot(
-        &mut self,
-        annot: &hlr::TyAnnot,
-        gen_vars: &[GenVar],
-        self_ty: Option<Ty>,
-        allow_wildcards: bool,
-    ) -> Option<Ty> {
-        use hlr::TyAnnot::*;
-
-        match annot {
-            Path(path) => match path.segments.as_slice() {
-                [hlr::PathSegment::Ident(ident)] => {
-                    if let Some(gv) = gen_vars.iter().find(|&&GenVar(gv)| self.gen_var_names[gv] == *ident) {
-                        let ty = self.gen_var(*gv);
-                        return Some(ty);
-                    }
-
-                    match *self.named_tys.get(ident)? {
-                        self::Named::Ty(ty) => Some(ty),
-                        self::Named::Struct(struct_) => self.inst_struct(struct_, []).ok(),
-                        self::Named::Enum(enum_) => self.inst_enum(enum_, []).ok(),
-                    }
-                }
-                [hlr::PathSegment::Generic(hlr::GenPathSegment { ident, gen_args })] => {
-                    let gen_args: Vec<Ty> = gen_args
-                        .iter()
-                        .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty, allow_wildcards))
-                        .collect::<Option<Vec<_>>>()?;
-
-                    match *self.named_tys.get(ident)? {
-                        self::Named::Struct(struct_) => self.inst_struct(struct_, gen_args).ok(),
-                        self::Named::Enum(enum_) => self.inst_enum(enum_, gen_args).ok(),
-                        self::Named::Ty(..) => None,
-                    }
-                }
-                [hlr::PathSegment::Self_] => Some(self_ty.expect("self type not available")),
-                [_base_ty, hlr::PathSegment::Ident(_ident)] => todo!("Resolving associated types"),
-                _ => None,
-            },
-            Ref(ty_annot) => self
-                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
-                .map(|inner| self.ref_(inner)),
-            Ptr(ty_annot) => self
-                .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
-                .map(|inner| self.ptr(inner)),
-            Fn { param_tys, return_ty } => {
-                let param_tys: Vec<Ty> = param_tys
-                    .iter()
-                    .map(|pt| self.try_resolve_hlr_annot(pt, gen_vars, self_ty, allow_wildcards))
-                    .collect::<Option<Vec<_>>>()?;
-
-                let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_hlr_annot(rt, gen_vars, self_ty, allow_wildcards),
-                    None => Some(self.unit()),
-                }?;
-
-                Some(self.fn_(param_tys, return_ty, false))
-            }
-            Wildcard => allow_wildcards.then(|| self.undef_ty()),
-            Tuple(ty_annots) => {
-                let tys: Vec<Ty> = ty_annots
-                    .iter()
-                    .map(|ty_annot| self.try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards))
-                    .collect::<Option<Vec<_>>>()?;
-                Some(self.tuple(tys))
-            }
-        }
     }
 
     pub fn get_string_rep(&self, ty: Ty) -> String {
