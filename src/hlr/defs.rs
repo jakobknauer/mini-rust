@@ -336,9 +336,8 @@ pub struct StructPatternField {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TyAnnot {
-    Named(String),
+    Path(Path),
     Tuple(Vec<TyAnnot>),
-    Generic(GenPathSegment),
     Ref(Box<TyAnnot>),
     Ptr(Box<TyAnnot>),
     Fn {
@@ -352,13 +351,12 @@ pub enum TyAnnot {
 impl std::fmt::Display for TyAnnot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TyAnnot::Named(name) => write!(f, "{}", name),
+            TyAnnot::Path(path) => write!(f, "{}", path),
             TyAnnot::Tuple(ty_annots) => write!(
                 f,
                 "({})",
                 ty_annots.iter().map(|ty| ty.to_string()).collect::<Vec<_>>().join(", ")
             ),
-            TyAnnot::Generic(gen_path_segment) => write!(f, "{}", gen_path_segment),
             TyAnnot::Ref(ty_annot) => write!(f, "&{}", ty_annot),
             TyAnnot::Ptr(ty_annot) => write!(f, "*{}", ty_annot),
             TyAnnot::Fn { param_tys, return_ty } => write!(

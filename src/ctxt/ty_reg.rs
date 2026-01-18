@@ -291,18 +291,33 @@ impl TyReg {
         use hlr::TyAnnot::*;
 
         match annot {
-            Named(name) => {
-                if let Some(gv) = gen_vars.iter().find(|&&GenVar(gv)| self.gen_var_names[gv] == *name) {
-                    let ty = self.gen_var(*gv);
-                    return Some(ty);
-                }
+            Path(path) => match path.segments.as_slice() {
+                [hlr::PathSegment::Ident(ident)] => {
+                    if let Some(gv) = gen_vars.iter().find(|&&GenVar(gv)| self.gen_var_names[gv] == *ident) {
+                        let ty = self.gen_var(*gv);
+                        return Some(ty);
+                    }
 
-                match *self.named_tys.get(name)? {
-                    self::Named::Ty(ty) => Some(ty),
-                    self::Named::Struct(struct_) => self.inst_struct(struct_, []).ok(),
-                    self::Named::Enum(enum_) => self.inst_enum(enum_, []).ok(),
+                    match *self.named_tys.get(ident)? {
+                        self::Named::Ty(ty) => Some(ty),
+                        self::Named::Struct(struct_) => self.inst_struct(struct_, []).ok(),
+                        self::Named::Enum(enum_) => self.inst_enum(enum_, []).ok(),
+                    }
                 }
-            }
+                [hlr::PathSegment::Generic(hlr::GenPathSegment { ident, gen_args })] => {
+                    let gen_args: Vec<Ty> = gen_args
+                        .iter()
+                        .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty, allow_wildcards))
+                        .collect::<Option<Vec<_>>>()?;
+
+                    match *self.named_tys.get(ident)? {
+                        self::Named::Struct(struct_) => self.inst_struct(struct_, gen_args).ok(),
+                        self::Named::Enum(enum_) => self.inst_enum(enum_, gen_args).ok(),
+                        self::Named::Ty(..) => None,
+                    }
+                }
+                _ => None,
+            },
             Ref(ty_annot) => self
                 .try_resolve_hlr_annot(ty_annot, gen_vars, self_ty, allow_wildcards)
                 .map(|inner| self.ref_(inner)),
@@ -321,19 +336,6 @@ impl TyReg {
                 }?;
 
                 Some(self.fn_(param_tys, return_ty, false))
-            }
-            Generic(ident) => {
-                let gen_args: Vec<Ty> = ident
-                    .gen_args
-                    .iter()
-                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty, allow_wildcards))
-                    .collect::<Option<Vec<_>>>()?;
-
-                match *self.named_tys.get(&ident.ident)? {
-                    self::Named::Struct(struct_) => self.inst_struct(struct_, gen_args).ok(),
-                    self::Named::Enum(enum_) => self.inst_enum(enum_, gen_args).ok(),
-                    self::Named::Ty(..) => None,
-                }
             }
             Wildcard => allow_wildcards.then(|| self.undef_ty()),
             Self_ => Some(self_ty.expect("self type not available")),

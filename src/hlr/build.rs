@@ -376,23 +376,23 @@ impl<'a> HlrParser<'a> {
         let (trait_annot, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
             let ty2 = self.parse_ty_annot()?;
             match ty {
-                TyAnnot::Named(trait_name) => (
-                    Some(TraitAnnot {
-                        name: trait_name,
-                        args: vec![],
-                    }),
-                    ty2,
-                ),
-                TyAnnot::Generic(GenPathSegment {
-                    ident: trait_name,
-                    gen_args: trait_args,
-                }) => (
-                    Some(TraitAnnot {
-                        name: trait_name,
-                        args: trait_args,
-                    }),
-                    ty2,
-                ),
+                TyAnnot::Path(path) => match path.segments.as_slice() {
+                    [PathSegment::Ident(ident)] => (
+                        Some(TraitAnnot {
+                            name: ident.clone(),
+                            args: vec![],
+                        }),
+                        ty2,
+                    ),
+                    [PathSegment::Generic(GenPathSegment { ident, gen_args })] => (
+                        Some(TraitAnnot {
+                            name: ident.clone(),
+                            args: gen_args.clone(),
+                        }),
+                        ty2,
+                    ),
+                    _ => return Err(ParserErr::ExpectedTraitName),
+                },
                 _ => return Err(ParserErr::ExpectedTraitName),
             }
         } else {
@@ -706,7 +706,7 @@ impl<'a> HlrParser<'a> {
                         field: FieldDescriptor::Indexed(index),
                     };
                 } else {
-                    let member = self.parse_path_segment()?;
+                    let member = self.parse_path_segment(true)?;
                     if self.advance_if(Token::LParen) {
                         // method call
                         let mut arguments = Vec::new();
@@ -764,7 +764,7 @@ impl<'a> HlrParser<'a> {
                 Ok(Expr::Lit(Lit::CString(value)))
             }
             Token::Identifier(..) => {
-                let path = self.parse_path()?;
+                let path = self.parse_path(true)?;
 
                 let expr = if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
                     // parse struct expr
@@ -876,7 +876,7 @@ impl<'a> HlrParser<'a> {
 
                 self.expect_token(Token::Greater)?;
                 self.expect_token(Token::ColonColon)?;
-                let path = self.parse_path()?;
+                let path = self.parse_path(true)?;
 
                 let qual_path = QualifiedPath { ty, trait_, path };
 
@@ -910,11 +910,11 @@ impl<'a> HlrParser<'a> {
         }
     }
 
-    fn parse_path(&mut self) -> Result<Path, ParserErr> {
+    fn parse_path(&mut self, in_expression: bool) -> Result<Path, ParserErr> {
         let mut segments = Vec::new();
 
         loop {
-            let segment = self.parse_path_segment()?;
+            let segment = self.parse_path_segment(in_expression)?;
             segments.push(segment);
 
             if !self.advance_if(Token::ColonColon) {
@@ -925,10 +925,10 @@ impl<'a> HlrParser<'a> {
         Ok(Path { segments })
     }
 
-    fn parse_path_segment(&mut self) -> Result<PathSegment, ParserErr> {
+    fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment, ParserErr> {
         let ident = self.expect_identifier()?;
 
-        let segment = if self.advance_if_turbofish() {
+        let segment = if (!in_expression && self.advance_if(Token::Smaller)) || self.advance_if_turbofish() {
             let mut gen_args = Vec::new();
             while self.current() != Some(&Token::Greater) {
                 let gen_arg = self.parse_ty_annot()?;
@@ -1038,23 +1038,9 @@ impl<'a> HlrParser<'a> {
     fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
-            Token::Identifier(ident) => {
-                let ident = ident.clone();
-                self.position += 1;
-                if self.advance_if(Token::Smaller) {
-                    let mut gen_args = Vec::new();
-                    while self.current() != Some(&Token::Greater) {
-                        let gen_arg = self.parse_ty_annot()?;
-                        gen_args.push(gen_arg);
-                        if !self.advance_if(Token::Comma) {
-                            break;
-                        }
-                    }
-                    self.expect_token(Token::Greater)?;
-                    Ok(TyAnnot::Generic(GenPathSegment { ident, gen_args }))
-                } else {
-                    Ok(TyAnnot::Named(ident))
-                }
+            Token::Identifier(_) => {
+                let path = self.parse_path(false)?;
+                Ok(TyAnnot::Path(path))
             }
             Token::Ampersand => {
                 self.position += 1;
@@ -1129,14 +1115,17 @@ impl<'a> HlrParser<'a> {
     fn parse_trait_annot(&mut self) -> Result<TraitAnnot, ParserErr> {
         let ty_annot = self.parse_ty_annot()?;
         match ty_annot {
-            TyAnnot::Named(ident) => Ok(TraitAnnot {
-                name: ident,
-                args: vec![],
-            }),
-            TyAnnot::Generic(GenPathSegment { ident, gen_args }) => Ok(TraitAnnot {
-                name: ident,
-                args: gen_args,
-            }),
+            TyAnnot::Path(path) => match path.segments.as_slice() {
+                [PathSegment::Ident(ident)] => Ok(TraitAnnot {
+                    name: ident.clone(),
+                    args: vec![],
+                }),
+                [PathSegment::Generic(GenPathSegment { ident, gen_args })] => Ok(TraitAnnot {
+                    name: ident.clone(),
+                    args: gen_args.clone(),
+                }),
+                _ => Err(ParserErr::ExpectedTraitName),
+            },
             _ => Err(ParserErr::ExpectedTraitName),
         }
     }
@@ -1150,6 +1139,12 @@ mod tests {
         Expr::Path(Path {
             segments: vec![PathSegment::Ident(name.to_string())],
         })
+    }
+
+    fn str_to_path(path: &str) -> Path {
+        Path {
+            segments: vec![PathSegment::Ident(path.to_string())],
+        }
     }
 
     mod program {
@@ -1206,7 +1201,7 @@ mod tests {
                 }],
                 impls: vec![Impl {
                     gen_params: vec![],
-                    ty: TyAnnot::Named("Empty".to_string()),
+                    ty: TyAnnot::Path(str_to_path("Empty")),
                     trait_annot: None,
                     mthds: vec![],
                 }],
@@ -1235,15 +1230,15 @@ mod tests {
                     params: vec![
                         Param::Regular {
                             name: "a".to_string(),
-                            ty: TyAnnot::Named("int".to_string()),
+                            ty: TyAnnot::Path(str_to_path("int")),
                         },
                         Param::Regular {
                             name: "b".to_string(),
-                            ty: TyAnnot::Named("int".to_string()),
+                            ty: TyAnnot::Path(str_to_path("int")),
                         },
                     ],
                     var_args: false,
-                    return_ty: Some(TyAnnot::Named("int".to_string())),
+                    return_ty: Some(TyAnnot::Path(str_to_path("int"))),
                     constraints: vec![],
                     body: Some(Block {
                         stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
@@ -1275,11 +1270,11 @@ mod tests {
                     fields: vec![
                         StructField {
                             name: "x".to_string(),
-                            ty: TyAnnot::Named("int".to_string()),
+                            ty: TyAnnot::Path(str_to_path("int")),
                         },
                         StructField {
                             name: "y".to_string(),
-                            ty: TyAnnot::Named("int".to_string()),
+                            ty: TyAnnot::Path(str_to_path("int")),
                         },
                     ],
                 }],
@@ -1335,14 +1330,14 @@ mod tests {
             let expected = Program {
                 impls: vec![Impl {
                     gen_params: vec![],
-                    ty: TyAnnot::Named("A".to_string()),
+                    ty: TyAnnot::Path(str_to_path("A")),
                     trait_annot: None,
                     mthds: vec![Fn {
                         name: "get_b".to_string(),
                         gen_params: vec![],
                         params: vec![Param::Receiver],
                         var_args: false,
-                        return_ty: Some(TyAnnot::Named("B".to_string())),
+                        return_ty: Some(TyAnnot::Path(str_to_path("B"))),
                         constraints: vec![],
                         body: Some(Block {
                             stmts: vec![],
@@ -1486,16 +1481,12 @@ mod tests {
                 }"#;
 
             let expected = Expr::Struct {
-                ty_path: Path {
-                    segments: vec![PathSegment::Ident("Circle".to_string())],
-                },
+                ty_path: str_to_path("Circle"),
                 fields: vec![
                     (
                         "center".to_string(),
                         Expr::Struct {
-                            ty_path: Path {
-                                segments: vec![PathSegment::Ident("Point".to_string())],
-                            },
+                            ty_path: str_to_path("Point"),
                             fields: vec![
                                 ("x".to_string(), Expr::Lit(Lit::Int(1))),
                                 ("y".to_string(), Expr::Lit(Lit::Int(2))),
