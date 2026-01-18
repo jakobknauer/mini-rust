@@ -941,6 +941,10 @@ impl<'a> HlrParser<'a> {
     }
 
     fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment, ParserErr> {
+        if self.advance_if(Token::Keyword(Keyword::SelfTy)) {
+            return Ok(PathSegment::Self_);
+        }
+
         let ident = self.expect_identifier()?;
 
         let segment = if (!in_expression && self.advance_if(Token::Smaller)) || self.advance_if_turbofish() {
@@ -1053,7 +1057,7 @@ impl<'a> HlrParser<'a> {
     fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
-            Token::Identifier(_) => {
+            Token::Identifier(_) | Token::Keyword(Keyword::SelfTy) => {
                 let path = self.parse_path(false)?;
                 Ok(TyAnnot::Path(path))
             }
@@ -1118,10 +1122,6 @@ impl<'a> HlrParser<'a> {
             Token::Underscore => {
                 self.position += 1;
                 Ok(TyAnnot::Wildcard)
-            }
-            Token::Keyword(Keyword::SelfTy) => {
-                self.position += 1;
-                Ok(TyAnnot::Self_)
             }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }

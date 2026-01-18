@@ -156,6 +156,7 @@ impl std::fmt::Display for QualifiedPath {
 pub enum PathSegment {
     Ident(String),
     Generic(GenPathSegment),
+    Self_,
 }
 
 impl std::fmt::Display for PathSegment {
@@ -163,6 +164,7 @@ impl std::fmt::Display for PathSegment {
         match self {
             PathSegment::Ident(ident) => write!(f, "{}", ident),
             PathSegment::Generic(segment) => write!(f, "{}", segment),
+            PathSegment::Self_ => write!(f, "Self"),
         }
     }
 }
@@ -345,7 +347,6 @@ pub enum TyAnnot {
         param_tys: Vec<TyAnnot>,
         return_ty: Option<Box<TyAnnot>>,
     },
-    Self_,
     Wildcard,
 }
 
@@ -369,7 +370,6 @@ impl std::fmt::Display for TyAnnot {
                     None => "()".to_string(),
                 }
             ),
-            TyAnnot::Self_ => write!(f, "Self"),
             TyAnnot::Wildcard => write!(f, "_"),
         }
     }

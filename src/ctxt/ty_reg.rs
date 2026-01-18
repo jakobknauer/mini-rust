@@ -316,6 +316,7 @@ impl TyReg {
                         self::Named::Ty(..) => None,
                     }
                 }
+                [hlr::PathSegment::Self_] => Some(self_ty.expect("self type not available")),
                 _ => None,
             },
             Ref(ty_annot) => self
@@ -338,7 +339,6 @@ impl TyReg {
                 Some(self.fn_(param_tys, return_ty, false))
             }
             Wildcard => allow_wildcards.then(|| self.undef_ty()),
-            Self_ => Some(self_ty.expect("self type not available")),
             Tuple(ty_annots) => {
                 let tys: Vec<Ty> = ty_annots
                     .iter()

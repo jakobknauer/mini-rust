@@ -252,6 +252,7 @@ impl<'a> H2M<'a> {
                     hlr::PathSegment::Generic(gen_path_segment) => {
                         (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
                     }
+                    hlr::PathSegment::Self_ => return H2MError::UnresolvablePath { path: path.clone() }.into(),
                 };
 
                 let mthd_resolution = self.typechecker().resolve_mthd(ty, fn_name, false)?;
@@ -390,6 +391,7 @@ impl<'a> H2M<'a> {
             hlr::PathSegment::Generic(gen_path_segment) => {
                 (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
             }
+            hlr::PathSegment::Self_ => unreachable!(),
         };
 
         let mthd_resolution = self.typechecker().resolve_mthd(base_ty, ident, true)?;
@@ -908,6 +910,7 @@ impl<'a> H2M<'a> {
                             .collect::<H2MResult<_>>()?;
                         (struct_, gen_args)
                     }
+                    hlr::PathSegment::Self_ => return H2MError::UnresolvableStructOrEnum { path: path.clone() }.into(),
                 };
                 let ty = self.tys().inst_struct(struct_, gen_args)?;
                 Ok(StructOrEnumResolution::Struct(ty))
@@ -932,11 +935,12 @@ impl<'a> H2M<'a> {
                             .collect::<H2MResult<_>>()?;
                         (struct_, gen_args)
                     }
+                    hlr::PathSegment::Self_ => return H2MError::UnresolvableStructOrEnum { path: path.clone() }.into(),
                 };
                 let ty = self.tys().inst_enum(enum_, gen_args)?;
 
                 let hlr::PathSegment::Ident(variant_name) = &variant_name else {
-                    return Err(H2MError::UnresolvableStructOrEnum { path: path.clone() });
+                    return H2MError::UnresolvableStructOrEnum { path: path.clone() }.into();
                 };
 
                 let variant_index = self
@@ -950,7 +954,7 @@ impl<'a> H2M<'a> {
 
                 Ok(StructOrEnumResolution::EnumVariant(ty, variant_index))
             }
-            _ => Err(H2MError::UnresolvableStructOrEnum { path: path.clone() }),
+            _ => H2MError::UnresolvableStructOrEnum { path: path.clone() }.into(),
         }
     }
 
@@ -983,6 +987,7 @@ impl<'a> H2M<'a> {
             hlr::PathSegment::Generic(gen_path_segment) => {
                 (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
             }
+            hlr::PathSegment::Self_ => todo!(),
         };
 
         // TODO allow generic variables
