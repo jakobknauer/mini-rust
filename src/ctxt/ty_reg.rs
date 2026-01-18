@@ -1295,5 +1295,4 @@ impl TyReg {
     pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named, NotATypeName> {
         self.named_tys.get(ty_name).ok_or(NotATypeName(ty_name.to_string()))
     }
-
 }
