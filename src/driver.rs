@@ -63,7 +63,7 @@ pub fn compile(
     build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
     check_obligations(&mut ctxt).map_err(|err| print_obligation_check_error(err, &ctxt))?;
 
-    h2m::opt::canonicalize_types(&mut ctxt);
+    h2m::opt::canonicalize_types(&mut ctxt).map_err(|_| "Could not infer types")?;
 
     if let Some(mlr_path) = output_paths.mlr {
         print_detail(&format!("Saving MLR to {}", mlr_path.display()));

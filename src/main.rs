@@ -58,5 +58,5 @@ fn print_detail(msg: &str) {
 }
 
 fn print_error(msg: &str) {
-    eprintln!("{} {}", "ERROR:".red().bold(), msg.bold());
+    eprintln!("{} {}.", "ERROR:".red().bold(), msg.bold());
 }

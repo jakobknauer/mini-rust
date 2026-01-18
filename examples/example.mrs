@@ -1,25 +1,11 @@
 fn main() -> i32 {
-    // assoc fn call    
-    let vec = Vec::new();
-
-    // inherent mthd call
-    Vec::<_>::push(&vec, 3);
-
-    let b = i32::eq(&vec.len(), &1);
-    // equivalent (in this case)
-    let b = <_ as Eq>::eq(&vec.len(), &1);
-
     0
 }
 
-fn is_eq<A, B>(a: A, b: &B) -> bool
-    where A: Into<B>,
-        B: Eq
+fn apply<A, B, F>(f: F, a: A) -> B
+    where F: Fn(A) -> B
 {
-    // The following two lines are overly complicated
-    // for demonstrating the explicit trait method call syntax
-    let a_as_b = <A as Into<B>>::into(a);
-    <B as Eq>::eq(b, &a_as_b)
+    f(a)
 }
 
 fn malloc(size: i32) -> *c_void;
@@ -36,12 +22,6 @@ fn alloc_n<T>(n: i32) -> *T {
 }
 fn delete<T>(ref: *T) {
     free(ref as *c_void)
-}
-
-fn apply<F, A, B>(f: F, a: A) -> B
-    where F: Fn(A) -> B
-{
-    f(a)
 }
 
 fn double(x: i32) -> i32 {
@@ -149,7 +129,7 @@ impl Into<i32> for bool {
     }
 }
 
-trait Iterator {
-    type Item;
-    fn next(&self) -> Option<Self::Item>;
-}
+// trait Iterator {
+//     type Item;
+//     fn next(&self) -> Option<Self::Item>;
+// }

@@ -247,6 +247,10 @@ impl TyReg {
         self.tys.get(id.0).and_then(|inner| inner.as_ref())
     }
 
+    pub fn is_ty_defined(&self, ty: Ty) -> bool {
+        self.get_ty_def(ty).is_some()
+    }
+
     pub fn get_struct_by_name(&self, name: &str) -> Option<Struct> {
         match self.named_tys.get(name) {
             Some(&Named::Struct(struct_)) => Some(struct_),
@@ -1291,4 +1295,5 @@ impl TyReg {
     pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named, NotATypeName> {
         self.named_tys.get(ty_name).ok_or(NotATypeName(ty_name.to_string()))
     }
+
 }
