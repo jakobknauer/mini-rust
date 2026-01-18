@@ -1224,6 +1224,7 @@ mod tests {
                     name: "Empty".to_string(),
                     gen_params: vec![],
                     mthds: vec![],
+                    assoc_ty_names: vec![],
                 }],
             };
 
