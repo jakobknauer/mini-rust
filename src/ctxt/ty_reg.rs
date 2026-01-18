@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ctxt::{
         fns,
-        traits::{Trait, TraitInst},
+        traits::{self, Trait, TraitInst},
         ty::*,
     },
     hlr,
@@ -204,6 +204,15 @@ impl TyReg {
         self.register_ty(closure)
     }
 
+    pub fn assoc_ty(&mut self, base_ty: Ty, trait_inst: traits::TraitInst, assoc_ty_idx: usize) -> Ty {
+        let assoc_ty = TyDef::AssocTy {
+            base_ty,
+            trait_inst,
+            assoc_ty_idx,
+        };
+        self.register_ty(assoc_ty)
+    }
+
     pub fn inst_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         let gen_args = gen_args.into();
@@ -317,6 +326,7 @@ impl TyReg {
                     }
                 }
                 [hlr::PathSegment::Self_] => Some(self_ty.expect("self type not available")),
+                [_base_ty, hlr::PathSegment::Ident(_ident)] => todo!("Resolving associated types"),
                 _ => None,
             },
             Ref(ty_annot) => self
@@ -431,6 +441,28 @@ impl TyReg {
             }
             TraitSelf(_) => "self".to_string(),
             Closure { ref name, .. } => name.clone(),
+            AssocTy {
+                base_ty,
+                ref trait_inst,
+                assoc_ty_idx,
+            } => {
+                let trait_arg_names = trait_inst
+                    .gen_args
+                    .iter()
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                // TODO move this method to ctxt so the trait name can be printed
+
+                format!(
+                    "<{} as Trait({})::<{}>>::{}",
+                    self.get_string_rep_with_subst(base_ty, subst),
+                    trait_inst.trait_.0,
+                    trait_arg_names,
+                    assoc_ty_idx
+                )
+            }
         }
     }
 
@@ -585,6 +617,38 @@ impl TyReg {
                     }
                     Ok(())
                 }
+
+                (
+                    AssocTy {
+                        base_ty: base_ty1,
+                        trait_inst: trait_inst1,
+                        assoc_ty_idx: assoc_ty_idx1,
+                    },
+                    AssocTy {
+                        base_ty: base_ty2,
+                        trait_inst: trait_inst2,
+                        assoc_ty_idx: assoc_ty_idx2,
+                    },
+                ) => {
+                    // TODO Try to fully resolve the associated types first?
+                    // This could also be done in canonicalize or directly when creating the type
+                    // during lowering/type inference
+
+                    let trait_inst = trait_inst1.clone();
+                    let trait_inst2 = trait_inst2.clone();
+
+                    if trait_inst.trait_ != trait_inst2.trait_ || assoc_ty_idx1 != assoc_ty_idx2 {
+                        return Err(UnificationError::TypeMismatch);
+                    }
+
+                    self.unify(*base_ty1, *base_ty2)?;
+                    for (gen_arg1, gen_arg2) in trait_inst.gen_args.iter().zip(&trait_inst2.gen_args) {
+                        self.unify(*gen_arg1, *gen_arg2)?;
+                    }
+
+                    Ok(())
+                }
+
                 _ => Err(UnificationError::TypeMismatch),
             },
         }
@@ -680,6 +744,18 @@ impl TyReg {
                     .collect::<Vec<_>>();
                 self.tuple(new_tys)
             }
+            AssocTy {
+                base_ty,
+                ref trait_inst,
+                assoc_ty_idx,
+            } => {
+                let mut new_trait_inst = trait_inst.clone();
+                let new_base_ty = self.substitute_gen_vars(base_ty, subst);
+                for gen_arg in &mut new_trait_inst.gen_args {
+                    *gen_arg = self.substitute_gen_vars(*gen_arg, subst);
+                }
+                self.assoc_ty(new_base_ty, new_trait_inst, assoc_ty_idx)
+            }
         }
     }
 
@@ -756,6 +832,18 @@ impl TyReg {
                     .map(|ty| self.substitute_self_ty(ty, substitute))
                     .collect::<Vec<_>>();
                 self.tuple(new_tys)
+            }
+            AssocTy {
+                base_ty,
+                ref trait_inst,
+                assoc_ty_idx,
+            } => {
+                let mut new_trait_inst = trait_inst.clone();
+                let new_base_ty = self.substitute_self_ty(base_ty, substitute);
+                for gen_arg in &mut new_trait_inst.gen_args {
+                    *gen_arg = self.substitute_self_ty(*gen_arg, substitute);
+                }
+                self.assoc_ty(new_base_ty, new_trait_inst, assoc_ty_idx)
             }
         }
     }
@@ -970,6 +1058,28 @@ impl TyReg {
                     tys1.len() == tys2.len() && tys1.iter().zip(tys2).all(|(&ty1, &ty2)| self.tys_eq(ty1, ty2))
                 }
 
+                (
+                    AssocTy {
+                        base_ty: base_ty1,
+                        trait_inst: trait_inst1,
+                        assoc_ty_idx: assoc_ty_idx1,
+                    },
+                    AssocTy {
+                        base_ty: base_ty2,
+                        trait_inst: trait_inst2,
+                        assoc_ty_idx: assoc_ty_idx2,
+                    },
+                ) => {
+                    base_ty1 == base_ty2
+                        && trait_inst1.trait_ == trait_inst2.trait_
+                        && trait_inst1
+                            .gen_args
+                            .iter()
+                            .zip(&trait_inst2.gen_args)
+                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                        && assoc_ty_idx1 == assoc_ty_idx2
+                }
+
                 _ => false,
             },
         }
@@ -1113,6 +1223,29 @@ impl TyReg {
                         .iter()
                         .zip(tys2)
                         .all(|(ty1, ty2)| self.try_find_instantiation_internal(*ty1, *ty2, instantiation))
+            }
+
+            (
+                &AssocTy {
+                    base_ty: base_ty1,
+                    trait_inst: ref trait_inst1,
+                    assoc_ty_idx: assoc_ty_idx1,
+                },
+                &AssocTy {
+                    base_ty: base_ty2,
+                    trait_inst: ref trait_inst2,
+                    assoc_ty_idx: assoc_ty_idx2,
+                },
+            ) => {
+                self.try_find_instantiation_internal(base_ty1, base_ty2, instantiation)
+                    && trait_inst1.trait_ == trait_inst2.trait_
+                    && trait_inst1.gen_args.len() == trait_inst2.gen_args.len()
+                    && trait_inst1
+                        .gen_args
+                        .iter()
+                        .zip(&trait_inst2.gen_args)
+                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+                    && assoc_ty_idx1 == assoc_ty_idx2
             }
 
             (_, _) => false,

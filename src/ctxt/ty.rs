@@ -41,6 +41,11 @@ pub enum TyDef {
         name: String,
         captures_ty: Ty,
     },
+    AssocTy {
+        base_ty: Ty,
+        trait_inst: traits::TraitInst,
+        assoc_ty_idx: usize,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
