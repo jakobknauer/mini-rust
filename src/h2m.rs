@@ -250,44 +250,12 @@ impl<'a> H2M<'a> {
                 let (fn_name, gen_args) = match mthd_name {
                     hlr::PathSegment::Ident(ident) => (ident, None),
                     hlr::PathSegment::Generic(gen_path_segment) => {
-                        let fn_name = &gen_path_segment.ident;
-                        let gen_args = Some(gen_path_segment.gen_args.as_slice());
-                        (fn_name, gen_args)
+                        (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
                     }
                 };
 
-                let mthd = match self.typechecker().resolve_mthd(ty, fn_name, false)? {
-                    MthdResolution::Inherent { fn_, env_gen_args } => {
-                        let sig = self.fns().get_sig(fn_).unwrap();
-
-                        let n_gen_params = sig.gen_params.len();
-                        let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-                        let fn_inst = fns::FnInst {
-                            fn_,
-                            gen_args,
-                            env_gen_args,
-                        };
-
-                        self.builder.insert_fn_inst_op(fn_inst)?
-                    }
-                    MthdResolution::Trait { trait_inst, mthd_idx } => {
-                        let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
-
-                        let n_gen_params = sig.gen_params.len();
-                        let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-                        let trait_mthd_inst = fns::TraitMthdInst {
-                            trait_inst,
-                            mthd_idx,
-                            impl_ty: ty,
-                            gen_args,
-                        };
-
-                        self.builder.insert_trait_mthd_op(trait_mthd_inst)?
-                    }
-                };
-
+                let mthd_resolution = self.typechecker().resolve_mthd(ty, fn_name, false)?;
+                let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, gen_args)?;
                 Lowered::Op(mthd)
             }
             _ => return Err(H2MError::UnresolvablePath { path: path.clone() }),
@@ -424,39 +392,8 @@ impl<'a> H2M<'a> {
             }
         };
 
-        let (callee, by_ref) = match self.typechecker().resolve_mthd(base_ty, ident, true)? {
-            MthdResolution::Inherent { fn_, env_gen_args } => {
-                let sig = self.fns().get_sig(fn_).unwrap();
-                let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
-
-                let n_gen_params = sig.gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-                let fn_inst = fns::FnInst {
-                    fn_,
-                    gen_args,
-                    env_gen_args,
-                };
-
-                (self.builder.insert_fn_inst_op(fn_inst)?, by_ref)
-            }
-            MthdResolution::Trait { trait_inst, mthd_idx } => {
-                let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
-                let by_ref = sig.params[0].kind == fns::FnParamKind::SelfByRef;
-
-                let n_gen_params = sig.gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-                let trait_mthd_inst = fns::TraitMthdInst {
-                    trait_inst,
-                    mthd_idx,
-                    impl_ty: base_ty,
-                    gen_args,
-                };
-
-                (self.builder.insert_trait_mthd_op(trait_mthd_inst)?, by_ref)
-            }
-        };
+        let mthd_resolution = self.typechecker().resolve_mthd(base_ty, ident, true)?;
+        let (callee, by_ref) = self.mthd_resolution_to_op(mthd_resolution, base_ty, gen_args)?;
 
         let base = if by_ref {
             let base_addr = self.builder.insert_addr_of_val(base_place)?;
@@ -884,9 +821,7 @@ impl<'a> H2M<'a> {
             let (fn_name, gen_args) = match qual_path.path.segments.as_slice() {
                 [hlr::PathSegment::Ident(ident)] => (ident, None),
                 [hlr::PathSegment::Generic(gen_path_segment)] => {
-                    let fn_name = &gen_path_segment.ident;
-                    let gen_args = Some(gen_path_segment.gen_args.as_slice());
-                    (fn_name, gen_args)
+                    (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
                 }
                 _ => {
                     return Err(H2MError::UnresolvablePath {
@@ -895,38 +830,8 @@ impl<'a> H2M<'a> {
                 }
             };
 
-            let mthd = match self.typechecker().resolve_mthd(ty, fn_name, false)? {
-                MthdResolution::Inherent { fn_, env_gen_args } => {
-                    let sig = self.fns().get_sig(fn_).unwrap();
-
-                    let n_gen_params = sig.gen_params.len();
-                    let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-                    let fn_inst = fns::FnInst {
-                        fn_,
-                        gen_args,
-                        env_gen_args,
-                    };
-
-                    self.builder.insert_fn_inst_op(fn_inst)?
-                }
-                MthdResolution::Trait { trait_inst, mthd_idx } => {
-                    let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
-
-                    let n_gen_params = sig.gen_params.len();
-                    let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
-
-                    let trait_mthd_inst = fns::TraitMthdInst {
-                        trait_inst,
-                        mthd_idx,
-                        impl_ty: ty,
-                        gen_args,
-                    };
-
-                    self.builder.insert_trait_mthd_op(trait_mthd_inst)?
-                }
-            };
-
+            let mthd_resolution = self.typechecker().resolve_mthd(ty, fn_name, false)?;
+            let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, gen_args)?;
             Ok(Lowered::Op(mthd))
         }
     }
@@ -1099,6 +1004,55 @@ impl<'a> H2M<'a> {
         };
 
         Ok(ty)
+    }
+
+    fn mthd_resolution_to_op(
+        &mut self,
+        mthd_resolution: MthdResolution,
+        obj_ty: ty::Ty,
+        gen_args: Option<&[hlr::TyAnnot]>,
+    ) -> H2MResult<(mlr::Op, bool)> {
+        match mthd_resolution {
+            MthdResolution::Inherent { fn_, env_gen_args } => {
+                let sig = self.fns().get_sig(fn_).unwrap();
+                let by_ref = sig
+                    .params
+                    .first()
+                    .map(|param| param.kind == fns::FnParamKind::SelfByRef)
+                    .unwrap_or(false);
+
+                let n_gen_params = sig.gen_params.len();
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
+
+                let fn_inst = fns::FnInst {
+                    fn_,
+                    gen_args,
+                    env_gen_args,
+                };
+
+                Ok((self.builder.insert_fn_inst_op(fn_inst)?, by_ref))
+            }
+            MthdResolution::Trait { trait_inst, mthd_idx } => {
+                let sig = self.traits().get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
+                let by_ref = sig
+                    .params
+                    .first()
+                    .map(|param| param.kind == fns::FnParamKind::SelfByRef)
+                    .unwrap_or(false);
+
+                let n_gen_params = sig.gen_params.len();
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_params)?;
+
+                let trait_mthd_inst = fns::TraitMthdInst {
+                    trait_inst,
+                    mthd_idx,
+                    impl_ty: obj_ty,
+                    gen_args,
+                };
+
+                Ok((self.builder.insert_trait_mthd_op(trait_mthd_inst)?, by_ref))
+            }
+        }
     }
 }
 
