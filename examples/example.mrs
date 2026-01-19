@@ -129,7 +129,7 @@ impl Into<i32> for bool {
     }
 }
 
-// trait Iterator {
-//     type Item;
-//     fn next(&self) -> Option<Self::Item>;
-// }
+trait Iterator {
+    type Item;
+    // fn next(&self) -> Option<Self::Item>;
+}

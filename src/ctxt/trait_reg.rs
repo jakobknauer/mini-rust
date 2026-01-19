@@ -16,12 +16,17 @@ impl TraitReg {
             name: name.to_string(),
             gen_params,
             mthds: Vec::new(),
+            assoc_tys: Vec::new(),
         });
         trait_
     }
 
     pub fn register_mthd(&mut self, trait_: Trait, sig: FnSig) {
         self.traits[trait_.0].mthds.push(sig);
+    }
+
+    pub fn register_assoc_ty(&mut self, trait_: Trait, name: &str) {
+        self.traits[trait_.0].assoc_tys.push(name.to_string());
     }
 
     pub fn resolve_trait_name(&self, trait_name: &str) -> Option<Trait> {

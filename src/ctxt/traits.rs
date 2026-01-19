@@ -10,6 +10,7 @@ pub struct TraitDef {
     pub name: String,
     pub gen_params: Vec<GenVar>,
     pub mthds: Vec<FnSig>,
+    pub assoc_tys: Vec<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

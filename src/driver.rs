@@ -33,6 +33,7 @@ struct HlrMetadata {
     pub fn_ids: HashMap<usize, fns::Fn>,
     pub struct_ids: HashMap<usize, ty::Struct>,
     pub enum_ids: HashMap<usize, ty::Enum>,
+    pub trait_ids: HashMap<usize, traits::Trait>,
     pub impl_ids: HashMap<usize, impls::Impl>,
 }
 
@@ -54,8 +55,9 @@ pub fn compile(
 
     print_pretty("Building MLR from HLR");
     register_tys(&hlr, &mut ctxt.tys, &mut hlr_meta).map_err(|_| "Error registering types")?;
-    register_traits(&hlr, &mut ctxt).map_err(|_| "Error registering traits")?;
     define_tys(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error defining types")?;
+    register_traits(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering traits")?;
+    register_trait_methods(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error registering trait methods")?;
     register_functions(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering functions")?;
     register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
     check_trait_impls(&mut ctxt).map_err(|err| print_impl_check_error(err, &ctxt))?;
@@ -273,8 +275,8 @@ fn build_fn_param(
     }
 }
 
-fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
-    for hlr_trait in &hlr.traits {
+fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+    for (idx, hlr_trait) in hlr.traits.iter().enumerate() {
         let trait_gen_params: Vec<_> = hlr_trait
             .gen_params
             .iter()
@@ -282,7 +284,21 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt) -> Result<(), ()> 
             .collect();
 
         let trait_ = ctxt.traits.register_trait(&hlr_trait.name, trait_gen_params.clone());
+        hlr_meta.trait_ids.insert(idx, trait_);
+
+        for assoc_ty in &hlr_trait.assoc_ty_names {
+            ctxt.traits.register_assoc_ty(trait_, assoc_ty);
+        }
+    }
+
+    Ok(())
+}
+
+fn register_trait_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), ()> {
+    for (idx, hlr_trait) in hlr.traits.iter().enumerate() {
+        let trait_ = hlr_meta.trait_ids[&idx];
         let self_type = ctxt.tys.trait_self(trait_);
+        let trait_gen_params = ctxt.traits.get_trait_def(trait_).gen_params.clone();
 
         for mthd in &hlr_trait.mthds {
             let mthd_gen_params: Vec<_> = mthd.gen_params.iter().map(|gp| ctxt.tys.register_gen_var(gp)).collect();
