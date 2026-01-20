@@ -399,19 +399,38 @@ impl<'a> HlrParser<'a> {
             (None, ty)
         };
 
-        self.expect_token(Token::LBrace)?;
-
         let mut mthds = Vec::new();
-        while let Some(Token::Keyword(Keyword::Fn)) = self.current() {
-            mthds.push(self.parse_function(true)?);
-        }
+        let mut assoc_tys = Vec::new();
 
+        self.expect_token(Token::LBrace)?;
+        loop {
+            match self.current() {
+                Some(Token::Keyword(Keyword::Type)) => {
+                    self.position += 1;
+                    let name = self.expect_identifier()?;
+                    self.expect_token(Token::Equal)?;
+                    let ty = self.parse_ty_annot()?;
+                    self.expect_token(Token::Semicolon)?;
+
+                    assoc_tys.push(AssocTy { name, ty });
+                }
+                Some(Token::Keyword(Keyword::Fn)) => {
+                    let mthd = self.parse_function(true)?;
+                    mthds.push(mthd);
+                }
+                Some(Token::RBrace) => break,
+                Some(token) => return Err(ParserErr::UnexpectedToken(token.clone())),
+                None => return Err(ParserErr::UnexpectedEOF),
+            }
+        }
         self.expect_token(Token::RBrace)?;
+
         Ok(Impl {
             gen_params,
             trait_annot,
             ty,
             mthds,
+            assoc_tys,
         })
     }
 

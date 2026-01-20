@@ -75,6 +75,13 @@ pub struct Impl {
     pub trait_annot: Option<TraitAnnot>,
     pub ty: TyAnnot,
     pub mthds: Vec<Fn>,
+    pub assoc_tys: Vec<AssocTy>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AssocTy {
+    pub name: String,
+    pub ty: TyAnnot,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

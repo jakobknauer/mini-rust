@@ -133,3 +133,11 @@ trait Iterator {
     type Item;
     fn next(&self) -> Option<Self::Item>;
 }
+
+trait HasItem {
+    type Item;
+}
+
+impl HasItem for Option<i32> {
+    type Item = i32;
+}
