@@ -249,6 +249,12 @@ impl Ctxt {
             return true;
         }
 
+        if let Some(&ty::TyDef::TraitSelf(trait_2)) = ty_def
+            && trait_2 == trait_
+        {
+            return true;
+        }
+
         self.get_impl_insts_for_ty_and_trait(ty, trait_).next().is_some()
     }
 
@@ -290,32 +296,16 @@ impl Ctxt {
 
         match annot {
             Path(path) => match path.segments.as_slice() {
-                [hlr::PathSegment::Ident(ident)] => {
-                    if let Some(&gv) = gen_vars.iter().find(|&&gv| self.tys.get_gen_var_name(gv) == *ident) {
-                        let ty = self.tys.gen_var(gv);
-                        return Some(ty);
-                    }
+                [segment] => self.try_resolve_hlr_path_segment_to_ty(segment, gen_vars, self_ty, allow_wildcards),
+                [base_ty, hlr::PathSegment::Ident(_ident)] => {
+                    let base_ty =
+                        self.try_resolve_hlr_path_segment_to_ty(base_ty, gen_vars, self_ty, allow_wildcards)?;
 
-                    match *self.tys.get_ty_by_name(ident).ok()? {
-                        self::Named::Ty(ty) => Some(ty),
-                        self::Named::Struct(struct_) => self.tys.inst_struct(struct_, []).ok(),
-                        self::Named::Enum(enum_) => self.tys.inst_enum(enum_, []).ok(),
-                    }
+                    let ty = self
+                        .resolve_associated_ty(base_ty, _ident)
+                        .expect("associated type not found");
+                    Some(ty)
                 }
-                [hlr::PathSegment::Generic(hlr::GenPathSegment { ident, gen_args })] => {
-                    let gen_args: Vec<ty::Ty> = gen_args
-                        .iter()
-                        .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty, allow_wildcards))
-                        .collect::<Option<Vec<_>>>()?;
-
-                    match *self.tys.get_ty_by_name(ident).ok()? {
-                        self::Named::Struct(struct_) => self.tys.inst_struct(struct_, gen_args).ok(),
-                        self::Named::Enum(enum_) => self.tys.inst_enum(enum_, gen_args).ok(),
-                        self::Named::Ty(..) => None,
-                    }
-                }
-                [hlr::PathSegment::Self_] => Some(self_ty.expect("self type not available")),
-                [_base_ty, hlr::PathSegment::Ident(_ident)] => todo!("Resolving associated types"),
                 _ => None,
             },
             Ref(ty_annot) => self
@@ -345,6 +335,70 @@ impl Ctxt {
                     .collect::<Option<Vec<_>>>()?;
                 Some(self.tys.tuple(tys))
             }
+        }
+    }
+
+    pub fn try_resolve_hlr_path_segment_to_ty(
+        &mut self,
+        path_segment: &hlr::PathSegment,
+        gen_vars: &[ty::GenVar],
+        self_ty: Option<ty::Ty>,
+        allow_wildcards: bool,
+    ) -> Option<ty::Ty> {
+        match path_segment {
+            hlr::PathSegment::Ident(ident) => {
+                if let Some(&gv) = gen_vars.iter().find(|&&gv| self.tys.get_gen_var_name(gv) == *ident) {
+                    let ty = self.tys.gen_var(gv);
+                    return Some(ty);
+                }
+
+                match *self.tys.get_ty_by_name(ident).ok()? {
+                    self::Named::Ty(ty) => Some(ty),
+                    self::Named::Struct(struct_) => self.tys.inst_struct(struct_, []).ok(),
+                    self::Named::Enum(enum_) => self.tys.inst_enum(enum_, []).ok(),
+                }
+            }
+            hlr::PathSegment::Generic(hlr::GenPathSegment { ident, gen_args }) => {
+                let gen_args: Vec<ty::Ty> = gen_args
+                    .iter()
+                    .map(|arg_annot| self.try_resolve_hlr_annot(arg_annot, gen_vars, self_ty, allow_wildcards))
+                    .collect::<Option<Vec<_>>>()?;
+
+                match *self.tys.get_ty_by_name(ident).ok()? {
+                    self::Named::Struct(struct_) => self.tys.inst_struct(struct_, gen_args).ok(),
+                    self::Named::Enum(enum_) => self.tys.inst_enum(enum_, gen_args).ok(),
+                    self::Named::Ty(..) => None,
+                }
+            }
+            hlr::PathSegment::Self_ => Some(self_ty.expect("self type not available")),
+        }
+    }
+
+    fn resolve_associated_ty(&mut self, base_ty: ty::Ty, ident: &str) -> Option<ty::Ty> {
+        let candidate_assoc_tys: Vec<_> = self
+            .traits
+            .get_trait_assoc_ty_with_name(ident)
+            .filter(|&(trait_, _)| self.ty_implements_trait(base_ty, trait_))
+            .collect();
+
+        match &candidate_assoc_tys[..] {
+            [] => None,
+            [(trait_, assoc_ty_idx)] => {
+                let trait_def = self.traits.get_trait_def(*trait_);
+                let n_gen_params = trait_def.gen_params.len();
+                // TODO It's not always correct to use `undef_ty` here
+                // e.g. if base_ty == SelfTy(trait_), then the gen_args should be exactly the gen_params
+                // of the trait
+                let gen_args = (0..n_gen_params).map(|_| self.tys.undef_ty()).collect();
+
+                let trait_inst = traits::TraitInst {
+                    trait_: *trait_,
+                    gen_args,
+                };
+                let ty = self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx);
+                Some(ty)
+            }
+            [_, _, ..] => todo!(),
         }
     }
 }

@@ -76,4 +76,17 @@ impl TraitReg {
             .iter()
             .position(|mthd| mthd.name == ident)
     }
+
+    pub fn get_trait_assoc_ty_with_name(&self, ident: &str) -> impl Iterator<Item = (Trait, usize)> {
+        self.traits
+            .iter()
+            .enumerate()
+            .filter_map(move |(trait_idx, trait_def)| {
+                trait_def
+                    .assoc_tys
+                    .iter()
+                    .position(|assoc_ty| assoc_ty == ident)
+                    .map(|assoc_ty_idx| (Trait(trait_idx), assoc_ty_idx))
+            })
+    }
 }
