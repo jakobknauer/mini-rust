@@ -382,7 +382,9 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
         hlr_meta.impl_ids.insert(idx, impl_);
 
         for assoc_ty in &hlr_impl.assoc_tys {
-            let ty = ctxt.try_resolve_hlr_annot(&assoc_ty.ty, &gen_params, None, false).ok_or(())?;
+            let ty = ctxt
+                .try_resolve_hlr_annot(&assoc_ty.ty, &gen_params, None, false)
+                .ok_or(())?;
             ctxt.impls.register_assoc_ty(impl_, &assoc_ty.name, ty);
         }
     }
