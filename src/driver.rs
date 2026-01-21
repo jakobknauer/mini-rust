@@ -57,9 +57,12 @@ pub fn compile(
     register_tys(&hlr, &mut ctxt.tys, &mut hlr_meta).map_err(|_| "Error registering types")?;
     define_tys(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error defining types")?;
     register_traits(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering traits")?;
-    register_trait_methods(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error registering trait methods")?;
-    register_functions(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering functions")?;
     register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
+
+    register_functions(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering functions")?;
+    register_trait_methods(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error registering trait methods")?;
+    register_impl_methods(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error registering impl methods")?;
+
     check_trait_impls(&mut ctxt).map_err(|err| print_impl_check_error(err, &ctxt))?;
     build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
     build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
@@ -377,6 +380,23 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
 
         let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst.clone());
         hlr_meta.impl_ids.insert(idx, impl_);
+
+        for assoc_ty in &hlr_impl.assoc_tys {
+            let ty = ctxt.try_resolve_hlr_annot(&assoc_ty.ty, &gen_params, None, false).ok_or(())?;
+            ctxt.impls.register_assoc_ty(impl_, &assoc_ty.name, ty);
+        }
+    }
+
+    Ok(())
+}
+
+fn register_impl_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), ()> {
+    for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
+        let impl_ = hlr_meta.impl_ids[&idx];
+        let impl_def = ctxt.impls.get_impl_def(impl_);
+        let ty = impl_def.ty;
+        let gen_params = impl_def.gen_params.clone();
+        let trait_inst = impl_def.trait_inst.clone();
 
         for mthd in &hlr_impl.mthds {
             let fn_ = register_function(mthd, ctxt, Some(ty), trait_inst.clone(), gen_params.clone())?;

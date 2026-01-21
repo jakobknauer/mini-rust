@@ -33,6 +33,11 @@ impl ImplReg {
         impl_.mthds_by_name.insert(name.to_string(), mthd);
     }
 
+    pub fn register_assoc_ty(&mut self, impl_: Impl, name: &str, ty: Ty) {
+        let impl_ = self.impls.get_mut(impl_.0).unwrap();
+        impl_.assoc_tys.insert(name.to_string(), ty);
+    }
+
     pub fn get_all_impls(&self) -> impl Iterator<Item = Impl> {
         (0..self.impls.len()).map(Impl)
     }
