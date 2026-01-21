@@ -1238,6 +1238,7 @@ mod tests {
                     ty: TyAnnot::Path(str_to_path("Empty")),
                     trait_annot: None,
                     mthds: vec![],
+                    assoc_tys: vec![],
                 }],
                 traits: vec![Trait {
                     name: "Empty".to_string(),
@@ -1382,6 +1383,7 @@ mod tests {
                             })),
                         }),
                     }],
+                    assoc_tys: vec![],
                 }],
                 ..Default::default()
             };

@@ -1,4 +1,6 @@
 fn main() -> i32 {
+    let b: bool = <i32 as Into>::into(3);
+
     0
 }
 
