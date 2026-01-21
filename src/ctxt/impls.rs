@@ -22,4 +22,5 @@ pub struct ImplDef {
     pub mthds: Vec<Fn>,
     pub mthds_by_name: HashMap<String, Fn>,
     pub trait_inst: Option<TraitInst>,
+    pub assoc_tys: HashMap<String, Ty>,
 }

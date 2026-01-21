@@ -302,7 +302,7 @@ impl Ctxt {
                         self.try_resolve_hlr_path_segment_to_ty(base_ty, gen_vars, self_ty, allow_wildcards)?;
 
                     let ty = self
-                        .resolve_associated_ty(base_ty, _ident)
+                        .resolve_associated_ty_completely(base_ty, _ident)
                         .expect("associated type not found");
                     Some(ty)
                 }
@@ -374,7 +374,20 @@ impl Ctxt {
         }
     }
 
-    fn resolve_associated_ty(&mut self, base_ty: ty::Ty, ident: &str) -> Option<ty::Ty> {
+    fn resolve_associated_ty_completely(&mut self, base_ty: ty::Ty, ident: &str) -> Option<ty::Ty> {
+        let base_ty_def = self.tys.get_ty_def(base_ty);
+
+        if let Some(&ty::TyDef::TraitSelf(trait_)) = base_ty_def {
+            let trait_def = self.traits.get_trait_def(trait_);
+            let assoc_ty_index = trait_def.assoc_tys.iter().position(|name| name == ident)?;
+            let default_trait_inst = traits::TraitInst {
+                trait_,
+                gen_args: trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect(),
+            };
+            let ty = self.tys.assoc_ty(base_ty, default_trait_inst, assoc_ty_index);
+            return Some(ty);
+        }
+
         let candidate_assoc_tys: Vec<_> = self
             .traits
             .get_trait_assoc_ty_with_name(ident)
@@ -383,22 +396,19 @@ impl Ctxt {
 
         match &candidate_assoc_tys[..] {
             [] => None,
-            [(trait_, assoc_ty_idx)] => {
-                let trait_def = self.traits.get_trait_def(*trait_);
-                let n_gen_params = trait_def.gen_params.len();
-                // TODO It's not always correct to use `undef_ty` here
-                // e.g. if base_ty == SelfTy(trait_), then the gen_args should be exactly the gen_params
-                // of the trait
-                let gen_args = (0..n_gen_params).map(|_| self.tys.undef_ty()).collect();
+            [(trait_, _assoc_ty_idx)] => {
+                let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_).collect();
 
-                let trait_inst = traits::TraitInst {
-                    trait_: *trait_,
-                    gen_args,
+                let [impl_inst] = &impl_insts[..] else {
+                    return None;
                 };
-                let ty = self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx);
-                Some(ty)
+
+                let impl_def = self.impls.get_impl_def(impl_inst.impl_);
+                let assoc_ty = *impl_def.assoc_tys.get(ident).unwrap();
+
+                Some(assoc_ty)
             }
-            [_, _, ..] => todo!(),
+            [_, _, ..] => None,
         }
     }
 }

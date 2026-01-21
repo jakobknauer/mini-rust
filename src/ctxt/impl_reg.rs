@@ -21,6 +21,7 @@ impl ImplReg {
             mthds: Vec::new(),
             mthds_by_name: HashMap::new(),
             trait_inst,
+            assoc_tys: HashMap::new(),
         };
         self.impls.push(impl_def);
         impl_

@@ -1,6 +1,4 @@
 fn main() -> i32 {
-    let b: bool = <i32 as Into>::into(3);
-
     0
 }
 
@@ -136,10 +134,10 @@ trait Iterator {
     fn next(&self) -> Option<Self::Item>;
 }
 
-trait HasItem {
-    type Item;
-}
-
-impl HasItem for Option<i32> {
+impl Iterator for Option<i32> {
     type Item = i32;
+
+    fn next(&self) -> Option<Self::Item> {
+        *self
+    }
 }
