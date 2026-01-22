@@ -134,8 +134,8 @@ trait Iterator {
     fn next(&self) -> Option<Self::Item>;
 }
 
-impl Iterator for Option<i32> {
-    type Item = i32;
+impl<T> Iterator for Option<T> {
+    type Item = T;
 
     fn next(&self) -> Option<Self::Item> {
         *self

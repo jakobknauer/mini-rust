@@ -89,4 +89,12 @@ impl TraitReg {
                     .map(|assoc_ty_idx| (Trait(trait_idx), assoc_ty_idx))
             })
     }
+
+    pub fn get_trait_assoc_ty_index(&self, trait_: Trait, name: &str) -> usize {
+        self.traits[trait_.0]
+            .assoc_tys
+            .iter()
+            .position(|assoc_ty| assoc_ty == name)
+            .unwrap()
+    }
 }

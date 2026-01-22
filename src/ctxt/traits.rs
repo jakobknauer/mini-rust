@@ -6,6 +6,7 @@ use crate::ctxt::{
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Trait(pub usize);
 
+#[derive(Clone)]
 pub struct TraitDef {
     pub name: String,
     pub gen_params: Vec<GenVar>,

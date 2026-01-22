@@ -396,7 +396,7 @@ impl Ctxt {
 
         match &candidate_assoc_tys[..] {
             [] => None,
-            [(trait_, _assoc_ty_idx)] => {
+            [(trait_, assoc_ty_idx)] => {
                 let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_).collect();
 
                 let [impl_inst] = &impl_insts[..] else {
@@ -404,11 +404,90 @@ impl Ctxt {
                 };
 
                 let impl_def = self.impls.get_impl_def(impl_inst.impl_);
-                let assoc_ty = *impl_def.assoc_tys.get(ident).unwrap();
+                let assoc_ty = *impl_def.assoc_tys.get(assoc_ty_idx).unwrap();
 
                 Some(assoc_ty)
             }
             [_, _, ..] => None,
+        }
+    }
+
+    pub fn canonicalize_assoc_tys(&mut self, ty: ty::Ty) -> ty::Ty {
+        use ty::TyDef::*;
+
+        let ty = self.tys.canonicalize(ty);
+        let Some(ty_def) = self.tys.get_ty_def(ty).cloned() else {
+            return ty;
+        };
+
+        match ty_def {
+            Primitive(_) => ty,
+            Tuple(items) => {
+                let items: Vec<ty::Ty> = items.into_iter().map(|ty| self.canonicalize_assoc_tys(ty)).collect();
+                self.tys.tuple(items)
+            }
+            Struct { struct_, gen_args } => {
+                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.canonicalize_assoc_tys(ty)).collect();
+                self.tys.inst_struct(struct_, gen_args).unwrap()
+            }
+            Enum { enum_, gen_args } => {
+                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.canonicalize_assoc_tys(ty)).collect();
+                self.tys.inst_enum(enum_, gen_args).unwrap()
+            }
+            Fn {
+                param_tys,
+                return_ty,
+                var_args,
+            } => {
+                let param_tys: Vec<ty::Ty> = param_tys
+                    .into_iter()
+                    .map(|ty| self.canonicalize_assoc_tys(ty))
+                    .collect();
+                let return_ty = self.canonicalize_assoc_tys(return_ty);
+                self.tys.fn_(param_tys, return_ty, var_args)
+            }
+            Ref(ty) => {
+                let ty = self.canonicalize_assoc_tys(ty);
+                self.tys.ref_(ty)
+            }
+            Ptr(ty) => {
+                let ty = self.canonicalize_assoc_tys(ty);
+                self.tys.ptr(ty)
+            }
+            Alias(ty) => self.canonicalize_assoc_tys(ty),
+            GenVar(_) => ty,
+            TraitSelf(_) => ty,
+            Closure {
+                ..
+            } => ty,
+            AssocTy {
+                base_ty,
+                trait_inst,
+                assoc_ty_idx,
+            } => {
+                let base_ty = self.canonicalize_assoc_tys(base_ty);
+                let trait_inst = traits::TraitInst {
+                    trait_: trait_inst.trait_,
+                    gen_args: trait_inst
+                        .gen_args
+                        .iter()
+                        .map(|ty| self.canonicalize_assoc_tys(*ty))
+                        .collect(),
+                };
+
+                let impl_insts: Vec<_> = self
+                    .get_impl_insts_for_ty_and_trait_inst(base_ty, &trait_inst)
+                    .collect();
+
+                let [impl_inst] = &impl_insts[..] else { return ty };
+
+                let impl_def = self.impls.get_impl_def(impl_inst.impl_);
+                let assoc_ty = impl_def.assoc_tys[&assoc_ty_idx];
+
+                let subst = GenVarSubst::new(&impl_def.gen_params, &impl_inst.gen_args).unwrap();
+
+                self.tys.substitute_gen_vars(assoc_ty, &subst)
+            }
         }
     }
 }
