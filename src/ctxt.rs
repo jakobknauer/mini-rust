@@ -457,9 +457,7 @@ impl Ctxt {
             Alias(ty) => self.canonicalize_assoc_tys(ty),
             GenVar(_) => ty,
             TraitSelf(_) => ty,
-            Closure {
-                ..
-            } => ty,
+            Closure { .. } => ty,
             AssocTy {
                 base_ty,
                 trait_inst,
