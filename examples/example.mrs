@@ -1,4 +1,10 @@
 fn main() -> i32 {
+    let some = Option::Some { item: 1 };
+    let none = Option::<i32>::None {};
+
+    printf("Length of Some = %d\n", iter_len(some.into_iter()));
+    printf("Length of None = %d\n", iter_len(none.into_iter()));
+
     0
 }
 
@@ -126,18 +132,5 @@ impl Into<bool> for i32 {
 impl Into<i32> for bool {
     fn into(self) -> i32 {
         if self { 1 } else { 0 }
-    }
-}
-
-trait Iterator {
-    type Item;
-    fn next(&self) -> Option<Self::Item>;
-}
-
-impl<T> Iterator for Option<T> {
-    type Item = T;
-
-    fn next(&self) -> Option<Self::Item> {
-        *self
     }
 }

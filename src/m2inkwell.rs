@@ -120,7 +120,10 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
                 self.mr_ctxt.tys.get_gen_var_name(gen_var)
             ),
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
-            AssocTy { .. } => todo!("resolve and build associated types"),
+            AssocTy { .. } => {
+                let ty = self.mr_ctxt.canonicalize_assoc_tys(ty);
+                self.get_or_define_ty(ty).unwrap()
+            }
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

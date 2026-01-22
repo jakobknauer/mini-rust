@@ -35,4 +35,29 @@ impl<T> Option<T> {
             None {} => Option::None {},
         }
     }
+
+    fn is_some(&self) -> bool {
+        match self {
+            Some { item: item } => true,
+            None {} => false,
+        }
+    }
+
+    fn into_iter(self) -> OptionIter<T> {
+        OptionIter { item: self }
+    }
+}
+
+struct OptionIter<T> {
+    item: Option<T>
+}
+
+impl<T> Iterator for OptionIter<T> {
+    type Item = T;
+
+    fn next(&self) -> Option<T> {
+        let item = self.item;
+        self.item = Option::None {};
+        item
+    }
 }

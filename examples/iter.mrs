@@ -1,0 +1,15 @@
+trait Iterator {
+    type Item;
+    fn next(&self) -> Option<Self::Item>;
+}
+
+fn iter_len<T>(iter: T) -> i32
+where
+    T: Iterator,
+{
+    let len = 0;
+    while iter.next().is_some() {
+        len = len + 1;
+    }
+    len
+}
