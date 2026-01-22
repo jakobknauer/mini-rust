@@ -4,4 +4,5 @@
 - Non-destructive Ty::eq
 - ~~Correct handling of undefined types in try_find_instantiation~~
 - ~~Reduce code duplication in h2m.rs (related to Method resolution)~~
-- Associated types
+- ~~Associated types~~
+- Clean up stuff related to associated types
