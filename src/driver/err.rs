@@ -282,6 +282,7 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
             "Generic argument count mismatch for implementation: expected {}, got {}",
             expected, actual
         ),
+        MissingAssocTy(name) => format!("Missing associated type '{}'", name),
     };
 
     format!(

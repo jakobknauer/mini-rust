@@ -46,6 +46,7 @@ pub enum ImplCheckErrorKind {
         actual: usize,
         expected: usize,
     },
+    MissingAssocTy(String),
 }
 
 pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
@@ -73,6 +74,17 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
         });
     }
 
+    let impl_def = ctxt.impls.get_impl_def(impl_).clone();
+    for (assoc_ty_idx, assoc_ty_name) in trait_def.assoc_tys.iter().enumerate() {
+        if !impl_def.assoc_tys.contains_key(&assoc_ty_idx) {
+            return Err(ImplCheckError {
+                impl_,
+                trait_inst: trait_inst.clone(),
+                kind: ImplCheckErrorKind::MissingAssocTy(assoc_ty_name.clone()),
+            });
+        }
+    }
+
     check_mthd_names(ctxt, impl_, trait_inst.trait_).map_err(|kind| ImplCheckError {
         impl_,
         trait_inst: trait_inst.clone(),
@@ -80,7 +92,6 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
     })?;
 
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_).clone();
-    let impl_def = ctxt.impls.get_impl_def(impl_).clone();
 
     // Substitution of the generic params of the trait with the arguments of the impl.
     // E.g. if we have a trait `trait Into<T>` and an impl `impl Into<u32> for Foo`,
