@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast, ast_lowering,
+    ast, ast_lowering, ast_parsing,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -49,7 +49,7 @@ pub fn compile(
     print_pretty("Building AST from source");
     let mut ast = ast::Program::default();
     for source in sources {
-        ast::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
+        ast_parsing::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
     }
 
     let mut ast_meta = AstMeta::default();

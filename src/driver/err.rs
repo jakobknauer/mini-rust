@@ -1,13 +1,13 @@
 use crate::{
-    ast, ast_lowering,
+    ast_lowering, ast_parsing,
     ctxt::{self, ty::Obligation},
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     obligation_check::ObligationCheckError,
     typechecker::TyError,
 };
 
-pub fn print_parser_err(err: &ast::ParserErr, _: &str) -> String {
-    use ast::ParserErr::*;
+pub fn print_parser_err(err: &ast_parsing::ParserErr, _: &str) -> String {
+    use ast_parsing::ParserErr::*;
 
     match err {
         LexerErr(lexer_err) => format!("Lexer error at position {}", lexer_err.position),

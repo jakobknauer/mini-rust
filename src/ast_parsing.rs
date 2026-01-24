@@ -1,9 +1,13 @@
+mod lexer;
+mod token;
+
 #[macro_use]
 mod macros;
 
-use crate::ast::{defs::*, lexer, token::Keyword};
+use crate::{ast::*, ast_parsing::token::Keyword};
 
-pub use crate::ast::{lexer::LexerErr, token::Token};
+pub use lexer::LexerErr;
+pub use token::Token;
 
 pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
     let tokens = lexer::get_tokens(input)?;
