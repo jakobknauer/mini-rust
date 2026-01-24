@@ -6,6 +6,9 @@ fn main() -> i32 {
 
     printf("Length of Vec = %d\n", iter_len(vec.iter()));
 
+    for_each(vec.iter(), |x: &i32| *x = *x + 1);
+    for_each(vec.iter(), |x: &i32| { printf("%d ", *x); });
+
     0
 }
 

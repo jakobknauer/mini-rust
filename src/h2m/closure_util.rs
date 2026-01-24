@@ -18,9 +18,9 @@ impl<'a> super::H2M<'a> {
             && !var_args
         {
             for (&param_ty, &exp_param_ty) in param_tys.iter().zip(exp_param_tys.iter()) {
-                self.tys().unify(param_ty, exp_param_ty).unwrap();
+                let _ = self.tys().unify(param_ty, exp_param_ty);
             }
-            self.tys().unify(return_ty, exp_return_ty).unwrap();
+            let _ = self.tys().unify(return_ty, exp_return_ty);
         }
 
         Ok(())

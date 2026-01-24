@@ -13,3 +13,28 @@ where
     }
     len
 }
+
+fn first<T>(iter: T) -> Option<T::Item>
+where
+    T: Iterator,
+{
+    iter.next()
+}
+
+fn for_each<T, F>(iter: T, f: F)
+    where T: Iterator,
+          F: Fn(T::Item)
+{
+    let current = iter.next();
+    loop {
+        match current {
+            Some { item: x } => {
+                f(x);
+                current = iter.next();
+            },
+            None {} => {
+                break;
+            }
+        }
+    }
+}

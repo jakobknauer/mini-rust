@@ -192,7 +192,7 @@ fn check_mthd_sig(
     let do_substitutions = |ctxt: &mut ctxt::Ctxt, ty: ty::Ty| {
         let ty = ctxt.tys.substitute_gen_vars(ty, &all_gen_params_subst);
         let ty = ctxt.tys.substitute_self_ty(ty, impl_ty);
-        ctxt.canonicalize_assoc_tys(ty)
+        ctxt.normalize_ty(ty)
     };
 
     // Compare params

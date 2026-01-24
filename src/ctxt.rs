@@ -416,7 +416,7 @@ impl Ctxt {
         }
     }
 
-    pub fn canonicalize_assoc_tys(&mut self, ty: ty::Ty) -> ty::Ty {
+    pub fn normalize_ty(&mut self, ty: ty::Ty) -> ty::Ty {
         use ty::TyDef::*;
 
         let ty = self.tys.canonicalize(ty);
@@ -427,15 +427,15 @@ impl Ctxt {
         match ty_def {
             Primitive(_) => ty,
             Tuple(items) => {
-                let items: Vec<ty::Ty> = items.into_iter().map(|ty| self.canonicalize_assoc_tys(ty)).collect();
+                let items: Vec<ty::Ty> = items.into_iter().map(|ty| self.normalize_ty(ty)).collect();
                 self.tys.tuple(items)
             }
             Struct { struct_, gen_args } => {
-                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.canonicalize_assoc_tys(ty)).collect();
+                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.normalize_ty(ty)).collect();
                 self.tys.inst_struct(struct_, gen_args).unwrap()
             }
             Enum { enum_, gen_args } => {
-                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.canonicalize_assoc_tys(ty)).collect();
+                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.normalize_ty(ty)).collect();
                 self.tys.inst_enum(enum_, gen_args).unwrap()
             }
             Fn {
@@ -443,22 +443,19 @@ impl Ctxt {
                 return_ty,
                 var_args,
             } => {
-                let param_tys: Vec<ty::Ty> = param_tys
-                    .into_iter()
-                    .map(|ty| self.canonicalize_assoc_tys(ty))
-                    .collect();
-                let return_ty = self.canonicalize_assoc_tys(return_ty);
+                let param_tys: Vec<ty::Ty> = param_tys.into_iter().map(|ty| self.normalize_ty(ty)).collect();
+                let return_ty = self.normalize_ty(return_ty);
                 self.tys.fn_(param_tys, return_ty, var_args)
             }
             Ref(ty) => {
-                let ty = self.canonicalize_assoc_tys(ty);
+                let ty = self.normalize_ty(ty);
                 self.tys.ref_(ty)
             }
             Ptr(ty) => {
-                let ty = self.canonicalize_assoc_tys(ty);
+                let ty = self.normalize_ty(ty);
                 self.tys.ptr(ty)
             }
-            Alias(ty) => self.canonicalize_assoc_tys(ty),
+            Alias(ty) => self.normalize_ty(ty),
             GenVar(_) => ty,
             TraitSelf(_) => ty,
             Closure { .. } => ty,
@@ -467,14 +464,10 @@ impl Ctxt {
                 trait_inst,
                 assoc_ty_idx,
             } => {
-                let base_ty = self.canonicalize_assoc_tys(base_ty);
+                let base_ty = self.normalize_ty(base_ty);
                 let trait_inst = traits::TraitInst {
                     trait_: trait_inst.trait_,
-                    gen_args: trait_inst
-                        .gen_args
-                        .iter()
-                        .map(|ty| self.canonicalize_assoc_tys(*ty))
-                        .collect(),
+                    gen_args: trait_inst.gen_args.iter().map(|ty| self.normalize_ty(*ty)).collect(),
                 };
 
                 let impl_insts: Vec<_> = self

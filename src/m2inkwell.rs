@@ -121,7 +121,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
             ),
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
             AssocTy { .. } => {
-                let ty = self.mr_ctxt.canonicalize_assoc_tys(ty);
+                let ty = self.mr_ctxt.normalize_ty(ty);
                 self.get_or_define_ty(ty).unwrap()
             }
         };
