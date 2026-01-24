@@ -1,7 +1,7 @@
 use crate::{
-    ctxt::{mlr, ty},
-    ast_lowering::{AstLoweringResult, macros::assign_to_fresh_alloc},
     ast,
+    ast_lowering::{AstLoweringResult, macros::assign_to_fresh_alloc},
+    ctxt::{mlr, ty},
 };
 
 impl<'a> super::AstLowerer<'a> {

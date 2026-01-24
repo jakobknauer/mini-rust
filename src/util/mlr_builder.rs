@@ -1,13 +1,13 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::{
+    ast,
+    ast_lowering::{AstLoweringError, AstLoweringResult},
     ctxt::{
         self, fns,
         mlr::{self, Mlr},
         ty,
     },
-    ast_lowering::{AstLoweringError, AstLoweringResult},
-    ast,
     typechecker::Typechecker,
 };
 
@@ -198,7 +198,11 @@ impl<'a> MlrBuilder<'a> {
         self.insert_place(place)
     }
 
-    pub fn insert_project_to_variant_place(&mut self, base: mlr::Place, variant_index: usize) -> AstLoweringResult<mlr::Place> {
+    pub fn insert_project_to_variant_place(
+        &mut self,
+        base: mlr::Place,
+        variant_index: usize,
+    ) -> AstLoweringResult<mlr::Place> {
         let place = mlr::PlaceDef::ProjectToVariant { base, variant_index };
         self.insert_place(place)
     }
@@ -304,7 +308,10 @@ impl<'a> MlrBuilder<'a> {
             .and_then(|loc| self.insert_loc_place(loc).ok())
     }
 
-    pub fn resolve_ast_ty_annot_or_insert_new_type(&mut self, annot: Option<&ast::TyAnnot>) -> AstLoweringResult<ty::Ty> {
+    pub fn resolve_ast_ty_annot_or_insert_new_type(
+        &mut self,
+        annot: Option<&ast::TyAnnot>,
+    ) -> AstLoweringResult<ty::Ty> {
         annot
             .map(|annot| self.resolve_ast_ty_annot(annot))
             .unwrap_or_else(|| Ok(self.tys().undef_ty()))

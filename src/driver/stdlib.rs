@@ -1,10 +1,10 @@
 use crate::{
+    ast_lowering::AstLoweringError,
     ctxt::{
         self,
         fns::{self},
         ty,
     },
-    ast_lowering::AstLoweringError,
     util::mlr_builder::MlrBuilder,
 };
 

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{fns, mlr, ty},
     ast_lowering::AstLoweringResult,
+    ctxt::{fns, mlr, ty},
 };
 
 impl<'a> super::AstLowerer<'a> {

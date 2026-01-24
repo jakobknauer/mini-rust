@@ -1,4 +1,4 @@
-use crate::{ctxt::mlr, ast_lowering::AstLoweringResult, util::mlr_builder::MlrBuilder};
+use crate::{ast_lowering::AstLoweringResult, ctxt::mlr, util::mlr_builder::MlrBuilder};
 
 pub enum Lowered {
     Op(mlr::Op),

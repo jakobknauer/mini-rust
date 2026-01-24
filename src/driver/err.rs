@@ -1,7 +1,7 @@
 use crate::{
+    ast, ast_lowering,
     ctxt::{self, ty::Obligation},
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
-    ast_lowering, ast,
     obligation_check::ObligationCheckError,
     typechecker::TyError,
 };

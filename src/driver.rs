@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast,
+    ast, ast_lowering,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -18,7 +18,7 @@ use crate::{
         err::{print_impl_check_error, print_obligation_check_error},
         impl_check::check_trait_impls,
     },
-    ast_lowering, mlr_lowering,
+    mlr_lowering,
     obligation_check::check_obligations,
     util::print,
 };
@@ -426,7 +426,8 @@ fn build_function_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &Ast
 
         let target_fn = ast_meta.fn_ids[&idx];
 
-        ast_lowering::ast_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, ctxt))?;
+        ast_lowering::ast_to_mlr(ctxt, body, target_fn)
+            .map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, ctxt))?;
     }
 
     Ok(())
