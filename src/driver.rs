@@ -18,7 +18,7 @@ use crate::{
         err::{print_impl_check_error, print_obligation_check_error},
         impl_check::check_trait_impls,
     },
-    ast_lowering, m2inkwell,
+    ast_lowering, mlr_lowering,
     obligation_check::check_obligations,
     util::print,
 };
@@ -80,7 +80,7 @@ pub fn compile(
     let fn_insts = monomorphize_functions(&mut ctxt).map_err(|_| "Error monomorphizing functions")?;
 
     print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = m2inkwell::mlr_to_llvm_ir(&mut ctxt, fn_insts.into_iter().collect());
+    let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut ctxt, fn_insts.into_iter().collect());
 
     if let Some(llvm_ir_path) = output_paths.llvm_ir {
         print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));

@@ -13,12 +13,12 @@ use inkwell::{
 
 use crate::{
     ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_tys},
-    m2inkwell::fns::M2InkwellFn,
+    mlr_lowering::fns::MlrFnLowerer,
 };
 
 pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = M2Inkwell::new(&iw_ctxt, mr_ctxt, fn_insts);
+    let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, fn_insts);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -27,7 +27,7 @@ pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>
     generator.iw_module.print_to_string().to_string()
 }
 
-struct M2Inkwell<'iw, 'mr> {
+struct MlrLowerer<'iw, 'mr> {
     iw_ctxt: &'iw IwContext,
     iw_module: Module<'iw>,
 
@@ -41,10 +41,10 @@ struct M2Inkwell<'iw, 'mr> {
     enums: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
 }
 
-impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
+impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
     fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>) -> Self {
         let iw_module = iw_ctxt.create_module("test");
-        M2Inkwell {
+        MlrLowerer {
             iw_ctxt,
             iw_module,
             fn_insts,
@@ -81,7 +81,7 @@ impl<'iw, 'mr> M2Inkwell<'iw, 'mr> {
 
     fn define_functions(&mut self) {
         for fn_inst in self.fn_insts.clone() {
-            let Some(mut fn_gen) = M2InkwellFn::new(self, fn_inst.clone()) else {
+            let Some(mut fn_gen) = MlrFnLowerer::new(self, fn_inst.clone()) else {
                 continue;
             };
             if fn_gen.build_fn().is_err() {
