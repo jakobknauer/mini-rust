@@ -400,7 +400,11 @@ impl Ctxt {
                 let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_).collect();
 
                 let [impl_inst] = &impl_insts[..] else {
-                    return None;
+                    let trait_inst = traits::TraitInst {
+                        trait_: *trait_,
+                        gen_args: vec![], // TODO add gen args
+                    };
+                    return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
 
                 let impl_def = self.impls.get_impl_def(impl_inst.impl_);

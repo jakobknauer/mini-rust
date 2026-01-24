@@ -184,20 +184,6 @@ fn register_function(
         .collect();
     let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
-    let params = hlr_fn
-        .params
-        .iter()
-        .enumerate()
-        .map(|(idx, param)| build_fn_param(ctxt, param, &all_gen_params, associated_ty, idx == 0))
-        .collect::<Result<_, _>>()?;
-
-    let return_ty = match hlr_fn.return_ty.as_ref() {
-        Some(ty) => ctxt
-            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
-            .ok_or(())?,
-        None => ctxt.tys.unit(),
-    };
-
     for constraint in &hlr_fn.constraints {
         let subject = gen_params
             .iter()
@@ -239,6 +225,20 @@ fn register_function(
             }
         }
     }
+
+    let params = hlr_fn
+        .params
+        .iter()
+        .enumerate()
+        .map(|(idx, param)| build_fn_param(ctxt, param, &all_gen_params, associated_ty, idx == 0))
+        .collect::<Result<_, _>>()?;
+
+    let return_ty = match hlr_fn.return_ty.as_ref() {
+        Some(ty) => ctxt
+            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
+            .ok_or(())?,
+        None => ctxt.tys.unit(),
+    };
 
     let signature = fns::FnSig {
         name: hlr_fn.name.clone(),
