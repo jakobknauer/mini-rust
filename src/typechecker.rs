@@ -46,6 +46,7 @@ impl<'a> Typechecker<'a> {
             PtrOffset(op, offset) => self.infer_ty_of_ptr_offset_expr(op, offset),
         }?;
 
+        let ty = self.ctxt.normalize_ty(ty);
         self.ctxt.mlr.set_val_ty(val, ty);
         Ok(ty)
     }
@@ -64,6 +65,7 @@ impl<'a> Typechecker<'a> {
             ClosureCaptures(place) => self.infer_ty_of_closure_captures(place),
         }?;
 
+        let ty = self.ctxt.normalize_ty(ty);
         self.ctxt.mlr.set_place_ty(place, ty);
         Ok(ty)
     }
@@ -80,6 +82,7 @@ impl<'a> Typechecker<'a> {
             Copy(place) => self.infer_place_ty(place),
         }?;
 
+        let ty = self.ctxt.normalize_ty(ty);
         self.ctxt.mlr.set_op_ty(op, ty);
         Ok(ty)
     }
