@@ -29,6 +29,33 @@ pub struct OutputPaths<'a> {
     pub llvm_ir: Option<&'a Path>,
 }
 
+pub fn compile(
+    sources: &[String],
+    print_pretty: impl Fn(&str),
+    print_detail: impl Fn(&str),
+    output_paths: &OutputPaths,
+) -> Result<(), String> {
+    let mut driver = Driver {
+        ctxt: ctxt::Ctxt::default(),
+        ast_meta: AstMeta::default(),
+        sources: sources.to_vec(),
+        print_pretty: &print_pretty,
+        print_detail: &print_detail,
+        output_paths,
+    };
+
+    driver.compile()
+}
+
+struct Driver<'a> {
+    ctxt: ctxt::Ctxt,
+    sources: Vec<String>,
+    print_pretty: &'a dyn Fn(&str),
+    print_detail: &'a dyn Fn(&str),
+    output_paths: &'a OutputPaths<'a>,
+    ast_meta: AstMeta,
+}
+
 #[derive(Default)]
 struct AstMeta {
     pub fn_ids: HashMap<usize, fns::Fn>,
@@ -38,476 +65,509 @@ struct AstMeta {
     pub impl_ids: HashMap<usize, impls::Impl>,
 }
 
-pub fn compile(
-    sources: &[String],
-    print_pretty: impl Fn(&str),
-    print_detail: impl Fn(&str),
-    output_paths: &OutputPaths,
-) -> Result<(), String> {
-    let mut ctxt = ctxt::Ctxt::default();
-
-    print_pretty("Building AST from source");
-    let mut ast = ast::Program::default();
-    for source in sources {
-        ast_parsing::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
-    }
-
-    let mut ast_meta = AstMeta::default();
-
-    print_pretty("Building MLR from AST");
-    register_tys(&ast, &mut ctxt.tys, &mut ast_meta).map_err(|_| "Error registering types")?;
-    define_tys(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error defining types")?;
-    register_traits(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering traits")?;
-    register_impls(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering impls")?;
-
-    register_functions(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering functions")?;
-    register_trait_methods(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error registering trait methods")?;
-    register_impl_methods(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error registering impl methods")?;
-
-    check_trait_impls(&mut ctxt).map_err(|err| print_impl_check_error(err, &ctxt))?;
-    build_function_mlrs(&ast, &mut ctxt, &ast_meta).map_err(|err| format!("Error building MLR: {err}"))?;
-    build_impl_fn_mlrs(&ast, &mut ctxt, &ast_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
-    check_obligations(&mut ctxt).map_err(|err| print_obligation_check_error(err, &ctxt))?;
-
-    ast_lowering::opt::canonicalize_types(&mut ctxt).map_err(|_| "Could not infer types")?;
-
-    if let Some(mlr_path) = output_paths.mlr {
-        print_detail(&format!("Saving MLR to {}", mlr_path.display()));
-        print_functions(&ctxt, mlr_path).map_err(|_| "Error printing MLR")?;
-    }
-
-    print_pretty("Monomorphizing functions");
-    let fn_insts = monomorphize_functions(&mut ctxt).map_err(|_| "Error monomorphizing functions")?;
-
-    print_pretty("Building LLVM IR from MLR");
-    let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut ctxt, fn_insts.into_iter().collect());
-
-    if let Some(llvm_ir_path) = output_paths.llvm_ir {
-        print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
-        std::fs::write(llvm_ir_path, &llvm_ir).map_err(|_| "Could not write LLVM IR file")?;
-    }
-
-    Ok(())
-}
-
-fn register_tys(program: &ast::Program, tys: &mut ctxt::TyReg, ast_meta: &mut AstMeta) -> Result<(), ()> {
-    tys.register_primitive_tys()?;
-
-    for (idx, struct_) in program.structs.iter().enumerate() {
-        let ty = tys.register_struct(&struct_.name, &struct_.gen_params)?;
-        ast_meta.struct_ids.insert(idx, ty);
-    }
-
-    for (idx, enum_) in program.enums.iter().enumerate() {
-        let ty = tys.register_enum(&enum_.name, &enum_.gen_params)?;
-        ast_meta.enum_ids.insert(idx, ty);
-
-        for variant in &enum_.variants {
-            let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-            let variant_ty = tys.register_struct(&variant_struct_name, &enum_.gen_params)?;
-
-            let enum_def = tys.get_mut_enum_def(ty).ok_or(())?;
-
-            enum_def.variants.push(ty::EnumVariant {
-                name: variant.name.clone(),
-                struct_: variant_ty,
-            });
+impl<'a> Driver<'a> {
+    pub fn compile(&mut self) -> Result<(), String> {
+        self.print_pretty("Building AST from source");
+        let mut ast = ast::Program::default();
+        for source in &self.sources {
+            ast_parsing::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
         }
-    }
 
-    Ok(())
-}
+        self.print_pretty("Building MLR from AST");
+        self.register_tys(&ast).map_err(|_| "Error registering types")?;
+        self.define_tys(&ast).map_err(|_| "Error defining types")?;
+        self.register_traits(&ast).map_err(|_| "Error registering traits")?;
+        self.register_impls(&ast).map_err(|_| "Error registering impls")?;
 
-fn define_tys(program: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), ()> {
-    for (idx, struct_) in program.structs.iter().enumerate() {
-        set_struct_fields(ctxt, ast_meta.struct_ids[&idx], &struct_.fields)?
-    }
+        self.register_functions(&ast)
+            .map_err(|_| "Error registering functions")?;
+        self.register_trait_methods(&ast)
+            .map_err(|_| "Error registering trait methods")?;
+        self.register_impl_methods(&ast)
+            .map_err(|_| "Error registering impl methods")?;
 
-    for (idx, ast_enum) in program.enums.iter().enumerate() {
-        let enum_ = ast_meta.enum_ids[&idx];
-        let variants = ctxt.tys.get_enum_def(enum_).ok_or(())?.variants.clone();
+        check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
+        self.build_function_mlrs(&ast)
+            .map_err(|err| format!("Error building MLR: {err}"))?;
+        self.build_impl_fn_mlrs(&ast)
+            .map_err(|err| format!("Error building MLR for impls: {err}"))?;
+        check_obligations(&mut self.ctxt).map_err(|err| print_obligation_check_error(err, &self.ctxt))?;
 
-        for (ast_variant, variant) in ast_enum.variants.iter().zip(variants) {
-            set_struct_fields(ctxt, variant.struct_, &ast_variant.fields)?;
+        ast_lowering::opt::canonicalize_types(&mut self.ctxt).map_err(|_| "Could not infer types")?;
+
+        if let Some(mlr_path) = self.output_paths.mlr {
+            self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
+            self.print_functions(mlr_path).map_err(|_| "Error printing MLR")?;
         }
+
+        self.print_pretty("Monomorphizing functions");
+        let fn_insts = self
+            .monomorphize_functions()
+            .map_err(|_| "Error monomorphizing functions")?;
+
+        self.print_pretty("Building LLVM IR from MLR");
+        let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, fn_insts.into_iter().collect());
+
+        if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
+            self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
+            std::fs::write(llvm_ir_path, &llvm_ir).map_err(|_| "Could not write LLVM IR file")?;
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
-
-fn set_struct_fields<'a>(
-    ctxt: &mut ctxt::Ctxt,
-    struct_: ty::Struct,
-    fields: impl IntoIterator<Item = &'a ast::StructField>,
-) -> Result<(), ()> {
-    let gen_params = ctxt.tys.get_struct_def(struct_).ok_or(())?.gen_params.clone();
-
-    let fields = fields
-        .into_iter()
-        .map(|field| {
-            Ok(ty::StructField {
-                name: field.name.clone(),
-                ty: ctxt
-                    .try_resolve_ast_ty_annot(&field.ty, &gen_params, None, false)
-                    .ok_or(())?,
-            })
-        })
-        .collect::<Result<_, _>>()?;
-
-    let struct_def = ctxt.tys.get_mut_struct_def(struct_).ok_or(())?;
-    struct_def.fields = fields;
-
-    Ok(())
-}
-
-fn register_functions(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &mut AstMeta) -> Result<(), ()> {
-    stdlib::register_fns(ctxt)?;
-
-    for (idx, function) in ast.fns.iter().enumerate() {
-        let fn_ = register_function(function, ctxt, None, None, Vec::new())?;
-        ast_meta.fn_ids.insert(idx, fn_);
+    fn print_pretty(&self, msg: &str) {
+        (self.print_pretty)(msg);
     }
 
-    Ok(())
-}
+    fn print_detail(&self, msg: &str) {
+        (self.print_detail)(msg);
+    }
 
-fn register_function(
-    ast_fn: &ast::Fn,
-    ctxt: &mut ctxt::Ctxt,
-    associated_ty: Option<ty::Ty>,
-    associated_trait_inst: Option<traits::TraitInst>,
-    env_gen_params: Vec<ty::GenVar>,
-) -> Result<fns::Fn, ()> {
-    let gen_params: Vec<_> = ast_fn
-        .gen_params
-        .iter()
-        .map(|gp| ctxt.tys.register_gen_var(gp))
-        .collect();
-    let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
+    fn register_tys(&mut self, program: &ast::Program) -> Result<(), ()> {
+        self.ctxt.tys.register_primitive_tys()?;
 
-    for constraint in &ast_fn.constraints {
-        let subject = gen_params
-            .iter()
-            .cloned()
-            .find(|&gp| ctxt.tys.get_gen_var_name(gp) == constraint.subject)
-            .ok_or(())?;
+        for (idx, struct_) in program.structs.iter().enumerate() {
+            let ty = self.ctxt.tys.register_struct(&struct_.name, &struct_.gen_params)?;
+            self.ast_meta.struct_ids.insert(idx, ty);
+        }
 
-        match &constraint.requirement {
-            ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
-                let trait_ = ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
-                let trait_args = trait_args
-                    .iter()
-                    .map(|arg| {
-                        ctxt.try_resolve_ast_ty_annot(arg, &all_gen_params, associated_ty, false)
-                            .ok_or(())
-                    })
-                    .collect::<Result<_, _>>()?;
-                let trait_inst = TraitInst {
-                    trait_,
-                    gen_args: trait_args,
-                };
-                ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
+        for (idx, enum_) in program.enums.iter().enumerate() {
+            let ty = self.ctxt.tys.register_enum(&enum_.name, &enum_.gen_params)?;
+            self.ast_meta.enum_ids.insert(idx, ty);
+
+            for variant in &enum_.variants {
+                let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
+                let variant_ty = self.ctxt.tys.register_struct(&variant_struct_name, &enum_.gen_params)?;
+
+                let enum_def = self.ctxt.tys.get_mut_enum_def(ty).ok_or(())?;
+
+                enum_def.variants.push(ty::EnumVariant {
+                    name: variant.name.clone(),
+                    struct_: variant_ty,
+                });
             }
-            ast::ConstraintRequirement::Callable { params, return_ty } => {
-                let params = params
-                    .iter()
-                    .map(|ty| {
-                        ctxt.try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
-                            .ok_or(())
-                    })
-                    .collect::<Result<_, _>>()?;
-                let return_ty = match return_ty {
-                    Some(return_ty) => ctxt
-                        .try_resolve_ast_ty_annot(return_ty, &all_gen_params, associated_ty, false)
+        }
+
+        Ok(())
+    }
+
+    fn define_tys(&mut self, program: &ast::Program) -> Result<(), ()> {
+        for (idx, struct_) in program.structs.iter().enumerate() {
+            self.set_struct_fields(self.ast_meta.struct_ids[&idx], &struct_.fields)?
+        }
+
+        for (idx, ast_enum) in program.enums.iter().enumerate() {
+            let enum_ = self.ast_meta.enum_ids[&idx];
+            let variants = self.ctxt.tys.get_enum_def(enum_).ok_or(())?.variants.clone();
+
+            for (ast_variant, variant) in ast_enum.variants.iter().zip(variants) {
+                self.set_struct_fields(variant.struct_, &ast_variant.fields)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn set_struct_fields<'b>(
+        &mut self,
+        struct_: ty::Struct,
+        fields: impl IntoIterator<Item = &'b ast::StructField>,
+    ) -> Result<(), ()> {
+        let gen_params = self.ctxt.tys.get_struct_def(struct_).ok_or(())?.gen_params.clone();
+
+        let fields = fields
+            .into_iter()
+            .map(|field| {
+                Ok(ty::StructField {
+                    name: field.name.clone(),
+                    ty: self
+                        .ctxt
+                        .try_resolve_ast_ty_annot(&field.ty, &gen_params, None, false)
                         .ok_or(())?,
-                    None => ctxt.tys.unit(),
-                };
-                ctxt.tys.add_callable_constraint(subject, params, return_ty);
+                })
+            })
+            .collect::<Result<_, _>>()?;
+
+        let struct_def = self.ctxt.tys.get_mut_struct_def(struct_).ok_or(())?;
+        struct_def.fields = fields;
+
+        Ok(())
+    }
+
+    fn register_functions(&mut self, ast: &ast::Program) -> Result<(), ()> {
+        stdlib::register_fns(&mut self.ctxt)?;
+
+        for (idx, function) in ast.fns.iter().enumerate() {
+            let fn_ = self.register_function(function, None, None, Vec::new())?;
+            self.ast_meta.fn_ids.insert(idx, fn_);
+        }
+
+        Ok(())
+    }
+
+    fn register_function(
+        &mut self,
+        ast_fn: &ast::Fn,
+        associated_ty: Option<ty::Ty>,
+        associated_trait_inst: Option<traits::TraitInst>,
+        env_gen_params: Vec<ty::GenVar>,
+    ) -> Result<fns::Fn, ()> {
+        let gen_params: Vec<_> = ast_fn
+            .gen_params
+            .iter()
+            .map(|gp| self.ctxt.tys.register_gen_var(gp))
+            .collect();
+        let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
+
+        for constraint in &ast_fn.constraints {
+            let subject = gen_params
+                .iter()
+                .cloned()
+                .find(|&gp| self.ctxt.tys.get_gen_var_name(gp) == constraint.subject)
+                .ok_or(())?;
+
+            match &constraint.requirement {
+                ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
+                    let trait_ = self.ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
+                    let trait_args = trait_args
+                        .iter()
+                        .map(|arg| {
+                            self.ctxt
+                                .try_resolve_ast_ty_annot(arg, &all_gen_params, associated_ty, false)
+                                .ok_or(())
+                        })
+                        .collect::<Result<_, _>>()?;
+                    let trait_inst = TraitInst {
+                        trait_,
+                        gen_args: trait_args,
+                    };
+                    self.ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
+                }
+                ast::ConstraintRequirement::Callable { params, return_ty } => {
+                    let params = params
+                        .iter()
+                        .map(|ty| {
+                            self.ctxt
+                                .try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
+                                .ok_or(())
+                        })
+                        .collect::<Result<_, _>>()?;
+                    let return_ty = match return_ty {
+                        Some(return_ty) => self
+                            .ctxt
+                            .try_resolve_ast_ty_annot(return_ty, &all_gen_params, associated_ty, false)
+                            .ok_or(())?,
+                        None => self.ctxt.tys.unit(),
+                    };
+                    self.ctxt.tys.add_callable_constraint(subject, params, return_ty);
+                }
             }
         }
-    }
 
-    let params = ast_fn
-        .params
-        .iter()
-        .enumerate()
-        .map(|(idx, param)| build_fn_param(ctxt, param, &all_gen_params, associated_ty, idx == 0))
-        .collect::<Result<_, _>>()?;
+        let params = ast_fn
+            .params
+            .iter()
+            .enumerate()
+            .map(|(idx, param)| self.build_fn_param(param, &all_gen_params, associated_ty, idx == 0))
+            .collect::<Result<_, _>>()?;
 
-    let return_ty = match ast_fn.return_ty.as_ref() {
-        Some(ty) => ctxt
-            .try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
-            .ok_or(())?,
-        None => ctxt.tys.unit(),
-    };
-
-    let signature = fns::FnSig {
-        name: ast_fn.name.clone(),
-        associated_ty,
-        associated_trait_inst,
-        gen_params,
-        env_gen_params,
-        params,
-        var_args: ast_fn.var_args,
-        return_ty,
-    };
-
-    ctxt.fns.register_fn(signature, associated_ty.is_none())
-}
-
-fn build_fn_param(
-    ctxt: &mut ctxt::Ctxt,
-    param: &ast::Param,
-    gen_params: &[ty::GenVar],
-    self_ty: Option<ty::Ty>,
-    allow_receiver: bool,
-) -> Result<fns::FnParam, ()> {
-    match param {
-        ast::Param::Regular { name, ty } => Ok(fns::FnParam {
-            kind: fns::FnParamKind::Regular(name.clone()),
-            ty: ctxt
-                .try_resolve_ast_ty_annot(ty, gen_params, self_ty, false)
+        let return_ty = match ast_fn.return_ty.as_ref() {
+            Some(ty) => self
+                .ctxt
+                .try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
                 .ok_or(())?,
-        }),
-        ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
-            kind: fns::FnParamKind::Self_,
-            ty: self_ty.ok_or(())?,
-        }),
-        ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
-            kind: fns::FnParamKind::SelfByRef,
-            ty: self_ty.map(|self_ty| ctxt.tys.ref_(self_ty)).ok_or(())?,
-        }),
-        _ => Err(()),
-    }
-}
-
-fn register_traits(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &mut AstMeta) -> Result<(), ()> {
-    for (idx, ast_trait) in ast.traits.iter().enumerate() {
-        let trait_gen_params: Vec<_> = ast_trait
-            .gen_params
-            .iter()
-            .map(|gp| ctxt.tys.register_gen_var(gp))
-            .collect();
-
-        let trait_ = ctxt.traits.register_trait(&ast_trait.name, trait_gen_params.clone());
-        ast_meta.trait_ids.insert(idx, trait_);
-
-        for assoc_ty in &ast_trait.assoc_ty_names {
-            ctxt.traits.register_assoc_ty(trait_, assoc_ty);
-        }
-    }
-
-    Ok(())
-}
-
-fn register_trait_methods(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), ()> {
-    for (idx, ast_trait) in ast.traits.iter().enumerate() {
-        let trait_ = ast_meta.trait_ids[&idx];
-        let self_type = ctxt.tys.trait_self(trait_);
-        let trait_gen_params = ctxt.traits.get_trait_def(trait_).gen_params.clone();
-
-        for mthd in &ast_trait.mthds {
-            let mthd_gen_params: Vec<_> = mthd.gen_params.iter().map(|gp| ctxt.tys.register_gen_var(gp)).collect();
-            let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_gen_params).cloned().collect();
-
-            let params = mthd
-                .params
-                .iter()
-                .enumerate()
-                .map(|(idx, param)| build_fn_param(ctxt, param, &all_gen_params, Some(self_type), idx == 0))
-                .collect::<Result<_, _>>()?;
-
-            let return_ty = match &mthd.return_ty {
-                Some(ty) => ctxt
-                    .try_resolve_ast_ty_annot(ty, &all_gen_params, Some(self_type), false)
-                    .ok_or(())?,
-                None => ctxt.tys.unit(),
-            };
-
-            let trait_inst = traits::TraitInst {
-                trait_,
-                gen_args: mthd_gen_params.iter().map(|&gp| ctxt.tys.gen_var(gp)).collect(),
-            };
-
-            let sig = fns::FnSig {
-                name: mthd.name.clone(),
-                associated_ty: None,
-                associated_trait_inst: Some(trait_inst),
-                gen_params: mthd_gen_params,
-                env_gen_params: trait_gen_params.clone(),
-                params,
-                var_args: false,
-                return_ty,
-            };
-
-            ctxt.traits.register_mthd(trait_, sig);
-        }
-    }
-
-    Ok(())
-}
-
-fn register_impls(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &mut AstMeta) -> Result<(), ()> {
-    stdlib::register_impl_for_ptr(ctxt)?;
-
-    for (idx, ast_impl) in ast.impls.iter().enumerate() {
-        let gen_params: Vec<_> = ast_impl
-            .gen_params
-            .iter()
-            .map(|gp| ctxt.tys.register_gen_var(gp))
-            .collect();
-
-        let ty = ctxt
-            .try_resolve_ast_ty_annot(&ast_impl.ty, &gen_params, None, false)
-            .ok_or(())?;
-
-        let trait_inst = ast_impl
-            .trait_annot
-            .as_ref()
-            .map(|trait_annot| {
-                let trait_ = ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
-
-                let trait_args = trait_annot
-                    .args
-                    .iter()
-                    .map(|arg| ctxt.try_resolve_ast_ty_annot(arg, &gen_params, None, false).ok_or(()))
-                    .collect::<Result<_, _>>()?;
-
-                let trait_inst = TraitInst {
-                    trait_,
-                    gen_args: trait_args,
-                };
-                Ok(trait_inst)
-            })
-            .transpose()?;
-
-        let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst.clone());
-        ast_meta.impl_ids.insert(idx, impl_);
-
-        for assoc_ty in &ast_impl.assoc_tys {
-            let ty = ctxt
-                .try_resolve_ast_ty_annot(&assoc_ty.ty, &gen_params, None, false)
-                .ok_or(())?;
-            let assoc_ty_idx = ctxt
-                .traits
-                .get_trait_assoc_ty_index(trait_inst.clone().unwrap().trait_, &assoc_ty.name);
-            ctxt.impls.register_assoc_ty(impl_, assoc_ty_idx, ty);
-        }
-    }
-
-    Ok(())
-}
-
-fn register_impl_methods(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), ()> {
-    for (idx, ast_impl) in ast.impls.iter().enumerate() {
-        let impl_ = ast_meta.impl_ids[&idx];
-        let impl_def = ctxt.impls.get_impl_def(impl_);
-        let ty = impl_def.ty;
-        let gen_params = impl_def.gen_params.clone();
-        let trait_inst = impl_def.trait_inst.clone();
-
-        for mthd in &ast_impl.mthds {
-            let fn_ = register_function(mthd, ctxt, Some(ty), trait_inst.clone(), gen_params.clone())?;
-            ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
-        }
-    }
-
-    Ok(())
-}
-
-fn build_function_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), String> {
-    stdlib::define_size_of(ctxt)?;
-    stdlib::define_impl_for_ptr(ctxt).map_err(|err| err::print_mlr_builder_error("offset", err, ctxt))?;
-
-    for (idx, ast_fn) in ast.fns.iter().enumerate() {
-        let Some(body) = &ast_fn.body else {
-            continue;
+            None => self.ctxt.tys.unit(),
         };
 
-        let target_fn = ast_meta.fn_ids[&idx];
+        let signature = fns::FnSig {
+            name: ast_fn.name.clone(),
+            associated_ty,
+            associated_trait_inst,
+            gen_params,
+            env_gen_params,
+            params,
+            var_args: ast_fn.var_args,
+            return_ty,
+        };
 
-        ast_lowering::ast_to_mlr(ctxt, body, target_fn)
-            .map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, ctxt))?;
+        self.ctxt.fns.register_fn(signature, associated_ty.is_none())
     }
 
-    Ok(())
-}
+    fn build_fn_param(
+        &mut self,
+        param: &ast::Param,
+        gen_params: &[ty::GenVar],
+        self_ty: Option<ty::Ty>,
+        allow_receiver: bool,
+    ) -> Result<fns::FnParam, ()> {
+        match param {
+            ast::Param::Regular { name, ty } => Ok(fns::FnParam {
+                kind: fns::FnParamKind::Regular(name.clone()),
+                ty: self
+                    .ctxt
+                    .try_resolve_ast_ty_annot(ty, gen_params, self_ty, false)
+                    .ok_or(())?,
+            }),
+            ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
+                kind: fns::FnParamKind::Self_,
+                ty: self_ty.ok_or(())?,
+            }),
+            ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
+                kind: fns::FnParamKind::SelfByRef,
+                ty: self_ty.map(|self_ty| self.ctxt.tys.ref_(self_ty)).ok_or(())?,
+            }),
+            _ => Err(()),
+        }
+    }
 
-fn build_impl_fn_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), String> {
-    for (idx, ast_impl) in ast.impls.iter().enumerate() {
-        let impl_ = ast_meta.impl_ids[&idx];
-        let impl_def = ctxt.impls.get_impl_def(impl_);
-        let impl_mthds = impl_def.mthds.clone();
+    fn register_traits(&mut self, ast: &ast::Program) -> Result<(), ()> {
+        for (idx, ast_trait) in ast.traits.iter().enumerate() {
+            let trait_gen_params: Vec<_> = ast_trait
+                .gen_params
+                .iter()
+                .map(|gp| self.ctxt.tys.register_gen_var(gp))
+                .collect();
 
-        for (ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
-            let Some(body) = &ast_mthd.body else {
+            let trait_ = self
+                .ctxt
+                .traits
+                .register_trait(&ast_trait.name, trait_gen_params.clone());
+            self.ast_meta.trait_ids.insert(idx, trait_);
+
+            for assoc_ty in &ast_trait.assoc_ty_names {
+                self.ctxt.traits.register_assoc_ty(trait_, assoc_ty);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn register_trait_methods(&mut self, ast: &ast::Program) -> Result<(), ()> {
+        for (idx, ast_trait) in ast.traits.iter().enumerate() {
+            let trait_ = self.ast_meta.trait_ids[&idx];
+            let self_type = self.ctxt.tys.trait_self(trait_);
+            let trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.clone();
+
+            for mthd in &ast_trait.mthds {
+                let mthd_gen_params: Vec<_> = mthd
+                    .gen_params
+                    .iter()
+                    .map(|gp| self.ctxt.tys.register_gen_var(gp))
+                    .collect();
+                let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_gen_params).cloned().collect();
+
+                let params = mthd
+                    .params
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, param)| self.build_fn_param(param, &all_gen_params, Some(self_type), idx == 0))
+                    .collect::<Result<_, _>>()?;
+
+                let return_ty = match &mthd.return_ty {
+                    Some(ty) => self
+                        .ctxt
+                        .try_resolve_ast_ty_annot(ty, &all_gen_params, Some(self_type), false)
+                        .ok_or(())?,
+                    None => self.ctxt.tys.unit(),
+                };
+
+                let trait_inst = traits::TraitInst {
+                    trait_,
+                    gen_args: mthd_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect(),
+                };
+
+                let sig = fns::FnSig {
+                    name: mthd.name.clone(),
+                    associated_ty: None,
+                    associated_trait_inst: Some(trait_inst),
+                    gen_params: mthd_gen_params,
+                    env_gen_params: trait_gen_params.clone(),
+                    params,
+                    var_args: false,
+                    return_ty,
+                };
+
+                self.ctxt.traits.register_mthd(trait_, sig);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn register_impls(&mut self, ast: &ast::Program) -> Result<(), ()> {
+        stdlib::register_impl_for_ptr(&mut self.ctxt)?;
+
+        for (idx, ast_impl) in ast.impls.iter().enumerate() {
+            let gen_params: Vec<_> = ast_impl
+                .gen_params
+                .iter()
+                .map(|gp| self.ctxt.tys.register_gen_var(gp))
+                .collect();
+
+            let ty = self
+                .ctxt
+                .try_resolve_ast_ty_annot(&ast_impl.ty, &gen_params, None, false)
+                .ok_or(())?;
+
+            let trait_inst = ast_impl
+                .trait_annot
+                .as_ref()
+                .map(|trait_annot| {
+                    let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
+
+                    let trait_args = trait_annot
+                        .args
+                        .iter()
+                        .map(|arg| {
+                            self.ctxt
+                                .try_resolve_ast_ty_annot(arg, &gen_params, None, false)
+                                .ok_or(())
+                        })
+                        .collect::<Result<_, _>>()?;
+
+                    let trait_inst = TraitInst {
+                        trait_,
+                        gen_args: trait_args,
+                    };
+                    Ok(trait_inst)
+                })
+                .transpose()?;
+
+            let impl_ = self
+                .ctxt
+                .impls
+                .register_impl(ty, gen_params.clone(), trait_inst.clone());
+            self.ast_meta.impl_ids.insert(idx, impl_);
+
+            for assoc_ty in &ast_impl.assoc_tys {
+                let ty = self
+                    .ctxt
+                    .try_resolve_ast_ty_annot(&assoc_ty.ty, &gen_params, None, false)
+                    .ok_or(())?;
+                let assoc_ty_idx = self
+                    .ctxt
+                    .traits
+                    .get_trait_assoc_ty_index(trait_inst.clone().unwrap().trait_, &assoc_ty.name);
+                self.ctxt.impls.register_assoc_ty(impl_, assoc_ty_idx, ty);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn register_impl_methods(&mut self, ast: &ast::Program) -> Result<(), ()> {
+        for (idx, ast_impl) in ast.impls.iter().enumerate() {
+            let impl_ = self.ast_meta.impl_ids[&idx];
+            let impl_def = self.ctxt.impls.get_impl_def(impl_);
+            let ty = impl_def.ty;
+            let gen_params = impl_def.gen_params.clone();
+            let trait_inst = impl_def.trait_inst.clone();
+
+            for mthd in &ast_impl.mthds {
+                let fn_ = self.register_function(mthd, Some(ty), trait_inst.clone(), gen_params.clone())?;
+                self.ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn build_function_mlrs(&mut self, ast: &ast::Program) -> Result<(), String> {
+        stdlib::define_size_of(&mut self.ctxt)?;
+        stdlib::define_impl_for_ptr(&mut self.ctxt)
+            .map_err(|err| err::print_mlr_builder_error("offset", err, &self.ctxt))?;
+
+        for (idx, ast_fn) in ast.fns.iter().enumerate() {
+            let Some(body) = &ast_fn.body else {
                 continue;
             };
-            ast_lowering::ast_to_mlr(ctxt, body, target_fn)
-                .map_err(|err| err::print_mlr_builder_error(&ast_mthd.name, err, ctxt))?;
+
+            let target_fn = self.ast_meta.fn_ids[&idx];
+
+            ast_lowering::ast_to_mlr(&mut self.ctxt, body, target_fn)
+                .map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, &self.ctxt))?;
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    fn build_impl_fn_mlrs(&mut self, ast: &ast::Program) -> Result<(), String> {
+        for (idx, ast_impl) in ast.impls.iter().enumerate() {
+            let impl_ = self.ast_meta.impl_ids[&idx];
+            let impl_def = self.ctxt.impls.get_impl_def(impl_);
+            let impl_mthds = impl_def.mthds.clone();
 
-fn print_functions(ctxt: &ctxt::Ctxt, path: &Path) -> Result<(), ()> {
-    let mut file = std::fs::File::create(path).map_err(|_| ())?;
-
-    for fn_ in ctxt.fns.get_all_fns() {
-        if ctxt.fns.is_fn_defined(fn_) {
-            print::print_mlr(fn_, ctxt, &mut file).map_err(|_| ())?;
-        }
-    }
-
-    Ok(())
-}
-
-fn monomorphize_functions(ctxt: &mut ctxt::Ctxt) -> Result<HashSet<fns::FnInst>, ()> {
-    let mut open = VecDeque::new();
-    open.push_back(fns::FnInst {
-        fn_: ctxt.fns.get_fn_by_name("main").ok_or(())?,
-        gen_args: Vec::new(),
-        env_gen_args: Vec::new(),
-    });
-
-    let mut closed = HashSet::new();
-
-    while let Some(current) = open.pop_front() {
-        if closed.contains(&current) {
-            continue;
-        }
-
-        let subst = ctxt.fns.get_subst_for_fn_inst(&current);
-
-        let fn_insts = ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
-            let new_gen_args = fn_inst
-                .gen_args
-                .iter()
-                .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
-                .collect();
-            let new_env_gen_args = fn_inst
-                .env_gen_args
-                .iter()
-                .map(|&ty| ctxt.tys.substitute_gen_vars(ty, &subst))
-                .collect();
-
-            fns::FnInst {
-                fn_: fn_inst.fn_,
-                gen_args: new_gen_args,
-                env_gen_args: new_env_gen_args,
+            for (ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
+                let Some(body) = &ast_mthd.body else {
+                    continue;
+                };
+                ast_lowering::ast_to_mlr(&mut self.ctxt, body, target_fn)
+                    .map_err(|err| err::print_mlr_builder_error(&ast_mthd.name, err, &self.ctxt))?;
             }
-        });
-        open.extend(fn_insts);
+        }
 
-        let called_trait_mthd_insts = ctxt.fns.get_called_trait_mthd_insts(current.fn_).to_vec();
-        let trait_fn_insts = called_trait_mthd_insts
-            .into_iter()
-            .map(|trait_mthd_inst| ctxt.resolve_trait_mthd_to_fn(&trait_mthd_inst, &subst));
-        open.extend(trait_fn_insts);
-
-        closed.insert(current);
+        Ok(())
     }
 
-    Ok(closed)
+    fn print_functions(&mut self, path: &Path) -> Result<(), ()> {
+        let mut file = std::fs::File::create(path).map_err(|_| ())?;
+
+        for fn_ in self.ctxt.fns.get_all_fns() {
+            if self.ctxt.fns.is_fn_defined(fn_) {
+                print::print_mlr(fn_, &self.ctxt, &mut file).map_err(|_| ())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn monomorphize_functions(&mut self) -> Result<HashSet<fns::FnInst>, ()> {
+        let mut open = VecDeque::new();
+        open.push_back(fns::FnInst {
+            fn_: self.ctxt.fns.get_fn_by_name("main").ok_or(())?,
+            gen_args: Vec::new(),
+            env_gen_args: Vec::new(),
+        });
+
+        let mut closed = HashSet::new();
+
+        while let Some(current) = open.pop_front() {
+            if closed.contains(&current) {
+                continue;
+            }
+
+            let subst = self.ctxt.fns.get_subst_for_fn_inst(&current);
+
+            let fn_insts = self.ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
+                let new_gen_args = fn_inst
+                    .gen_args
+                    .iter()
+                    .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &subst))
+                    .collect();
+                let new_env_gen_args = fn_inst
+                    .env_gen_args
+                    .iter()
+                    .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &subst))
+                    .collect();
+
+                fns::FnInst {
+                    fn_: fn_inst.fn_,
+                    gen_args: new_gen_args,
+                    env_gen_args: new_env_gen_args,
+                }
+            });
+            open.extend(fn_insts);
+
+            let called_trait_mthd_insts = self.ctxt.fns.get_called_trait_mthd_insts(current.fn_).to_vec();
+            let trait_fn_insts = called_trait_mthd_insts
+                .into_iter()
+                .map(|trait_mthd_inst| self.ctxt.resolve_trait_mthd_to_fn(&trait_mthd_inst, &subst));
+            open.extend(trait_fn_insts);
+
+            closed.insert(current);
+        }
+
+        Ok(closed)
+    }
 }
