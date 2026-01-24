@@ -1,9 +1,10 @@
 fn main() -> i32 {
-    let some = Option::Some { item: 1 };
-    let none = Option::<i32>::None {};
+    let vec = Vec::new();
+    vec.push(1);
+    vec.push(2);
+    vec.push(3);
 
-    printf("Length of Some = %d\n", iter_len(some.into_iter()));
-    printf("Length of None = %d\n", iter_len(none.into_iter()));
+    printf("Length of Vec = %d\n", iter_len(vec.iter()));
 
     0
 }

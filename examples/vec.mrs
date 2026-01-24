@@ -62,4 +62,23 @@ impl<T> Vec<T> {
         self.cap = 0;
         delete(self.ptr);
     }
+
+    fn iter(&self) -> RefVecIter<T> {
+        RefVecIter { vec: self, idx: 0 }
+    }
+}
+
+struct RefVecIter<T> {
+    vec: &Vec<T>,
+    idx: i32,
+}
+
+impl<T> Iterator for RefVecIter<T> {
+    type Item = &T;
+
+    fn next(&self) -> Option<&T> {
+        let next = (*self.vec).get(self.idx);
+        self.idx = self.idx + 1;
+        next
+    }
 }
