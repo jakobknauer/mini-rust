@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    ast,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -17,7 +18,7 @@ use crate::{
         err::{print_impl_check_error, print_obligation_check_error},
         impl_check::check_trait_impls,
     },
-    h2m, hlr, m2inkwell,
+    h2m, m2inkwell,
     obligation_check::check_obligations,
     util::print,
 };
@@ -29,7 +30,7 @@ pub struct OutputPaths<'a> {
 }
 
 #[derive(Default)]
-struct HlrMetadata {
+struct AstMeta {
     pub fn_ids: HashMap<usize, fns::Fn>,
     pub struct_ids: HashMap<usize, ty::Struct>,
     pub enum_ids: HashMap<usize, ty::Enum>,
@@ -45,27 +46,27 @@ pub fn compile(
 ) -> Result<(), String> {
     let mut ctxt = ctxt::Ctxt::default();
 
-    print_pretty("Building HLR from source");
-    let mut hlr = hlr::Program::default();
+    print_pretty("Building AST from source");
+    let mut ast = ast::Program::default();
     for source in sources {
-        hlr::parse(source, &mut hlr).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
+        ast::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
     }
 
-    let mut hlr_meta = HlrMetadata::default();
+    let mut ast_meta = AstMeta::default();
 
-    print_pretty("Building MLR from HLR");
-    register_tys(&hlr, &mut ctxt.tys, &mut hlr_meta).map_err(|_| "Error registering types")?;
-    define_tys(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error defining types")?;
-    register_traits(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering traits")?;
-    register_impls(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering impls")?;
+    print_pretty("Building MLR from ast");
+    register_tys(&ast, &mut ctxt.tys, &mut ast_meta).map_err(|_| "Error registering types")?;
+    define_tys(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error defining types")?;
+    register_traits(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering traits")?;
+    register_impls(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering impls")?;
 
-    register_functions(&hlr, &mut ctxt, &mut hlr_meta).map_err(|_| "Error registering functions")?;
-    register_trait_methods(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error registering trait methods")?;
-    register_impl_methods(&hlr, &mut ctxt, &hlr_meta).map_err(|_| "Error registering impl methods")?;
+    register_functions(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering functions")?;
+    register_trait_methods(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error registering trait methods")?;
+    register_impl_methods(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error registering impl methods")?;
 
     check_trait_impls(&mut ctxt).map_err(|err| print_impl_check_error(err, &ctxt))?;
-    build_function_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR: {err}"))?;
-    build_impl_fn_mlrs(&hlr, &mut ctxt, &hlr_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
+    build_function_mlrs(&ast, &mut ctxt, &ast_meta).map_err(|err| format!("Error building MLR: {err}"))?;
+    build_impl_fn_mlrs(&ast, &mut ctxt, &ast_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
     check_obligations(&mut ctxt).map_err(|err| print_obligation_check_error(err, &ctxt))?;
 
     h2m::opt::canonicalize_types(&mut ctxt).map_err(|_| "Could not infer types")?;
@@ -89,17 +90,17 @@ pub fn compile(
     Ok(())
 }
 
-fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+fn register_tys(program: &ast::Program, tys: &mut ctxt::TyReg, ast_meta: &mut AstMeta) -> Result<(), ()> {
     tys.register_primitive_tys()?;
 
     for (idx, struct_) in program.structs.iter().enumerate() {
         let ty = tys.register_struct(&struct_.name, &struct_.gen_params)?;
-        hlr_meta.struct_ids.insert(idx, ty);
+        ast_meta.struct_ids.insert(idx, ty);
     }
 
     for (idx, enum_) in program.enums.iter().enumerate() {
         let ty = tys.register_enum(&enum_.name, &enum_.gen_params)?;
-        hlr_meta.enum_ids.insert(idx, ty);
+        ast_meta.enum_ids.insert(idx, ty);
 
         for variant in &enum_.variants {
             let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
@@ -117,17 +118,17 @@ fn register_tys(program: &hlr::Program, tys: &mut ctxt::TyReg, hlr_meta: &mut Hl
     Ok(())
 }
 
-fn define_tys(program: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), ()> {
+fn define_tys(program: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), ()> {
     for (idx, struct_) in program.structs.iter().enumerate() {
-        set_struct_fields(ctxt, hlr_meta.struct_ids[&idx], &struct_.fields)?
+        set_struct_fields(ctxt, ast_meta.struct_ids[&idx], &struct_.fields)?
     }
 
-    for (idx, hlr_enum) in program.enums.iter().enumerate() {
-        let enum_ = hlr_meta.enum_ids[&idx];
+    for (idx, ast_enum) in program.enums.iter().enumerate() {
+        let enum_ = ast_meta.enum_ids[&idx];
         let variants = ctxt.tys.get_enum_def(enum_).ok_or(())?.variants.clone();
 
-        for (hlr_variant, variant) in hlr_enum.variants.iter().zip(variants) {
-            set_struct_fields(ctxt, variant.struct_, &hlr_variant.fields)?;
+        for (ast_variant, variant) in ast_enum.variants.iter().zip(variants) {
+            set_struct_fields(ctxt, variant.struct_, &ast_variant.fields)?;
         }
     }
 
@@ -137,7 +138,7 @@ fn define_tys(program: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetad
 fn set_struct_fields<'a>(
     ctxt: &mut ctxt::Ctxt,
     struct_: ty::Struct,
-    fields: impl IntoIterator<Item = &'a hlr::StructField>,
+    fields: impl IntoIterator<Item = &'a ast::StructField>,
 ) -> Result<(), ()> {
     let gen_params = ctxt.tys.get_struct_def(struct_).ok_or(())?.gen_params.clone();
 
@@ -147,7 +148,7 @@ fn set_struct_fields<'a>(
             Ok(ty::StructField {
                 name: field.name.clone(),
                 ty: ctxt
-                    .try_resolve_hlr_annot(&field.ty, &gen_params, None, false)
+                    .try_resolve_ast_ty_annot(&field.ty, &gen_params, None, false)
                     .ok_or(())?,
             })
         })
@@ -159,32 +160,32 @@ fn set_struct_fields<'a>(
     Ok(())
 }
 
-fn register_functions(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+fn register_functions(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &mut AstMeta) -> Result<(), ()> {
     stdlib::register_fns(ctxt)?;
 
-    for (idx, function) in hlr.fns.iter().enumerate() {
+    for (idx, function) in ast.fns.iter().enumerate() {
         let fn_ = register_function(function, ctxt, None, None, Vec::new())?;
-        hlr_meta.fn_ids.insert(idx, fn_);
+        ast_meta.fn_ids.insert(idx, fn_);
     }
 
     Ok(())
 }
 
 fn register_function(
-    hlr_fn: &hlr::Fn,
+    ast_fn: &ast::Fn,
     ctxt: &mut ctxt::Ctxt,
     associated_ty: Option<ty::Ty>,
     associated_trait_inst: Option<traits::TraitInst>,
     env_gen_params: Vec<ty::GenVar>,
 ) -> Result<fns::Fn, ()> {
-    let gen_params: Vec<_> = hlr_fn
+    let gen_params: Vec<_> = ast_fn
         .gen_params
         .iter()
         .map(|gp| ctxt.tys.register_gen_var(gp))
         .collect();
     let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
-    for constraint in &hlr_fn.constraints {
+    for constraint in &ast_fn.constraints {
         let subject = gen_params
             .iter()
             .cloned()
@@ -192,12 +193,12 @@ fn register_function(
             .ok_or(())?;
 
         match &constraint.requirement {
-            hlr::ConstraintRequirement::Trait { trait_name, trait_args } => {
+            ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
                 let trait_ = ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
                 let trait_args = trait_args
                     .iter()
                     .map(|arg| {
-                        ctxt.try_resolve_hlr_annot(arg, &all_gen_params, associated_ty, false)
+                        ctxt.try_resolve_ast_ty_annot(arg, &all_gen_params, associated_ty, false)
                             .ok_or(())
                     })
                     .collect::<Result<_, _>>()?;
@@ -207,17 +208,17 @@ fn register_function(
                 };
                 ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
             }
-            hlr::ConstraintRequirement::Callable { params, return_ty } => {
+            ast::ConstraintRequirement::Callable { params, return_ty } => {
                 let params = params
                     .iter()
                     .map(|ty| {
-                        ctxt.try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
+                        ctxt.try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
                             .ok_or(())
                     })
                     .collect::<Result<_, _>>()?;
                 let return_ty = match return_ty {
                     Some(return_ty) => ctxt
-                        .try_resolve_hlr_annot(return_ty, &all_gen_params, associated_ty, false)
+                        .try_resolve_ast_ty_annot(return_ty, &all_gen_params, associated_ty, false)
                         .ok_or(())?,
                     None => ctxt.tys.unit(),
                 };
@@ -226,28 +227,28 @@ fn register_function(
         }
     }
 
-    let params = hlr_fn
+    let params = ast_fn
         .params
         .iter()
         .enumerate()
         .map(|(idx, param)| build_fn_param(ctxt, param, &all_gen_params, associated_ty, idx == 0))
         .collect::<Result<_, _>>()?;
 
-    let return_ty = match hlr_fn.return_ty.as_ref() {
+    let return_ty = match ast_fn.return_ty.as_ref() {
         Some(ty) => ctxt
-            .try_resolve_hlr_annot(ty, &all_gen_params, associated_ty, false)
+            .try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
             .ok_or(())?,
         None => ctxt.tys.unit(),
     };
 
     let signature = fns::FnSig {
-        name: hlr_fn.name.clone(),
+        name: ast_fn.name.clone(),
         associated_ty,
         associated_trait_inst,
         gen_params,
         env_gen_params,
         params,
-        var_args: hlr_fn.var_args,
+        var_args: ast_fn.var_args,
         return_ty,
     };
 
@@ -256,21 +257,23 @@ fn register_function(
 
 fn build_fn_param(
     ctxt: &mut ctxt::Ctxt,
-    param: &hlr::Param,
+    param: &ast::Param,
     gen_params: &[ty::GenVar],
     self_ty: Option<ty::Ty>,
     allow_receiver: bool,
 ) -> Result<fns::FnParam, ()> {
     match param {
-        hlr::Param::Regular { name, ty } => Ok(fns::FnParam {
+        ast::Param::Regular { name, ty } => Ok(fns::FnParam {
             kind: fns::FnParamKind::Regular(name.clone()),
-            ty: ctxt.try_resolve_hlr_annot(ty, gen_params, self_ty, false).ok_or(())?,
+            ty: ctxt
+                .try_resolve_ast_ty_annot(ty, gen_params, self_ty, false)
+                .ok_or(())?,
         }),
-        hlr::Param::Receiver if allow_receiver => Ok(fns::FnParam {
+        ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
             kind: fns::FnParamKind::Self_,
             ty: self_ty.ok_or(())?,
         }),
-        hlr::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
+        ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
             kind: fns::FnParamKind::SelfByRef,
             ty: self_ty.map(|self_ty| ctxt.tys.ref_(self_ty)).ok_or(())?,
         }),
@@ -278,18 +281,18 @@ fn build_fn_param(
     }
 }
 
-fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
-    for (idx, hlr_trait) in hlr.traits.iter().enumerate() {
-        let trait_gen_params: Vec<_> = hlr_trait
+fn register_traits(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &mut AstMeta) -> Result<(), ()> {
+    for (idx, ast_trait) in ast.traits.iter().enumerate() {
+        let trait_gen_params: Vec<_> = ast_trait
             .gen_params
             .iter()
             .map(|gp| ctxt.tys.register_gen_var(gp))
             .collect();
 
-        let trait_ = ctxt.traits.register_trait(&hlr_trait.name, trait_gen_params.clone());
-        hlr_meta.trait_ids.insert(idx, trait_);
+        let trait_ = ctxt.traits.register_trait(&ast_trait.name, trait_gen_params.clone());
+        ast_meta.trait_ids.insert(idx, trait_);
 
-        for assoc_ty in &hlr_trait.assoc_ty_names {
+        for assoc_ty in &ast_trait.assoc_ty_names {
             ctxt.traits.register_assoc_ty(trait_, assoc_ty);
         }
     }
@@ -297,13 +300,13 @@ fn register_traits(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut Hlr
     Ok(())
 }
 
-fn register_trait_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), ()> {
-    for (idx, hlr_trait) in hlr.traits.iter().enumerate() {
-        let trait_ = hlr_meta.trait_ids[&idx];
+fn register_trait_methods(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), ()> {
+    for (idx, ast_trait) in ast.traits.iter().enumerate() {
+        let trait_ = ast_meta.trait_ids[&idx];
         let self_type = ctxt.tys.trait_self(trait_);
         let trait_gen_params = ctxt.traits.get_trait_def(trait_).gen_params.clone();
 
-        for mthd in &hlr_trait.mthds {
+        for mthd in &ast_trait.mthds {
             let mthd_gen_params: Vec<_> = mthd.gen_params.iter().map(|gp| ctxt.tys.register_gen_var(gp)).collect();
             let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_gen_params).cloned().collect();
 
@@ -316,7 +319,7 @@ fn register_trait_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &
 
             let return_ty = match &mthd.return_ty {
                 Some(ty) => ctxt
-                    .try_resolve_hlr_annot(ty, &all_gen_params, Some(self_type), false)
+                    .try_resolve_ast_ty_annot(ty, &all_gen_params, Some(self_type), false)
                     .ok_or(())?,
                 None => ctxt.tys.unit(),
             };
@@ -344,21 +347,21 @@ fn register_trait_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &
     Ok(())
 }
 
-fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrMetadata) -> Result<(), ()> {
+fn register_impls(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &mut AstMeta) -> Result<(), ()> {
     stdlib::register_impl_for_ptr(ctxt)?;
 
-    for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
-        let gen_params: Vec<_> = hlr_impl
+    for (idx, ast_impl) in ast.impls.iter().enumerate() {
+        let gen_params: Vec<_> = ast_impl
             .gen_params
             .iter()
             .map(|gp| ctxt.tys.register_gen_var(gp))
             .collect();
 
         let ty = ctxt
-            .try_resolve_hlr_annot(&hlr_impl.ty, &gen_params, None, false)
+            .try_resolve_ast_ty_annot(&ast_impl.ty, &gen_params, None, false)
             .ok_or(())?;
 
-        let trait_inst = hlr_impl
+        let trait_inst = ast_impl
             .trait_annot
             .as_ref()
             .map(|trait_annot| {
@@ -367,7 +370,7 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
                 let trait_args = trait_annot
                     .args
                     .iter()
-                    .map(|arg| ctxt.try_resolve_hlr_annot(arg, &gen_params, None, false).ok_or(()))
+                    .map(|arg| ctxt.try_resolve_ast_ty_annot(arg, &gen_params, None, false).ok_or(()))
                     .collect::<Result<_, _>>()?;
 
                 let trait_inst = TraitInst {
@@ -379,11 +382,11 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
             .transpose()?;
 
         let impl_ = ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst.clone());
-        hlr_meta.impl_ids.insert(idx, impl_);
+        ast_meta.impl_ids.insert(idx, impl_);
 
-        for assoc_ty in &hlr_impl.assoc_tys {
+        for assoc_ty in &ast_impl.assoc_tys {
             let ty = ctxt
-                .try_resolve_hlr_annot(&assoc_ty.ty, &gen_params, None, false)
+                .try_resolve_ast_ty_annot(&assoc_ty.ty, &gen_params, None, false)
                 .ok_or(())?;
             let assoc_ty_idx = ctxt
                 .traits
@@ -395,15 +398,15 @@ fn register_impls(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &mut HlrM
     Ok(())
 }
 
-fn register_impl_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), ()> {
-    for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
-        let impl_ = hlr_meta.impl_ids[&idx];
+fn register_impl_methods(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), ()> {
+    for (idx, ast_impl) in ast.impls.iter().enumerate() {
+        let impl_ = ast_meta.impl_ids[&idx];
         let impl_def = ctxt.impls.get_impl_def(impl_);
         let ty = impl_def.ty;
         let gen_params = impl_def.gen_params.clone();
         let trait_inst = impl_def.trait_inst.clone();
 
-        for mthd in &hlr_impl.mthds {
+        for mthd in &ast_impl.mthds {
             let fn_ = register_function(mthd, ctxt, Some(ty), trait_inst.clone(), gen_params.clone())?;
             ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
         }
@@ -412,35 +415,35 @@ fn register_impl_methods(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &H
     Ok(())
 }
 
-fn build_function_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
+fn build_function_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), String> {
     stdlib::define_size_of(ctxt)?;
     stdlib::define_impl_for_ptr(ctxt).map_err(|err| err::print_mlr_builder_error("offset", err, ctxt))?;
 
-    for (idx, hlr_fn) in hlr.fns.iter().enumerate() {
-        let Some(body) = &hlr_fn.body else {
+    for (idx, ast_fn) in ast.fns.iter().enumerate() {
+        let Some(body) = &ast_fn.body else {
             continue;
         };
 
-        let target_fn = hlr_meta.fn_ids[&idx];
+        let target_fn = ast_meta.fn_ids[&idx];
 
-        h2m::hlr_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&hlr_fn.name, err, ctxt))?;
+        h2m::ast_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, ctxt))?;
     }
 
     Ok(())
 }
 
-fn build_impl_fn_mlrs(hlr: &hlr::Program, ctxt: &mut ctxt::Ctxt, hlr_meta: &HlrMetadata) -> Result<(), String> {
-    for (idx, hlr_impl) in hlr.impls.iter().enumerate() {
-        let impl_ = hlr_meta.impl_ids[&idx];
+fn build_impl_fn_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstMeta) -> Result<(), String> {
+    for (idx, ast_impl) in ast.impls.iter().enumerate() {
+        let impl_ = ast_meta.impl_ids[&idx];
         let impl_def = ctxt.impls.get_impl_def(impl_);
         let impl_mthds = impl_def.mthds.clone();
 
-        for (hlr_mthd, target_fn) in hlr_impl.mthds.iter().zip(impl_mthds) {
-            let Some(body) = &hlr_mthd.body else {
+        for (ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
+            let Some(body) = &ast_mthd.body else {
                 continue;
             };
-            h2m::hlr_to_mlr(ctxt, body, target_fn)
-                .map_err(|err| err::print_mlr_builder_error(&hlr_mthd.name, err, ctxt))?;
+            h2m::ast_to_mlr(ctxt, body, target_fn)
+                .map_err(|err| err::print_mlr_builder_error(&ast_mthd.name, err, ctxt))?;
         }
     }
 

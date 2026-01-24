@@ -1,7 +1,7 @@
 use crate::{
     ctxt::{fns, ty},
     h2m::{self, H2MError, H2MResult},
-    hlr,
+    ast,
 };
 
 macro_rules! op_match {
@@ -33,10 +33,10 @@ macro_rules! op_match {
 impl<'a> h2m::H2M<'a> {
     pub fn resolve_binary_operator(
         &mut self,
-        operator: &hlr::BinaryOperator,
+        operator: &ast::BinaryOperator,
         (left, right): (ty::Ty, ty::Ty),
     ) -> H2MResult<fns::Fn> {
-        use hlr::BinaryOperator::*;
+        use ast::BinaryOperator::*;
 
         let tys = &mut self.tys();
 
@@ -72,8 +72,8 @@ impl<'a> h2m::H2M<'a> {
         })
     }
 
-    pub fn resolve_unary_operator(&mut self, operator: &hlr::UnaryOperator, operand: ty::Ty) -> H2MResult<fns::Fn> {
-        use hlr::UnaryOperator::*;
+    pub fn resolve_unary_operator(&mut self, operator: &ast::UnaryOperator, operand: ty::Ty) -> H2MResult<fns::Fn> {
+        use ast::UnaryOperator::*;
 
         let tys = &mut self.tys();
 

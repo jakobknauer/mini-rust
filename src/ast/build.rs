@@ -1,27 +1,27 @@
 #[macro_use]
 mod macros;
 
-use crate::hlr::{defs::*, lexer, token::Keyword};
+use crate::ast::{defs::*, lexer, token::Keyword};
 
-pub use crate::hlr::{lexer::LexerErr, token::Token};
+pub use crate::ast::{lexer::LexerErr, token::Token};
 
 pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut parser = HlrParser::new(&tokens[..]);
+    let mut parser = AstParser::new(&tokens[..]);
     parser.parse_program(output)
 }
 
 #[cfg(test)]
 fn parse_expr(input: &str) -> Result<Expr, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut parser = HlrParser::new(&tokens[..]);
+    let mut parser = AstParser::new(&tokens[..]);
     parser.parse_expr(true)
 }
 
 #[cfg(test)]
 fn parse_block(input: &str) -> Result<Block, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut parser = HlrParser::new(&tokens[..]);
+    let mut parser = AstParser::new(&tokens[..]);
     parser.parse_block()
 }
 
@@ -43,7 +43,7 @@ impl From<LexerErr> for ParserErr {
     }
 }
 
-struct HlrParser<'a> {
+struct AstParser<'a> {
     input: &'a [Token],
     position: usize,
 }
@@ -62,9 +62,9 @@ enum StmtKind {
     ExplicitelyDelimited,
 }
 
-impl<'a> HlrParser<'a> {
+impl<'a> AstParser<'a> {
     fn new(input: &'a [Token]) -> Self {
-        HlrParser { input, position: 0 }
+        AstParser { input, position: 0 }
     }
 
     fn current(&self) -> Option<&Token> {
@@ -1187,7 +1187,7 @@ mod tests {
 
         fn parse_and_compare(input: &str, expected: Program) {
             let mut program = Program::default();
-            parse(input, &mut program).expect("Failed to parse HLR");
+            parse(input, &mut program).expect("Failed to parse AST");
             assert_eq!(program, expected);
         }
 
@@ -1397,7 +1397,7 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Block) {
-            let parsed = parse_block(input).expect("Failed to parse HLR");
+            let parsed = parse_block(input).expect("Failed to parse AST");
             assert_eq!(parsed, expected);
         }
 
@@ -1482,7 +1482,7 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         fn parse_and_compare(input: &str, expected: Expr) {
-            let parsed = parse_expr(input).expect("Failed to parse HLR");
+            let parsed = parse_expr(input).expect("Failed to parse AST");
             assert_eq!(parsed, expected);
         }
 

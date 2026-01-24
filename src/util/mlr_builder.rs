@@ -7,7 +7,7 @@ use crate::{
         ty,
     },
     h2m::{H2MError, H2MResult},
-    hlr,
+    ast,
     typechecker::Typechecker,
 };
 
@@ -304,13 +304,13 @@ impl<'a> MlrBuilder<'a> {
             .and_then(|loc| self.insert_loc_place(loc).ok())
     }
 
-    pub fn resolve_hlr_ty_annot_or_insert_new_type(&mut self, annot: Option<&hlr::TyAnnot>) -> H2MResult<ty::Ty> {
+    pub fn resolve_ast_ty_annot_or_insert_new_type(&mut self, annot: Option<&ast::TyAnnot>) -> H2MResult<ty::Ty> {
         annot
-            .map(|annot| self.resolve_hlr_ty_annot(annot))
+            .map(|annot| self.resolve_ast_ty_annot(annot))
             .unwrap_or_else(|| Ok(self.tys().undef_ty()))
     }
 
-    pub fn resolve_hlr_ty_annot(&mut self, annot: &hlr::TyAnnot) -> H2MResult<ty::Ty> {
+    pub fn resolve_ast_ty_annot(&mut self, annot: &ast::TyAnnot) -> H2MResult<ty::Ty> {
         let gen_params = &self.get_signature().gen_params;
         let env_gen_params = &self.get_signature().env_gen_params;
         let all_gen_params: Vec<_> = gen_params.iter().chain(env_gen_params.iter()).cloned().collect();
@@ -318,7 +318,7 @@ impl<'a> MlrBuilder<'a> {
 
         let ty = self
             .ctxt
-            .try_resolve_hlr_annot(annot, &all_gen_params, self_ty, true)
+            .try_resolve_ast_ty_annot(annot, &all_gen_params, self_ty, true)
             .ok_or(H2MError::UnresolvableTyAnnot)?;
         Ok(ty)
     }

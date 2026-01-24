@@ -1,7 +1,7 @@
 mod ctxt;
 pub mod driver;
 mod h2m;
-mod hlr;
+mod ast;
 mod m2inkwell;
 mod obligation_check;
 mod typechecker;

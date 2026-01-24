@@ -1,4 +1,4 @@
-use crate::hlr::token::{Keyword, Token};
+use crate::ast::token::{Keyword, Token};
 
 pub fn get_tokens(input: &str) -> Result<Vec<Token>, LexerErr> {
     Lexer::new(input).collect()

@@ -1,7 +1,7 @@
 use crate::{
     ctxt::{mlr, ty},
     h2m::{H2MResult, macros::assign_to_fresh_alloc},
-    hlr,
+    ast,
 };
 
 impl<'a> super::H2M<'a> {
@@ -10,7 +10,7 @@ impl<'a> super::H2M<'a> {
         &mut self,
         enum_ty: ty::Ty,
         by_ref: bool,
-        arms: &[hlr::MatchArm],
+        arms: &[ast::MatchArm],
         variant_indices: &[usize],
         eq_fn: mlr::Op,
         discriminant_op: mlr::Op,
@@ -88,7 +88,7 @@ impl<'a> super::H2M<'a> {
         &mut self,
         enum_ty: ty::Ty,
         by_ref: bool,
-        arm: &hlr::MatchArm,
+        arm: &ast::MatchArm,
         variant_index: usize,
         base_place: mlr::Place,
         expected: Option<ty::Ty>,
@@ -105,7 +105,7 @@ impl<'a> super::H2M<'a> {
         let variant_place = self
             .builder
             .insert_project_to_variant_place(base_place, variant_index)?;
-        for (hlr::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
+        for (ast::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
         {
             let field_place = self.builder.insert_field_access_place(variant_place, field_index)?;
             let field_ty = self.mlr().get_place_ty(field_place);

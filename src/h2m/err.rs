@@ -1,6 +1,6 @@
 use crate::{
     ctxt::{NotATypeName, ty::Ty},
-    hlr::Path,
+    ast::Path,
     typechecker::TyError,
 };
 
