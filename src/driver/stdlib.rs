@@ -4,7 +4,7 @@ use crate::{
         fns::{self},
         ty,
     },
-    h2m::H2MError,
+    ast_lowering::AstLoweringError,
     util::mlr_builder::MlrBuilder,
 };
 
@@ -148,7 +148,7 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     Ok(())
 }
 
-pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), H2MError> {
+pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), AstLoweringError> {
     let fn_ = ctxt.language_items.ptr_offset.unwrap();
     let mut builder = MlrBuilder::new(fn_, ctxt);
     let mut param_locs = Vec::new();

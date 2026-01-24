@@ -1,4 +1,4 @@
-use crate::{ctxt::mlr, h2m::H2MResult, util::mlr_builder::MlrBuilder};
+use crate::{ctxt::mlr, ast_lowering::AstLoweringResult, util::mlr_builder::MlrBuilder};
 
 pub enum Lowered {
     Op(mlr::Op),
@@ -7,7 +7,7 @@ pub enum Lowered {
 }
 
 impl Lowered {
-    pub fn into_op(self, mlr_builder: &mut MlrBuilder) -> H2MResult<mlr::Op> {
+    pub fn into_op(self, mlr_builder: &mut MlrBuilder) -> AstLoweringResult<mlr::Op> {
         match self {
             Lowered::Op(op) => Ok(op),
             Lowered::Val(val) => {
@@ -19,7 +19,7 @@ impl Lowered {
         }
     }
 
-    pub fn into_val(self, mlr_builder: &mut MlrBuilder) -> H2MResult<mlr::Val> {
+    pub fn into_val(self, mlr_builder: &mut MlrBuilder) -> AstLoweringResult<mlr::Val> {
         match self {
             Lowered::Op(op) => mlr_builder.insert_use_val(op),
             Lowered::Val(val) => Ok(val),
@@ -27,7 +27,7 @@ impl Lowered {
         }
     }
 
-    pub fn into_place(self, mlr_builder: &mut MlrBuilder) -> H2MResult<mlr::Place> {
+    pub fn into_place(self, mlr_builder: &mut MlrBuilder) -> AstLoweringResult<mlr::Place> {
         match self {
             Lowered::Op(op) => {
                 let place = mlr_builder.insert_fresh_alloc()?;

@@ -18,7 +18,7 @@ use crate::{
         err::{print_impl_check_error, print_obligation_check_error},
         impl_check::check_trait_impls,
     },
-    h2m, m2inkwell,
+    ast_lowering, m2inkwell,
     obligation_check::check_obligations,
     util::print,
 };
@@ -54,7 +54,7 @@ pub fn compile(
 
     let mut ast_meta = AstMeta::default();
 
-    print_pretty("Building MLR from ast");
+    print_pretty("Building MLR from AST");
     register_tys(&ast, &mut ctxt.tys, &mut ast_meta).map_err(|_| "Error registering types")?;
     define_tys(&ast, &mut ctxt, &ast_meta).map_err(|_| "Error defining types")?;
     register_traits(&ast, &mut ctxt, &mut ast_meta).map_err(|_| "Error registering traits")?;
@@ -69,7 +69,7 @@ pub fn compile(
     build_impl_fn_mlrs(&ast, &mut ctxt, &ast_meta).map_err(|err| format!("Error building MLR for impls: {err}"))?;
     check_obligations(&mut ctxt).map_err(|err| print_obligation_check_error(err, &ctxt))?;
 
-    h2m::opt::canonicalize_types(&mut ctxt).map_err(|_| "Could not infer types")?;
+    ast_lowering::opt::canonicalize_types(&mut ctxt).map_err(|_| "Could not infer types")?;
 
     if let Some(mlr_path) = output_paths.mlr {
         print_detail(&format!("Saving MLR to {}", mlr_path.display()));
@@ -426,7 +426,7 @@ fn build_function_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &Ast
 
         let target_fn = ast_meta.fn_ids[&idx];
 
-        h2m::ast_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, ctxt))?;
+        ast_lowering::ast_to_mlr(ctxt, body, target_fn).map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, ctxt))?;
     }
 
     Ok(())
@@ -442,7 +442,7 @@ fn build_impl_fn_mlrs(ast: &ast::Program, ctxt: &mut ctxt::Ctxt, ast_meta: &AstM
             let Some(body) = &ast_mthd.body else {
                 continue;
             };
-            h2m::ast_to_mlr(ctxt, body, target_fn)
+            ast_lowering::ast_to_mlr(ctxt, body, target_fn)
                 .map_err(|err| err::print_mlr_builder_error(&ast_mthd.name, err, ctxt))?;
         }
     }

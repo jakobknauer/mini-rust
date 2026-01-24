@@ -2,16 +2,16 @@ use std::collections::HashMap;
 
 use crate::{
     ctxt::{fns, mlr, ty},
-    h2m::H2MResult,
+    ast_lowering::AstLoweringResult,
 };
 
-impl<'a> super::H2M<'a> {
+impl<'a> super::AstLowerer<'a> {
     pub fn match_param_and_return_ty(
         &mut self,
         param_tys: &[ty::Ty],
         return_ty: ty::Ty,
         expected: Option<ty::Ty>,
-    ) -> H2MResult<()> {
+    ) -> AstLoweringResult<()> {
         if let Some(expected) = expected
             && let Some((exp_param_tys, exp_return_ty, var_args)) = self.ctxt().ty_is_callable(expected)
             && exp_param_tys.len() == param_tys.len()
@@ -26,7 +26,7 @@ impl<'a> super::H2M<'a> {
         Ok(())
     }
 
-    pub fn generate_captures_ty(&mut self) -> H2MResult<ty::Ty> {
+    pub fn generate_captures_ty(&mut self) -> AstLoweringResult<ty::Ty> {
         let captures_struct_name = format!(
             "<Captures:{}.{}>",
             self.builder.get_signature().name,
@@ -107,7 +107,7 @@ impl<'a> super::H2M<'a> {
         }
     }
 
-    pub fn generate_closure_fn_inst(&mut self, signature: fns::FnSig) -> H2MResult<fns::FnInst> {
+    pub fn generate_closure_fn_inst(&mut self, signature: fns::FnSig) -> AstLoweringResult<fns::FnInst> {
         let env_gen_args = signature
             .env_gen_params
             .iter()
@@ -138,7 +138,7 @@ impl<'a> super::H2M<'a> {
         &mut self,
         closure_place: mlr::Place,
         captured_values: HashMap<mlr::Loc, usize>,
-    ) -> H2MResult<()> {
+    ) -> AstLoweringResult<()> {
         if captured_values.is_empty() {
             return Ok(());
         }

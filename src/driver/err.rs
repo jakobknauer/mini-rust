@@ -1,7 +1,7 @@
 use crate::{
     ctxt::{self, ty::Obligation},
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
-    h2m, ast,
+    ast_lowering, ast,
     obligation_check::ObligationCheckError,
     typechecker::TyError,
 };
@@ -21,8 +21,8 @@ pub fn print_parser_err(err: &ast::ParserErr, _: &str) -> String {
     }
 }
 
-pub fn print_mlr_builder_error(fn_name: &str, err: h2m::H2MError, ctxt: &ctxt::Ctxt) -> String {
-    use h2m::H2MError::*;
+pub fn print_mlr_builder_error(fn_name: &str, err: ast_lowering::AstLoweringError, ctxt: &ctxt::Ctxt) -> String {
+    use ast_lowering::AstLoweringError::*;
 
     match err {
         TyErr(err) => print_ty_error(fn_name, err, ctxt),

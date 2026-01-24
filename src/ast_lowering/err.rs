@@ -4,10 +4,10 @@ use crate::{
     typechecker::TyError,
 };
 
-pub type H2MResult<T> = Result<T, H2MError>;
+pub type AstLoweringResult<T> = Result<T, AstLoweringError>;
 
 #[derive(Debug)]
-pub enum H2MError {
+pub enum AstLoweringError {
     MissingOperatorImpl { name: String },
     UnresolvableSymbol { name: String },
     NotAPlace,
@@ -24,23 +24,23 @@ pub enum H2MError {
     NotAGenericType(Ty),
 }
 
-impl<T> From<H2MError> for H2MResult<T> {
-    fn from(val: H2MError) -> Self {
+impl<T> From<AstLoweringError> for AstLoweringResult<T> {
+    fn from(val: AstLoweringError) -> Self {
         Err(val)
     }
 }
 
-impl<E> From<E> for H2MError
+impl<E> From<E> for AstLoweringError
 where
     TyError: From<E>,
 {
     fn from(val: E) -> Self {
-        H2MError::TyErr(TyError::from(val))
+        AstLoweringError::TyErr(TyError::from(val))
     }
 }
 
-impl From<NotATypeName> for H2MError {
+impl From<NotATypeName> for AstLoweringError {
     fn from(val: NotATypeName) -> Self {
-        H2MError::NotATypeName(val.0)
+        AstLoweringError::NotATypeName(val.0)
     }
 }

@@ -12,16 +12,16 @@ mod macros;
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{self, fns, mlr, traits, ty},
     ast,
+    ctxt::{self, fns, mlr, traits, ty},
     typechecker::{self, MthdResolution},
     util::mlr_builder::MlrBuilder,
 };
 
-pub use err::{H2MError, H2MResult};
+pub use err::{AstLoweringError, AstLoweringResult};
 use lowered::Lowered;
 
-pub fn ast_to_mlr(ctxt: &mut ctxt::Ctxt, ast_body: &ast::Block, target_fn: fns::Fn) -> H2MResult<()> {
+pub fn ast_to_mlr(ctxt: &mut ctxt::Ctxt, ast_body: &ast::Block, target_fn: fns::Fn) -> AstLoweringResult<()> {
     ast_to_mlr_with_external_scope(ctxt, ast_body, target_fn, HashMap::new(), None)?;
     Ok(())
 }
@@ -32,13 +32,13 @@ pub fn ast_to_mlr_with_external_scope(
     target_fn: fns::Fn,
     external_scope: HashMap<String, mlr::Loc>,
     captures_ty: Option<ty::Ty>,
-) -> H2MResult<HashMap<mlr::Loc, usize>> {
-    let (mlr, captured_values) = H2M::new(target_fn, ctxt, external_scope, captures_ty).build(ast_body)?;
+) -> AstLoweringResult<HashMap<mlr::Loc, usize>> {
+    let (mlr, captured_values) = AstLowerer::new(target_fn, ctxt, external_scope, captures_ty).build(ast_body)?;
     ctxt.fns.add_fn_def(target_fn, mlr);
     Ok(captured_values)
 }
 
-struct H2M<'a> {
+struct AstLowerer<'a> {
     builder: MlrBuilder<'a>,
     closure_counter: u32,
 
@@ -50,7 +50,7 @@ struct H2M<'a> {
     captured_values: HashMap<mlr::Loc, usize>,
 }
 
-impl<'a> H2M<'a> {
+impl<'a> AstLowerer<'a> {
     pub fn new(
         target_fn: fns::Fn,
         ctxt: &'a mut ctxt::Ctxt,
@@ -69,10 +69,10 @@ impl<'a> H2M<'a> {
         }
     }
 
-    pub fn build(mut self, body: &'a ast::Block) -> H2MResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
+    pub fn build(mut self, body: &'a ast::Block) -> AstLoweringResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
         let signature = self.builder.get_signature();
         if signature.var_args {
-            return Err(H2MError::VarArgsNotSupported);
+            return Err(AstLoweringError::VarArgsNotSupported);
         }
 
         let params = signature.params.clone();
@@ -142,7 +142,7 @@ impl<'a> H2M<'a> {
     /// all while in a new scope.
     ///
     /// This method does not start or end a new MLR block; but it does push and pop a new scope.
-    fn build_block(&mut self, block: &ast::Block, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
+    fn build_block(&mut self, block: &ast::Block, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
         self.builder.push_scope();
 
         for stmt in &block.stmts {
@@ -162,7 +162,7 @@ impl<'a> H2M<'a> {
         Ok(output)
     }
 
-    fn lower(&mut self, expr: &ast::Expr, expected: Option<ty::Ty>) -> H2MResult<Lowered> {
+    fn lower(&mut self, expr: &ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<Lowered> {
         use ast::Expr::*;
 
         let lowered = match expr {
@@ -196,19 +196,19 @@ impl<'a> H2M<'a> {
         Ok(lowered)
     }
 
-    fn lower_to_val(&mut self, expr: &ast::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Val> {
+    fn lower_to_val(&mut self, expr: &ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
         self.lower(expr, expected)?.into_val(&mut self.builder)
     }
 
-    fn lower_to_place(&mut self, expr: &ast::Expr) -> H2MResult<mlr::Place> {
+    fn lower_to_place(&mut self, expr: &ast::Expr) -> AstLoweringResult<mlr::Place> {
         self.lower(expr, None)?.into_place(&mut self.builder)
     }
 
-    fn lower_to_op(&mut self, expr: &ast::Expr, expected: Option<ty::Ty>) -> H2MResult<mlr::Op> {
+    fn lower_to_op(&mut self, expr: &ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Op> {
         self.lower(expr, expected)?.into_op(&mut self.builder)
     }
 
-    fn build_literal(&mut self, lit: &ast::Lit) -> H2MResult<mlr::Op> {
+    fn build_literal(&mut self, lit: &ast::Lit) -> AstLoweringResult<mlr::Op> {
         use ast::Lit::*;
 
         match *lit {
@@ -219,7 +219,7 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn lower_path(&mut self, path: &ast::Path) -> H2MResult<Lowered> {
+    fn lower_path(&mut self, path: &ast::Path) -> AstLoweringResult<Lowered> {
         let lowered: Lowered = match path.segments.as_slice() {
             [ast::PathSegment::Ident(ident)] => {
                 if let Some(place) = self.resolve_name_to_place(ident) {
@@ -229,7 +229,7 @@ impl<'a> H2M<'a> {
                     let gen_args = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                     self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                 } else {
-                    return Err(H2MError::UnresolvablePath { path: path.clone() });
+                    return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
                 }
             }
             [ast::PathSegment::Generic(gen_path_segment)] => {
@@ -238,10 +238,10 @@ impl<'a> H2M<'a> {
                         .gen_args
                         .iter()
                         .map(|annot| self.builder.resolve_ast_ty_annot(annot))
-                        .collect::<H2MResult<_>>()?;
+                        .collect::<AstLoweringResult<_>>()?;
                     self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                 } else {
-                    return Err(H2MError::UnresolvablePath { path: path.clone() });
+                    return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
                 }
             }
             [ty_path, mthd_name] => {
@@ -252,14 +252,14 @@ impl<'a> H2M<'a> {
                     ast::PathSegment::Generic(gen_path_segment) => {
                         (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
                     }
-                    ast::PathSegment::Self_ => return H2MError::UnresolvablePath { path: path.clone() }.into(),
+                    ast::PathSegment::Self_ => return AstLoweringError::UnresolvablePath { path: path.clone() }.into(),
                 };
 
                 let mthd_resolution = self.typechecker().resolve_mthd(ty, fn_name, false)?;
                 let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, gen_args)?;
                 Lowered::Op(mthd)
             }
-            _ => return Err(H2MError::UnresolvablePath { path: path.clone() }),
+            _ => return Err(AstLoweringError::UnresolvablePath { path: path.clone() }),
         };
 
         Ok(lowered)
@@ -270,7 +270,7 @@ impl<'a> H2M<'a> {
         left: &ast::Expr,
         operator: &ast::BinaryOperator,
         right: &ast::Expr,
-    ) -> H2MResult<mlr::Val> {
+    ) -> AstLoweringResult<mlr::Val> {
         match operator {
             ast::BinaryOperator::LogicalAnd => self.build_logical_and(left, right),
             ast::BinaryOperator::LogicalOr => self.build_logical_or(left, right),
@@ -290,7 +290,11 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_unary_op(&mut self, operator: &ast::UnaryOperator, operand: &ast::Expr) -> Result<mlr::Val, H2MError> {
+    fn build_unary_op(
+        &mut self,
+        operator: &ast::UnaryOperator,
+        operand: &ast::Expr,
+    ) -> Result<mlr::Val, AstLoweringError> {
         let operand = self.lower_to_op(operand, None)?;
         let operand_ty = self.mlr().get_op_ty(operand);
 
@@ -299,7 +303,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_call_val(op, vec![operand])
     }
 
-    fn build_logical_and(&mut self, left: &ast::Expr, right: &ast::Expr) -> H2MResult<mlr::Val> {
+    fn build_logical_and(&mut self, left: &ast::Expr, right: &ast::Expr) -> AstLoweringResult<mlr::Val> {
         let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
@@ -325,7 +329,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_logical_or(&mut self, left: &ast::Expr, right: &ast::Expr) -> H2MResult<mlr::Val> {
+    fn build_logical_or(&mut self, left: &ast::Expr, right: &ast::Expr) -> AstLoweringResult<mlr::Val> {
         let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
@@ -351,7 +355,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_assignment(&mut self, target: &ast::Expr, value: &ast::Expr) -> H2MResult<mlr::Val> {
+    fn build_assignment(&mut self, target: &ast::Expr, value: &ast::Expr) -> AstLoweringResult<mlr::Val> {
         let loc = self.lower_to_place(target)?;
         let value = self.lower_to_val(value, None)?;
         self.builder.insert_assign_stmt(loc, value)?;
@@ -360,7 +364,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: &ast::Expr, args: &[ast::Expr]) -> H2MResult<mlr::Val> {
+    fn build_call(&mut self, callee: &ast::Expr, args: &[ast::Expr]) -> AstLoweringResult<mlr::Val> {
         let callee = self.lower_to_op(callee, None)?;
         let callee_ty = self.mlr().get_op_ty(callee);
 
@@ -377,12 +381,17 @@ impl<'a> H2M<'a> {
                 let expected = param_tys.get(idx).cloned(); // possibly None
                 self.lower_to_op(arg, expected)
             })
-            .collect::<H2MResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
 
         self.builder.insert_call_val(callee, args)
     }
 
-    fn build_mthd_call(&mut self, obj: &ast::Expr, mthd: &ast::PathSegment, args: &[ast::Expr]) -> H2MResult<mlr::Val> {
+    fn build_mthd_call(
+        &mut self,
+        obj: &ast::Expr,
+        mthd: &ast::PathSegment,
+        args: &[ast::Expr],
+    ) -> AstLoweringResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
 
@@ -418,7 +427,7 @@ impl<'a> H2M<'a> {
                 let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
                 self.lower_to_op(arg, expected)
             }))
-            .collect::<H2MResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
 
         self.builder.insert_call_val(callee, args)
     }
@@ -429,7 +438,7 @@ impl<'a> H2M<'a> {
         then_block: &ast::Block,
         else_block: Option<&ast::Block>,
         expected: Option<ty::Ty>,
-    ) -> H2MResult<mlr::Val> {
+    ) -> AstLoweringResult<mlr::Val> {
         let cond = self.lower_to_op(condition, None)?;
 
         let result_place = self.builder.insert_fresh_alloc()?;
@@ -454,7 +463,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_loop(&mut self, body: &ast::Block) -> H2MResult<mlr::Val> {
+    fn build_loop(&mut self, body: &ast::Block) -> AstLoweringResult<mlr::Val> {
         self.builder.start_new_block();
         self.build_block(body, None)?;
         let body = self.builder.release_current_block();
@@ -464,7 +473,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_val(unit)
     }
 
-    fn build_while(&mut self, condition: &ast::Expr, body: &ast::Block) -> H2MResult<mlr::Val> {
+    fn build_while(&mut self, condition: &ast::Expr, body: &ast::Block) -> AstLoweringResult<mlr::Val> {
         self.builder.start_new_block();
 
         // build 'if condition, then break'
@@ -497,14 +506,18 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_val(unit)
     }
 
-    fn build_struct_or_enum_val(&mut self, ty_path: &ast::Path, fields: &[(String, ast::Expr)]) -> H2MResult<mlr::Val> {
+    fn build_struct_or_enum_val(
+        &mut self,
+        ty_path: &ast::Path,
+        fields: &[(String, ast::Expr)],
+    ) -> AstLoweringResult<mlr::Val> {
         match self.resolve_path_to_struct_or_enum_variant(ty_path)? {
             StructOrEnumResolution::Struct(ty) => self.build_struct_val(ty, fields),
             StructOrEnumResolution::EnumVariant(ty, variant_index) => self.build_enum_val(ty, variant_index, fields),
         }
     }
 
-    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, ast::Expr)]) -> H2MResult<mlr::Val> {
+    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, ast::Expr)]) -> AstLoweringResult<mlr::Val> {
         let struct_val_place = self.builder.insert_alloc_with_ty(ty)?;
         self.build_struct_field_init_stmts(ty, fields, struct_val_place)?;
         self.builder.insert_use_place_val(struct_val_place)
@@ -515,7 +528,7 @@ impl<'a> H2M<'a> {
         ty: ty::Ty,
         variant_index: usize,
         fields: &[(String, ast::Expr)],
-    ) -> H2MResult<mlr::Val> {
+    ) -> AstLoweringResult<mlr::Val> {
         // Create empty enum value
         let base_place = self.builder.insert_alloc_with_ty(ty)?;
 
@@ -541,7 +554,7 @@ impl<'a> H2M<'a> {
         ty: ty::Ty,
         fields: &[(String, ast::Expr)],
         base_place: mlr::Place,
-    ) -> H2MResult<()> {
+    ) -> AstLoweringResult<()> {
         let field_indices = self
             .builder
             .typechecker()
@@ -558,11 +571,11 @@ impl<'a> H2M<'a> {
         Ok(())
     }
 
-    fn build_tuple_val(&mut self, exprs: &[ast::Expr]) -> H2MResult<mlr::Val> {
+    fn build_tuple_val(&mut self, exprs: &[ast::Expr]) -> AstLoweringResult<mlr::Val> {
         let exprs = exprs
             .iter()
             .map(|expr| self.lower_to_val(expr, None))
-            .collect::<H2MResult<Vec<_>>>()?;
+            .collect::<AstLoweringResult<Vec<_>>>()?;
 
         let expr_tys = exprs
             .iter()
@@ -584,7 +597,7 @@ impl<'a> H2M<'a> {
         scrutinee: &ast::Expr,
         arms: &[ast::MatchArm],
         expected: Option<ty::Ty>,
-    ) -> H2MResult<mlr::Val> {
+    ) -> AstLoweringResult<mlr::Val> {
         let scrutinee_place = self.lower_to_place(scrutinee)?;
         let scrutinee_ty = self.mlr().get_place_ty(scrutinee_place);
         let scrutinee_ty_def = self.tys().get_ty_def(scrutinee_ty).unwrap();
@@ -599,10 +612,10 @@ impl<'a> H2M<'a> {
                         let scrutinee_place = self.builder.insert_deref_place(scrutinee_addr_op)?;
                         Ok((inner, true, scrutinee_place))
                     }
-                    _ => Err(H2MError::NonMatchableScrutinee { ty: scrutinee_ty }),
+                    _ => Err(AstLoweringError::NonMatchableScrutinee { ty: scrutinee_ty }),
                 }
             }
-            _ => Err(H2MError::NonMatchableScrutinee { ty: scrutinee_ty }),
+            _ => Err(AstLoweringError::NonMatchableScrutinee { ty: scrutinee_ty }),
         }?;
 
         let discriminant_place = self.builder.insert_enum_discriminant_place(scrutinee_place)?;
@@ -637,19 +650,22 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_val(result_op)
     }
 
-    fn build_addr_of_val(&mut self, base: &ast::Expr) -> H2MResult<mlr::Val> {
+    fn build_addr_of_val(&mut self, base: &ast::Expr) -> AstLoweringResult<mlr::Val> {
         let base = self.lower_to_place(base)?;
         self.builder.insert_addr_of_val(base)
     }
 
-    fn build_as_expr(&mut self, expr: &ast::Expr, target_ty: &ast::TyAnnot) -> H2MResult<mlr::Val> {
+    fn build_as_expr(&mut self, expr: &ast::Expr, target_ty: &ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
         let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_ast_ty_annot(target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
     }
 
-    fn build_self_place(&mut self) -> H2MResult<mlr::Place> {
-        let loc = self.builder.get_receiver_loc().ok_or(H2MError::NoSelfOutsideOfMethod)?;
+    fn build_self_place(&mut self) -> AstLoweringResult<mlr::Place> {
+        let loc = self
+            .builder
+            .get_receiver_loc()
+            .ok_or(AstLoweringError::NoSelfOutsideOfMethod)?;
         self.builder.insert_loc_place(loc)
     }
 
@@ -659,11 +675,11 @@ impl<'a> H2M<'a> {
         return_ty: &Option<ast::TyAnnot>,
         body: &ast::Block,
         expected: Option<ty::Ty>,
-    ) -> H2MResult<mlr::Val> {
+    ) -> AstLoweringResult<mlr::Val> {
         let param_tys = params
             .iter()
             .map(|param| self.builder.resolve_ast_ty_annot_or_insert_new_type(param.ty.as_ref()))
-            .collect::<H2MResult<Vec<_>>>()?;
+            .collect::<AstLoweringResult<Vec<_>>>()?;
         let return_ty = self
             .builder
             .resolve_ast_ty_annot_or_insert_new_type(return_ty.as_ref())?;
@@ -687,7 +703,7 @@ impl<'a> H2M<'a> {
         self.builder.insert_use_place_val(closure_place)
     }
 
-    fn build_stmt(&mut self, stmt: &ast::Stmt) -> H2MResult<()> {
+    fn build_stmt(&mut self, stmt: &ast::Stmt) -> AstLoweringResult<()> {
         use ast::Stmt::*;
 
         match stmt {
@@ -698,7 +714,12 @@ impl<'a> H2M<'a> {
         }
     }
 
-    fn build_let_stmt(&mut self, name: &str, ty_annot: Option<&ast::TyAnnot>, value: &ast::Expr) -> H2MResult<()> {
+    fn build_let_stmt(
+        &mut self,
+        name: &str,
+        ty_annot: Option<&ast::TyAnnot>,
+        value: &ast::Expr,
+    ) -> AstLoweringResult<()> {
         let annot_ty = match ty_annot {
             Some(ty_annot) => self.builder.resolve_ast_ty_annot(ty_annot)?,
             None => self.tys().undef_ty(),
@@ -717,14 +738,14 @@ impl<'a> H2M<'a> {
         Ok(())
     }
 
-    fn build_expr_stmt(&mut self, expr: &ast::Expr) -> H2MResult<()> {
+    fn build_expr_stmt(&mut self, expr: &ast::Expr) -> AstLoweringResult<()> {
         self.builder.start_new_block();
         let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr, None)?);
         self.builder.end_and_insert_current_block();
         Ok(())
     }
 
-    fn build_return_stmt(&mut self, expr: Option<&ast::Expr>) -> H2MResult<()> {
+    fn build_return_stmt(&mut self, expr: Option<&ast::Expr>) -> AstLoweringResult<()> {
         self.builder.start_new_block();
 
         let return_ty = self.builder.get_signature().return_ty;
@@ -742,7 +763,7 @@ impl<'a> H2M<'a> {
         Ok(())
     }
 
-    fn build_break_stmt(&mut self) -> H2MResult<()> {
+    fn build_break_stmt(&mut self) -> AstLoweringResult<()> {
         self.builder.insert_break_stmt()?;
         Ok(())
     }
@@ -751,14 +772,14 @@ impl<'a> H2M<'a> {
         &mut self,
         obj: &ast::Expr,
         field_desc: &ast::FieldDescriptor,
-    ) -> H2MResult<mlr::Place> {
+    ) -> AstLoweringResult<mlr::Place> {
         let mut obj = self.lower_to_place(obj)?;
         let obj_ty = self.mlr().get_place_ty(obj);
 
         let field_resolution = match field_desc {
             ast::FieldDescriptor::Named(path) => {
                 let ast::PathSegment::Ident(field_name) = path else {
-                    return Err(H2MError::NotAPlace);
+                    return Err(AstLoweringError::NotAPlace);
                 };
 
                 self.typechecker().resolve_struct_field(obj_ty, field_name)?
@@ -775,12 +796,12 @@ impl<'a> H2M<'a> {
             .insert_field_access_place(obj, field_resolution.field_index)
     }
 
-    fn lower_deref_to_place(&mut self, base: &ast::Expr) -> H2MResult<mlr::Place> {
+    fn lower_deref_to_place(&mut self, base: &ast::Expr) -> AstLoweringResult<mlr::Place> {
         let base_op = self.lower_to_op(base, None)?;
         self.builder.insert_deref_place(base_op)
     }
 
-    fn lower_qualified_path(&mut self, qual_path: &ast::QualifiedPath) -> H2MResult<Lowered> {
+    fn lower_qualified_path(&mut self, qual_path: &ast::QualifiedPath) -> AstLoweringResult<Lowered> {
         let ty = self.builder.resolve_ast_ty_annot(&qual_path.ty)?;
 
         if let Some(trait_) = &qual_path.trait_ {
@@ -800,11 +821,11 @@ impl<'a> H2M<'a> {
                         .gen_args
                         .iter()
                         .map(|annot| self.builder.resolve_ast_ty_annot(annot))
-                        .collect::<H2MResult<_>>()?;
+                        .collect::<AstLoweringResult<_>>()?;
                     (trait_mthd_idx, gen_args)
                 }
                 _ => {
-                    return Err(H2MError::UnresolvablePath {
+                    return Err(AstLoweringError::UnresolvablePath {
                         path: qual_path.path.clone(),
                     });
                 }
@@ -826,7 +847,7 @@ impl<'a> H2M<'a> {
                     (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
                 }
                 _ => {
-                    return Err(H2MError::UnresolvablePath {
+                    return Err(AstLoweringError::UnresolvablePath {
                         path: qual_path.path.clone(),
                     });
                 }
@@ -842,12 +863,12 @@ impl<'a> H2M<'a> {
         &mut self,
         gen_args: Option<&[ast::TyAnnot]>,
         n_expected: usize,
-    ) -> H2MResult<Vec<ty::Ty>> {
+    ) -> AstLoweringResult<Vec<ty::Ty>> {
         match gen_args {
             Some(gen_args) => gen_args
                 .iter()
                 .map(|annot| self.builder.resolve_ast_ty_annot(annot))
-                .collect::<H2MResult<_>>(),
+                .collect::<AstLoweringResult<_>>(),
             None => Ok((0..n_expected).map(|_| self.tys().undef_ty()).collect()),
         }
     }
@@ -888,7 +909,10 @@ impl<'a> H2M<'a> {
         self.builder.insert_field_access_place(self.captures_place?, index).ok()
     }
 
-    fn resolve_path_to_struct_or_enum_variant(&mut self, path: &ast::Path) -> H2MResult<StructOrEnumResolution> {
+    fn resolve_path_to_struct_or_enum_variant(
+        &mut self,
+        path: &ast::Path,
+    ) -> AstLoweringResult<StructOrEnumResolution> {
         match path.segments.as_slice() {
             [ident] => {
                 let (struct_, gen_args) = match ident {
@@ -896,7 +920,7 @@ impl<'a> H2M<'a> {
                         let struct_ = self
                             .tys()
                             .get_struct_by_name(ident)
-                            .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
+                            .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
                         let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
                         let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                         (struct_, gen_args)
@@ -907,10 +931,12 @@ impl<'a> H2M<'a> {
                             .gen_args
                             .iter()
                             .map(|annot| self.builder.resolve_ast_ty_annot(annot))
-                            .collect::<H2MResult<_>>()?;
+                            .collect::<AstLoweringResult<_>>()?;
                         (struct_, gen_args)
                     }
-                    ast::PathSegment::Self_ => return H2MError::UnresolvableStructOrEnum { path: path.clone() }.into(),
+                    ast::PathSegment::Self_ => {
+                        return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                    }
                 };
                 let ty = self.tys().inst_struct(struct_, gen_args)?;
                 Ok(StructOrEnumResolution::Struct(ty))
@@ -921,7 +947,7 @@ impl<'a> H2M<'a> {
                         let enum_ = self
                             .tys()
                             .get_enum_by_name(ident)
-                            .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
+                            .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
                         let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
                         let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                         (enum_, gen_args)
@@ -932,15 +958,17 @@ impl<'a> H2M<'a> {
                             .gen_args
                             .iter()
                             .map(|annot| self.builder.resolve_ast_ty_annot(annot))
-                            .collect::<H2MResult<_>>()?;
+                            .collect::<AstLoweringResult<_>>()?;
                         (struct_, gen_args)
                     }
-                    ast::PathSegment::Self_ => return H2MError::UnresolvableStructOrEnum { path: path.clone() }.into(),
+                    ast::PathSegment::Self_ => {
+                        return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                    }
                 };
                 let ty = self.tys().inst_enum(enum_, gen_args)?;
 
                 let ast::PathSegment::Ident(variant_name) = &variant_name else {
-                    return H2MError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                    return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
                 };
 
                 let variant_index = self
@@ -950,21 +978,21 @@ impl<'a> H2M<'a> {
                     .variants
                     .iter()
                     .position(|variant| &variant.name == variant_name)
-                    .ok_or(H2MError::UnresolvableStructOrEnum { path: path.clone() })?;
+                    .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
 
                 Ok(StructOrEnumResolution::EnumVariant(ty, variant_index))
             }
-            _ => H2MError::UnresolvableStructOrEnum { path: path.clone() }.into(),
+            _ => AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into(),
         }
     }
 
-    fn resolve_trait_annot(&mut self, trait_annot: &ast::TraitAnnot) -> H2MResult<traits::TraitInst> {
-        let trait_ = self
-            .traits()
-            .resolve_trait_name(&trait_annot.name)
-            .ok_or(H2MError::UnresolvableTraitAnnot {
-                trait_name: trait_annot.name.clone(),
-            })?;
+    fn resolve_trait_annot(&mut self, trait_annot: &ast::TraitAnnot) -> AstLoweringResult<traits::TraitInst> {
+        let trait_ =
+            self.traits()
+                .resolve_trait_name(&trait_annot.name)
+                .ok_or(AstLoweringError::UnresolvableTraitAnnot {
+                    trait_name: trait_annot.name.clone(),
+                })?;
 
         let trait_args = trait_annot
             .args
@@ -979,7 +1007,7 @@ impl<'a> H2M<'a> {
         Ok(trait_inst)
     }
 
-    fn resolve_path_segment_to_ty(&mut self, ty_path: &ast::PathSegment) -> H2MResult<ty::Ty> {
+    fn resolve_path_segment_to_ty(&mut self, ty_path: &ast::PathSegment) -> AstLoweringResult<ty::Ty> {
         use ctxt::Named::*;
 
         let (ty_name, gen_args) = match ty_path {
@@ -995,7 +1023,7 @@ impl<'a> H2M<'a> {
 
         let ty = match (named_ty, gen_args) {
             (Ty(ty), None) => ty,
-            (Ty(ty), Some(_)) => return H2MError::NotAGenericType(ty).into(),
+            (Ty(ty), Some(_)) => return AstLoweringError::NotAGenericType(ty).into(),
             (Struct(struct_), gen_args) => {
                 let n_gen_args = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
@@ -1016,7 +1044,7 @@ impl<'a> H2M<'a> {
         mthd_resolution: MthdResolution,
         obj_ty: ty::Ty,
         gen_args: Option<&[ast::TyAnnot]>,
-    ) -> H2MResult<(mlr::Op, bool)> {
+    ) -> AstLoweringResult<(mlr::Op, bool)> {
         match mthd_resolution {
             MthdResolution::Inherent { fn_, env_gen_args } => {
                 let sig = self.fns().get_sig(fn_).unwrap();

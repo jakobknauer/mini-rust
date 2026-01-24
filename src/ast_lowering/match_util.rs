@@ -1,10 +1,10 @@
 use crate::{
     ctxt::{mlr, ty},
-    h2m::{H2MResult, macros::assign_to_fresh_alloc},
+    ast_lowering::{AstLoweringResult, macros::assign_to_fresh_alloc},
     ast,
 };
 
-impl<'a> super::H2M<'a> {
+impl<'a> super::AstLowerer<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn build_match_arms(
         &mut self,
@@ -17,7 +17,7 @@ impl<'a> super::H2M<'a> {
         scrutinee_place: mlr::Place,
         result_place: mlr::Place,
         expected: Option<ty::Ty>,
-    ) -> H2MResult<()> {
+    ) -> AstLoweringResult<()> {
         assert!(
             arms.len() == variant_indices.len(),
             "arm_variant_indices length should match arms length"
@@ -75,7 +75,7 @@ impl<'a> super::H2M<'a> {
         variant_index: usize,
         eq_fn: mlr::Op,
         discriminant: mlr::Op,
-    ) -> H2MResult<mlr::Op> {
+    ) -> AstLoweringResult<mlr::Op> {
         let variant_index = self.builder.insert_int_op(variant_index as i64)?;
         let condition_place = assign_to_fresh_alloc!(
             self,
@@ -92,7 +92,7 @@ impl<'a> super::H2M<'a> {
         variant_index: usize,
         base_place: mlr::Place,
         expected: Option<ty::Ty>,
-    ) -> H2MResult<mlr::Val> {
+    ) -> AstLoweringResult<mlr::Val> {
         let enum_variant_ty = self.tys().get_enum_variant_ty(enum_ty, variant_index)?;
         let field_indices = self.typechecker().resolve_struct_fields(
             enum_variant_ty,

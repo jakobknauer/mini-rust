@@ -1,7 +1,7 @@
 use crate::{
-    ctxt::{fns, ty},
-    h2m::{self, H2MError, H2MResult},
     ast,
+    ast_lowering::{self, AstLoweringError, AstLoweringResult},
+    ctxt::{fns, ty},
 };
 
 macro_rules! op_match {
@@ -20,7 +20,7 @@ macro_rules! op_match {
                 ($op, l, r) if l == $left_ty && r == $right_ty => $fn_name,
             )*
             _ => {
-                return H2MError::OperatorResolutionFailed {
+                return AstLoweringError::OperatorResolutionFailed {
                     operator: format!("{:?}", $operator),
                     operand_tys: ($left, $right),
                 }
@@ -30,12 +30,12 @@ macro_rules! op_match {
     }};
 }
 
-impl<'a> h2m::H2M<'a> {
+impl<'a> ast_lowering::AstLowerer<'a> {
     pub fn resolve_binary_operator(
         &mut self,
         operator: &ast::BinaryOperator,
         (left, right): (ty::Ty, ty::Ty),
-    ) -> H2MResult<fns::Fn> {
+    ) -> AstLoweringResult<fns::Fn> {
         use ast::BinaryOperator::*;
 
         let tys = &mut self.tys();
@@ -67,12 +67,18 @@ impl<'a> h2m::H2M<'a> {
             (GreaterThanOrEqual, i32, i32) => "ge::<i32>",
         );
 
-        self.fns().get_fn_by_name(fn_name).ok_or(H2MError::MissingOperatorImpl {
-            name: fn_name.to_string(),
-        })
+        self.fns()
+            .get_fn_by_name(fn_name)
+            .ok_or(AstLoweringError::MissingOperatorImpl {
+                name: fn_name.to_string(),
+            })
     }
 
-    pub fn resolve_unary_operator(&mut self, operator: &ast::UnaryOperator, operand: ty::Ty) -> H2MResult<fns::Fn> {
+    pub fn resolve_unary_operator(
+        &mut self,
+        operator: &ast::UnaryOperator,
+        operand: ty::Ty,
+    ) -> AstLoweringResult<fns::Fn> {
         use ast::UnaryOperator::*;
 
         let tys = &mut self.tys();
@@ -86,7 +92,7 @@ impl<'a> h2m::H2M<'a> {
             Negative if operand == i32 => "neg::<i32>",
             Not if operand == bool => "not::<bool>",
             _ => {
-                return H2MError::OperatorResolutionFailed {
+                return AstLoweringError::OperatorResolutionFailed {
                     operator: format!("{:?}", operator),
                     operand_tys: (operand, operand),
                 }
@@ -94,8 +100,10 @@ impl<'a> h2m::H2M<'a> {
             }
         };
 
-        self.fns().get_fn_by_name(fn_name).ok_or(H2MError::MissingOperatorImpl {
-            name: fn_name.to_string(),
-        })
+        self.fns()
+            .get_fn_by_name(fn_name)
+            .ok_or(AstLoweringError::MissingOperatorImpl {
+                name: fn_name.to_string(),
+            })
     }
 }
