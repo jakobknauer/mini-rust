@@ -8,6 +8,8 @@ pub struct Ast {
 
     pub exprs: Vec<ExprKind>,
     pub expr_slices: Vec<Expr>,
+
+    pub ty_annots: Vec<TyAnnotKind>,
 }
 
 impl Ast {
@@ -27,6 +29,15 @@ impl Ast {
 
     pub fn expr_slice(&self, ExprSlice(start, len): ExprSlice) -> &[Expr] {
         &self.expr_slices[start..start + len]
+    }
+
+    pub fn new_ty_annot(&mut self, annot: TyAnnotKind) -> TyAnnot {
+        self.ty_annots.push(annot);
+        TyAnnot(self.ty_annots.len() - 1)
+    }
+
+    pub fn ty_annot(&self, ty_annot: TyAnnot) -> &TyAnnotKind {
+        &self.ty_annots[ty_annot.0]
     }
 }
 
@@ -124,7 +135,7 @@ impl std::fmt::Display for TraitAnnot {
                 self.name,
                 self.args
                     .iter()
-                    .map(|annot| format!("{}", annot))
+                    .map(|annot| format!("{}", annot.0))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -175,9 +186,9 @@ pub struct QualifiedPath {
 impl std::fmt::Display for QualifiedPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(trait_) = &self.trait_ {
-            write!(f, "<{} as {}>::{}", self.ty, trait_, self.path)
+            write!(f, "<{} as {}>::{}", self.ty.0, trait_, self.path)
         } else {
-            write!(f, "<{}>::{}", self.ty, self.path)
+            write!(f, "<{}>::{}", self.ty.0, self.path)
         }
     }
 }
@@ -213,7 +224,7 @@ impl std::fmt::Display for GenPathSegment {
             self.ident,
             self.gen_args
                 .iter()
-                .map(|annot| format!("{}", annot))
+                .map(|annot| format!("{}", annot.0))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -373,40 +384,51 @@ pub struct StructPatternField {
     pub binding_name: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TyAnnot(usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TyAnnot {
+pub enum TyAnnotKind {
     Path(Path),
     Tuple(Vec<TyAnnot>),
-    Ref(Box<TyAnnot>),
-    Ptr(Box<TyAnnot>),
+    Ref(TyAnnot),
+    Ptr(TyAnnot),
     Fn {
         param_tys: Vec<TyAnnot>,
-        return_ty: Option<Box<TyAnnot>>,
+        return_ty: Option<TyAnnot>,
     },
     Wildcard,
 }
 
-impl std::fmt::Display for TyAnnot {
+impl std::fmt::Display for TyAnnotKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TyAnnot::Path(path) => write!(f, "{}", path),
-            TyAnnot::Tuple(ty_annots) => write!(
+            TyAnnotKind::Path(path) => write!(f, "{}", path),
+            TyAnnotKind::Tuple(ty_annots) => write!(
                 f,
                 "({})",
-                ty_annots.iter().map(|ty| ty.to_string()).collect::<Vec<_>>().join(", ")
+                ty_annots
+                    .iter()
+                    .map(|ty| ty.0.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
-            TyAnnot::Ref(ty_annot) => write!(f, "&{}", ty_annot),
-            TyAnnot::Ptr(ty_annot) => write!(f, "*{}", ty_annot),
-            TyAnnot::Fn { param_tys, return_ty } => write!(
+            TyAnnotKind::Ref(ty_annot) => write!(f, "&{}", ty_annot.0),
+            TyAnnotKind::Ptr(ty_annot) => write!(f, "*{}", ty_annot.0),
+            TyAnnotKind::Fn { param_tys, return_ty } => write!(
                 f,
                 "fn({}) -> {}",
-                param_tys.iter().map(|ty| ty.to_string()).collect::<Vec<_>>().join(", "),
+                param_tys
+                    .iter()
+                    .map(|ty| ty.0.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 match return_ty {
-                    Some(ty) => ty.to_string(),
+                    Some(ty) => ty.0.to_string(),
                     None => "()".to_string(),
                 }
             ),
-            TyAnnot::Wildcard => write!(f, "_"),
+            TyAnnotKind::Wildcard => write!(f, "_"),
         }
     }
 }

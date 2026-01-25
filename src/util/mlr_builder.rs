@@ -310,14 +310,15 @@ impl<'a> MlrBuilder<'a> {
 
     pub fn resolve_ast_ty_annot_or_insert_new_type(
         &mut self,
-        annot: Option<&ast::TyAnnot>,
+        ast: &ast::Ast,
+        annot: Option<ast::TyAnnot>,
     ) -> AstLoweringResult<ty::Ty> {
         annot
-            .map(|annot| self.resolve_ast_ty_annot(annot))
+            .map(|annot| self.resolve_ast_ty_annot(ast, annot))
             .unwrap_or_else(|| Ok(self.tys().undef_ty()))
     }
 
-    pub fn resolve_ast_ty_annot(&mut self, annot: &ast::TyAnnot) -> AstLoweringResult<ty::Ty> {
+    pub fn resolve_ast_ty_annot(&mut self, ast: &ast::Ast, annot: ast::TyAnnot) -> AstLoweringResult<ty::Ty> {
         let gen_params = &self.get_signature().gen_params;
         let env_gen_params = &self.get_signature().env_gen_params;
         let all_gen_params: Vec<_> = gen_params.iter().chain(env_gen_params.iter()).cloned().collect();
@@ -325,7 +326,7 @@ impl<'a> MlrBuilder<'a> {
 
         let ty = self
             .ctxt
-            .try_resolve_ast_ty_annot(annot, &all_gen_params, self_ty, true)
+            .try_resolve_ast_ty_annot(ast, annot, &all_gen_params, self_ty, true)
             .ok_or(AstLoweringError::UnresolvableTyAnnot)?;
         Ok(ty)
     }

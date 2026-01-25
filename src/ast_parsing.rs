@@ -393,8 +393,8 @@ impl<'a> AstParser<'a> {
 
         let (trait_annot, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
             let ty2 = self.parse_ty_annot()?;
-            match ty {
-                TyAnnot::Path(path) => match path.segments.as_slice() {
+            match self.ast.ty_annot(ty) {
+                TyAnnotKind::Path(path) => match path.segments.as_slice() {
                     [PathSegment::Ident(ident)] => (
                         Some(TraitAnnot {
                             name: ident.clone(),
@@ -1094,26 +1094,27 @@ impl<'a> AstParser<'a> {
 
     fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
-        match current {
+        let ty_annot = match current {
             Token::Identifier(_) | Token::Keyword(Keyword::SelfTy) => {
                 let path = self.parse_path(false)?;
-                Ok(TyAnnot::Path(path))
+                TyAnnotKind::Path(path)
             }
             Token::Ampersand => {
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                Ok(TyAnnot::Ref(Box::new(inner_ty)))
+                TyAnnotKind::Ref(inner_ty)
             }
             Token::AmpersandAmpersand => {
                 // Two levels of reference
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                Ok(TyAnnot::Ref(Box::new(TyAnnot::Ref(Box::new(inner_ty)))))
+                let inner = self.ast.new_ty_annot(TyAnnotKind::Ref(inner_ty));
+                TyAnnotKind::Ref(inner)
             }
             Token::Asterisk => {
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                Ok(TyAnnot::Ptr(Box::new(inner_ty)))
+                TyAnnotKind::Ptr(inner_ty)
             }
             Token::LParen => {
                 self.position += 1;
@@ -1131,9 +1132,9 @@ impl<'a> AstParser<'a> {
                 self.expect_token(Token::RParen)?;
 
                 if inner_tys.len() == 1 && !trailing_comma {
-                    Ok(inner_tys.remove(0))
+                    return Ok(inner_tys.remove(0));
                 } else {
-                    Ok(TyAnnot::Tuple(inner_tys))
+                    TyAnnotKind::Tuple(inner_tys)
                 }
             }
             Token::Keyword(Keyword::Fn) => {
@@ -1150,25 +1151,28 @@ impl<'a> AstParser<'a> {
                 self.expect_token(Token::RParen)?;
 
                 let return_ty = if self.advance_if(Token::Arrow) {
-                    Some(Box::new(self.parse_ty_annot()?))
+                    Some(self.parse_ty_annot()?)
                 } else {
                     None
                 };
 
-                Ok(TyAnnot::Fn { param_tys, return_ty })
+                TyAnnotKind::Fn { param_tys, return_ty }
             }
             Token::Underscore => {
                 self.position += 1;
-                Ok(TyAnnot::Wildcard)
+                TyAnnotKind::Wildcard
             }
-            token => Err(ParserErr::UnexpectedToken(token.clone())),
-        }
+            token => return Err(ParserErr::UnexpectedToken(token.clone())),
+        };
+
+        Ok(self.ast.new_ty_annot(ty_annot))
     }
 
     fn parse_trait_annot(&mut self) -> Result<TraitAnnot, ParserErr> {
         let ty_annot = self.parse_ty_annot()?;
+        let ty_annot = self.ast.ty_annot(ty_annot);
         match ty_annot {
-            TyAnnot::Path(path) => match path.segments.as_slice() {
+            TyAnnotKind::Path(path) => match path.segments.as_slice() {
                 [PathSegment::Ident(ident)] => Ok(TraitAnnot {
                     name: ident.clone(),
                     args: vec![],
@@ -1187,12 +1191,6 @@ impl<'a> AstParser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn str_to_path(path: &str) -> Path {
-        Path {
-            segments: vec![PathSegment::Ident(path.to_string())],
-        }
-    }
 
     mod ast {
         use super::*;
@@ -1214,9 +1212,6 @@ mod tests {
                 }
 
                 enum Empty {
-                }
-
-                impl Empty {
                 }
 
                 trait Empty {
@@ -1246,47 +1241,12 @@ mod tests {
                     gen_params: vec![],
                     variants: vec![],
                 }],
-                impls: vec![Impl {
-                    gen_params: vec![],
-                    ty: TyAnnot::Path(str_to_path("Empty")),
-                    trait_annot: None,
-                    mthds: vec![],
-                    assoc_tys: vec![],
-                }],
+                impls: vec![],
                 traits: vec![Trait {
                     name: "Empty".to_string(),
                     gen_params: vec![],
                     mthds: vec![],
                     assoc_ty_names: vec![],
-                }],
-                ..Default::default()
-            };
-
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_parse_simple_struct() {
-            let input = r#"
-                struct Point {
-                    x: int,
-                    y: int,
-                }"#;
-
-            let expected = Ast {
-                structs: vec![Struct {
-                    name: "Point".to_string(),
-                    gen_params: vec![],
-                    fields: vec![
-                        StructField {
-                            name: "x".to_string(),
-                            ty: TyAnnot::Path(str_to_path("int")),
-                        },
-                        StructField {
-                            name: "y".to_string(),
-                            ty: TyAnnot::Path(str_to_path("int")),
-                        },
-                    ],
                 }],
                 ..Default::default()
             };

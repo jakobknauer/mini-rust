@@ -196,13 +196,13 @@ impl<'a> AstLowerer<'a> {
             Match { scrutinee, arms } => self.build_match_expr(*scrutinee, arms, expected)?.into(),
             &Deref { base } => self.lower_deref(base)?.into(),
             &AddrOf { base } => self.build_addr_of_val(base)?.into(),
-            As { expr, target_ty } => self.build_as_expr(*expr, target_ty)?.into(),
+            &As { expr, target_ty } => self.build_as_expr(expr, target_ty)?.into(),
             Self_ => self.build_self_place()?.into(),
             Closure {
                 params,
                 body,
                 return_ty,
-            } => self.build_closure(params, return_ty, body, expected)?.into(),
+            } => self.build_closure(params, *return_ty, body, expected)?.into(),
         };
 
         Ok(lowered)
@@ -249,7 +249,7 @@ impl<'a> AstLowerer<'a> {
                     let gen_args = gen_path_segment
                         .gen_args
                         .iter()
-                        .map(|annot| self.builder.resolve_ast_ty_annot(annot))
+                        .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                         .collect::<AstLoweringResult<_>>()?;
                     self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                 } else {
@@ -671,9 +671,9 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_addr_of_val(base)
     }
 
-    fn build_as_expr(&mut self, expr: ast::Expr, target_ty: &ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
+    fn build_as_expr(&mut self, expr: ast::Expr, target_ty: ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
         let expr_op = self.lower_to_op(expr, None)?;
-        let target_ty = self.builder.resolve_ast_ty_annot(target_ty)?;
+        let target_ty = self.builder.resolve_ast_ty_annot(self.ast, target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
     }
 
@@ -688,17 +688,17 @@ impl<'a> AstLowerer<'a> {
     fn build_closure(
         &mut self,
         params: &[ast::ClosureParam],
-        return_ty: &Option<ast::TyAnnot>,
+        return_ty: Option<ast::TyAnnot>,
         body: &ast::Block,
         expected: Option<ty::Ty>,
     ) -> AstLoweringResult<mlr::Val> {
         let param_tys = params
             .iter()
-            .map(|param| self.builder.resolve_ast_ty_annot_or_insert_new_type(param.ty.as_ref()))
+            .map(|param| self.builder.resolve_ast_ty_annot_or_insert_new_type(self.ast, param.ty))
             .collect::<AstLoweringResult<Vec<_>>>()?;
         let return_ty = self
             .builder
-            .resolve_ast_ty_annot_or_insert_new_type(return_ty.as_ref())?;
+            .resolve_ast_ty_annot_or_insert_new_type(self.ast, return_ty)?;
 
         self.match_param_and_return_ty(&param_tys, return_ty, expected)?;
 
@@ -729,7 +729,7 @@ impl<'a> AstLowerer<'a> {
         use ast::Stmt::*;
 
         match stmt {
-            Let { name, value, ty_annot } => self.build_let_stmt(name, ty_annot.as_ref(), *value),
+            Let { name, value, ty_annot } => self.build_let_stmt(name, *ty_annot, *value),
             &Expr(expr) => self.build_expr_stmt(expr),
             &Return(expr) => self.build_return_stmt(expr),
             Break => self.build_break_stmt(),
@@ -739,11 +739,11 @@ impl<'a> AstLowerer<'a> {
     fn build_let_stmt(
         &mut self,
         name: &str,
-        ty_annot: Option<&ast::TyAnnot>,
+        ty_annot: Option<ast::TyAnnot>,
         value: ast::Expr,
     ) -> AstLoweringResult<()> {
         let annot_ty = match ty_annot {
-            Some(ty_annot) => self.builder.resolve_ast_ty_annot(ty_annot)?,
+            Some(ty_annot) => self.builder.resolve_ast_ty_annot(self.ast, ty_annot)?,
             None => self.tys().undef_ty(),
         };
         let loc = self.mlr().insert_typed_loc(annot_ty);
@@ -824,7 +824,7 @@ impl<'a> AstLowerer<'a> {
     }
 
     fn lower_qualified_path(&mut self, qual_path: &ast::QualifiedPath) -> AstLoweringResult<Lowered> {
-        let ty = self.builder.resolve_ast_ty_annot(&qual_path.ty)?;
+        let ty = self.builder.resolve_ast_ty_annot(self.ast, qual_path.ty)?;
 
         if let Some(trait_) = &qual_path.trait_ {
             let trait_inst = self.resolve_trait_annot(trait_)?;
@@ -842,7 +842,7 @@ impl<'a> AstLowerer<'a> {
                     let gen_args = gen_path_segment
                         .gen_args
                         .iter()
-                        .map(|annot| self.builder.resolve_ast_ty_annot(annot))
+                        .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                         .collect::<AstLoweringResult<_>>()?;
                     (trait_mthd_idx, gen_args)
                 }
@@ -889,7 +889,7 @@ impl<'a> AstLowerer<'a> {
         match gen_args {
             Some(gen_args) => gen_args
                 .iter()
-                .map(|annot| self.builder.resolve_ast_ty_annot(annot))
+                .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                 .collect::<AstLoweringResult<_>>(),
             None => Ok((0..n_expected).map(|_| self.tys().undef_ty()).collect()),
         }
@@ -952,7 +952,7 @@ impl<'a> AstLowerer<'a> {
                         let gen_args = gen_path_segment
                             .gen_args
                             .iter()
-                            .map(|annot| self.builder.resolve_ast_ty_annot(annot))
+                            .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                             .collect::<AstLoweringResult<_>>()?;
                         (struct_, gen_args)
                     }
@@ -979,7 +979,7 @@ impl<'a> AstLowerer<'a> {
                         let gen_args = gen_path_segment
                             .gen_args
                             .iter()
-                            .map(|annot| self.builder.resolve_ast_ty_annot(annot))
+                            .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                             .collect::<AstLoweringResult<_>>()?;
                         (struct_, gen_args)
                     }
@@ -1019,7 +1019,7 @@ impl<'a> AstLowerer<'a> {
         let trait_args = trait_annot
             .args
             .iter()
-            .map(|arg| self.builder.resolve_ast_ty_annot(arg))
+            .map(|&arg| self.builder.resolve_ast_ty_annot(self.ast, arg))
             .collect::<Result<_, _>>()?;
 
         let trait_inst = traits::TraitInst {
