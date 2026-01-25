@@ -487,7 +487,7 @@ impl<'a> Driver<'a> {
 
             let target_fn = self.ast_meta.fn_ids[&idx];
 
-            ast_lowering::ast_to_mlr(&mut self.ctxt, body, target_fn)
+            ast_lowering::ast_to_mlr(&mut self.ctxt, ast, body, target_fn)
                 .map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, &self.ctxt))?;
         }
 
@@ -504,7 +504,7 @@ impl<'a> Driver<'a> {
                 let Some(body) = &ast_mthd.body else {
                     continue;
                 };
-                ast_lowering::ast_to_mlr(&mut self.ctxt, body, target_fn)
+                ast_lowering::ast_to_mlr(&mut self.ctxt, ast, body, target_fn)
                     .map_err(|err| err::print_mlr_builder_error(&ast_mthd.name, err, &self.ctxt))?;
             }
         }

@@ -5,7 +5,7 @@ macro_rules! parse_left_associative {
         [ $( $token:pat => $op:expr ),+ $(,)? ]
     ) => {
         fn $name(&mut self, allow_struct: bool) -> Result<Expr, ParserErr> {
-            let mut acc = self.$next_fn(allow_struct)?;
+            let mut acc: Expr = self.$next_fn(allow_struct)?;
 
             while let Some(token) = self.current() {
                 let operator = match token {
@@ -16,11 +16,12 @@ macro_rules! parse_left_associative {
                 };
                 self.position += 1; // consume operator
                 let right = self.$next_fn(allow_struct)?;
-                acc = Expr::BinaryOp {
-                    left: Box::new(acc),
+                let acc_kind = ExprKind::BinaryOp {
+                    left: acc,
                     operator,
-                    right: Box::new(right),
+                    right,
                 };
+                acc = self.program.new_expr(acc_kind);
             }
 
             Ok(acc)

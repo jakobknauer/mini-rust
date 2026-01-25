@@ -33,7 +33,7 @@ macro_rules! op_match {
 impl<'a> ast_lowering::AstLowerer<'a> {
     pub fn resolve_binary_operator(
         &mut self,
-        operator: &ast::BinaryOperator,
+        operator: ast::BinaryOperator,
         (left, right): (ty::Ty, ty::Ty),
     ) -> AstLoweringResult<fns::Fn> {
         use ast::BinaryOperator::*;
@@ -76,7 +76,7 @@ impl<'a> ast_lowering::AstLowerer<'a> {
 
     pub fn resolve_unary_operator(
         &mut self,
-        operator: &ast::UnaryOperator,
+        operator: ast::UnaryOperator,
         operand: ty::Ty,
     ) -> AstLoweringResult<fns::Fn> {
         use ast::UnaryOperator::*;

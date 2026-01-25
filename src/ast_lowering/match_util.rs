@@ -131,7 +131,7 @@ impl<'a> super::AstLowerer<'a> {
         }
 
         // build actual arm block
-        let output = self.lower_to_val(&arm.value, expected)?;
+        let output = self.lower_to_val(arm.value, expected)?;
 
         self.builder.pop_scope();
 

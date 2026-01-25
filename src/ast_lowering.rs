@@ -21,19 +21,26 @@ use crate::{
 pub use err::{AstLoweringError, AstLoweringResult};
 use lowered::Lowered;
 
-pub fn ast_to_mlr(ctxt: &mut ctxt::Ctxt, ast_body: &ast::Block, target_fn: fns::Fn) -> AstLoweringResult<()> {
-    ast_to_mlr_with_external_scope(ctxt, ast_body, target_fn, HashMap::new(), None)?;
+pub fn ast_to_mlr(
+    ctxt: &mut ctxt::Ctxt,
+    ast: &ast::Program,
+    ast_body: &ast::Block,
+    target_fn: fns::Fn,
+) -> AstLoweringResult<()> {
+    ast_to_mlr_with_external_scope(ctxt, ast, ast_body, target_fn, HashMap::new(), None)?;
     Ok(())
 }
 
 pub fn ast_to_mlr_with_external_scope(
     ctxt: &mut ctxt::Ctxt,
+    ast: &ast::Program,
     ast_body: &ast::Block,
     target_fn: fns::Fn,
     external_scope: HashMap<String, mlr::Loc>,
     captures_ty: Option<ty::Ty>,
 ) -> AstLoweringResult<HashMap<mlr::Loc, usize>> {
-    let (mlr, captured_values) = AstLowerer::new(target_fn, ctxt, external_scope, captures_ty).build(ast_body)?;
+    let (mlr, captured_values) =
+        AstLowerer::new(target_fn, ctxt, ast, external_scope, captures_ty).lower_block(ast_body)?;
     ctxt.fns.add_fn_def(target_fn, mlr);
     Ok(captured_values)
 }
@@ -41,6 +48,7 @@ pub fn ast_to_mlr_with_external_scope(
 struct AstLowerer<'a> {
     builder: MlrBuilder<'a>,
     closure_counter: u32,
+    ast: &'a ast::Program,
 
     /// The available local variables in scope surrounding this function (i.e. only relevant for closures)
     outer_scope: HashMap<String, mlr::Loc>,
@@ -54,11 +62,13 @@ impl<'a> AstLowerer<'a> {
     pub fn new(
         target_fn: fns::Fn,
         ctxt: &'a mut ctxt::Ctxt,
+        ast: &'a ast::Program,
         external_scope: HashMap<String, mlr::Loc>,
         captures_ty: Option<ty::Ty>,
     ) -> Self {
         Self {
             builder: MlrBuilder::new(target_fn, ctxt),
+            ast,
 
             closure_counter: 0,
 
@@ -69,7 +79,7 @@ impl<'a> AstLowerer<'a> {
         }
     }
 
-    pub fn build(mut self, body: &'a ast::Block) -> AstLoweringResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
+    pub fn lower_block(mut self, body: &'a ast::Block) -> AstLoweringResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
         let signature = self.builder.get_signature();
         if signature.var_args {
             return Err(AstLoweringError::VarArgsNotSupported);
@@ -149,7 +159,7 @@ impl<'a> AstLowerer<'a> {
             self.build_stmt(stmt)?;
         }
 
-        let output = match &block.return_expr {
+        let output = match block.return_expr {
             Some(expr) => self.lower_to_val(expr, expected)?,
             None => {
                 let unit = self.builder.insert_unit_op()?;
@@ -162,29 +172,31 @@ impl<'a> AstLowerer<'a> {
         Ok(output)
     }
 
-    fn lower(&mut self, expr: &ast::ExprKind, expected: Option<ty::Ty>) -> AstLoweringResult<Lowered> {
+    fn lower(&mut self, expr: ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<Lowered> {
         use ast::ExprKind::*;
+
+        let expr = self.ast.expr(expr);
 
         let lowered = match expr {
             Lit(lit) => self.build_literal(lit)?.into(),
             Path(path) => self.lower_path(path)?,
             QualifiedPath(qual_path) => self.lower_qualified_path(qual_path)?,
             Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
-            BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
-            UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
-            Assign { target, value } => self.build_assignment(target, value)?.into(),
-            Call { callee, arguments } => self.build_call(callee, arguments)?.into(),
-            MthdCall { obj, mthd, arguments } => self.build_mthd_call(obj, mthd, arguments)?.into(),
+            &BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
+            &UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
+            &Assign { target, value } => self.build_assignment(target, value)?.into(),
+            Call { callee, arguments } => self.build_call(*callee, arguments)?.into(),
+            MthdCall { obj, mthd, args } => self.build_mthd_call(*obj, mthd, args)?.into(),
             Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields)?.into(),
-            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field)?.into(),
+            FieldAccess { obj, field } => self.lower_field_access_to_place(*obj, field)?.into(),
             Block(block) => self.build_block(block, expected)?.into(),
-            If { cond, then, else_ } => self.build_if(cond, then, else_.as_ref(), expected)?.into(),
+            If { cond, then, else_ } => self.build_if(*cond, then, else_.as_ref(), expected)?.into(),
             Loop { body } => self.build_loop(body)?.into(),
-            While { condition, body } => self.build_while(condition, body)?.into(),
-            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected)?.into(),
-            Deref { base } => self.lower_deref_to_place(base)?.into(),
-            AddrOf { base } => self.build_addr_of_val(base)?.into(),
-            As { expr, target_ty } => self.build_as_expr(expr, target_ty)?.into(),
+            While { condition, body } => self.build_while(*condition, body)?.into(),
+            Match { scrutinee, arms } => self.build_match_expr(*scrutinee, arms, expected)?.into(),
+            &Deref { base } => self.lower_deref(base)?.into(),
+            &AddrOf { base } => self.build_addr_of_val(base)?.into(),
+            As { expr, target_ty } => self.build_as_expr(*expr, target_ty)?.into(),
             Self_ => self.build_self_place()?.into(),
             Closure {
                 params,
@@ -196,15 +208,15 @@ impl<'a> AstLowerer<'a> {
         Ok(lowered)
     }
 
-    fn lower_to_val(&mut self, expr: &ast::ExprKind, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
+    fn lower_to_val(&mut self, expr: ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
         self.lower(expr, expected)?.into_val(&mut self.builder)
     }
 
-    fn lower_to_place(&mut self, expr: &ast::ExprKind) -> AstLoweringResult<mlr::Place> {
+    fn lower_to_place(&mut self, expr: ast::Expr) -> AstLoweringResult<mlr::Place> {
         self.lower(expr, None)?.into_place(&mut self.builder)
     }
 
-    fn lower_to_op(&mut self, expr: &ast::ExprKind, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Op> {
+    fn lower_to_op(&mut self, expr: ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Op> {
         self.lower(expr, expected)?.into_op(&mut self.builder)
     }
 
@@ -267,9 +279,9 @@ impl<'a> AstLowerer<'a> {
 
     fn build_binary_op(
         &mut self,
-        left: &ast::ExprKind,
-        operator: &ast::BinaryOperator,
-        right: &ast::ExprKind,
+        left: ast::Expr,
+        operator: ast::BinaryOperator,
+        right: ast::Expr,
     ) -> AstLoweringResult<mlr::Val> {
         match operator {
             ast::BinaryOperator::LogicalAnd => self.build_logical_and(left, right),
@@ -292,8 +304,8 @@ impl<'a> AstLowerer<'a> {
 
     fn build_unary_op(
         &mut self,
-        operator: &ast::UnaryOperator,
-        operand: &ast::ExprKind,
+        operator: ast::UnaryOperator,
+        operand: ast::Expr,
     ) -> Result<mlr::Val, AstLoweringError> {
         let operand = self.lower_to_op(operand, None)?;
         let operand_ty = self.mlr().get_op_ty(operand);
@@ -303,7 +315,7 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_call_val(op, vec![operand])
     }
 
-    fn build_logical_and(&mut self, left: &ast::ExprKind, right: &ast::ExprKind) -> AstLoweringResult<mlr::Val> {
+    fn build_logical_and(&mut self, left: ast::Expr, right: ast::Expr) -> AstLoweringResult<mlr::Val> {
         let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
@@ -329,7 +341,7 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_logical_or(&mut self, left: &ast::ExprKind, right: &ast::ExprKind) -> AstLoweringResult<mlr::Val> {
+    fn build_logical_or(&mut self, left: ast::Expr, right: ast::Expr) -> AstLoweringResult<mlr::Val> {
         let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
@@ -355,7 +367,7 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_assignment(&mut self, target: &ast::ExprKind, value: &ast::ExprKind) -> AstLoweringResult<mlr::Val> {
+    fn build_assignment(&mut self, target: ast::Expr, value: ast::Expr) -> AstLoweringResult<mlr::Val> {
         let loc = self.lower_to_place(target)?;
         let value = self.lower_to_val(value, None)?;
         self.builder.insert_assign_stmt(loc, value)?;
@@ -364,7 +376,7 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: &ast::ExprKind, args: &[ast::ExprKind]) -> AstLoweringResult<mlr::Val> {
+    fn build_call(&mut self, callee: ast::Expr, args: &[ast::Expr]) -> AstLoweringResult<mlr::Val> {
         let callee = self.lower_to_op(callee, None)?;
         let callee_ty = self.mlr().get_op_ty(callee);
 
@@ -377,7 +389,7 @@ impl<'a> AstLowerer<'a> {
         let args: Vec<_> = args
             .iter()
             .enumerate()
-            .map(|(idx, arg)| {
+            .map(|(idx, &arg)| {
                 let expected = param_tys.get(idx).cloned(); // possibly None
                 self.lower_to_op(arg, expected)
             })
@@ -388,9 +400,9 @@ impl<'a> AstLowerer<'a> {
 
     fn build_mthd_call(
         &mut self,
-        obj: &ast::ExprKind,
+        obj: ast::Expr,
         mthd: &ast::PathSegment,
-        args: &[ast::ExprKind],
+        args: &[ast::Expr],
     ) -> AstLoweringResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
@@ -423,7 +435,7 @@ impl<'a> AstLowerer<'a> {
             .unwrap_or_default();
 
         let args = std::iter::once(Ok(base))
-            .chain(args.iter().enumerate().map(|(idx, arg)| {
+            .chain(args.iter().enumerate().map(|(idx, &arg)| {
                 let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
                 self.lower_to_op(arg, expected)
             }))
@@ -434,7 +446,7 @@ impl<'a> AstLowerer<'a> {
 
     fn build_if(
         &mut self,
-        condition: &ast::ExprKind,
+        condition: ast::Expr,
         then_block: &ast::Block,
         else_block: Option<&ast::Block>,
         expected: Option<ty::Ty>,
@@ -473,7 +485,7 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_val(unit)
     }
 
-    fn build_while(&mut self, condition: &ast::ExprKind, body: &ast::Block) -> AstLoweringResult<mlr::Val> {
+    fn build_while(&mut self, condition: ast::Expr, body: &ast::Block) -> AstLoweringResult<mlr::Val> {
         self.builder.start_new_block();
 
         // build 'if condition, then break'
@@ -509,7 +521,7 @@ impl<'a> AstLowerer<'a> {
     fn build_struct_or_enum_val(
         &mut self,
         ty_path: &ast::Path,
-        fields: &[(String, ast::ExprKind)],
+        fields: &[(String, ast::Expr)],
     ) -> AstLoweringResult<mlr::Val> {
         match self.resolve_path_to_struct_or_enum_variant(ty_path)? {
             StructOrEnumResolution::Struct(ty) => self.build_struct_val(ty, fields),
@@ -517,7 +529,7 @@ impl<'a> AstLowerer<'a> {
         }
     }
 
-    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, ast::ExprKind)]) -> AstLoweringResult<mlr::Val> {
+    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, ast::Expr)]) -> AstLoweringResult<mlr::Val> {
         let struct_val_place = self.builder.insert_alloc_with_ty(ty)?;
         self.build_struct_field_init_stmts(ty, fields, struct_val_place)?;
         self.builder.insert_use_place_val(struct_val_place)
@@ -527,7 +539,7 @@ impl<'a> AstLowerer<'a> {
         &mut self,
         ty: ty::Ty,
         variant_index: usize,
-        fields: &[(String, ast::ExprKind)],
+        fields: &[(String, ast::Expr)],
     ) -> AstLoweringResult<mlr::Val> {
         // Create empty enum value
         let base_place = self.builder.insert_alloc_with_ty(ty)?;
@@ -552,7 +564,7 @@ impl<'a> AstLowerer<'a> {
     fn build_struct_field_init_stmts(
         &mut self,
         ty: ty::Ty,
-        fields: &[(String, ast::ExprKind)],
+        fields: &[(String, ast::Expr)],
         base_place: mlr::Place,
     ) -> AstLoweringResult<()> {
         let field_indices = self
@@ -560,7 +572,7 @@ impl<'a> AstLowerer<'a> {
             .typechecker()
             .resolve_struct_fields(ty, fields.iter().map(|(name, _)| name.as_str()))?;
 
-        for ((_, expr), field_index) in fields.iter().zip(field_indices) {
+        for (&(_, expr), field_index) in fields.iter().zip(field_indices) {
             let field_place = self.builder.insert_field_access_place(base_place, field_index)?;
 
             let expected_ty = self.tys().get_struct_field_ty(ty, field_index)?;
@@ -571,10 +583,10 @@ impl<'a> AstLowerer<'a> {
         Ok(())
     }
 
-    fn build_tuple_val(&mut self, exprs: &[ast::ExprKind]) -> AstLoweringResult<mlr::Val> {
+    fn build_tuple_val(&mut self, exprs: &[ast::Expr]) -> AstLoweringResult<mlr::Val> {
         let exprs = exprs
             .iter()
-            .map(|expr| self.lower_to_val(expr, None))
+            .map(|&expr| self.lower_to_val(expr, None))
             .collect::<AstLoweringResult<Vec<_>>>()?;
 
         let expr_tys = exprs
@@ -594,7 +606,7 @@ impl<'a> AstLowerer<'a> {
 
     fn build_match_expr(
         &mut self,
-        scrutinee: &ast::ExprKind,
+        scrutinee: ast::Expr,
         arms: &[ast::MatchArm],
         expected: Option<ty::Ty>,
     ) -> AstLoweringResult<mlr::Val> {
@@ -628,7 +640,7 @@ impl<'a> AstLowerer<'a> {
         // resolve equality function for discriminant comparisons once
         let eq_fn = {
             let i32 = self.tys().primitive(ty::Primitive::Integer32);
-            let eq_fn = self.resolve_binary_operator(&ast::BinaryOperator::Equal, (i32, i32))?;
+            let eq_fn = self.resolve_binary_operator(ast::BinaryOperator::Equal, (i32, i32))?;
             self.builder.insert_fn_op(eq_fn)?
         };
 
@@ -650,12 +662,12 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_val(result_op)
     }
 
-    fn build_addr_of_val(&mut self, base: &ast::ExprKind) -> AstLoweringResult<mlr::Val> {
+    fn build_addr_of_val(&mut self, base: ast::Expr) -> AstLoweringResult<mlr::Val> {
         let base = self.lower_to_place(base)?;
         self.builder.insert_addr_of_val(base)
     }
 
-    fn build_as_expr(&mut self, expr: &ast::ExprKind, target_ty: &ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
+    fn build_as_expr(&mut self, expr: ast::Expr, target_ty: &ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
         let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_ast_ty_annot(target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
@@ -695,8 +707,14 @@ impl<'a> AstLowerer<'a> {
         let closure_ty = self.generate_closure_ty(fn_inst, captures_ty);
 
         let current_bindings = self.builder.get_flattened_scope();
-        let captured_values =
-            ast_to_mlr_with_external_scope(self.ctxt(), body, fn_, current_bindings, Some(captures_ty))?;
+        let captured_values = ast_to_mlr_with_external_scope(
+            self.builder.ctxt(),
+            self.ast,
+            body,
+            fn_,
+            current_bindings,
+            Some(captures_ty),
+        )?;
 
         let closure_place = self.builder.insert_alloc_with_ty(closure_ty)?;
         self.fill_captures_fields(closure_place, captured_values)?;
@@ -707,9 +725,9 @@ impl<'a> AstLowerer<'a> {
         use ast::Stmt::*;
 
         match stmt {
-            Let { name, value, ty_annot } => self.build_let_stmt(name, ty_annot.as_ref(), value),
-            Expr(expr) => self.build_expr_stmt(expr),
-            Return(expr) => self.build_return_stmt(expr.as_ref()),
+            Let { name, value, ty_annot } => self.build_let_stmt(name, ty_annot.as_ref(), *value),
+            &Expr(expr) => self.build_expr_stmt(expr),
+            &Return(expr) => self.build_return_stmt(expr),
             Break => self.build_break_stmt(),
         }
     }
@@ -718,7 +736,7 @@ impl<'a> AstLowerer<'a> {
         &mut self,
         name: &str,
         ty_annot: Option<&ast::TyAnnot>,
-        value: &ast::ExprKind,
+        value: ast::Expr,
     ) -> AstLoweringResult<()> {
         let annot_ty = match ty_annot {
             Some(ty_annot) => self.builder.resolve_ast_ty_annot(ty_annot)?,
@@ -738,14 +756,14 @@ impl<'a> AstLowerer<'a> {
         Ok(())
     }
 
-    fn build_expr_stmt(&mut self, expr: &ast::ExprKind) -> AstLoweringResult<()> {
+    fn build_expr_stmt(&mut self, expr: ast::Expr) -> AstLoweringResult<()> {
         self.builder.start_new_block();
         let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr, None)?);
         self.builder.end_and_insert_current_block();
         Ok(())
     }
 
-    fn build_return_stmt(&mut self, expr: Option<&ast::ExprKind>) -> AstLoweringResult<()> {
+    fn build_return_stmt(&mut self, expr: Option<ast::Expr>) -> AstLoweringResult<()> {
         self.builder.start_new_block();
 
         let return_ty = self.builder.get_signature().return_ty;
@@ -770,7 +788,7 @@ impl<'a> AstLowerer<'a> {
 
     fn lower_field_access_to_place(
         &mut self,
-        obj: &ast::ExprKind,
+        obj: ast::Expr,
         field_desc: &ast::FieldDescriptor,
     ) -> AstLoweringResult<mlr::Place> {
         let mut obj = self.lower_to_place(obj)?;
@@ -796,7 +814,7 @@ impl<'a> AstLowerer<'a> {
             .insert_field_access_place(obj, field_resolution.field_index)
     }
 
-    fn lower_deref_to_place(&mut self, base: &ast::ExprKind) -> AstLoweringResult<mlr::Place> {
+    fn lower_deref(&mut self, base: ast::Expr) -> AstLoweringResult<mlr::Place> {
         let base_op = self.lower_to_op(base, None)?;
         self.builder.insert_deref_place(base_op)
     }

@@ -11,21 +11,24 @@ pub use token::Token;
 
 pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut parser = AstParser::new(&tokens[..]);
-    parser.parse_program(output)
+    let mut parser = AstParser::new(&tokens[..], output);
+    parser.parse_program()
 }
 
 #[cfg(test)]
 fn parse_expr(input: &str) -> Result<ExprKind, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut parser = AstParser::new(&tokens[..]);
-    parser.parse_expr(true)
+    let mut program = Program::default();
+    let mut parser = AstParser::new(&tokens[..], &mut program);
+    let expr = parser.parse_expr(true)?;
+    Ok(program.expr(expr).clone())
 }
 
 #[cfg(test)]
 fn parse_block(input: &str) -> Result<Block, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut parser = AstParser::new(&tokens[..]);
+    let mut program = Program::default();
+    let mut parser = AstParser::new(&tokens[..], &mut program);
     parser.parse_block()
 }
 
@@ -50,6 +53,7 @@ impl From<LexerErr> for ParserErr {
 struct AstParser<'a> {
     input: &'a [Token],
     position: usize,
+    program: &'a mut Program,
 }
 
 #[derive(PartialEq, Eq)]
@@ -67,8 +71,12 @@ enum StmtKind {
 }
 
 impl<'a> AstParser<'a> {
-    fn new(input: &'a [Token]) -> Self {
-        AstParser { input, position: 0 }
+    fn new(input: &'a [Token], program: &'a mut Program) -> Self {
+        AstParser {
+            input,
+            position: 0,
+            program,
+        }
     }
 
     fn current(&self) -> Option<&Token> {
@@ -132,14 +140,29 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_program(&mut self, output: &mut Program) -> Result<(), ParserErr> {
+    fn parse_program(&mut self) -> Result<(), ParserErr> {
         while let Some(token) = self.current() {
             match token {
-                Token::Keyword(Keyword::Fn) => output.fns.push(self.parse_function(false)?),
-                Token::Keyword(Keyword::Struct) => output.structs.push(self.parse_struct()?),
-                Token::Keyword(Keyword::Enum) => output.enums.push(self.parse_enum()?),
-                Token::Keyword(Keyword::Impl) => output.impls.push(self.parse_impl()?),
-                Token::Keyword(Keyword::Trait) => output.traits.push(self.parse_trait()?),
+                Token::Keyword(Keyword::Fn) => {
+                    let fn_ = self.parse_function(true)?;
+                    self.program.fns.push(fn_);
+                }
+                Token::Keyword(Keyword::Struct) => {
+                    let struct_ = self.parse_struct()?;
+                    self.program.structs.push(struct_);
+                }
+                Token::Keyword(Keyword::Enum) => {
+                    let enum_ = self.parse_enum()?;
+                    self.program.enums.push(enum_);
+                }
+                Token::Keyword(Keyword::Impl) => {
+                    let impl_ = self.parse_impl()?;
+                    self.program.impls.push(impl_);
+                }
+                Token::Keyword(Keyword::Trait) => {
+                    let trait_ = self.parse_trait()?;
+                    self.program.traits.push(trait_);
+                }
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
         }
@@ -524,7 +547,7 @@ impl<'a> AstParser<'a> {
                     let Stmt::Expr(expr) = stmt else {
                         unreachable!();
                     };
-                    return_expr = Some(Box::new(expr));
+                    return_expr = Some(expr);
                 } else {
                     stmts.push(stmt);
                 }
@@ -557,8 +580,9 @@ impl<'a> AstParser<'a> {
                 Ok((stmt, StmtKind::ExplicitelyDelimited))
             }
             Some(Token::LBrace) => {
-                let expr = self.parse_block()?;
-                let stmt = Stmt::Expr(ExprKind::Block(expr));
+                let block = self.parse_block()?;
+                let expr = self.program.new_expr(ExprKind::Block(block));
+                let stmt = Stmt::Expr(expr);
                 Ok((stmt, StmtKind::BlockExpr))
             }
             Some(Token::Keyword(Keyword::If)) => {
@@ -623,31 +647,30 @@ impl<'a> AstParser<'a> {
         Ok(Stmt::Expr(expr))
     }
 
-    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
+    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         self.parse_assign_expr(allow_top_level_struct_expr)
     }
 
-    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
+    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let target = self.parse_conversion_expr(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
             let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
-            Ok(ExprKind::Assign {
-                target: Box::new(target),
-                value: Box::new(value),
-            })
+            let expr = ExprKind::Assign { target, value };
+            Ok(self.program.new_expr(expr))
         } else {
             Ok(target)
         }
     }
 
-    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
+    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let mut expr = self.parse_disjunction(allow_top_level_struct_expr)?;
         while self.advance_if(Token::Keyword(Keyword::As)) {
             let ty_annot = self.parse_ty_annot()?;
-            expr = ExprKind::As {
-                expr: Box::new(expr),
+            let expr_kind = ExprKind::As {
+                expr,
                 target_ty: ty_annot,
             };
+            expr = self.program.new_expr(expr_kind);
         }
         Ok(expr)
     }
@@ -685,36 +708,38 @@ impl<'a> AstParser<'a> {
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
-        if self.advance_if(Token::Asterisk) {
+    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+        let expr = if self.advance_if(Token::Asterisk) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(ExprKind::Deref { base: Box::new(base) })
+            ExprKind::Deref { base }
         } else if self.advance_if(Token::Ampersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(ExprKind::AddrOf { base: Box::new(base) })
+            ExprKind::AddrOf { base }
         } else if self.advance_if(Token::AmpersandAmpersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(ExprKind::AddrOf {
-                base: Box::new(ExprKind::AddrOf { base: Box::new(base) }),
-            })
+            ExprKind::AddrOf {
+                base: self.program.new_expr(ExprKind::AddrOf { base }),
+            }
         } else if self.advance_if(Token::Bang) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(ExprKind::UnaryOp {
-                operand: Box::new(base),
+            ExprKind::UnaryOp {
+                operand: base,
                 operator: UnaryOperator::Not,
-            })
+            }
         } else if self.advance_if(Token::Minus) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(ExprKind::UnaryOp {
-                operand: Box::new(base),
+            ExprKind::UnaryOp {
+                operand: base,
                 operator: UnaryOperator::Negative,
-            })
+            }
         } else {
-            self.parse_function_call_and_field_access(allow_top_level_struct_expr)
-        }
+            return self.parse_function_call_and_field_access(allow_top_level_struct_expr);
+        };
+
+        Ok(self.program.new_expr(expr))
     }
 
-    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
+    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;
 
         loop {
@@ -729,20 +754,19 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                acc = ExprKind::Call {
-                    callee: Box::new(acc),
-                    arguments,
-                };
+                let new_acc = ExprKind::Call { callee: acc, arguments };
+                acc = self.program.new_expr(new_acc);
             } else if self.advance_if(Token::Dot) {
                 // field access or method call
                 if let Some(Token::NumLiteral(n)) = self.current() {
                     let index = n.parse().unwrap();
                     self.position += 1;
                     // indexed field access
-                    acc = ExprKind::FieldAccess {
-                        obj: Box::new(acc),
+                    let new_acc = ExprKind::FieldAccess {
+                        obj: acc,
                         field: FieldDescriptor::Indexed(index),
                     };
+                    acc = self.program.new_expr(new_acc);
                 } else {
                     let member = self.parse_path_segment(true)?;
                     if self.advance_if(Token::LParen) {
@@ -756,17 +780,19 @@ impl<'a> AstParser<'a> {
                             }
                         }
                         self.expect_token(Token::RParen)?;
-                        acc = ExprKind::MthdCall {
-                            obj: Box::new(acc),
+                        let new_acc = ExprKind::MthdCall {
+                            obj: acc,
                             mthd: member,
-                            arguments,
+                            args: arguments,
                         };
+                        acc = self.program.new_expr(new_acc);
                     } else {
                         // named field access
-                        acc = ExprKind::FieldAccess {
-                            obj: Box::new(acc),
+                        let new_acc = ExprKind::FieldAccess {
+                            obj: acc,
                             field: FieldDescriptor::Named(member),
                         };
+                        acc = self.program.new_expr(new_acc);
                     }
                 }
             } else {
@@ -777,34 +803,34 @@ impl<'a> AstParser<'a> {
         Ok(acc)
     }
 
-    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
+    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
 
-        match current {
+        let expr = match current {
             Token::NumLiteral(value) => {
                 let value = value.parse().map_err(|_| ParserErr::InvalidLiteral)?;
                 self.position += 1;
-                Ok(ExprKind::Lit(Lit::Int(value)))
+                ExprKind::Lit(Lit::Int(value))
             }
             Token::BoolLiteral(b) => {
                 let value = *b;
                 self.position += 1;
-                Ok(ExprKind::Lit(Lit::Bool(value)))
+                ExprKind::Lit(Lit::Bool(value))
             }
             Token::CCharLiteral(c) => {
                 let value = *c;
                 self.position += 1;
-                Ok(ExprKind::Lit(Lit::CChar(value)))
+                ExprKind::Lit(Lit::CChar(value))
             }
             Token::CStringLiteral(s) => {
                 let value = s.clone();
                 self.position += 1;
-                Ok(ExprKind::Lit(Lit::CString(value)))
+                ExprKind::Lit(Lit::CString(value))
             }
             Token::Identifier(..) => {
                 let path = self.parse_path(true)?;
 
-                let expr = if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
+                if allow_top_level_struct_expr && self.advance_if(Token::LBrace) {
                     // parse struct expr
                     let mut fields = Vec::new();
                     while let Some(Token::Identifier(field_name)) = self.current() {
@@ -821,9 +847,7 @@ impl<'a> AstParser<'a> {
                     ExprKind::Struct { ty_path: path, fields }
                 } else {
                     ExprKind::Path(path)
-                };
-
-                Ok(expr)
+                }
             }
             Token::LParen => {
                 self.position += 1;
@@ -841,22 +865,22 @@ impl<'a> AstParser<'a> {
                 self.expect_token(Token::RParen)?;
 
                 if inner_exprs.len() == 1 && !trailing_comma {
-                    Ok(inner_exprs.remove(0))
+                    return Ok(inner_exprs.remove(0));
                 } else {
-                    Ok(ExprKind::Tuple(inner_exprs))
+                    ExprKind::Tuple(inner_exprs)
                 }
             }
             Token::LBrace => {
                 let block = self.parse_block()?;
-                Ok(ExprKind::Block(block))
+                ExprKind::Block(block)
             }
-            Token::Keyword(Keyword::If) => self.parse_if_expr(),
-            Token::Keyword(Keyword::Loop) => self.parse_loop(),
-            Token::Keyword(Keyword::While) => self.parse_while(),
-            Token::Keyword(Keyword::Match) => self.parse_match(),
+            Token::Keyword(Keyword::If) => return self.parse_if_expr(),
+            Token::Keyword(Keyword::Loop) => return self.parse_loop(),
+            Token::Keyword(Keyword::While) => return self.parse_while(),
+            Token::Keyword(Keyword::Match) => return self.parse_match(),
             Token::Keyword(Keyword::Self_) => {
                 self.position += 1;
-                Ok(ExprKind::Self_)
+                ExprKind::Self_
             }
             Token::Pipe => {
                 self.position += 1;
@@ -879,11 +903,11 @@ impl<'a> AstParser<'a> {
 
                 let body = self.parse_closure_body(return_ty.is_some())?;
 
-                Ok(ExprKind::Closure {
+                ExprKind::Closure {
                     params,
                     return_ty,
                     body,
-                })
+                }
             }
             Token::PipePipe => {
                 self.position += 1;
@@ -896,11 +920,11 @@ impl<'a> AstParser<'a> {
 
                 let body = self.parse_closure_body(return_ty.is_some())?;
 
-                Ok(ExprKind::Closure {
+                ExprKind::Closure {
                     params: vec![],
                     return_ty,
                     body,
-                })
+                }
             }
             Token::Smaller => {
                 self.position += 1;
@@ -918,11 +942,13 @@ impl<'a> AstParser<'a> {
 
                 let qual_path = QualifiedPath { ty, trait_, path };
 
-                Ok(ExprKind::QualifiedPath(qual_path))
+                ExprKind::QualifiedPath(qual_path)
             }
 
-            token => Err(ParserErr::UnexpectedToken(token.clone())),
-        }
+            token => return Err(ParserErr::UnexpectedToken(token.clone())),
+        };
+
+        Ok(self.program.new_expr(expr))
     }
 
     fn parse_closure_param(&mut self) -> Result<ClosureParam, ParserErr> {
@@ -941,7 +967,7 @@ impl<'a> AstParser<'a> {
         } else {
             let return_expr = self.parse_expr(true)?;
             let block = Block {
-                return_expr: Some(Box::new(return_expr)),
+                return_expr: Some(return_expr),
                 stmts: Vec::new(),
             };
             Ok(block)
@@ -988,7 +1014,7 @@ impl<'a> AstParser<'a> {
         Ok(segment)
     }
 
-    fn parse_if_expr(&mut self) -> Result<ExprKind, ParserErr> {
+    fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::If)?;
         let condition = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
@@ -997,30 +1023,30 @@ impl<'a> AstParser<'a> {
         } else {
             None
         };
-        Ok(ExprKind::If {
-            cond: Box::new(condition),
+        let expr = ExprKind::If {
+            cond: condition,
             then: then_block,
             else_: else_block,
-        })
+        };
+        Ok(self.program.new_expr(expr))
     }
 
-    fn parse_loop(&mut self) -> Result<ExprKind, ParserErr> {
+    fn parse_loop(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
-        Ok(ExprKind::Loop { body })
+        let expr = ExprKind::Loop { body };
+        Ok(self.program.new_expr(expr))
     }
 
-    fn parse_while(&mut self) -> Result<ExprKind, ParserErr> {
+    fn parse_while(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::While)?;
         let condition = self.parse_expr(false)?; // Don't allow top-level struct in while condition
         let body = self.parse_block()?;
-        Ok(ExprKind::While {
-            condition: Box::new(condition),
-            body,
-        })
+        let expr = ExprKind::While { condition, body };
+        Ok(self.program.new_expr(expr))
     }
 
-    fn parse_match(&mut self) -> Result<ExprKind, ParserErr> {
+    fn parse_match(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::Match)?;
         let scrutinee = self.parse_expr(false)?; // Don't allow top-level struct in match scrutinee
 
@@ -1032,10 +1058,7 @@ impl<'a> AstParser<'a> {
             self.expect_token(Token::BoldArrow)?;
             let value = self.parse_expr(true)?; // Allow top-level struct expr in match arm body
 
-            arms.push(MatchArm {
-                pattern,
-                value: Box::new(value),
-            });
+            arms.push(MatchArm { pattern, value });
 
             if !self.advance_if(Token::Comma) {
                 break;
@@ -1044,10 +1067,8 @@ impl<'a> AstParser<'a> {
 
         self.expect_token(Token::RBrace)?;
 
-        Ok(ExprKind::Match {
-            scrutinee: Box::new(scrutinee),
-            arms,
-        })
+        let expr = ExprKind::Match { scrutinee, arms };
+        Ok(self.program.new_expr(expr))
     }
 
     fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserErr> {
@@ -1582,7 +1603,7 @@ mod tests {
                             arguments: vec![make_ident("arg0")],
                         }),
                         mthd: PathSegment::Ident("method".to_string()),
-                        arguments: vec![make_ident("arg1"), make_ident("arg2")],
+                        args: vec![make_ident("arg1"), make_ident("arg2")],
                     }),
                     field: FieldDescriptor::Named(PathSegment::Ident("field".to_string())),
                 }),

@@ -5,6 +5,18 @@ pub struct Program {
     pub enums: Vec<Enum>,
     pub impls: Vec<Impl>,
     pub traits: Vec<Trait>,
+    exprs: Vec<ExprKind>,
+}
+
+impl Program {
+    pub fn new_expr(&mut self, expr: ExprKind) -> Expr {
+        self.exprs.push(expr);
+        Expr(self.exprs.len() - 1)
+    }
+
+    pub fn expr(&self, expr: Expr) -> &ExprKind {
+        &self.exprs[expr.0]
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -120,7 +132,7 @@ pub struct Trait {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
-    pub return_expr: Option<Box<ExprKind>>,
+    pub return_expr: Option<Expr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -201,52 +213,55 @@ pub enum Stmt {
     Let {
         name: String,
         ty_annot: Option<TyAnnot>,
-        value: ExprKind,
+        value: Expr,
     },
-    Expr(ExprKind),
-    Return(Option<ExprKind>),
+    Expr(Expr),
+    Return(Option<Expr>),
     Break,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Expr(usize);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExprKind {
     Lit(Lit),
     Path(Path),
     QualifiedPath(QualifiedPath),
-    Tuple(Vec<ExprKind>),
+    Tuple(Vec<Expr>),
     BinaryOp {
-        left: Box<ExprKind>,
+        left: Expr,
         operator: BinaryOperator,
-        right: Box<ExprKind>,
+        right: Expr,
     },
     UnaryOp {
         operator: UnaryOperator,
-        operand: Box<ExprKind>,
+        operand: Expr,
     },
     Assign {
-        target: Box<ExprKind>,
-        value: Box<ExprKind>,
+        target: Expr,
+        value: Expr,
     },
     Call {
-        callee: Box<ExprKind>,
-        arguments: Vec<ExprKind>,
+        callee: Expr,
+        arguments: Vec<Expr>,
     },
     MthdCall {
-        obj: Box<ExprKind>,
+        obj: Expr,
         mthd: PathSegment,
-        arguments: Vec<ExprKind>,
+        args: Vec<Expr>,
     },
     Struct {
         ty_path: Path,
-        fields: Vec<(String, ExprKind)>,
+        fields: Vec<(String, Expr)>,
     },
     FieldAccess {
-        obj: Box<ExprKind>,
+        obj: Expr,
         field: FieldDescriptor,
     },
     Block(Block),
     If {
-        cond: Box<ExprKind>,
+        cond: Expr,
         then: Block,
         else_: Option<Block>,
     },
@@ -254,21 +269,21 @@ pub enum ExprKind {
         body: Block,
     },
     While {
-        condition: Box<ExprKind>,
+        condition: Expr,
         body: Block,
     },
     Match {
-        scrutinee: Box<ExprKind>,
+        scrutinee: Expr,
         arms: Vec<MatchArm>,
     },
     Deref {
-        base: Box<ExprKind>,
+        base: Expr,
     },
     AddrOf {
-        base: Box<ExprKind>,
+        base: Expr,
     },
     As {
-        expr: Box<ExprKind>,
+        expr: Expr,
         target_ty: TyAnnot,
     },
     Self_,
@@ -299,7 +314,7 @@ pub enum Lit {
     CString(Vec<u8>),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -318,7 +333,7 @@ pub enum BinaryOperator {
     LogicalOr,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOperator {
     Not,
     Negative,
@@ -327,7 +342,7 @@ pub enum UnaryOperator {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchArm {
     pub pattern: Pattern,
-    pub value: Box<ExprKind>,
+    pub value: Expr,
 }
 
 type Pattern = StructPattern;
