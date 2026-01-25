@@ -5,7 +5,9 @@ pub struct Ast {
     pub enums: Vec<Enum>,
     pub impls: Vec<Impl>,
     pub traits: Vec<Trait>,
+
     pub exprs: Vec<ExprKind>,
+    pub expr_slices: Vec<Expr>,
 }
 
 impl Ast {
@@ -16,6 +18,15 @@ impl Ast {
 
     pub fn expr(&self, expr: Expr) -> &ExprKind {
         &self.exprs[expr.0]
+    }
+
+    pub fn new_expr_slice(&mut self, exprs: Vec<Expr>) -> ExprSlice {
+        self.expr_slices.extend_from_slice(&exprs);
+        ExprSlice(self.expr_slices.len() - exprs.len(), exprs.len())
+    }
+
+    pub fn expr_slice(&self, ExprSlice(start, len): ExprSlice) -> &[Expr] {
+        &self.expr_slices[start..start + len]
     }
 }
 
@@ -223,12 +234,15 @@ pub enum Stmt {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Expr(usize);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExprSlice(usize, usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExprKind {
     Lit(Lit),
     Path(Path),
     QualifiedPath(QualifiedPath),
-    Tuple(Vec<Expr>),
+    Tuple(ExprSlice),
     BinaryOp {
         left: Expr,
         operator: BinaryOperator,
@@ -244,12 +258,12 @@ pub enum ExprKind {
     },
     Call {
         callee: Expr,
-        arguments: Vec<Expr>,
+        args: ExprSlice,
     },
     MthdCall {
         obj: Expr,
         mthd: PathSegment,
-        args: Vec<Expr>,
+        args: ExprSlice,
     },
     Struct {
         ty_path: Path,

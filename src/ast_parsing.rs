@@ -66,7 +66,7 @@ impl<'a> AstParser<'a> {
         AstParser {
             input,
             position: 0,
-            ast: ast,
+            ast,
         }
     }
 
@@ -745,7 +745,8 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                let new_acc = ExprKind::Call { callee: acc, arguments };
+                let args = self.ast.new_expr_slice(arguments);
+                let new_acc = ExprKind::Call { callee: acc, args };
                 acc = self.ast.new_expr(new_acc);
             } else if self.advance_if(Token::Dot) {
                 // field access or method call
@@ -762,19 +763,20 @@ impl<'a> AstParser<'a> {
                     let member = self.parse_path_segment(true)?;
                     if self.advance_if(Token::LParen) {
                         // method call
-                        let mut arguments = Vec::new();
+                        let mut args = Vec::new();
                         while self.current() != Some(&Token::RParen) {
                             let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
-                            arguments.push(argument);
+                            args.push(argument);
                             if !self.advance_if(Token::Comma) {
                                 break;
                             }
                         }
                         self.expect_token(Token::RParen)?;
+                        let args = self.ast.new_expr_slice(args);
                         let new_acc = ExprKind::MthdCall {
                             obj: acc,
                             mthd: member,
-                            args: arguments,
+                            args,
                         };
                         acc = self.ast.new_expr(new_acc);
                     } else {
@@ -858,6 +860,7 @@ impl<'a> AstParser<'a> {
                 if inner_exprs.len() == 1 && !trailing_comma {
                     return Ok(inner_exprs.remove(0));
                 } else {
+                    let inner_exprs = self.ast.new_expr_slice(inner_exprs);
                     ExprKind::Tuple(inner_exprs)
                 }
             }

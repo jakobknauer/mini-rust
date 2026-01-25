@@ -181,12 +181,12 @@ impl<'a> AstLowerer<'a> {
             Lit(lit) => self.build_literal(lit)?.into(),
             Path(path) => self.lower_path(path)?,
             QualifiedPath(qual_path) => self.lower_qualified_path(qual_path)?,
-            Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
+            &Tuple(exprs) => self.build_tuple_val(exprs)?.into(),
             &BinaryOp { left, operator, right } => self.build_binary_op(left, operator, right)?.into(),
             &UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
             &Assign { target, value } => self.build_assignment(target, value)?.into(),
-            Call { callee, arguments } => self.build_call(*callee, arguments)?.into(),
-            MthdCall { obj, mthd, args } => self.build_mthd_call(*obj, mthd, args)?.into(),
+            &Call { callee, args } => self.build_call(callee, args)?.into(),
+            MthdCall { obj, mthd, args } => self.build_mthd_call(*obj, mthd, *args)?.into(),
             Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields)?.into(),
             FieldAccess { obj, field } => self.lower_field_access_to_place(*obj, field)?.into(),
             Block(block) => self.build_block(block, expected)?.into(),
@@ -376,7 +376,7 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: ast::Expr, args: &[ast::Expr]) -> AstLoweringResult<mlr::Val> {
+    fn build_call(&mut self, callee: ast::Expr, args: ast::ExprSlice) -> AstLoweringResult<mlr::Val> {
         let callee = self.lower_to_op(callee, None)?;
         let callee_ty = self.mlr().get_op_ty(callee);
 
@@ -386,7 +386,9 @@ impl<'a> AstLowerer<'a> {
             .map(|(param_tys, ..)| param_tys)
             .unwrap_or_default();
 
-        let args: Vec<_> = args
+        let args: Vec<_> = self
+            .ast
+            .expr_slice(args)
             .iter()
             .enumerate()
             .map(|(idx, &arg)| {
@@ -402,7 +404,7 @@ impl<'a> AstLowerer<'a> {
         &mut self,
         obj: ast::Expr,
         mthd: &ast::PathSegment,
-        args: &[ast::Expr],
+        args: ast::ExprSlice,
     ) -> AstLoweringResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
@@ -435,7 +437,7 @@ impl<'a> AstLowerer<'a> {
             .unwrap_or_default();
 
         let args = std::iter::once(Ok(base))
-            .chain(args.iter().enumerate().map(|(idx, &arg)| {
+            .chain(self.ast.expr_slice(args).iter().enumerate().map(|(idx, &arg)| {
                 let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
                 self.lower_to_op(arg, expected)
             }))
@@ -583,8 +585,10 @@ impl<'a> AstLowerer<'a> {
         Ok(())
     }
 
-    fn build_tuple_val(&mut self, exprs: &[ast::Expr]) -> AstLoweringResult<mlr::Val> {
-        let exprs = exprs
+    fn build_tuple_val(&mut self, exprs: ast::ExprSlice) -> AstLoweringResult<mlr::Val> {
+        let exprs = self
+            .ast
+            .expr_slice(exprs)
             .iter()
             .map(|&expr| self.lower_to_val(expr, None))
             .collect::<AstLoweringResult<Vec<_>>>()?;
