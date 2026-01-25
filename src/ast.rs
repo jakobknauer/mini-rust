@@ -5,7 +5,7 @@ pub struct Program {
     pub enums: Vec<Enum>,
     pub impls: Vec<Impl>,
     pub traits: Vec<Trait>,
-    exprs: Vec<ExprKind>,
+    pub exprs: Vec<ExprKind>,
 }
 
 impl Program {

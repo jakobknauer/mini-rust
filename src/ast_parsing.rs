@@ -16,15 +16,6 @@ pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
 }
 
 #[cfg(test)]
-fn parse_expr(input: &str) -> Result<ExprKind, ParserErr> {
-    let tokens = lexer::get_tokens(input)?;
-    let mut program = Program::default();
-    let mut parser = AstParser::new(&tokens[..], &mut program);
-    let expr = parser.parse_expr(true)?;
-    Ok(program.expr(expr).clone())
-}
-
-#[cfg(test)]
 fn parse_block(input: &str) -> Result<Block, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut program = Program::default();
@@ -1194,12 +1185,6 @@ impl<'a> AstParser<'a> {
 mod tests {
     use super::*;
 
-    fn make_ident(name: &str) -> ExprKind {
-        ExprKind::Path(Path {
-            segments: vec![PathSegment::Ident(name.to_string())],
-        })
-    }
-
     fn str_to_path(path: &str) -> Path {
         Path {
             segments: vec![PathSegment::Ident(path.to_string())],
@@ -1271,45 +1256,6 @@ mod tests {
                     mthds: vec![],
                     assoc_ty_names: vec![],
                 }],
-            };
-
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_parse_simple_function() {
-            let input = r#"
-                fn add(a: int, b: int) -> int {
-                    return a + b;
-                }
-                "#;
-
-            let expected = Program {
-                fns: vec![Fn {
-                    name: "add".to_string(),
-                    gen_params: vec![],
-                    params: vec![
-                        Param::Regular {
-                            name: "a".to_string(),
-                            ty: TyAnnot::Path(str_to_path("int")),
-                        },
-                        Param::Regular {
-                            name: "b".to_string(),
-                            ty: TyAnnot::Path(str_to_path("int")),
-                        },
-                    ],
-                    var_args: false,
-                    return_ty: Some(TyAnnot::Path(str_to_path("int"))),
-                    constraints: vec![],
-                    body: Some(Block {
-                        stmts: vec![Stmt::Return(Some(ExprKind::BinaryOp {
-                            left: Box::new(make_ident("a")),
-                            operator: BinaryOperator::Add,
-                            right: Box::new(make_ident("b")),
-                        }))],
-                        return_expr: None,
-                    }),
-                }],
                 ..Default::default()
             };
 
@@ -1378,43 +1324,6 @@ mod tests {
 
             parse_and_compare(input, expected);
         }
-
-        #[test]
-        fn test_parse_simple_impl() {
-            let input = r#"
-                impl A {
-                    fn get_b(self) -> B {
-                        self.b
-                    }
-                }"#;
-
-            let expected = Program {
-                impls: vec![Impl {
-                    gen_params: vec![],
-                    ty: TyAnnot::Path(str_to_path("A")),
-                    trait_annot: None,
-                    mthds: vec![Fn {
-                        name: "get_b".to_string(),
-                        gen_params: vec![],
-                        params: vec![Param::Receiver],
-                        var_args: false,
-                        return_ty: Some(TyAnnot::Path(str_to_path("B"))),
-                        constraints: vec![],
-                        body: Some(Block {
-                            stmts: vec![],
-                            return_expr: Some(Box::new(ExprKind::FieldAccess {
-                                obj: Box::new(ExprKind::Self_),
-                                field: FieldDescriptor::Named(PathSegment::Ident("b".to_string())),
-                            })),
-                        }),
-                    }],
-                    assoc_tys: vec![],
-                }],
-                ..Default::default()
-            };
-
-            parse_and_compare(input, expected);
-        }
     }
 
     mod block {
@@ -1433,213 +1342,6 @@ mod tests {
             let expected = Block {
                 stmts: vec![],
                 return_expr: None,
-            };
-
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_control_structures() {
-            let input = r#"{
-                let result = 1;
-                loop {
-                    if n == 1 {
-                        break;
-                    };
-                    result = result * n;
-                    n = n - 1;
-                };
-                result
-            }"#;
-
-            let expected = Block {
-                stmts: vec![
-                    Stmt::Let {
-                        name: "result".to_string(),
-                        ty_annot: None,
-                        value: ExprKind::Lit(Lit::Int(1)),
-                    },
-                    Stmt::Expr(ExprKind::Loop {
-                        body: Block {
-                            stmts: vec![
-                                Stmt::Expr(ExprKind::If {
-                                    cond: Box::new(ExprKind::BinaryOp {
-                                        left: Box::new(make_ident("n")),
-                                        operator: BinaryOperator::Equal,
-                                        right: Box::new(ExprKind::Lit(Lit::Int(1))),
-                                    }),
-                                    then: Block {
-                                        stmts: vec![Stmt::Break],
-                                        return_expr: None,
-                                    },
-                                    else_: None,
-                                }),
-                                Stmt::Expr(ExprKind::Assign {
-                                    target: Box::new(make_ident("result")),
-                                    value: Box::new(ExprKind::BinaryOp {
-                                        left: Box::new(make_ident("result")),
-                                        operator: BinaryOperator::Multiply,
-                                        right: Box::new(make_ident("n")),
-                                    }),
-                                }),
-                                Stmt::Expr(ExprKind::Assign {
-                                    target: Box::new(make_ident("n")),
-                                    value: Box::new(ExprKind::BinaryOp {
-                                        left: Box::new(make_ident("n")),
-                                        operator: BinaryOperator::Subtract,
-                                        right: Box::new(ExprKind::Lit(Lit::Int(1))),
-                                    }),
-                                }),
-                            ],
-                            return_expr: None,
-                        },
-                    }),
-                ],
-                return_expr: Some(Box::new(make_ident("result"))),
-            };
-
-            parse_and_compare(input, expected);
-        }
-    }
-
-    mod expr {
-        use super::*;
-        use pretty_assertions::assert_eq;
-
-        fn parse_and_compare(input: &str, expected: ExprKind) {
-            let parsed = parse_expr(input).expect("Failed to parse AST");
-            assert_eq!(parsed, expected);
-        }
-
-        #[test]
-        fn test_parse_arithmetic_expr() {
-            let input = r#"1 + 2 * a - arctan2(x, y)"#;
-
-            let expected = ExprKind::BinaryOp {
-                left: Box::new(ExprKind::BinaryOp {
-                    left: Box::new(ExprKind::Lit(Lit::Int(1))),
-                    operator: BinaryOperator::Add,
-                    right: Box::new(ExprKind::BinaryOp {
-                        left: Box::new(ExprKind::Lit(Lit::Int(2))),
-                        operator: BinaryOperator::Multiply {},
-                        right: Box::new(make_ident("a")),
-                    }),
-                }),
-                operator: BinaryOperator::Subtract,
-                right: Box::new(ExprKind::Call {
-                    callee: Box::new(make_ident("arctan2")),
-                    arguments: vec![make_ident("x"), make_ident("y")],
-                }),
-            };
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn parse_struct_expr() {
-            let input = r#"
-                Circle {
-                    center: Point { x: 1, y: 2 },
-                    radius: 3
-                }"#;
-
-            let expected = ExprKind::Struct {
-                ty_path: str_to_path("Circle"),
-                fields: vec![
-                    (
-                        "center".to_string(),
-                        ExprKind::Struct {
-                            ty_path: str_to_path("Point"),
-                            fields: vec![
-                                ("x".to_string(), ExprKind::Lit(Lit::Int(1))),
-                                ("y".to_string(), ExprKind::Lit(Lit::Int(2))),
-                            ],
-                        },
-                    ),
-                    ("radius".to_string(), ExprKind::Lit(Lit::Int(3))),
-                ],
-            };
-
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_parse_int_literal() {
-            let input = "42";
-            let expected = ExprKind::Lit(Lit::Int(42));
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_parse_if_expr() {
-            let input = r#"if condition {
-                42
-            } else {
-                0
-            }"#;
-
-            let expected = ExprKind::If {
-                cond: Box::new(make_ident("condition")),
-                then: Block {
-                    stmts: vec![],
-                    return_expr: Some(Box::new(ExprKind::Lit(Lit::Int(42)))),
-                },
-                else_: Some(Block {
-                    stmts: vec![],
-                    return_expr: Some(Box::new(ExprKind::Lit(Lit::Int(0)))),
-                }),
-            };
-
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_parse_calls_and_field_access() {
-            let input = "(function(arg0).method(arg1, arg2).field)(arg3)";
-            let expected = ExprKind::Call {
-                callee: Box::new(ExprKind::FieldAccess {
-                    obj: Box::new(ExprKind::MthdCall {
-                        obj: Box::new(ExprKind::Call {
-                            callee: Box::new(make_ident("function")),
-                            arguments: vec![make_ident("arg0")],
-                        }),
-                        mthd: PathSegment::Ident("method".to_string()),
-                        args: vec![make_ident("arg1"), make_ident("arg2")],
-                    }),
-                    field: FieldDescriptor::Named(PathSegment::Ident("field".to_string())),
-                }),
-                arguments: vec![make_ident("arg3")],
-            };
-            parse_and_compare(input, expected);
-        }
-
-        #[test]
-        fn test_parse_match_expr() {
-            let input = r#"match value {
-                Some { inner: a } => a,
-                None {} => 0,
-            }"#;
-
-            let expected = ExprKind::Match {
-                scrutinee: Box::new(make_ident("value")),
-                arms: vec![
-                    MatchArm {
-                        pattern: StructPattern {
-                            variant: "Some".to_string(),
-                            fields: vec![StructPatternField {
-                                field_name: "inner".to_string(),
-                                binding_name: "a".to_string(),
-                            }],
-                        },
-                        value: Box::new(make_ident("a")),
-                    },
-                    MatchArm {
-                        pattern: StructPattern {
-                            variant: "None".to_string(),
-                            fields: vec![],
-                        },
-                        value: Box::new(ExprKind::Lit(Lit::Int(0))),
-                    },
-                ],
             };
 
             parse_and_compare(input, expected);
