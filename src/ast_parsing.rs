@@ -9,17 +9,17 @@ use crate::{ast::*, ast_parsing::token::Keyword};
 pub use lexer::LexerErr;
 pub use token::Token;
 
-pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
+pub fn parse(input: &str, output: &mut Ast) -> Result<(), ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut parser = AstParser::new(&tokens[..], output);
-    parser.parse_program()
+    parser.parse()
 }
 
 #[cfg(test)]
 fn parse_block(input: &str) -> Result<Block, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
-    let mut program = Program::default();
-    let mut parser = AstParser::new(&tokens[..], &mut program);
+    let mut ast = Ast::default();
+    let mut parser = AstParser::new(&tokens[..], &mut ast);
     parser.parse_block()
 }
 
@@ -44,7 +44,7 @@ impl From<LexerErr> for ParserErr {
 struct AstParser<'a> {
     input: &'a [Token],
     position: usize,
-    program: &'a mut Program,
+    ast: &'a mut Ast,
 }
 
 #[derive(PartialEq, Eq)]
@@ -62,11 +62,11 @@ enum StmtKind {
 }
 
 impl<'a> AstParser<'a> {
-    fn new(input: &'a [Token], program: &'a mut Program) -> Self {
+    fn new(input: &'a [Token], ast: &'a mut Ast) -> Self {
         AstParser {
             input,
             position: 0,
-            program,
+            ast: ast,
         }
     }
 
@@ -131,28 +131,28 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_program(&mut self) -> Result<(), ParserErr> {
+    fn parse(&mut self) -> Result<(), ParserErr> {
         while let Some(token) = self.current() {
             match token {
                 Token::Keyword(Keyword::Fn) => {
                     let fn_ = self.parse_function(true)?;
-                    self.program.fns.push(fn_);
+                    self.ast.fns.push(fn_);
                 }
                 Token::Keyword(Keyword::Struct) => {
                     let struct_ = self.parse_struct()?;
-                    self.program.structs.push(struct_);
+                    self.ast.structs.push(struct_);
                 }
                 Token::Keyword(Keyword::Enum) => {
                     let enum_ = self.parse_enum()?;
-                    self.program.enums.push(enum_);
+                    self.ast.enums.push(enum_);
                 }
                 Token::Keyword(Keyword::Impl) => {
                     let impl_ = self.parse_impl()?;
-                    self.program.impls.push(impl_);
+                    self.ast.impls.push(impl_);
                 }
                 Token::Keyword(Keyword::Trait) => {
                     let trait_ = self.parse_trait()?;
-                    self.program.traits.push(trait_);
+                    self.ast.traits.push(trait_);
                 }
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
@@ -572,7 +572,7 @@ impl<'a> AstParser<'a> {
             }
             Some(Token::LBrace) => {
                 let block = self.parse_block()?;
-                let expr = self.program.new_expr(ExprKind::Block(block));
+                let expr = self.ast.new_expr(ExprKind::Block(block));
                 let stmt = Stmt::Expr(expr);
                 Ok((stmt, StmtKind::BlockExpr))
             }
@@ -647,7 +647,7 @@ impl<'a> AstParser<'a> {
         if self.advance_if(Token::Equal) {
             let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
             let expr = ExprKind::Assign { target, value };
-            Ok(self.program.new_expr(expr))
+            Ok(self.ast.new_expr(expr))
         } else {
             Ok(target)
         }
@@ -661,7 +661,7 @@ impl<'a> AstParser<'a> {
                 expr,
                 target_ty: ty_annot,
             };
-            expr = self.program.new_expr(expr_kind);
+            expr = self.ast.new_expr(expr_kind);
         }
         Ok(expr)
     }
@@ -709,7 +709,7 @@ impl<'a> AstParser<'a> {
         } else if self.advance_if(Token::AmpersandAmpersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
             ExprKind::AddrOf {
-                base: self.program.new_expr(ExprKind::AddrOf { base }),
+                base: self.ast.new_expr(ExprKind::AddrOf { base }),
             }
         } else if self.advance_if(Token::Bang) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
@@ -727,7 +727,7 @@ impl<'a> AstParser<'a> {
             return self.parse_function_call_and_field_access(allow_top_level_struct_expr);
         };
 
-        Ok(self.program.new_expr(expr))
+        Ok(self.ast.new_expr(expr))
     }
 
     fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
@@ -746,7 +746,7 @@ impl<'a> AstParser<'a> {
                 }
                 self.expect_token(Token::RParen)?;
                 let new_acc = ExprKind::Call { callee: acc, arguments };
-                acc = self.program.new_expr(new_acc);
+                acc = self.ast.new_expr(new_acc);
             } else if self.advance_if(Token::Dot) {
                 // field access or method call
                 if let Some(Token::NumLiteral(n)) = self.current() {
@@ -757,7 +757,7 @@ impl<'a> AstParser<'a> {
                         obj: acc,
                         field: FieldDescriptor::Indexed(index),
                     };
-                    acc = self.program.new_expr(new_acc);
+                    acc = self.ast.new_expr(new_acc);
                 } else {
                     let member = self.parse_path_segment(true)?;
                     if self.advance_if(Token::LParen) {
@@ -776,14 +776,14 @@ impl<'a> AstParser<'a> {
                             mthd: member,
                             args: arguments,
                         };
-                        acc = self.program.new_expr(new_acc);
+                        acc = self.ast.new_expr(new_acc);
                     } else {
                         // named field access
                         let new_acc = ExprKind::FieldAccess {
                             obj: acc,
                             field: FieldDescriptor::Named(member),
                         };
-                        acc = self.program.new_expr(new_acc);
+                        acc = self.ast.new_expr(new_acc);
                     }
                 }
             } else {
@@ -939,7 +939,7 @@ impl<'a> AstParser<'a> {
             token => return Err(ParserErr::UnexpectedToken(token.clone())),
         };
 
-        Ok(self.program.new_expr(expr))
+        Ok(self.ast.new_expr(expr))
     }
 
     fn parse_closure_param(&mut self) -> Result<ClosureParam, ParserErr> {
@@ -1019,14 +1019,14 @@ impl<'a> AstParser<'a> {
             then: then_block,
             else_: else_block,
         };
-        Ok(self.program.new_expr(expr))
+        Ok(self.ast.new_expr(expr))
     }
 
     fn parse_loop(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
         let expr = ExprKind::Loop { body };
-        Ok(self.program.new_expr(expr))
+        Ok(self.ast.new_expr(expr))
     }
 
     fn parse_while(&mut self) -> Result<Expr, ParserErr> {
@@ -1034,7 +1034,7 @@ impl<'a> AstParser<'a> {
         let condition = self.parse_expr(false)?; // Don't allow top-level struct in while condition
         let body = self.parse_block()?;
         let expr = ExprKind::While { condition, body };
-        Ok(self.program.new_expr(expr))
+        Ok(self.ast.new_expr(expr))
     }
 
     fn parse_match(&mut self) -> Result<Expr, ParserErr> {
@@ -1059,7 +1059,7 @@ impl<'a> AstParser<'a> {
         self.expect_token(Token::RBrace)?;
 
         let expr = ExprKind::Match { scrutinee, arms };
-        Ok(self.program.new_expr(expr))
+        Ok(self.ast.new_expr(expr))
     }
 
     fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserErr> {
@@ -1191,18 +1191,18 @@ mod tests {
         }
     }
 
-    mod program {
+    mod ast {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn parse_and_compare(input: &str, expected: Program) {
-            let mut program = Program::default();
-            parse(input, &mut program).expect("Failed to parse AST");
-            assert_eq!(program, expected);
+        fn parse_and_compare(input: &str, expected: Ast) {
+            let mut ast = Ast::default();
+            parse(input, &mut ast).expect("Failed to parse AST");
+            assert_eq!(ast, expected);
         }
 
         #[test]
-        fn test_empty_program_items() {
+        fn test_empty_ast_items() {
             let input = r#"
                 fn empty() {
                 }
@@ -1220,7 +1220,7 @@ mod tests {
                 }
                 "#;
 
-            let expected = Program {
+            let expected = Ast {
                 fns: vec![Fn {
                     name: "empty".to_string(),
                     gen_params: vec![],
@@ -1270,7 +1270,7 @@ mod tests {
                     y: int,
                 }"#;
 
-            let expected = Program {
+            let expected = Ast {
                 structs: vec![Struct {
                     name: "Point".to_string(),
                     gen_params: vec![],
@@ -1300,7 +1300,7 @@ mod tests {
                     Unknown,
                 }"#;
 
-            let expected = Program {
+            let expected = Ast {
                 enums: vec![Enum {
                     name: "State".to_string(),
                     gen_params: vec![],

@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq, Eq, Default)]
-pub struct Program {
+pub struct Ast {
     pub fns: Vec<Fn>,
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
@@ -8,7 +8,7 @@ pub struct Program {
     pub exprs: Vec<ExprKind>,
 }
 
-impl Program {
+impl Ast {
     pub fn new_expr(&mut self, expr: ExprKind) -> Expr {
         self.exprs.push(expr);
         Expr(self.exprs.len() - 1)

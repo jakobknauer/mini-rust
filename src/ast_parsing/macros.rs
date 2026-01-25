@@ -21,7 +21,7 @@ macro_rules! parse_left_associative {
                     operator,
                     right,
                 };
-                acc = self.program.new_expr(acc_kind);
+                acc = self.ast.new_expr(acc_kind);
             }
 
             Ok(acc)

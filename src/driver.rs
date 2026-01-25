@@ -68,7 +68,7 @@ struct AstMeta {
 impl<'a> Driver<'a> {
     pub fn compile(&mut self) -> Result<(), String> {
         self.print_pretty("Building AST from source");
-        let mut ast = ast::Program::default();
+        let mut ast = ast::Ast::default();
         for source in &self.sources {
             ast_parsing::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
         }
@@ -126,15 +126,15 @@ impl<'a> Driver<'a> {
         (self.print_detail)(msg);
     }
 
-    fn register_tys(&mut self, program: &ast::Program) -> Result<(), ()> {
+    fn register_tys(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         self.ctxt.tys.register_primitive_tys()?;
 
-        for (idx, struct_) in program.structs.iter().enumerate() {
+        for (idx, struct_) in ast.structs.iter().enumerate() {
             let ty = self.ctxt.tys.register_struct(&struct_.name, &struct_.gen_params)?;
             self.ast_meta.struct_ids.insert(idx, ty);
         }
 
-        for (idx, enum_) in program.enums.iter().enumerate() {
+        for (idx, enum_) in ast.enums.iter().enumerate() {
             let ty = self.ctxt.tys.register_enum(&enum_.name, &enum_.gen_params)?;
             self.ast_meta.enum_ids.insert(idx, ty);
 
@@ -154,12 +154,12 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn define_tys(&mut self, program: &ast::Program) -> Result<(), ()> {
-        for (idx, struct_) in program.structs.iter().enumerate() {
+    fn define_tys(&mut self, ast: &ast::Ast) -> Result<(), ()> {
+        for (idx, struct_) in ast.structs.iter().enumerate() {
             self.set_struct_fields(self.ast_meta.struct_ids[&idx], &struct_.fields)?
         }
 
-        for (idx, ast_enum) in program.enums.iter().enumerate() {
+        for (idx, ast_enum) in ast.enums.iter().enumerate() {
             let enum_ = self.ast_meta.enum_ids[&idx];
             let variants = self.ctxt.tys.get_enum_def(enum_).ok_or(())?.variants.clone();
 
@@ -197,7 +197,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn register_functions(&mut self, ast: &ast::Program) -> Result<(), ()> {
+    fn register_functions(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         stdlib::register_fns(&mut self.ctxt)?;
 
         for (idx, function) in ast.fns.iter().enumerate() {
@@ -323,7 +323,7 @@ impl<'a> Driver<'a> {
         }
     }
 
-    fn register_traits(&mut self, ast: &ast::Program) -> Result<(), ()> {
+    fn register_traits(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         for (idx, ast_trait) in ast.traits.iter().enumerate() {
             let trait_gen_params: Vec<_> = ast_trait
                 .gen_params
@@ -345,7 +345,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn register_trait_methods(&mut self, ast: &ast::Program) -> Result<(), ()> {
+    fn register_trait_methods(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         for (idx, ast_trait) in ast.traits.iter().enumerate() {
             let trait_ = self.ast_meta.trait_ids[&idx];
             let self_type = self.ctxt.tys.trait_self(trait_);
@@ -397,7 +397,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn register_impls(&mut self, ast: &ast::Program) -> Result<(), ()> {
+    fn register_impls(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         stdlib::register_impl_for_ptr(&mut self.ctxt)?;
 
         for (idx, ast_impl) in ast.impls.iter().enumerate() {
@@ -458,7 +458,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn register_impl_methods(&mut self, ast: &ast::Program) -> Result<(), ()> {
+    fn register_impl_methods(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         for (idx, ast_impl) in ast.impls.iter().enumerate() {
             let impl_ = self.ast_meta.impl_ids[&idx];
             let impl_def = self.ctxt.impls.get_impl_def(impl_);
@@ -475,7 +475,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn build_function_mlrs(&mut self, ast: &ast::Program) -> Result<(), String> {
+    fn build_function_mlrs(&mut self, ast: &ast::Ast) -> Result<(), String> {
         stdlib::define_size_of(&mut self.ctxt)?;
         stdlib::define_impl_for_ptr(&mut self.ctxt)
             .map_err(|err| err::print_mlr_builder_error("offset", err, &self.ctxt))?;
@@ -494,7 +494,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn build_impl_fn_mlrs(&mut self, ast: &ast::Program) -> Result<(), String> {
+    fn build_impl_fn_mlrs(&mut self, ast: &ast::Ast) -> Result<(), String> {
         for (idx, ast_impl) in ast.impls.iter().enumerate() {
             let impl_ = self.ast_meta.impl_ids[&idx];
             let impl_def = self.ctxt.impls.get_impl_def(impl_);

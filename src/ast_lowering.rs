@@ -23,7 +23,7 @@ use lowered::Lowered;
 
 pub fn ast_to_mlr(
     ctxt: &mut ctxt::Ctxt,
-    ast: &ast::Program,
+    ast: &ast::Ast,
     ast_body: &ast::Block,
     target_fn: fns::Fn,
 ) -> AstLoweringResult<()> {
@@ -33,7 +33,7 @@ pub fn ast_to_mlr(
 
 pub fn ast_to_mlr_with_external_scope(
     ctxt: &mut ctxt::Ctxt,
-    ast: &ast::Program,
+    ast: &ast::Ast,
     ast_body: &ast::Block,
     target_fn: fns::Fn,
     external_scope: HashMap<String, mlr::Loc>,
@@ -48,7 +48,7 @@ pub fn ast_to_mlr_with_external_scope(
 struct AstLowerer<'a> {
     builder: MlrBuilder<'a>,
     closure_counter: u32,
-    ast: &'a ast::Program,
+    ast: &'a ast::Ast,
 
     /// The available local variables in scope surrounding this function (i.e. only relevant for closures)
     outer_scope: HashMap<String, mlr::Loc>,
@@ -62,7 +62,7 @@ impl<'a> AstLowerer<'a> {
     pub fn new(
         target_fn: fns::Fn,
         ctxt: &'a mut ctxt::Ctxt,
-        ast: &'a ast::Program,
+        ast: &'a ast::Ast,
         external_scope: HashMap<String, mlr::Loc>,
         captures_ty: Option<ty::Ty>,
     ) -> Self {
