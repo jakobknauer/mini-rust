@@ -73,7 +73,7 @@ impl<'a> Driver<'a> {
             ast_parsing::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
         }
 
-        self.print_pretty("Building MLR from AST");
+        self.print_pretty("Building context");
         self.register_tys(&ast).map_err(|_| "Error registering types")?;
         self.define_tys(&ast).map_err(|_| "Error defining types")?;
         self.register_traits(&ast).map_err(|_| "Error registering traits")?;
@@ -87,6 +87,8 @@ impl<'a> Driver<'a> {
             .map_err(|_| "Error registering impl methods")?;
 
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
+
+        self.print_pretty("Building MLR from AST");
         self.build_function_mlrs(&ast)
             .map_err(|err| format!("Error building MLR: {err}"))?;
         self.build_impl_fn_mlrs(&ast)
