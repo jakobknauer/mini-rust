@@ -120,7 +120,7 @@ pub struct Trait {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
-    pub return_expr: Option<Box<Expr>>,
+    pub return_expr: Option<Box<ExprKind>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -201,52 +201,52 @@ pub enum Stmt {
     Let {
         name: String,
         ty_annot: Option<TyAnnot>,
-        value: Expr,
+        value: ExprKind,
     },
-    Expr(Expr),
-    Return(Option<Expr>),
+    Expr(ExprKind),
+    Return(Option<ExprKind>),
     Break,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Expr {
+pub enum ExprKind {
     Lit(Lit),
     Path(Path),
     QualifiedPath(QualifiedPath),
-    Tuple(Vec<Expr>),
+    Tuple(Vec<ExprKind>),
     BinaryOp {
-        left: Box<Expr>,
+        left: Box<ExprKind>,
         operator: BinaryOperator,
-        right: Box<Expr>,
+        right: Box<ExprKind>,
     },
     UnaryOp {
         operator: UnaryOperator,
-        operand: Box<Expr>,
+        operand: Box<ExprKind>,
     },
     Assign {
-        target: Box<Expr>,
-        value: Box<Expr>,
+        target: Box<ExprKind>,
+        value: Box<ExprKind>,
     },
     Call {
-        callee: Box<Expr>,
-        arguments: Vec<Expr>,
+        callee: Box<ExprKind>,
+        arguments: Vec<ExprKind>,
     },
     MthdCall {
-        obj: Box<Expr>,
+        obj: Box<ExprKind>,
         mthd: PathSegment,
-        arguments: Vec<Expr>,
+        arguments: Vec<ExprKind>,
     },
     Struct {
         ty_path: Path,
-        fields: Vec<(String, Expr)>,
+        fields: Vec<(String, ExprKind)>,
     },
     FieldAccess {
-        obj: Box<Expr>,
+        obj: Box<ExprKind>,
         field: FieldDescriptor,
     },
     Block(Block),
     If {
-        cond: Box<Expr>,
+        cond: Box<ExprKind>,
         then: Block,
         else_: Option<Block>,
     },
@@ -254,21 +254,21 @@ pub enum Expr {
         body: Block,
     },
     While {
-        condition: Box<Expr>,
+        condition: Box<ExprKind>,
         body: Block,
     },
     Match {
-        scrutinee: Box<Expr>,
+        scrutinee: Box<ExprKind>,
         arms: Vec<MatchArm>,
     },
     Deref {
-        base: Box<Expr>,
+        base: Box<ExprKind>,
     },
     AddrOf {
-        base: Box<Expr>,
+        base: Box<ExprKind>,
     },
     As {
-        expr: Box<Expr>,
+        expr: Box<ExprKind>,
         target_ty: TyAnnot,
     },
     Self_,
@@ -327,7 +327,7 @@ pub enum UnaryOperator {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchArm {
     pub pattern: Pattern,
-    pub value: Box<Expr>,
+    pub value: Box<ExprKind>,
 }
 
 type Pattern = StructPattern;

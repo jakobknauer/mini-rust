@@ -16,7 +16,7 @@ pub fn parse(input: &str, output: &mut Program) -> Result<(), ParserErr> {
 }
 
 #[cfg(test)]
-fn parse_expr(input: &str) -> Result<Expr, ParserErr> {
+fn parse_expr(input: &str) -> Result<ExprKind, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut parser = AstParser::new(&tokens[..]);
     parser.parse_expr(true)
@@ -558,7 +558,7 @@ impl<'a> AstParser<'a> {
             }
             Some(Token::LBrace) => {
                 let expr = self.parse_block()?;
-                let stmt = Stmt::Expr(Expr::Block(expr));
+                let stmt = Stmt::Expr(ExprKind::Block(expr));
                 Ok((stmt, StmtKind::BlockExpr))
             }
             Some(Token::Keyword(Keyword::If)) => {
@@ -623,15 +623,15 @@ impl<'a> AstParser<'a> {
         Ok(Stmt::Expr(expr))
     }
 
-    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
         self.parse_assign_expr(allow_top_level_struct_expr)
     }
 
-    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
         let target = self.parse_conversion_expr(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
             let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::Assign {
+            Ok(ExprKind::Assign {
                 target: Box::new(target),
                 value: Box::new(value),
             })
@@ -640,11 +640,11 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
         let mut expr = self.parse_disjunction(allow_top_level_struct_expr)?;
         while self.advance_if(Token::Keyword(Keyword::As)) {
             let ty_annot = self.parse_ty_annot()?;
-            expr = Expr::As {
+            expr = ExprKind::As {
                 expr: Box::new(expr),
                 target_ty: ty_annot,
             };
@@ -685,27 +685,27 @@ impl<'a> AstParser<'a> {
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
         if self.advance_if(Token::Asterisk) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::Deref { base: Box::new(base) })
+            Ok(ExprKind::Deref { base: Box::new(base) })
         } else if self.advance_if(Token::Ampersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::AddrOf { base: Box::new(base) })
+            Ok(ExprKind::AddrOf { base: Box::new(base) })
         } else if self.advance_if(Token::AmpersandAmpersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::AddrOf {
-                base: Box::new(Expr::AddrOf { base: Box::new(base) }),
+            Ok(ExprKind::AddrOf {
+                base: Box::new(ExprKind::AddrOf { base: Box::new(base) }),
             })
         } else if self.advance_if(Token::Bang) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::UnaryOp {
+            Ok(ExprKind::UnaryOp {
                 operand: Box::new(base),
                 operator: UnaryOperator::Not,
             })
         } else if self.advance_if(Token::Minus) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            Ok(Expr::UnaryOp {
+            Ok(ExprKind::UnaryOp {
                 operand: Box::new(base),
                 operator: UnaryOperator::Negative,
             })
@@ -714,7 +714,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
         let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;
 
         loop {
@@ -729,7 +729,7 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                acc = Expr::Call {
+                acc = ExprKind::Call {
                     callee: Box::new(acc),
                     arguments,
                 };
@@ -739,7 +739,7 @@ impl<'a> AstParser<'a> {
                     let index = n.parse().unwrap();
                     self.position += 1;
                     // indexed field access
-                    acc = Expr::FieldAccess {
+                    acc = ExprKind::FieldAccess {
                         obj: Box::new(acc),
                         field: FieldDescriptor::Indexed(index),
                     };
@@ -756,14 +756,14 @@ impl<'a> AstParser<'a> {
                             }
                         }
                         self.expect_token(Token::RParen)?;
-                        acc = Expr::MthdCall {
+                        acc = ExprKind::MthdCall {
                             obj: Box::new(acc),
                             mthd: member,
                             arguments,
                         };
                     } else {
                         // named field access
-                        acc = Expr::FieldAccess {
+                        acc = ExprKind::FieldAccess {
                             obj: Box::new(acc),
                             field: FieldDescriptor::Named(member),
                         };
@@ -777,29 +777,29 @@ impl<'a> AstParser<'a> {
         Ok(acc)
     }
 
-    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<ExprKind, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
 
         match current {
             Token::NumLiteral(value) => {
                 let value = value.parse().map_err(|_| ParserErr::InvalidLiteral)?;
                 self.position += 1;
-                Ok(Expr::Lit(Lit::Int(value)))
+                Ok(ExprKind::Lit(Lit::Int(value)))
             }
             Token::BoolLiteral(b) => {
                 let value = *b;
                 self.position += 1;
-                Ok(Expr::Lit(Lit::Bool(value)))
+                Ok(ExprKind::Lit(Lit::Bool(value)))
             }
             Token::CCharLiteral(c) => {
                 let value = *c;
                 self.position += 1;
-                Ok(Expr::Lit(Lit::CChar(value)))
+                Ok(ExprKind::Lit(Lit::CChar(value)))
             }
             Token::CStringLiteral(s) => {
                 let value = s.clone();
                 self.position += 1;
-                Ok(Expr::Lit(Lit::CString(value)))
+                Ok(ExprKind::Lit(Lit::CString(value)))
             }
             Token::Identifier(..) => {
                 let path = self.parse_path(true)?;
@@ -818,9 +818,9 @@ impl<'a> AstParser<'a> {
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    Expr::Struct { ty_path: path, fields }
+                    ExprKind::Struct { ty_path: path, fields }
                 } else {
-                    Expr::Path(path)
+                    ExprKind::Path(path)
                 };
 
                 Ok(expr)
@@ -843,12 +843,12 @@ impl<'a> AstParser<'a> {
                 if inner_exprs.len() == 1 && !trailing_comma {
                     Ok(inner_exprs.remove(0))
                 } else {
-                    Ok(Expr::Tuple(inner_exprs))
+                    Ok(ExprKind::Tuple(inner_exprs))
                 }
             }
             Token::LBrace => {
                 let block = self.parse_block()?;
-                Ok(Expr::Block(block))
+                Ok(ExprKind::Block(block))
             }
             Token::Keyword(Keyword::If) => self.parse_if_expr(),
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
@@ -856,7 +856,7 @@ impl<'a> AstParser<'a> {
             Token::Keyword(Keyword::Match) => self.parse_match(),
             Token::Keyword(Keyword::Self_) => {
                 self.position += 1;
-                Ok(Expr::Self_)
+                Ok(ExprKind::Self_)
             }
             Token::Pipe => {
                 self.position += 1;
@@ -879,7 +879,7 @@ impl<'a> AstParser<'a> {
 
                 let body = self.parse_closure_body(return_ty.is_some())?;
 
-                Ok(Expr::Closure {
+                Ok(ExprKind::Closure {
                     params,
                     return_ty,
                     body,
@@ -896,7 +896,7 @@ impl<'a> AstParser<'a> {
 
                 let body = self.parse_closure_body(return_ty.is_some())?;
 
-                Ok(Expr::Closure {
+                Ok(ExprKind::Closure {
                     params: vec![],
                     return_ty,
                     body,
@@ -918,7 +918,7 @@ impl<'a> AstParser<'a> {
 
                 let qual_path = QualifiedPath { ty, trait_, path };
 
-                Ok(Expr::QualifiedPath(qual_path))
+                Ok(ExprKind::QualifiedPath(qual_path))
             }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
@@ -988,7 +988,7 @@ impl<'a> AstParser<'a> {
         Ok(segment)
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_if_expr(&mut self) -> Result<ExprKind, ParserErr> {
         self.expect_keyword(Keyword::If)?;
         let condition = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
@@ -997,30 +997,30 @@ impl<'a> AstParser<'a> {
         } else {
             None
         };
-        Ok(Expr::If {
+        Ok(ExprKind::If {
             cond: Box::new(condition),
             then: then_block,
             else_: else_block,
         })
     }
 
-    fn parse_loop(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_loop(&mut self) -> Result<ExprKind, ParserErr> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
-        Ok(Expr::Loop { body })
+        Ok(ExprKind::Loop { body })
     }
 
-    fn parse_while(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_while(&mut self) -> Result<ExprKind, ParserErr> {
         self.expect_keyword(Keyword::While)?;
         let condition = self.parse_expr(false)?; // Don't allow top-level struct in while condition
         let body = self.parse_block()?;
-        Ok(Expr::While {
+        Ok(ExprKind::While {
             condition: Box::new(condition),
             body,
         })
     }
 
-    fn parse_match(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_match(&mut self) -> Result<ExprKind, ParserErr> {
         self.expect_keyword(Keyword::Match)?;
         let scrutinee = self.parse_expr(false)?; // Don't allow top-level struct in match scrutinee
 
@@ -1044,7 +1044,7 @@ impl<'a> AstParser<'a> {
 
         self.expect_token(Token::RBrace)?;
 
-        Ok(Expr::Match {
+        Ok(ExprKind::Match {
             scrutinee: Box::new(scrutinee),
             arms,
         })
@@ -1173,8 +1173,8 @@ impl<'a> AstParser<'a> {
 mod tests {
     use super::*;
 
-    fn make_ident(name: &str) -> Expr {
-        Expr::Path(Path {
+    fn make_ident(name: &str) -> ExprKind {
+        ExprKind::Path(Path {
             segments: vec![PathSegment::Ident(name.to_string())],
         })
     }
@@ -1281,7 +1281,7 @@ mod tests {
                     return_ty: Some(TyAnnot::Path(str_to_path("int"))),
                     constraints: vec![],
                     body: Some(Block {
-                        stmts: vec![Stmt::Return(Some(Expr::BinaryOp {
+                        stmts: vec![Stmt::Return(Some(ExprKind::BinaryOp {
                             left: Box::new(make_ident("a")),
                             operator: BinaryOperator::Add,
                             right: Box::new(make_ident("b")),
@@ -1381,8 +1381,8 @@ mod tests {
                         constraints: vec![],
                         body: Some(Block {
                             stmts: vec![],
-                            return_expr: Some(Box::new(Expr::FieldAccess {
-                                obj: Box::new(Expr::Self_),
+                            return_expr: Some(Box::new(ExprKind::FieldAccess {
+                                obj: Box::new(ExprKind::Self_),
                                 field: FieldDescriptor::Named(PathSegment::Ident("b".to_string())),
                             })),
                         }),
@@ -1436,16 +1436,16 @@ mod tests {
                     Stmt::Let {
                         name: "result".to_string(),
                         ty_annot: None,
-                        value: Expr::Lit(Lit::Int(1)),
+                        value: ExprKind::Lit(Lit::Int(1)),
                     },
-                    Stmt::Expr(Expr::Loop {
+                    Stmt::Expr(ExprKind::Loop {
                         body: Block {
                             stmts: vec![
-                                Stmt::Expr(Expr::If {
-                                    cond: Box::new(Expr::BinaryOp {
+                                Stmt::Expr(ExprKind::If {
+                                    cond: Box::new(ExprKind::BinaryOp {
                                         left: Box::new(make_ident("n")),
                                         operator: BinaryOperator::Equal,
-                                        right: Box::new(Expr::Lit(Lit::Int(1))),
+                                        right: Box::new(ExprKind::Lit(Lit::Int(1))),
                                     }),
                                     then: Block {
                                         stmts: vec![Stmt::Break],
@@ -1453,20 +1453,20 @@ mod tests {
                                     },
                                     else_: None,
                                 }),
-                                Stmt::Expr(Expr::Assign {
+                                Stmt::Expr(ExprKind::Assign {
                                     target: Box::new(make_ident("result")),
-                                    value: Box::new(Expr::BinaryOp {
+                                    value: Box::new(ExprKind::BinaryOp {
                                         left: Box::new(make_ident("result")),
                                         operator: BinaryOperator::Multiply,
                                         right: Box::new(make_ident("n")),
                                     }),
                                 }),
-                                Stmt::Expr(Expr::Assign {
+                                Stmt::Expr(ExprKind::Assign {
                                     target: Box::new(make_ident("n")),
-                                    value: Box::new(Expr::BinaryOp {
+                                    value: Box::new(ExprKind::BinaryOp {
                                         left: Box::new(make_ident("n")),
                                         operator: BinaryOperator::Subtract,
-                                        right: Box::new(Expr::Lit(Lit::Int(1))),
+                                        right: Box::new(ExprKind::Lit(Lit::Int(1))),
                                     }),
                                 }),
                             ],
@@ -1485,7 +1485,7 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn parse_and_compare(input: &str, expected: Expr) {
+        fn parse_and_compare(input: &str, expected: ExprKind) {
             let parsed = parse_expr(input).expect("Failed to parse AST");
             assert_eq!(parsed, expected);
         }
@@ -1494,18 +1494,18 @@ mod tests {
         fn test_parse_arithmetic_expr() {
             let input = r#"1 + 2 * a - arctan2(x, y)"#;
 
-            let expected = Expr::BinaryOp {
-                left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Lit(Lit::Int(1))),
+            let expected = ExprKind::BinaryOp {
+                left: Box::new(ExprKind::BinaryOp {
+                    left: Box::new(ExprKind::Lit(Lit::Int(1))),
                     operator: BinaryOperator::Add,
-                    right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Lit(Lit::Int(2))),
+                    right: Box::new(ExprKind::BinaryOp {
+                        left: Box::new(ExprKind::Lit(Lit::Int(2))),
                         operator: BinaryOperator::Multiply {},
                         right: Box::new(make_ident("a")),
                     }),
                 }),
                 operator: BinaryOperator::Subtract,
-                right: Box::new(Expr::Call {
+                right: Box::new(ExprKind::Call {
                     callee: Box::new(make_ident("arctan2")),
                     arguments: vec![make_ident("x"), make_ident("y")],
                 }),
@@ -1521,20 +1521,20 @@ mod tests {
                     radius: 3
                 }"#;
 
-            let expected = Expr::Struct {
+            let expected = ExprKind::Struct {
                 ty_path: str_to_path("Circle"),
                 fields: vec![
                     (
                         "center".to_string(),
-                        Expr::Struct {
+                        ExprKind::Struct {
                             ty_path: str_to_path("Point"),
                             fields: vec![
-                                ("x".to_string(), Expr::Lit(Lit::Int(1))),
-                                ("y".to_string(), Expr::Lit(Lit::Int(2))),
+                                ("x".to_string(), ExprKind::Lit(Lit::Int(1))),
+                                ("y".to_string(), ExprKind::Lit(Lit::Int(2))),
                             ],
                         },
                     ),
-                    ("radius".to_string(), Expr::Lit(Lit::Int(3))),
+                    ("radius".to_string(), ExprKind::Lit(Lit::Int(3))),
                 ],
             };
 
@@ -1544,7 +1544,7 @@ mod tests {
         #[test]
         fn test_parse_int_literal() {
             let input = "42";
-            let expected = Expr::Lit(Lit::Int(42));
+            let expected = ExprKind::Lit(Lit::Int(42));
             parse_and_compare(input, expected);
         }
 
@@ -1556,15 +1556,15 @@ mod tests {
                 0
             }"#;
 
-            let expected = Expr::If {
+            let expected = ExprKind::If {
                 cond: Box::new(make_ident("condition")),
                 then: Block {
                     stmts: vec![],
-                    return_expr: Some(Box::new(Expr::Lit(Lit::Int(42)))),
+                    return_expr: Some(Box::new(ExprKind::Lit(Lit::Int(42)))),
                 },
                 else_: Some(Block {
                     stmts: vec![],
-                    return_expr: Some(Box::new(Expr::Lit(Lit::Int(0)))),
+                    return_expr: Some(Box::new(ExprKind::Lit(Lit::Int(0)))),
                 }),
             };
 
@@ -1574,10 +1574,10 @@ mod tests {
         #[test]
         fn test_parse_calls_and_field_access() {
             let input = "(function(arg0).method(arg1, arg2).field)(arg3)";
-            let expected = Expr::Call {
-                callee: Box::new(Expr::FieldAccess {
-                    obj: Box::new(Expr::MthdCall {
-                        obj: Box::new(Expr::Call {
+            let expected = ExprKind::Call {
+                callee: Box::new(ExprKind::FieldAccess {
+                    obj: Box::new(ExprKind::MthdCall {
+                        obj: Box::new(ExprKind::Call {
                             callee: Box::new(make_ident("function")),
                             arguments: vec![make_ident("arg0")],
                         }),
@@ -1598,7 +1598,7 @@ mod tests {
                 None {} => 0,
             }"#;
 
-            let expected = Expr::Match {
+            let expected = ExprKind::Match {
                 scrutinee: Box::new(make_ident("value")),
                 arms: vec![
                     MatchArm {
@@ -1616,7 +1616,7 @@ mod tests {
                             variant: "None".to_string(),
                             fields: vec![],
                         },
-                        value: Box::new(Expr::Lit(Lit::Int(0))),
+                        value: Box::new(ExprKind::Lit(Lit::Int(0))),
                     },
                 ],
             };
