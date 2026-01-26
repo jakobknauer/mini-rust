@@ -277,6 +277,7 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
+                let params = self.ast.new_ty_annot_slice(params);
 
                 let return_ty = if self.advance_if(Token::Arrow) {
                     Some(self.parse_ty_annot()?)
@@ -303,6 +304,7 @@ impl<'a> AstParser<'a> {
                 } else {
                     vec![]
                 };
+                let trait_args = self.ast.new_ty_annot_slice(trait_args);
 
                 ConstraintRequirement::Trait { trait_name, trait_args }
             }
@@ -398,14 +400,14 @@ impl<'a> AstParser<'a> {
                     [PathSegment::Ident(ident)] => (
                         Some(TraitAnnot {
                             name: ident.clone(),
-                            args: vec![],
+                            args: self.ast.new_ty_annot_slice(vec![]),
                         }),
                         ty2,
                     ),
                     [PathSegment::Generic(GenPathSegment { ident, gen_args })] => (
                         Some(TraitAnnot {
                             name: ident.clone(),
-                            args: gen_args.clone(),
+                            args: self.ast.new_ty_annot_slice(gen_args.clone()),
                         }),
                         ty2,
                     ),
@@ -1134,6 +1136,7 @@ impl<'a> AstParser<'a> {
                 if inner_tys.len() == 1 && !trailing_comma {
                     return Ok(inner_tys.remove(0));
                 } else {
+                    let inner_tys = self.ast.new_ty_annot_slice(inner_tys);
                     TyAnnotKind::Tuple(inner_tys)
                 }
             }
@@ -1149,6 +1152,7 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
+                let param_tys = self.ast.new_ty_annot_slice(param_tys);
 
                 let return_ty = if self.advance_if(Token::Arrow) {
                     Some(self.parse_ty_annot()?)
@@ -1175,11 +1179,11 @@ impl<'a> AstParser<'a> {
             TyAnnotKind::Path(path) => match path.segments.as_slice() {
                 [PathSegment::Ident(ident)] => Ok(TraitAnnot {
                     name: ident.clone(),
-                    args: vec![],
+                    args: self.ast.new_ty_annot_slice(vec![]),
                 }),
                 [PathSegment::Generic(GenPathSegment { ident, gen_args })] => Ok(TraitAnnot {
                     name: ident.clone(),
-                    args: gen_args.clone(),
+                    args: self.ast.new_ty_annot_slice(gen_args.clone()),
                 }),
                 _ => Err(ParserErr::ExpectedTraitName),
             },

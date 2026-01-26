@@ -234,7 +234,8 @@ impl<'a> Driver<'a> {
             match &constraint.requirement {
                 ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
                     let trait_ = self.ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
-                    let trait_args = trait_args
+                    let trait_args = ast
+                        .ty_annot_slice(*trait_args)
                         .iter()
                         .map(|&arg| {
                             self.ctxt
@@ -248,8 +249,9 @@ impl<'a> Driver<'a> {
                     };
                     self.ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
                 }
-                ast::ConstraintRequirement::Callable { params, return_ty } => {
-                    let params = params
+                &ast::ConstraintRequirement::Callable { params, return_ty } => {
+                    let params = ast
+                        .ty_annot_slice(params)
                         .iter()
                         .map(|&ty| {
                             self.ctxt
@@ -258,7 +260,7 @@ impl<'a> Driver<'a> {
                         })
                         .collect::<Result<_, _>>()?;
                     let return_ty = match return_ty {
-                        &Some(return_ty) => self
+                        Some(return_ty) => self
                             .ctxt
                             .try_resolve_ast_ty_annot(ast, return_ty, &all_gen_params, associated_ty, false)
                             .ok_or(())?,
@@ -421,8 +423,8 @@ impl<'a> Driver<'a> {
                 .map(|trait_annot| {
                     let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
 
-                    let trait_args = trait_annot
-                        .args
+                    let trait_args = ast
+                        .ty_annot_slice(trait_annot.args)
                         .iter()
                         .map(|&arg| {
                             self.ctxt

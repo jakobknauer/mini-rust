@@ -10,6 +10,7 @@ pub struct Ast {
     pub expr_slices: Vec<Expr>,
 
     pub ty_annots: Vec<TyAnnotKind>,
+    pub ty_annot_slices: Vec<TyAnnot>,
 }
 
 impl Ast {
@@ -38,6 +39,15 @@ impl Ast {
 
     pub fn ty_annot(&self, ty_annot: TyAnnot) -> &TyAnnotKind {
         &self.ty_annots[ty_annot.0]
+    }
+
+    pub fn new_ty_annot_slice(&mut self, ty_annots: Vec<TyAnnot>) -> TyAnnotSlice {
+        self.ty_annot_slices.extend_from_slice(&ty_annots);
+        TyAnnotSlice(self.ty_annot_slices.len() - ty_annots.len(), ty_annots.len())
+    }
+
+    pub fn ty_annot_slice(&self, TyAnnotSlice(start, len): TyAnnotSlice) -> &[TyAnnot] {
+        &self.ty_annot_slices[start..start + len]
     }
 }
 
@@ -69,10 +79,10 @@ pub struct Constraint {
 pub enum ConstraintRequirement {
     Trait {
         trait_name: String,
-        trait_args: Vec<TyAnnot>,
+        trait_args: TyAnnotSlice,
     },
     Callable {
-        params: Vec<TyAnnot>,
+        params: TyAnnotSlice,
         return_ty: Option<TyAnnot>,
     },
 }
@@ -121,26 +131,7 @@ pub struct AssocTy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraitAnnot {
     pub name: String,
-    pub args: Vec<TyAnnot>,
-}
-
-impl std::fmt::Display for TraitAnnot {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.args.is_empty() {
-            write!(f, "{}", self.name)
-        } else {
-            write!(
-                f,
-                "{}<{}>",
-                self.name,
-                self.args
-                    .iter()
-                    .map(|annot| format!("{}", annot.0))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        }
-    }
+    pub args: TyAnnotSlice,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -181,16 +172,6 @@ pub struct QualifiedPath {
     pub ty: TyAnnot,
     pub trait_: Option<TraitAnnot>,
     pub path: Path,
-}
-
-impl std::fmt::Display for QualifiedPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(trait_) = &self.trait_ {
-            write!(f, "<{} as {}>::{}", self.ty.0, trait_, self.path)
-        } else {
-            write!(f, "<{}>::{}", self.ty.0, self.path)
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -387,48 +368,18 @@ pub struct StructPatternField {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TyAnnot(usize);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TyAnnotSlice(usize, usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TyAnnotKind {
     Path(Path),
-    Tuple(Vec<TyAnnot>),
+    Tuple(TyAnnotSlice),
     Ref(TyAnnot),
     Ptr(TyAnnot),
     Fn {
-        param_tys: Vec<TyAnnot>,
+        param_tys: TyAnnotSlice,
         return_ty: Option<TyAnnot>,
     },
     Wildcard,
-}
-
-impl std::fmt::Display for TyAnnotKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TyAnnotKind::Path(path) => write!(f, "{}", path),
-            TyAnnotKind::Tuple(ty_annots) => write!(
-                f,
-                "({})",
-                ty_annots
-                    .iter()
-                    .map(|ty| ty.0.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            TyAnnotKind::Ref(ty_annot) => write!(f, "&{}", ty_annot.0),
-            TyAnnotKind::Ptr(ty_annot) => write!(f, "*{}", ty_annot.0),
-            TyAnnotKind::Fn { param_tys, return_ty } => write!(
-                f,
-                "fn({}) -> {}",
-                param_tys
-                    .iter()
-                    .map(|ty| ty.0.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                match return_ty {
-                    Some(ty) => ty.0.to_string(),
-                    None => "()".to_string(),
-                }
-            ),
-            TyAnnotKind::Wildcard => write!(f, "_"),
-        }
-    }
 }

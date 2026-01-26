@@ -1016,8 +1016,9 @@ impl<'a> AstLowerer<'a> {
                     trait_name: trait_annot.name.clone(),
                 })?;
 
-        let trait_args = trait_annot
-            .args
+        let trait_args = self
+            .ast
+            .ty_annot_slice(trait_annot.args)
             .iter()
             .map(|&arg| self.builder.resolve_ast_ty_annot(self.ast, arg))
             .collect::<Result<_, _>>()?;

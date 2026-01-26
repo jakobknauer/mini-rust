@@ -315,22 +315,24 @@ impl Ctxt {
             &Ptr(ty_annot) => self
                 .try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty, allow_wildcards)
                 .map(|inner| self.tys.ptr(inner)),
-            Fn { param_tys, return_ty } => {
-                let param_tys: Vec<ty::Ty> = param_tys
+            &Fn { param_tys, return_ty } => {
+                let param_tys: Vec<ty::Ty> = ast
+                    .ty_annot_slice(param_tys)
                     .iter()
                     .map(|&pt| self.try_resolve_ast_ty_annot(ast, pt, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_ast_ty_annot(ast, *rt, gen_vars, self_ty, allow_wildcards),
+                    Some(rt) => self.try_resolve_ast_ty_annot(ast, rt, gen_vars, self_ty, allow_wildcards),
                     None => Some(self.tys.unit()),
                 }?;
 
                 Some(self.tys.fn_(param_tys, return_ty, false))
             }
             Wildcard => allow_wildcards.then(|| self.tys.undef_ty()),
-            Tuple(ty_annots) => {
-                let tys: Vec<ty::Ty> = ty_annots
+            &Tuple(ty_annots) => {
+                let tys: Vec<ty::Ty> = ast
+                    .ty_annot_slice(ty_annots)
                     .iter()
                     .map(|ty_annot| self.try_resolve_ast_ty_annot(ast, *ty_annot, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
