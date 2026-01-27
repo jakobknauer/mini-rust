@@ -1,3 +1,5 @@
+pub mod builder;
+
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Ast {
     pub fns: Vec<Fn>,
@@ -23,8 +25,8 @@ impl Ast {
         &self.exprs[expr.0]
     }
 
-    pub fn new_expr_slice(&mut self, exprs: Vec<Expr>) -> ExprSlice {
-        self.expr_slices.extend_from_slice(&exprs);
+    pub fn new_expr_slice(&mut self, exprs: &[Expr]) -> ExprSlice {
+        self.expr_slices.extend_from_slice(exprs);
         ExprSlice(self.expr_slices.len() - exprs.len(), exprs.len())
     }
 
@@ -41,8 +43,8 @@ impl Ast {
         &self.ty_annots[ty_annot.0]
     }
 
-    pub fn new_ty_annot_slice(&mut self, ty_annots: Vec<TyAnnot>) -> TyAnnotSlice {
-        self.ty_annot_slices.extend_from_slice(&ty_annots);
+    pub fn new_ty_annot_slice(&mut self, ty_annots: &[TyAnnot]) -> TyAnnotSlice {
+        self.ty_annot_slices.extend_from_slice(ty_annots);
         TyAnnotSlice(self.ty_annot_slices.len() - ty_annots.len(), ty_annots.len())
     }
 
@@ -275,7 +277,7 @@ pub enum ExprKind {
         body: Block,
     },
     While {
-        condition: Expr,
+        cond: Expr,
         body: Block,
     },
     Match {

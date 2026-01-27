@@ -4,7 +4,7 @@ mod token;
 #[macro_use]
 mod macros;
 
-use crate::{ast::*, ast_parsing::token::Keyword};
+use crate::{ast::builder::AstBuilder, ast::*, ast_parsing::token::Keyword};
 
 pub use lexer::LexerErr;
 pub use token::Token;
@@ -44,7 +44,7 @@ impl From<LexerErr> for ParserErr {
 struct AstParser<'a> {
     input: &'a [Token],
     position: usize,
-    ast: &'a mut Ast,
+    builder: AstBuilder<'a>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -66,7 +66,7 @@ impl<'a> AstParser<'a> {
         AstParser {
             input,
             position: 0,
-            ast,
+            builder: AstBuilder::new(ast),
         }
     }
 
@@ -136,23 +136,23 @@ impl<'a> AstParser<'a> {
             match token {
                 Token::Keyword(Keyword::Fn) => {
                     let fn_ = self.parse_function(true)?;
-                    self.ast.fns.push(fn_);
+                    self.builder.add_fn(fn_);
                 }
                 Token::Keyword(Keyword::Struct) => {
                     let struct_ = self.parse_struct()?;
-                    self.ast.structs.push(struct_);
+                    self.builder.add_struct(struct_);
                 }
                 Token::Keyword(Keyword::Enum) => {
                     let enum_ = self.parse_enum()?;
-                    self.ast.enums.push(enum_);
+                    self.builder.add_enum(enum_);
                 }
                 Token::Keyword(Keyword::Impl) => {
                     let impl_ = self.parse_impl()?;
-                    self.ast.impls.push(impl_);
+                    self.builder.add_impl(impl_);
                 }
                 Token::Keyword(Keyword::Trait) => {
                     let trait_ = self.parse_trait()?;
-                    self.ast.traits.push(trait_);
+                    self.builder.add_trait(trait_);
                 }
                 token => return Err(ParserErr::UnexpectedToken(token.clone())),
             }
@@ -277,7 +277,7 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                let params = self.ast.new_ty_annot_slice(params);
+                let params = self.builder.ty_annot_slice(&params);
 
                 let return_ty = if self.advance_if(Token::Arrow) {
                     Some(self.parse_ty_annot()?)
@@ -304,7 +304,7 @@ impl<'a> AstParser<'a> {
                 } else {
                     vec![]
                 };
-                let trait_args = self.ast.new_ty_annot_slice(trait_args);
+                let trait_args = self.builder.ty_annot_slice(&trait_args);
 
                 ConstraintRequirement::Trait { trait_name, trait_args }
             }
@@ -395,19 +395,19 @@ impl<'a> AstParser<'a> {
 
         let (trait_annot, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
             let ty2 = self.parse_ty_annot()?;
-            match self.ast.ty_annot(ty) {
+            match self.builder.ast().ty_annot(ty) {
                 TyAnnotKind::Path(path) => match path.segments.as_slice() {
                     [PathSegment::Ident(ident)] => (
                         Some(TraitAnnot {
                             name: ident.clone(),
-                            args: self.ast.new_ty_annot_slice(vec![]),
+                            args: self.builder.ty_annot_slice(&[]),
                         }),
                         ty2,
                     ),
                     [PathSegment::Generic(GenPathSegment { ident, gen_args })] => (
                         Some(TraitAnnot {
                             name: ident.clone(),
-                            args: self.ast.new_ty_annot_slice(gen_args.clone()),
+                            args: self.builder.ty_annot_slice(&gen_args.clone()),
                         }),
                         ty2,
                     ),
@@ -512,7 +512,6 @@ impl<'a> AstParser<'a> {
         Ok(params)
     }
 
-    /// TODO allow loop/if/block expression statements without delimiting semicolon
     fn parse_block(&mut self) -> Result<Block, ParserErr> {
         let mut stmts = Vec::new();
         let mut return_expr = None;
@@ -574,7 +573,7 @@ impl<'a> AstParser<'a> {
             }
             Some(Token::LBrace) => {
                 let block = self.parse_block()?;
-                let expr = self.ast.new_expr(ExprKind::Block(block));
+                let expr = self.builder.block(block);
                 let stmt = Stmt::Expr(expr);
                 Ok((stmt, StmtKind::BlockExpr))
             }
@@ -648,8 +647,8 @@ impl<'a> AstParser<'a> {
         let target = self.parse_conversion_expr(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
             let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
-            let expr = ExprKind::Assign { target, value };
-            Ok(self.ast.new_expr(expr))
+            let expr = self.builder.assign(target, value);
+            Ok(expr)
         } else {
             Ok(target)
         }
@@ -659,11 +658,7 @@ impl<'a> AstParser<'a> {
         let mut expr = self.parse_disjunction(allow_top_level_struct_expr)?;
         while self.advance_if(Token::Keyword(Keyword::As)) {
             let ty_annot = self.parse_ty_annot()?;
-            let expr_kind = ExprKind::As {
-                expr,
-                target_ty: ty_annot,
-            };
-            expr = self.ast.new_expr(expr_kind);
+            expr = self.builder.as_(expr, ty_annot);
         }
         Ok(expr)
     }
@@ -702,34 +697,31 @@ impl<'a> AstParser<'a> {
     ]);
 
     fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
-        let expr = if self.advance_if(Token::Asterisk) {
+        // TODO refactor to a match
+        if self.advance_if(Token::Asterisk) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            ExprKind::Deref { base }
+            let expr = self.builder.deref(base);
+            Ok(expr)
         } else if self.advance_if(Token::Ampersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            ExprKind::AddrOf { base }
+            let expr = self.builder.addr_of(base);
+            Ok(expr)
         } else if self.advance_if(Token::AmpersandAmpersand) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            ExprKind::AddrOf {
-                base: self.ast.new_expr(ExprKind::AddrOf { base }),
-            }
+            let expr = self.builder.addr_of(base);
+            let expr = self.builder.addr_of(expr);
+            Ok(expr)
         } else if self.advance_if(Token::Bang) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            ExprKind::UnaryOp {
-                operand: base,
-                operator: UnaryOperator::Not,
-            }
+            let expr = self.builder.unary_op(UnaryOperator::Not, base);
+            Ok(expr)
         } else if self.advance_if(Token::Minus) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            ExprKind::UnaryOp {
-                operand: base,
-                operator: UnaryOperator::Negative,
-            }
+            let expr = self.builder.unary_op(UnaryOperator::Negative, base);
+            Ok(expr)
         } else {
-            return self.parse_function_call_and_field_access(allow_top_level_struct_expr);
-        };
-
-        Ok(self.ast.new_expr(expr))
+            self.parse_function_call_and_field_access(allow_top_level_struct_expr)
+        }
     }
 
     fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
@@ -738,29 +730,23 @@ impl<'a> AstParser<'a> {
         loop {
             if self.advance_if(Token::LParen) {
                 // function call
-                let mut arguments = Vec::new();
+                let mut args = Vec::new();
                 while self.current() != Some(&Token::RParen) {
                     let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
-                    arguments.push(argument);
+                    args.push(argument);
                     if !self.advance_if(Token::Comma) {
                         break;
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                let args = self.ast.new_expr_slice(arguments);
-                let new_acc = ExprKind::Call { callee: acc, args };
-                acc = self.ast.new_expr(new_acc);
+                acc = self.builder.call(acc, &args);
             } else if self.advance_if(Token::Dot) {
                 // field access or method call
                 if let Some(Token::NumLiteral(n)) = self.current() {
+                    // indexed field access
                     let index = n.parse().unwrap();
                     self.position += 1;
-                    // indexed field access
-                    let new_acc = ExprKind::FieldAccess {
-                        obj: acc,
-                        field: FieldDescriptor::Indexed(index),
-                    };
-                    acc = self.ast.new_expr(new_acc);
+                    acc = self.builder.field_access(acc, FieldDescriptor::Indexed(index));
                 } else {
                     let member = self.parse_path_segment(true)?;
                     if self.advance_if(Token::LParen) {
@@ -774,20 +760,10 @@ impl<'a> AstParser<'a> {
                             }
                         }
                         self.expect_token(Token::RParen)?;
-                        let args = self.ast.new_expr_slice(args);
-                        let new_acc = ExprKind::MthdCall {
-                            obj: acc,
-                            mthd: member,
-                            args,
-                        };
-                        acc = self.ast.new_expr(new_acc);
+                        acc = self.builder.mthd_call(acc, member, &args);
                     } else {
                         // named field access
-                        let new_acc = ExprKind::FieldAccess {
-                            obj: acc,
-                            field: FieldDescriptor::Named(member),
-                        };
-                        acc = self.ast.new_expr(new_acc);
+                        acc = self.builder.field_access(acc, FieldDescriptor::Named(member));
                     }
                 }
             } else {
@@ -801,26 +777,30 @@ impl<'a> AstParser<'a> {
     fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
 
-        let expr = match current {
+        match current {
             Token::NumLiteral(value) => {
                 let value = value.parse().map_err(|_| ParserErr::InvalidLiteral)?;
                 self.position += 1;
-                ExprKind::Lit(Lit::Int(value))
+                let expr = self.builder.lit(Lit::Int(value));
+                Ok(expr)
             }
             Token::BoolLiteral(b) => {
                 let value = *b;
                 self.position += 1;
-                ExprKind::Lit(Lit::Bool(value))
+                let expr = self.builder.lit(Lit::Bool(value));
+                Ok(expr)
             }
             Token::CCharLiteral(c) => {
                 let value = *c;
                 self.position += 1;
-                ExprKind::Lit(Lit::CChar(value))
+                let expr = self.builder.lit(Lit::CChar(value));
+                Ok(expr)
             }
             Token::CStringLiteral(s) => {
                 let value = s.clone();
                 self.position += 1;
-                ExprKind::Lit(Lit::CString(value))
+                let expr = self.builder.lit(Lit::CString(value));
+                Ok(expr)
             }
             Token::Identifier(..) => {
                 let path = self.parse_path(true)?;
@@ -839,9 +819,11 @@ impl<'a> AstParser<'a> {
                         }
                     }
                     self.expect_token(Token::RBrace)?;
-                    ExprKind::Struct { ty_path: path, fields }
+                    let expr = self.builder.struct_expr(path, fields);
+                    Ok(expr)
                 } else {
-                    ExprKind::Path(path)
+                    let expr = self.builder.path(path);
+                    Ok(expr)
                 }
             }
             Token::LParen => {
@@ -860,23 +842,26 @@ impl<'a> AstParser<'a> {
                 self.expect_token(Token::RParen)?;
 
                 if inner_exprs.len() == 1 && !trailing_comma {
-                    return Ok(inner_exprs.remove(0));
+                    Ok(inner_exprs.remove(0))
                 } else {
-                    let inner_exprs = self.ast.new_expr_slice(inner_exprs);
-                    ExprKind::Tuple(inner_exprs)
+                    // let inner_exprs = self.ast.new_expr_slice(inner_exprs);
+                    let expr = self.builder.tuple(&inner_exprs);
+                    Ok(expr)
                 }
             }
             Token::LBrace => {
                 let block = self.parse_block()?;
-                ExprKind::Block(block)
+                let expr = self.builder.block(block);
+                Ok(expr)
             }
-            Token::Keyword(Keyword::If) => return self.parse_if_expr(),
-            Token::Keyword(Keyword::Loop) => return self.parse_loop(),
-            Token::Keyword(Keyword::While) => return self.parse_while(),
-            Token::Keyword(Keyword::Match) => return self.parse_match(),
+            Token::Keyword(Keyword::If) => self.parse_if_expr(),
+            Token::Keyword(Keyword::Loop) => self.parse_loop(),
+            Token::Keyword(Keyword::While) => self.parse_while(),
+            Token::Keyword(Keyword::Match) => self.parse_match(),
             Token::Keyword(Keyword::Self_) => {
                 self.position += 1;
-                ExprKind::Self_
+                let expr = self.builder.self_();
+                Ok(expr)
             }
             Token::Pipe => {
                 self.position += 1;
@@ -899,11 +884,8 @@ impl<'a> AstParser<'a> {
 
                 let body = self.parse_closure_body(return_ty.is_some())?;
 
-                ExprKind::Closure {
-                    params,
-                    return_ty,
-                    body,
-                }
+                let expr = self.builder.closure(params, return_ty, body);
+                Ok(expr)
             }
             Token::PipePipe => {
                 self.position += 1;
@@ -916,11 +898,8 @@ impl<'a> AstParser<'a> {
 
                 let body = self.parse_closure_body(return_ty.is_some())?;
 
-                ExprKind::Closure {
-                    params: vec![],
-                    return_ty,
-                    body,
-                }
+                let expr = self.builder.closure(vec![], return_ty, body);
+                Ok(expr)
             }
             Token::Smaller => {
                 self.position += 1;
@@ -938,13 +917,12 @@ impl<'a> AstParser<'a> {
 
                 let qual_path = QualifiedPath { ty, trait_, path };
 
-                ExprKind::QualifiedPath(qual_path)
+                let expr = self.builder.qualified_path(qual_path);
+                Ok(expr)
             }
 
-            token => return Err(ParserErr::UnexpectedToken(token.clone())),
-        };
-
-        Ok(self.ast.new_expr(expr))
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
+        }
     }
 
     fn parse_closure_param(&mut self) -> Result<ClosureParam, ParserErr> {
@@ -1012,34 +990,30 @@ impl<'a> AstParser<'a> {
 
     fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::If)?;
-        let condition = self.parse_expr(false)?; // Don't allow top-level struct in if condition
+        let cond = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
         let else_block = if self.advance_if(Token::Keyword(Keyword::Else)) {
             Some(self.parse_block()?)
         } else {
             None
         };
-        let expr = ExprKind::If {
-            cond: condition,
-            then: then_block,
-            else_: else_block,
-        };
-        Ok(self.ast.new_expr(expr))
+        let expr = self.builder.if_(cond, then_block, else_block);
+        Ok(expr)
     }
 
     fn parse_loop(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
-        let expr = ExprKind::Loop { body };
-        Ok(self.ast.new_expr(expr))
+        let expr = self.builder.loop_(body);
+        Ok(expr)
     }
 
     fn parse_while(&mut self) -> Result<Expr, ParserErr> {
         self.expect_keyword(Keyword::While)?;
-        let condition = self.parse_expr(false)?; // Don't allow top-level struct in while condition
+        let cond = self.parse_expr(false)?; // Don't allow top-level struct in while condition
         let body = self.parse_block()?;
-        let expr = ExprKind::While { condition, body };
-        Ok(self.ast.new_expr(expr))
+        let expr = self.builder.while_(cond, body);
+        Ok(expr)
     }
 
     fn parse_match(&mut self) -> Result<Expr, ParserErr> {
@@ -1063,8 +1037,8 @@ impl<'a> AstParser<'a> {
 
         self.expect_token(Token::RBrace)?;
 
-        let expr = ExprKind::Match { scrutinee, arms };
-        Ok(self.ast.new_expr(expr))
+        let expr = self.builder.match_(scrutinee, arms);
+        Ok(expr)
     }
 
     fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserErr> {
@@ -1096,27 +1070,31 @@ impl<'a> AstParser<'a> {
 
     fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
-        let ty_annot = match current {
+        match current {
             Token::Identifier(_) | Token::Keyword(Keyword::SelfTy) => {
                 let path = self.parse_path(false)?;
-                TyAnnotKind::Path(path)
+                let annot = self.builder.path_annot(path);
+                Ok(annot)
             }
             Token::Ampersand => {
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                TyAnnotKind::Ref(inner_ty)
+                let annot = self.builder.ref_annot(inner_ty);
+                Ok(annot)
             }
             Token::AmpersandAmpersand => {
                 // Two levels of reference
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                let inner = self.ast.new_ty_annot(TyAnnotKind::Ref(inner_ty));
-                TyAnnotKind::Ref(inner)
+                let inner = self.builder.ref_annot(inner_ty);
+                let annot = self.builder.ref_annot(inner);
+                Ok(annot)
             }
             Token::Asterisk => {
                 self.position += 1;
                 let inner_ty = self.parse_ty_annot()?;
-                TyAnnotKind::Ptr(inner_ty)
+                let annot = self.builder.ptr_annot(inner_ty);
+                Ok(annot)
             }
             Token::LParen => {
                 self.position += 1;
@@ -1134,10 +1112,10 @@ impl<'a> AstParser<'a> {
                 self.expect_token(Token::RParen)?;
 
                 if inner_tys.len() == 1 && !trailing_comma {
-                    return Ok(inner_tys.remove(0));
+                    Ok(inner_tys.remove(0))
                 } else {
-                    let inner_tys = self.ast.new_ty_annot_slice(inner_tys);
-                    TyAnnotKind::Tuple(inner_tys)
+                    let annot = self.builder.tuple_annot(&inner_tys);
+                    Ok(annot)
                 }
             }
             Token::Keyword(Keyword::Fn) => {
@@ -1152,7 +1130,6 @@ impl<'a> AstParser<'a> {
                     }
                 }
                 self.expect_token(Token::RParen)?;
-                let param_tys = self.ast.new_ty_annot_slice(param_tys);
 
                 let return_ty = if self.advance_if(Token::Arrow) {
                     Some(self.parse_ty_annot()?)
@@ -1160,30 +1137,30 @@ impl<'a> AstParser<'a> {
                     None
                 };
 
-                TyAnnotKind::Fn { param_tys, return_ty }
+                let annot = self.builder.fn_annot(&param_tys, return_ty);
+                Ok(annot)
             }
             Token::Underscore => {
                 self.position += 1;
-                TyAnnotKind::Wildcard
+                let annot = self.builder.wildcard_annot();
+                Ok(annot)
             }
-            token => return Err(ParserErr::UnexpectedToken(token.clone())),
-        };
-
-        Ok(self.ast.new_ty_annot(ty_annot))
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
+        }
     }
 
     fn parse_trait_annot(&mut self) -> Result<TraitAnnot, ParserErr> {
         let ty_annot = self.parse_ty_annot()?;
-        let ty_annot = self.ast.ty_annot(ty_annot);
+        let ty_annot = self.builder.ast().ty_annot(ty_annot);
         match ty_annot {
             TyAnnotKind::Path(path) => match path.segments.as_slice() {
                 [PathSegment::Ident(ident)] => Ok(TraitAnnot {
                     name: ident.clone(),
-                    args: self.ast.new_ty_annot_slice(vec![]),
+                    args: self.builder.ty_annot_slice(&[]),
                 }),
                 [PathSegment::Generic(GenPathSegment { ident, gen_args })] => Ok(TraitAnnot {
                     name: ident.clone(),
-                    args: self.ast.new_ty_annot_slice(gen_args.clone()),
+                    args: self.builder.ty_annot_slice(&gen_args.clone()),
                 }),
                 _ => Err(ParserErr::ExpectedTraitName),
             },

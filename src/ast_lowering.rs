@@ -192,7 +192,7 @@ impl<'a> AstLowerer<'a> {
             Block(block) => self.build_block(block, expected)?.into(),
             If { cond, then, else_ } => self.build_if(*cond, then, else_.as_ref(), expected)?.into(),
             Loop { body } => self.build_loop(body)?.into(),
-            While { condition, body } => self.build_while(*condition, body)?.into(),
+            While { cond, body } => self.build_while(*cond, body)?.into(),
             Match { scrutinee, arms } => self.build_match_expr(*scrutinee, arms, expected)?.into(),
             &Deref { base } => self.lower_deref(base)?.into(),
             &AddrOf { base } => self.build_addr_of_val(base)?.into(),
