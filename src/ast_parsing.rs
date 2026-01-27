@@ -136,7 +136,7 @@ impl<'a> AstParser<'a> {
             match token {
                 Token::Keyword(Keyword::Fn) => {
                     let fn_ = self.parse_function(true)?;
-                    self.builder.add_fn(fn_);
+                    self.builder.add_free_fn(fn_);
                 }
                 Token::Keyword(Keyword::Struct) => {
                     let struct_ = self.parse_struct()?;
@@ -186,7 +186,7 @@ impl<'a> AstParser<'a> {
             None
         };
 
-        Ok(Fn {
+        let fn_def = FnDef {
             name,
             gen_params,
             params,
@@ -194,7 +194,8 @@ impl<'a> AstParser<'a> {
             return_ty,
             constraints,
             body,
-        })
+        };
+        Ok(self.builder.add_fn(fn_def))
     }
 
     fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param>, bool), ParserErr> {
@@ -473,7 +474,7 @@ impl<'a> AstParser<'a> {
                 }
                 Some(Token::Keyword(Keyword::Fn)) => {
                     let mthd = self.parse_function(true)?;
-                    if mthd.body.is_some() {
+                    if self.builder.ast().fn_(mthd).body.is_some() {
                         return Err(ParserErr::TraitMthdWithBody);
                     }
                     mthds.push(mthd);
@@ -1200,7 +1201,7 @@ mod tests {
                 "#;
 
             let expected = Ast {
-                fns: vec![Fn {
+                fns: vec![FnDef {
                     name: "empty".to_string(),
                     gen_params: vec![],
                     params: vec![],

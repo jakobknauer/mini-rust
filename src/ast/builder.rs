@@ -14,8 +14,12 @@ impl<'a> AstBuilder<'a> {
         self.ast
     }
 
-    pub fn add_fn(&mut self, fn_: Fn) {
-        self.ast.fns.push(fn_);
+    pub fn add_fn(&mut self, fn_: FnDef) -> Fn {
+        self.ast.new_fn(fn_)
+    }
+
+    pub fn add_free_fn(&mut self, fn_: Fn) {
+        self.ast.free_fns.push(fn_);
     }
 
     pub fn add_struct(&mut self, struct_: Struct) {

@@ -2,11 +2,13 @@ pub mod builder;
 
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Ast {
-    pub fns: Vec<Fn>,
+    pub free_fns: Vec<Fn>,
     pub structs: Vec<Struct>,
     pub enums: Vec<Enum>,
     pub impls: Vec<Impl>,
     pub traits: Vec<Trait>,
+
+    pub fns: Vec<FnDef>,
 
     pub exprs: Vec<ExprKind>,
     pub expr_slices: Vec<Expr>,
@@ -51,10 +53,22 @@ impl Ast {
     pub fn ty_annot_slice(&self, TyAnnotSlice(start, len): TyAnnotSlice) -> &[TyAnnot] {
         &self.ty_annot_slices[start..start + len]
     }
+
+    pub fn new_fn(&mut self, fn_def: FnDef) -> Fn {
+        self.fns.push(fn_def);
+        Fn(self.fns.len() - 1)
+    }
+
+    pub fn fn_(&self, fn_: Fn) -> &FnDef {
+        &self.fns[fn_.0]
+    }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fn(usize);
+
 #[derive(Debug, PartialEq, Eq)]
-pub struct Fn {
+pub struct FnDef {
     pub name: String,
     pub gen_params: Vec<String>,
     pub params: Vec<Param>,

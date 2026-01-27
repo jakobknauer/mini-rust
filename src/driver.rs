@@ -201,7 +201,7 @@ impl<'a> Driver<'a> {
     fn register_functions(&mut self, ast: &ast::Ast) -> Result<(), ()> {
         stdlib::register_fns(&mut self.ctxt)?;
 
-        for (idx, function) in ast.fns.iter().enumerate() {
+        for (idx, &function) in ast.free_fns.iter().enumerate() {
             let fn_ = self.register_function(ast, function, None, None, Vec::new())?;
             self.ast_meta.fn_ids.insert(idx, fn_);
         }
@@ -212,11 +212,12 @@ impl<'a> Driver<'a> {
     fn register_function(
         &mut self,
         ast: &ast::Ast,
-        ast_fn: &ast::Fn,
+        ast_fn: ast::Fn,
         associated_ty: Option<ty::Ty>,
         associated_trait_inst: Option<traits::TraitInst>,
         env_gen_params: Vec<ty::GenVar>,
     ) -> Result<fns::Fn, ()> {
+        let ast_fn = ast.fn_(ast_fn);
         let gen_params: Vec<_> = ast_fn
             .gen_params
             .iter()
@@ -356,7 +357,8 @@ impl<'a> Driver<'a> {
             let self_type = self.ctxt.tys.trait_self(trait_);
             let trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.clone();
 
-            for mthd in &ast_trait.mthds {
+            for &mthd in &ast_trait.mthds {
+                let mthd = ast.fn_(mthd);
                 let mthd_gen_params: Vec<_> = mthd
                     .gen_params
                     .iter()
@@ -471,9 +473,10 @@ impl<'a> Driver<'a> {
             let gen_params = impl_def.gen_params.clone();
             let trait_inst = impl_def.trait_inst.clone();
 
-            for mthd in &ast_impl.mthds {
+            for &mthd in &ast_impl.mthds {
                 let fn_ = self.register_function(ast, mthd, Some(ty), trait_inst.clone(), gen_params.clone())?;
-                self.ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
+                let mthd_name = &ast.fn_(mthd).name;
+                self.ctxt.impls.register_mthd(impl_, fn_, mthd_name);
             }
         }
 
@@ -485,7 +488,8 @@ impl<'a> Driver<'a> {
         stdlib::define_impl_for_ptr(&mut self.ctxt)
             .map_err(|err| err::print_mlr_builder_error("offset", err, &self.ctxt))?;
 
-        for (idx, ast_fn) in ast.fns.iter().enumerate() {
+        for (idx, &ast_fn) in ast.free_fns.iter().enumerate() {
+            let ast_fn = ast.fn_(ast_fn);
             let Some(body) = &ast_fn.body else {
                 continue;
             };
@@ -505,7 +509,8 @@ impl<'a> Driver<'a> {
             let impl_def = self.ctxt.impls.get_impl_def(impl_);
             let impl_mthds = impl_def.mthds.clone();
 
-            for (ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
+            for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
+                let ast_mthd = ast.fn_(ast_mthd);
                 let Some(body) = &ast_mthd.body else {
                     continue;
                 };
