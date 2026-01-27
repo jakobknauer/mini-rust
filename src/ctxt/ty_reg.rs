@@ -549,16 +549,13 @@ impl TyReg {
                     Ok(())
                 }
 
-                (&Tuple(tys1), &Tuple(tys2)) => {
-                    if tys1.1 != tys2.1 {
-                        return Err(UnificationError::TupleLengthMismatch);
+                (&Tuple(items1), &Tuple(items2)) => {
+                    if items1.1 != items2.1 {
+                        Err(UnificationError::TupleLengthMismatch)
+                    } else {
+                        zip_ty_slices!(self, (items1, items2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))?;
+                        Ok(())
                     }
-
-                    let len = tys1.1;
-                    for idx in 0..len {
-                        self.unify(self.get_ty_slice(tys1)[idx], self.get_ty_slice(tys2)[idx])?;
-                    }
-                    Ok(())
                 }
 
                 (
@@ -679,14 +676,10 @@ impl TyReg {
 
                 self.closure(new_fn_inst, name, captures_ty)
             }
-            Tuple(tys) => {
-                let new_tys = (0..tys.1)
-                    .map(|idx| {
-                        let ty = self.get_ty_slice(tys)[idx];
-                        self.substitute_gen_vars(ty, subst)
-                    })
-                    .collect::<Vec<_>>();
-                self.tuple(new_tys)
+            Tuple(items) => {
+                let items: Vec<_> =
+                    iter_ty_slice!(self, items, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                self.tuple(items)
             }
             AssocTy {
                 base_ty,
@@ -769,14 +762,10 @@ impl TyReg {
 
                 self.closure(new_fn_inst, name, captures_ty)
             }
-            Tuple(tys) => {
-                let new_tys = (0..tys.1)
-                    .map(|idx| {
-                        let ty = self.get_ty_slice(tys)[idx];
-                        self.substitute_self_ty(ty, substitute)
-                    })
-                    .collect::<Vec<_>>();
-                self.tuple(new_tys)
+            Tuple(items) => {
+                let items: Vec<_> =
+                    iter_ty_slice!(self, items, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                self.tuple(items)
             }
             AssocTy {
                 base_ty,
@@ -1000,9 +989,9 @@ impl TyReg {
                             .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
                 }
 
-                (&Tuple(tys1), &Tuple(tys2)) => {
-                    tys1.1 == tys2.1
-                        && (0..tys1.0).all(|i| self.tys_eq(self.get_ty_slice(tys1)[i], self.get_ty_slice(tys2)[i]))
+                (&Tuple(items1), &Tuple(items2)) => {
+                    items1.1 == items2.1
+                        && zip_ty_slices!(self, (items1, items2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
                 }
 
                 (
@@ -1164,13 +1153,13 @@ impl TyReg {
                         .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
             }
 
-            (&Tuple(tys1), &Tuple(tys2)) => {
-                tys1.1 == tys2.1
-                    && (0..tys1.1).all(|i| {
-                        let ty1 = self.get_ty_slice(tys1)[i];
-                        let ty2 = self.get_ty_slice(tys2)[i];
-                        self.try_find_instantiation_internal(ty1, ty2, instantiation)
-                    })
+            (&Tuple(items1), &Tuple(items2)) => {
+                items1.1 == items2.1
+                    && zip_ty_slices!(
+                        self,
+                        (items1, items2),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
             }
 
             (

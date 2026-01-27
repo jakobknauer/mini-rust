@@ -3,6 +3,7 @@ pub mod impls;
 pub mod language_items;
 pub mod mlr;
 pub mod traits;
+#[macro_use]
 pub mod ty;
 
 mod fn_reg;
@@ -431,12 +432,7 @@ impl Ctxt {
         match ty_def {
             Primitive(_) => ty,
             Tuple(items) => {
-                let items: Vec<ty::Ty> = (0..items.1)
-                    .map(|idx| {
-                        let ty = self.tys.get_ty_slice(items)[idx];
-                        self.normalize_ty(ty)
-                    })
-                    .collect();
+                let items: Vec<_> = iter_ty_slice!(self.tys, items, map(|ty| self.normalize_ty(ty))).collect();
                 self.tys.tuple(items)
             }
             Struct { struct_, gen_args } => {
