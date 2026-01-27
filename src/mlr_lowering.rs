@@ -189,7 +189,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
     }
 
     fn define_tuple_ty(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
-        let mr_field_tys = self.mr_ctxt.tys.get_tuple_field_tys(ty).unwrap().clone();
+        let mr_field_tys = self.mr_ctxt.tys.get_tuple_field_tys(ty).unwrap().to_vec();
         let iw_field_tys: Vec<BasicTypeEnum> = mr_field_tys
             .into_iter()
             .map(|field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())

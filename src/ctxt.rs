@@ -431,7 +431,12 @@ impl Ctxt {
         match ty_def {
             Primitive(_) => ty,
             Tuple(items) => {
-                let items: Vec<ty::Ty> = items.into_iter().map(|ty| self.normalize_ty(ty)).collect();
+                let items: Vec<ty::Ty> = (0..items.1)
+                    .map(|idx| {
+                        let ty = self.tys.get_ty_slice(items)[idx];
+                        self.normalize_ty(ty)
+                    })
+                    .collect();
                 self.tys.tuple(items)
             }
             Struct { struct_, gen_args } => {

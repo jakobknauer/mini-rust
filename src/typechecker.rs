@@ -322,10 +322,17 @@ impl<'a> Typechecker<'a> {
 
         let field_ty = match base_ty_def {
             ty::TyDef::Struct { .. } => self.ctxt.tys.get_struct_field_ty(base_ty, field_index)?,
-            ty::TyDef::Tuple(tys) => *tys.get(field_index).ok_or(TyError::InvalidTupleIndex {
-                ty: base_ty,
-                index: field_index,
-            })?,
+            &ty::TyDef::Tuple(items) => {
+                *self
+                    .ctxt
+                    .tys
+                    .get_ty_slice(items)
+                    .get(field_index)
+                    .ok_or(TyError::InvalidTupleIndex {
+                        ty: base_ty,
+                        index: field_index,
+                    })?
+            }
             _ => return TyError::NotAStructOrTuple { ty: base_ty }.into(),
         };
 

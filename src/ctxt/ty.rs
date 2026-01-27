@@ -6,6 +6,9 @@ use crate::ctxt::{fns, traits};
 pub struct Ty(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct TySlice(pub usize, pub usize);
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Struct(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -17,7 +20,7 @@ pub struct GenVar(pub usize);
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
     Primitive(Primitive),
-    Tuple(Vec<Ty>),
+    Tuple(TySlice),
     Struct {
         struct_: Struct,
         gen_args: Vec<Ty>,
