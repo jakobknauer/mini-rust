@@ -80,11 +80,14 @@ impl TyReg {
 
     pub fn ty_slice(&mut self, tys: &[Ty]) -> TySlice {
         self.ty_slices.extend_from_slice(tys);
-        TySlice(self.ty_slices.len() - tys.len(), tys.len())
+        TySlice {
+            offset: self.ty_slices.len() - tys.len(),
+            len: tys.len(),
+        }
     }
 
-    pub fn get_ty_slice(&self, TySlice(start, len): TySlice) -> &[Ty] {
-        &self.ty_slices[start..start + len]
+    pub fn get_ty_slice(&self, slice: TySlice) -> &[Ty] {
+        &self.ty_slices[slice.offset..(slice.offset + slice.len)]
     }
 
     fn register_named_ty(&mut self, name: &str, ty_def: TyDef) -> Result<Ty, ()> {
@@ -550,7 +553,7 @@ impl TyReg {
                 }
 
                 (&Tuple(items1), &Tuple(items2)) => {
-                    if items1.1 != items2.1 {
+                    if items1.len != items2.len {
                         Err(UnificationError::TupleLengthMismatch)
                     } else {
                         zip_ty_slices!(self, (items1, items2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))?;
@@ -990,7 +993,7 @@ impl TyReg {
                 }
 
                 (&Tuple(items1), &Tuple(items2)) => {
-                    items1.1 == items2.1
+                    items1.len == items2.len
                         && zip_ty_slices!(self, (items1, items2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
                 }
 
@@ -1154,7 +1157,7 @@ impl TyReg {
             }
 
             (&Tuple(items1), &Tuple(items2)) => {
-                items1.1 == items2.1
+                items1.len == items2.len
                     && zip_ty_slices!(
                         self,
                         (items1, items2),

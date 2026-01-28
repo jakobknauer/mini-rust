@@ -6,7 +6,10 @@ use crate::ctxt::{fns, traits};
 pub struct Ty(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct TySlice(pub usize, pub usize);
+pub struct TySlice {
+    pub offset: usize,
+    pub len: usize,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Struct(pub usize);
@@ -137,7 +140,7 @@ impl GenVarSubst {
 
 macro_rules! iter_ty_slice {
     ($self:expr, $tys:expr, $adapter:ident(|$a:ident| $body:expr)) => {{
-        let len = $tys.1;
+        let len = $tys.len;
         (0..len).$adapter(|idx| {
             let $a = ($self.get_ty_slice($tys))[idx];
             $body
@@ -148,7 +151,7 @@ macro_rules! iter_ty_slice {
 macro_rules! zip_ty_slices {
     // $adapter is the iterator method: all, any, try_for_each, etc.
     ($self:expr, ($tys1:expr, $tys2:expr), $adapter:ident(|$a:ident, $b:ident| $body:expr)) => {{
-        let len = $tys1.1;
+        let len = $tys1.len;
         (0..len).$adapter(|idx| {
             let $a = ($self.get_ty_slice($tys1))[idx];
             let $b = ($self.get_ty_slice($tys2))[idx];
