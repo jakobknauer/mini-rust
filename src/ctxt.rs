@@ -360,8 +360,8 @@ impl Ctxt {
 
                 match *self.tys.get_ty_by_name(ident).ok()? {
                     self::Named::Ty(ty) => Some(ty),
-                    self::Named::Struct(struct_) => self.tys.inst_struct(struct_, []).ok(),
-                    self::Named::Enum(enum_) => self.tys.inst_enum(enum_, []).ok(),
+                    self::Named::Struct(struct_) => self.tys.inst_struct(struct_, &[]).ok(),
+                    self::Named::Enum(enum_) => self.tys.inst_enum(enum_, &[]).ok(),
                 }
             }
             ast::PathSegment::Generic(ast::GenPathSegment { ident, gen_args }) => {
@@ -371,8 +371,8 @@ impl Ctxt {
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.tys.get_ty_by_name(ident).ok()? {
-                    self::Named::Struct(struct_) => self.tys.inst_struct(struct_, gen_args).ok(),
-                    self::Named::Enum(enum_) => self.tys.inst_enum(enum_, gen_args).ok(),
+                    self::Named::Struct(struct_) => self.tys.inst_struct(struct_, &gen_args).ok(),
+                    self::Named::Enum(enum_) => self.tys.inst_enum(enum_, &gen_args).ok(),
                     self::Named::Ty(..) => None,
                 }
             }
@@ -437,12 +437,12 @@ impl Ctxt {
                 self.tys.tuple(&items)
             }
             Struct { struct_, gen_args } => {
-                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.normalize_ty(ty)).collect();
-                self.tys.inst_struct(struct_, gen_args).unwrap()
+                let gen_args: Vec<_> = iter_ty_slice!(self.tys, gen_args, map(|ty| self.normalize_ty(ty))).collect();
+                self.tys.inst_struct(struct_, &gen_args).unwrap()
             }
             Enum { enum_, gen_args } => {
-                let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.normalize_ty(ty)).collect();
-                self.tys.inst_enum(enum_, gen_args).unwrap()
+                let gen_args: Vec<_> = iter_ty_slice!(self.tys, gen_args, map(|ty| self.normalize_ty(ty))).collect();
+                self.tys.inst_enum(enum_, &gen_args).unwrap()
             }
             Fn {
                 param_tys,

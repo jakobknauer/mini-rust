@@ -960,7 +960,7 @@ impl<'a> AstLowerer<'a> {
                         return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
                     }
                 };
-                let ty = self.tys().inst_struct(struct_, gen_args)?;
+                let ty = self.tys().inst_struct(struct_, &gen_args)?;
                 Ok(StructOrEnumResolution::Struct(ty))
             }
             [enum_, variant_name] => {
@@ -987,7 +987,7 @@ impl<'a> AstLowerer<'a> {
                         return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
                     }
                 };
-                let ty = self.tys().inst_enum(enum_, gen_args)?;
+                let ty = self.tys().inst_enum(enum_, &gen_args)?;
 
                 let ast::PathSegment::Ident(variant_name) = &variant_name else {
                     return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
@@ -1050,12 +1050,12 @@ impl<'a> AstLowerer<'a> {
             (Struct(struct_), gen_args) => {
                 let n_gen_args = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
-                self.tys().inst_struct(struct_, gen_args)?
+                self.tys().inst_struct(struct_, &gen_args)?
             }
             (Enum(enum_), gen_args) => {
                 let n_gen_args = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
                 let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
-                self.tys().inst_enum(enum_, gen_args)?
+                self.tys().inst_enum(enum_, &gen_args)?
             }
         };
 

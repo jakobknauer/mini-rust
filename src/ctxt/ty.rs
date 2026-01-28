@@ -11,6 +11,12 @@ pub struct TySlice {
     pub len: usize,
 }
 
+impl TySlice {
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Struct(pub usize);
 
@@ -26,11 +32,11 @@ pub enum TyDef {
     Tuple(TySlice),
     Struct {
         struct_: Struct,
-        gen_args: Vec<Ty>,
+        gen_args: TySlice,
     },
     Enum {
         enum_: Enum,
-        gen_args: Vec<Ty>,
+        gen_args: TySlice,
     },
     Fn {
         param_tys: TySlice,

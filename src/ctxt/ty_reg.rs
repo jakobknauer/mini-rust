@@ -225,10 +225,8 @@ impl TyReg {
         self.register_ty(assoc_ty)
     }
 
-    pub fn inst_struct(&mut self, struct_: Struct, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
+    pub fn inst_struct(&mut self, struct_: Struct, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
-        let gen_args = gen_args.into();
-
         if struct_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
                 struct_,
@@ -237,13 +235,26 @@ impl TyReg {
             });
         }
 
+        let gen_args = self.ty_slice(gen_args);
+        self.inst_struct_from_ty_slice(struct_, gen_args)
+    }
+
+    pub fn inst_struct_from_ty_slice(&mut self, struct_: Struct, gen_args: TySlice) -> Result<Ty, TyInstError> {
+        let struct_def = self.structs.get(struct_.0).unwrap();
+        if struct_def.gen_params.len() != gen_args.len {
+            return Err(TyInstError::StructGenericArgCountMismatch {
+                struct_,
+                expected: struct_def.gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
+
         let struct_ty = TyDef::Struct { struct_, gen_args };
         Ok(self.register_ty(struct_ty))
     }
 
-    pub fn inst_enum(&mut self, enum_: Enum, gen_args: impl Into<Vec<Ty>>) -> Result<Ty, TyInstError> {
+    pub fn inst_enum(&mut self, enum_: Enum, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
-        let gen_args = gen_args.into();
 
         if enum_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::EnumGenericArgCountMismatch {
@@ -252,6 +263,8 @@ impl TyReg {
                 actual: gen_args.len(),
             });
         }
+
+        let gen_args = self.ty_slice(gen_args);
 
         let enum_ty = TyDef::Enum { enum_, gen_args };
         Ok(self.register_ty(enum_ty))
@@ -360,26 +373,22 @@ impl TyReg {
                 .get(&gen_var)
                 .map(|&ty| self.get_string_rep_with_subst(ty, subst))
                 .unwrap_or(self.get_gen_var_name(gen_var).to_string()),
-            Struct { struct_, ref gen_args } => {
+            Struct { struct_, gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
                 if gen_args.is_empty() {
                     return struct_name;
                 }
-                let gen_arg_names = gen_args
-                    .iter()
-                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
+                let gen_arg_names = iter_ty_slice!(self, gen_args, map(|ga| self.get_string_rep_with_subst(ga, subst)))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", struct_name, gen_arg_names)
             }
-            Enum { enum_, ref gen_args } => {
+            Enum { enum_, gen_args } => {
                 let enum_name = self.get_enum_name(enum_);
                 if gen_args.is_empty() {
                     return enum_name;
                 }
-                let gen_arg_names = gen_args
-                    .iter()
-                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
+                let gen_arg_names = iter_ty_slice!(self, gen_args, map(|ga| self.get_string_rep_with_subst(ga, subst)))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", enum_name, gen_arg_names)
@@ -488,44 +497,44 @@ impl TyReg {
 
                 (
                     &Struct {
-                        struct_: struct_1,
-                        gen_args: ref gen_args_1,
+                        struct_: struct1,
+                        gen_args: gen_args1,
                     },
                     &Struct {
-                        struct_: struct_2,
-                        gen_args: ref gen_args_2,
+                        struct_: struct2,
+                        gen_args: gen_args2,
                     },
                 ) => {
-                    if struct_1 != struct_2 || gen_args_1.len() != gen_args_2.len() {
-                        return Err(UnificationError::TypeMismatch);
+                    if struct1 != struct2 || gen_args1.len != gen_args2.len {
+                        Err(UnificationError::TypeMismatch)
+                    } else {
+                        zip_ty_slices!(
+                            self,
+                            (gen_args1, gen_args2),
+                            try_for_each(|ty1, ty2| self.unify(ty1, ty2))
+                        )
                     }
-
-                    let pairs = gen_args_1.clone().into_iter().zip(gen_args_2.clone());
-                    for (arg1, arg2) in pairs {
-                        self.unify(arg1, arg2)?;
-                    }
-                    Ok(())
                 }
 
                 (
                     &Enum {
-                        enum_: enum_1,
-                        gen_args: ref gen_args_1,
+                        enum_: enum1,
+                        gen_args: gen_args1,
                     },
                     &Enum {
-                        enum_: enum_2,
-                        gen_args: ref gen_args_2,
+                        enum_: enum2,
+                        gen_args: gen_args2,
                     },
                 ) => {
-                    if enum_1 != enum_2 || gen_args_1.len() != gen_args_2.len() {
-                        return Err(UnificationError::TypeMismatch);
+                    if enum1 != enum2 || gen_args1.len != gen_args2.len {
+                        Err(UnificationError::TypeMismatch)
+                    } else {
+                        zip_ty_slices!(
+                            self,
+                            (gen_args1, gen_args2),
+                            try_for_each(|ty1, ty2| self.unify(ty1, ty2))
+                        )
                     }
-
-                    let pairs = gen_args_1.clone().into_iter().zip(gen_args_2.clone());
-                    for (arg1, arg2) in pairs {
-                        self.unify(arg1, arg2)?;
-                    }
-                    Ok(())
                 }
 
                 (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
@@ -552,8 +561,7 @@ impl TyReg {
                     if items1.len != items2.len {
                         Err(UnificationError::TupleLengthMismatch)
                     } else {
-                        zip_ty_slices!(self, (items1, items2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))?;
-                        Ok(())
+                        zip_ty_slices!(self, (items1, items2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))
                     }
                 }
 
@@ -635,21 +643,15 @@ impl TyReg {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
                 self.ptr(new_inner_ty)
             }
-            Struct { struct_, ref gen_args } => {
-                let new_gen_args = gen_args
-                    .clone()
-                    .iter()
-                    .map(|&ga| self.substitute_gen_vars(ga, subst))
-                    .collect::<Vec<_>>();
-                self.inst_struct(struct_, new_gen_args).unwrap()
+            Struct { struct_, gen_args } => {
+                let gen_args: Vec<_> =
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                self.inst_struct(struct_, &gen_args).unwrap()
             }
-            Enum { enum_, ref gen_args } => {
-                let new_gen_args = gen_args
-                    .clone()
-                    .iter()
-                    .map(|&ga| self.substitute_gen_vars(ga, subst))
-                    .collect::<Vec<_>>();
-                self.inst_enum(enum_, new_gen_args).unwrap()
+            Enum { enum_, gen_args } => {
+                let gen_args: Vec<_> =
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                self.inst_enum(enum_, &gen_args).unwrap()
             }
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
@@ -720,21 +722,15 @@ impl TyReg {
                 let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
                 self.ptr(new_inner_ty)
             }
-            Struct { struct_, ref gen_args } => {
-                let new_gen_args = gen_args
-                    .clone()
-                    .iter()
-                    .map(|&ga| self.substitute_self_ty(ga, substitute))
-                    .collect::<Vec<_>>();
-                self.inst_struct(struct_, new_gen_args).unwrap()
+            Struct { struct_, gen_args } => {
+                let gen_args: Vec<_> =
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                self.inst_struct(struct_, &gen_args).unwrap()
             }
-            Enum { enum_, ref gen_args } => {
-                let new_gen_args = gen_args
-                    .clone()
-                    .iter()
-                    .map(|&ga| self.substitute_self_ty(ga, substitute))
-                    .collect::<Vec<_>>();
-                self.inst_enum(enum_, new_gen_args).unwrap()
+            Enum { enum_, gen_args } => {
+                let gen_args: Vec<_> =
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                self.inst_enum(enum_, &gen_args).unwrap()
             }
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
@@ -777,7 +773,7 @@ impl TyReg {
 
     pub fn get_struct_field_ty(&mut self, ty: Ty, index: usize) -> Result<Ty, NotAStruct> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Struct { struct_, ref gen_args } = ty_def else {
+        let &TyDef::Struct { struct_, gen_args } = ty_def else {
             return Err(NotAStruct(ty));
         };
 
@@ -786,7 +782,7 @@ impl TyReg {
             .expect("struct definition should be registered");
         let field_ty = struct_def.fields[index].ty;
 
-        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
+        let subst = GenVarSubst::new(&struct_def.gen_params, self.get_ty_slice(gen_args)).unwrap();
         let instantiated_field_ty = self.substitute_gen_vars(field_ty, &subst);
 
         Ok(instantiated_field_ty)
@@ -794,14 +790,14 @@ impl TyReg {
 
     pub fn get_struct_field_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAStruct> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Struct { struct_, ref gen_args } = ty_def else {
+        let &TyDef::Struct { struct_, gen_args } = ty_def else {
             return Err(NotAStruct(ty));
         };
 
         let struct_def = self
             .get_struct_def(struct_)
             .expect("struct definition should be registered");
-        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
+        let subst = GenVarSubst::new(&struct_def.gen_params, self.get_ty_slice(gen_args)).unwrap();
 
         let field_tys: Vec<Ty> = struct_def.fields.iter().map(|field| field.ty).collect();
         let instantiated_field_tys: Vec<Ty> = field_tys
@@ -814,31 +810,29 @@ impl TyReg {
 
     pub fn get_enum_variant_ty(&mut self, ty: Ty, variant_index: usize) -> Result<Ty, NotAnEnum> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Enum { enum_, ref gen_args } = ty_def else {
+        let &TyDef::Enum { enum_, gen_args } = ty_def else {
             return Err(NotAnEnum(ty));
         };
 
         let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
         let base_variant_struct_ty = enum_def.variants[variant_index].struct_;
-        let instantiated_variant_struct_ty = self.inst_struct(base_variant_struct_ty, gen_args.clone()).unwrap();
+        let instantiated_variant_struct_ty = self
+            .inst_struct_from_ty_slice(base_variant_struct_ty, gen_args)
+            .unwrap();
         Ok(instantiated_variant_struct_ty)
     }
 
     pub fn get_enum_variant_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAnEnum> {
         let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Enum { enum_, ref gen_args } = ty_def else {
+        let &TyDef::Enum { enum_, gen_args } = ty_def else {
             return Err(NotAnEnum(ty));
         };
 
         let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
         let base_variant_structs: Vec<Struct> = enum_def.variants.iter().map(|variant| variant.struct_).collect();
-        let gen_args = gen_args.clone();
         let instantiated_variant_struct_tys: Vec<Ty> = base_variant_structs
             .into_iter()
-            .map(|variant_ty| {
-                let gen_args = gen_args.clone();
-                self.inst_struct(variant_ty, gen_args).unwrap()
-            })
+            .map(|variant_ty| self.inst_struct_from_ty_slice(variant_ty, gen_args).unwrap())
             .collect();
         Ok(instantiated_variant_struct_tys)
     }
@@ -932,38 +926,32 @@ impl TyReg {
 
                 (
                     &Struct {
-                        struct_: struct_1,
-                        gen_args: ref gen_args_1,
+                        struct_: struct1,
+                        gen_args: gen_args1,
                     },
                     &Struct {
-                        struct_: struct_2,
-                        gen_args: ref gen_args_2,
+                        struct_: struct2,
+                        gen_args: gen_args2,
                     },
                 ) => {
-                    struct_1 == struct_2
-                        && gen_args_1.len() == gen_args_2.len()
-                        && gen_args_1
-                            .iter()
-                            .zip(gen_args_2.iter())
-                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                    struct1 == struct2
+                        && gen_args1.len == gen_args2.len
+                        && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
                 }
 
                 (
                     &Enum {
-                        enum_: enum_1,
-                        gen_args: ref gen_args_1,
+                        enum_: enum1,
+                        gen_args: gen_args1,
                     },
                     &Enum {
-                        enum_: enum_2,
-                        gen_args: ref gen_args_2,
+                        enum_: enum2,
+                        gen_args: gen_args2,
                     },
                 ) => {
-                    enum_1 == enum_2
-                        && gen_args_1.len() == gen_args_2.len()
-                        && gen_args_1
-                            .iter()
-                            .zip(gen_args_2.iter())
-                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                    enum1 == enum2
+                        && gen_args1.len == gen_args2.len
+                        && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
                 }
 
                 (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
@@ -1097,38 +1085,40 @@ impl TyReg {
 
             (
                 &Struct {
-                    struct_: struct_1,
-                    gen_args: ref gen_args_1,
+                    struct_: struct1,
+                    gen_args: gen_args1,
                 },
                 &Struct {
-                    struct_: struct_2,
-                    gen_args: ref gen_args_2,
+                    struct_: struct2,
+                    gen_args: gen_args2,
                 },
             ) => {
-                struct_1 == struct_2
-                    && gen_args_1.len() == gen_args_2.len()
-                    && gen_args_1
-                        .iter()
-                        .zip(gen_args_2.iter())
-                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+                struct1 == struct2
+                    && gen_args1.len == gen_args2.len
+                    && zip_ty_slices!(
+                        self,
+                        (gen_args1, gen_args2),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
             }
 
             (
                 &Enum {
-                    enum_: enum_1,
-                    gen_args: ref gen_args_1,
+                    enum_: enum1,
+                    gen_args: gen_args1,
                 },
                 &Enum {
-                    enum_: enum_2,
-                    gen_args: ref gen_args_2,
+                    enum_: enum2,
+                    gen_args: gen_args2,
                 },
             ) => {
-                enum_1 == enum_2
-                    && gen_args_1.len() == gen_args_2.len()
-                    && gen_args_1
-                        .iter()
-                        .zip(gen_args_2.iter())
-                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+                enum1 == enum2
+                    && gen_args1.len == gen_args2.len
+                    && zip_ty_slices!(
+                        self,
+                        (gen_args1, gen_args2),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
             }
 
             (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {

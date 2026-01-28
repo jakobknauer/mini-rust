@@ -56,7 +56,7 @@ impl<'a> super::AstLowerer<'a> {
             .register_struct_with_existing_gen_vars(&captures_struct_name, surrounding_gen_vars)
             .unwrap();
 
-        let captures_ty = self.tys().inst_struct(captures_struct, gen_args)?;
+        let captures_ty = self.tys().inst_struct(captures_struct, &gen_args)?;
 
         Ok(captures_ty)
     }
