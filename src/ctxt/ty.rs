@@ -33,7 +33,7 @@ pub enum TyDef {
         gen_args: Vec<Ty>,
     },
     Fn {
-        param_tys: Vec<Ty>,
+        param_tys: TySlice,
         return_ty: Ty,
         var_args: bool,
     },

@@ -113,14 +113,14 @@ impl TyReg {
         self.register_ty(ty_def)
     }
 
-    pub fn tuple(&mut self, tys: impl Into<Vec<Ty>>) -> Ty {
-        let tys = self.ty_slice(&tys.into());
+    pub fn tuple(&mut self, tys: &[Ty]) -> Ty {
+        let tys = self.ty_slice(tys);
         let tuple_ty = TyDef::Tuple(tys);
         self.register_ty(tuple_ty)
     }
 
     pub fn unit(&mut self) -> Ty {
-        self.tuple([])
+        self.tuple(&[])
     }
 
     pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
@@ -171,9 +171,10 @@ impl TyReg {
         Ok(enum_)
     }
 
-    pub fn fn_(&mut self, param_tys: impl Into<Vec<Ty>>, return_ty: Ty, var_args: bool) -> Ty {
+    pub fn fn_(&mut self, param_tys: &[Ty], return_ty: Ty, var_args: bool) -> Ty {
+        let param_tys = self.ty_slice(param_tys);
         let fn_ty = TyDef::Fn {
-            param_tys: param_tys.into(),
+            param_tys,
             var_args,
             return_ty,
         };
@@ -340,14 +341,12 @@ impl TyReg {
                 ),
             },
             Fn {
-                ref param_tys,
+                param_tys,
                 return_ty,
                 var_args,
             } => {
-                let mut param_names: Vec<_> = param_tys
-                    .iter()
-                    .map(|&pt| self.get_string_rep_with_subst(pt, subst))
-                    .collect();
+                let mut param_names: Vec<_> =
+                    iter_ty_slice!(self, param_tys, map(|pt| self.get_string_rep_with_subst(pt, subst))).collect();
                 if var_args {
                     param_names.push("...".to_string());
                 }
@@ -463,17 +462,17 @@ impl TyReg {
 
                 (
                     &Fn {
-                        param_tys: ref params1,
+                        param_tys: params1,
                         return_ty: ret1,
                         var_args: var_args1,
                     },
                     &Fn {
-                        param_tys: ref params2,
+                        param_tys: params2,
                         return_ty: ret2,
                         var_args: var_args2,
                     },
                 ) => {
-                    if params1.len() != params2.len() {
+                    if params1.len != params2.len {
                         return Err(UnificationError::FunctionParamCountMismatch);
                     }
 
@@ -481,10 +480,7 @@ impl TyReg {
                         return Err(UnificationError::TypeMismatch);
                     }
 
-                    let pairs = params1.clone().into_iter().zip(params2.clone());
-                    for (p1, p2) in pairs {
-                        self.unify(p1, p2)?;
-                    }
+                    zip_ty_slices!(self, (params1, params2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))?;
                     self.unify(ret1, ret2)
                 }
 
@@ -622,17 +618,14 @@ impl TyReg {
                 }
             }
             Fn {
-                ref param_tys,
+                param_tys,
                 return_ty,
                 var_args,
             } => {
-                let new_param_tys = param_tys
-                    .clone()
-                    .into_iter()
-                    .map(|pt| self.substitute_gen_vars(pt, subst))
-                    .collect::<Vec<_>>();
-                let new_return_ty = self.substitute_gen_vars(return_ty, subst);
-                self.fn_(new_param_tys, new_return_ty, var_args)
+                let param_tys: Vec<_> =
+                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                let return_ty = self.substitute_gen_vars(return_ty, subst);
+                self.fn_(&param_tys, return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
@@ -682,7 +675,7 @@ impl TyReg {
             Tuple(items) => {
                 let items: Vec<_> =
                     iter_ty_slice!(self, items, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
-                self.tuple(items)
+                self.tuple(&items)
             }
             AssocTy {
                 base_ty,
@@ -710,17 +703,14 @@ impl TyReg {
         match *ty_def {
             GenVar(..) => ty,
             Fn {
-                ref param_tys,
+                param_tys,
                 return_ty,
                 var_args,
             } => {
-                let new_param_tys = param_tys
-                    .clone()
-                    .into_iter()
-                    .map(|pt| self.substitute_self_ty(pt, substitute))
-                    .collect::<Vec<_>>();
-                let new_return_ty = self.substitute_self_ty(return_ty, substitute);
-                self.fn_(new_param_tys, new_return_ty, var_args)
+                let param_tys: Vec<_> =
+                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                let return_ty = self.substitute_self_ty(return_ty, substitute);
+                self.fn_(&param_tys, return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
@@ -768,7 +758,7 @@ impl TyReg {
             Tuple(items) => {
                 let items: Vec<_> =
                     iter_ty_slice!(self, items, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
-                self.tuple(items)
+                self.tuple(&items)
             }
             AssocTy {
                 base_ty,
@@ -922,18 +912,18 @@ impl TyReg {
 
                 (
                     &Fn {
-                        param_tys: ref params1,
+                        param_tys: params1,
                         return_ty: ret1,
                         var_args: var_args1,
                     },
                     &Fn {
-                        param_tys: ref params2,
+                        param_tys: params2,
                         return_ty: ret2,
                         var_args: var_args2,
                     },
                 ) => {
-                    params1.len() == params2.len()
-                        && params1.iter().zip(params2.iter()).all(|(p1, p2)| self.tys_eq(*p1, *p2))
+                    params1.len == params2.len
+                        && zip_ty_slices!(self, (params1, params2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
                         && self.tys_eq(ret1, ret2)
                         && var_args1 == var_args2
                 }
@@ -1081,21 +1071,22 @@ impl TyReg {
 
             (
                 &Fn {
-                    param_tys: ref param_tys1,
+                    param_tys: params1,
                     return_ty: ret1,
                     var_args: var_args1,
                 },
                 &Fn {
-                    param_tys: ref param_tys2,
+                    param_tys: params2,
                     return_ty: ret2,
                     var_args: var_args2,
                 },
             ) => {
-                param_tys1.len() == param_tys2.len()
-                    && param_tys1
-                        .iter()
-                        .zip(param_tys2.iter())
-                        .all(|(param1, param2)| self.try_find_instantiation_internal(*param1, *param2, instantiation))
+                params1.len == params2.len
+                    && zip_ty_slices!(
+                        self,
+                        (params1, params2),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
                     && self.try_find_instantiation_internal(ret1, ret2, instantiation)
                     && var_args1 == var_args2
             }

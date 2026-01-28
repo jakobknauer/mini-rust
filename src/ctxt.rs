@@ -259,16 +259,17 @@ impl Ctxt {
         self.get_impl_insts_for_ty_and_trait(ty, trait_).next().is_some()
     }
 
+    // TODO return TySlice instead of Vec
     pub fn ty_is_callable(&mut self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
         if let Some((param_tys, return_ty)) = self.tys.try_get_callable_obligation(ty) {
             Some((param_tys, return_ty, false))
-        } else if let Some(ty::TyDef::Fn {
+        } else if let Some(&ty::TyDef::Fn {
             param_tys,
             return_ty,
             var_args,
         }) = self.tys.get_ty_def(ty)
         {
-            Some((param_tys.clone(), *return_ty, *var_args))
+            Some((self.tys.get_ty_slice(param_tys).to_vec(), return_ty, var_args))
         } else if let Some(ty::TyDef::GenVar(gen_var)) = self.tys.get_ty_def(ty)
             && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
         {
@@ -328,7 +329,7 @@ impl Ctxt {
                     None => Some(self.tys.unit()),
                 }?;
 
-                Some(self.tys.fn_(param_tys, return_ty, false))
+                Some(self.tys.fn_(&param_tys, return_ty, false))
             }
             Wildcard => allow_wildcards.then(|| self.tys.undef_ty()),
             &Tuple(ty_annots) => {
@@ -337,7 +338,7 @@ impl Ctxt {
                     .iter()
                     .map(|ty_annot| self.try_resolve_ast_ty_annot(ast, *ty_annot, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
-                Some(self.tys.tuple(tys))
+                Some(self.tys.tuple(&tys))
             }
         }
     }
@@ -433,7 +434,7 @@ impl Ctxt {
             Primitive(_) => ty,
             Tuple(items) => {
                 let items: Vec<_> = iter_ty_slice!(self.tys, items, map(|ty| self.normalize_ty(ty))).collect();
-                self.tys.tuple(items)
+                self.tys.tuple(&items)
             }
             Struct { struct_, gen_args } => {
                 let gen_args: Vec<ty::Ty> = gen_args.into_iter().map(|ty| self.normalize_ty(ty)).collect();
@@ -448,9 +449,9 @@ impl Ctxt {
                 return_ty,
                 var_args,
             } => {
-                let param_tys: Vec<ty::Ty> = param_tys.into_iter().map(|ty| self.normalize_ty(ty)).collect();
+                let param_tys: Vec<_> = iter_ty_slice!(self.tys, param_tys, map(|ty| self.normalize_ty(ty))).collect();
                 let return_ty = self.normalize_ty(return_ty);
-                self.tys.fn_(param_tys, return_ty, var_args)
+                self.tys.fn_(&param_tys, return_ty, var_args)
             }
             Ref(ty) => {
                 let ty = self.normalize_ty(ty);

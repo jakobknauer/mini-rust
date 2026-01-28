@@ -268,7 +268,7 @@ impl<'a> Typechecker<'a> {
         }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let fn_ty = self.ctxt.tys.fn_(param_tys, signature.return_ty, signature.var_args);
+        let fn_ty = self.ctxt.tys.fn_(&param_tys, signature.return_ty, signature.var_args);
 
         let fn_inst_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
 
@@ -299,7 +299,7 @@ impl<'a> Typechecker<'a> {
         }
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let fn_ty = self.ctxt.tys.fn_(param_tys, signature.return_ty, signature.var_args);
+        let fn_ty = self.ctxt.tys.fn_(&param_tys, signature.return_ty, signature.var_args);
 
         let trait_gen_var_subst =
             ty::GenVarSubst::new(&trait_def.gen_params, &trait_mthd_inst.trait_inst.gen_args).unwrap();

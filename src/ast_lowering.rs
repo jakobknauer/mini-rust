@@ -598,7 +598,7 @@ impl<'a> AstLowerer<'a> {
             .map(|&expr| self.mlr().get_val_ty(expr))
             .collect::<Vec<_>>();
 
-        let tuple_ty = self.tys().tuple(expr_tys);
+        let tuple_ty = self.tys().tuple(&expr_tys);
 
         let tuple_place = self.builder.insert_alloc_with_ty(tuple_ty)?;
         for (field_index, expr) in exprs.into_iter().enumerate() {
