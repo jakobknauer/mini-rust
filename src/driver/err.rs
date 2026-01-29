@@ -1,6 +1,9 @@
 use crate::{
     ast_lowering, ast_parsing,
-    ctxt::{self, ty::Obligation},
+    ctxt::{
+        self,
+        ty::{Obligation, iter_ty_slice},
+    },
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     obligation_check::ObligationCheckError,
     typechecker::TyError,
@@ -299,11 +302,8 @@ pub fn print_obligation_check_error(err: ObligationCheckError, ctxt: &ctxt::Ctxt
             "Obligation check error:  type '{}' does not implement trait '{}<{}>'",
             ctxt.tys.get_string_rep(ty),
             ctxt.traits.get_trait_name(trait_inst.trait_),
-            trait_inst
-                .gen_args
-                .iter()
-                .map(|ty| ctxt.tys.get_string_rep(*ty))
-                .collect::<Vec<String>>()
+            iter_ty_slice!(ctxt.tys, trait_inst.gen_args, map(|ty| ctxt.tys.get_string_rep(ty)))
+                .collect::<Vec<_>>()
                 .join(", "),
         ),
         Obligation::Callable {
@@ -316,7 +316,7 @@ pub fn print_obligation_check_error(err: ObligationCheckError, ctxt: &ctxt::Ctxt
             param_tys
                 .iter()
                 .map(|ty| ctxt.tys.get_string_rep(*ty))
-                .collect::<Vec<String>>()
+                .collect::<Vec<_>>()
                 .join(", "),
             ctxt.tys.get_string_rep(return_ty),
         ),

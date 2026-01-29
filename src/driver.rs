@@ -235,7 +235,7 @@ impl<'a> Driver<'a> {
             match &constraint.requirement {
                 ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
                     let trait_ = self.ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
-                    let trait_args = ast
+                    let trait_args: Vec<_> = ast
                         .ty_annot_slice(*trait_args)
                         .iter()
                         .map(|&arg| {
@@ -246,7 +246,7 @@ impl<'a> Driver<'a> {
                         .collect::<Result<_, _>>()?;
                     let trait_inst = TraitInst {
                         trait_,
-                        gen_args: trait_args,
+                        gen_args: self.ctxt.tys.ty_slice(&trait_args),
                     };
                     self.ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
                 }
@@ -381,9 +381,10 @@ impl<'a> Driver<'a> {
                     None => self.ctxt.tys.unit(),
                 };
 
+                let gen_args: Vec<_> = mthd_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
                 let trait_inst = traits::TraitInst {
                     trait_,
-                    gen_args: mthd_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect(),
+                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
                 };
 
                 let sig = fns::FnSig {
@@ -425,7 +426,7 @@ impl<'a> Driver<'a> {
                 .map(|trait_annot| {
                     let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
 
-                    let trait_args = ast
+                    let trait_args: Vec<_> = ast
                         .ty_annot_slice(trait_annot.args)
                         .iter()
                         .map(|&arg| {
@@ -437,16 +438,13 @@ impl<'a> Driver<'a> {
 
                     let trait_inst = TraitInst {
                         trait_,
-                        gen_args: trait_args,
+                        gen_args: self.ctxt.tys.ty_slice(&trait_args),
                     };
                     Ok(trait_inst)
                 })
                 .transpose()?;
 
-            let impl_ = self
-                .ctxt
-                .impls
-                .register_impl(ty, gen_params.clone(), trait_inst.clone());
+            let impl_ = self.ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst);
             self.ast_meta.impl_ids.insert(idx, impl_);
 
             for assoc_ty in &ast_impl.assoc_tys {
@@ -457,7 +455,7 @@ impl<'a> Driver<'a> {
                 let assoc_ty_idx = self
                     .ctxt
                     .traits
-                    .get_trait_assoc_ty_index(trait_inst.clone().unwrap().trait_, &assoc_ty.name);
+                    .get_trait_assoc_ty_index(trait_inst.unwrap().trait_, &assoc_ty.name);
                 self.ctxt.impls.register_assoc_ty(impl_, assoc_ty_idx, ty);
             }
         }
@@ -471,10 +469,10 @@ impl<'a> Driver<'a> {
             let impl_def = self.ctxt.impls.get_impl_def(impl_);
             let ty = impl_def.ty;
             let gen_params = impl_def.gen_params.clone();
-            let trait_inst = impl_def.trait_inst.clone();
+            let trait_inst = impl_def.trait_inst;
 
             for &mthd in &ast_impl.mthds {
-                let fn_ = self.register_function(ast, mthd, Some(ty), trait_inst.clone(), gen_params.clone())?;
+                let fn_ = self.register_function(ast, mthd, Some(ty), trait_inst, gen_params.clone())?;
                 let mthd_name = &ast.fn_(mthd).name;
                 self.ctxt.impls.register_mthd(impl_, fn_, mthd_name);
             }

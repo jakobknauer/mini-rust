@@ -60,7 +60,7 @@ impl ImplReg {
         self.impls.get(impl_.0).unwrap()
     }
 
-    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<&TraitInst> {
-        self.get_impl_def(impl_).trait_inst.as_ref()
+    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<TraitInst> {
+        self.get_impl_def(impl_).trait_inst
     }
 }

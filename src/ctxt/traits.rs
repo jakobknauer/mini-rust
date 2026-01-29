@@ -1,6 +1,6 @@
 use crate::ctxt::{
     fns::FnSig,
-    ty::{GenVar, Ty},
+    ty::{GenVar, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -14,8 +14,8 @@ pub struct TraitDef {
     pub assoc_tys: Vec<String>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TraitInst {
     pub trait_: Trait,
-    pub gen_args: Vec<Ty>,
+    pub gen_args: TySlice,
 }

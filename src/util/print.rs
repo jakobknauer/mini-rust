@@ -4,6 +4,7 @@ use crate::ctxt::{
     self,
     fns::{Fn, FnMlr, FnSig},
     mlr,
+    ty::iter_ty_slice,
 };
 
 pub fn print_mlr<W: Write>(fn_: Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
@@ -68,12 +69,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                 } else {
                     format!(
                         "<{}>",
-                        assoc_trait_inst
-                            .gen_args
-                            .iter()
-                            .map(|&ty| self.ctxt.tys.get_string_rep(ty))
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        iter_ty_slice!(
+                            self.ctxt.tys,
+                            assoc_trait_inst.gen_args,
+                            map(|ty| self.ctxt.tys.get_string_rep(ty))
+                        )
+                        .collect::<Vec<_>>()
+                        .join(", ")
                     )
                 };
 
@@ -314,13 +316,13 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     } else {
                         format!(
                             "<{}>",
-                            trait_mthd
-                                .trait_inst
-                                .gen_args
-                                .iter()
-                                .map(|ty| self.ctxt.tys.get_string_rep(*ty))
-                                .collect::<Vec<_>>()
-                                .join(", ")
+                            iter_ty_slice!(
+                                self.ctxt.tys,
+                                trait_mthd.trait_inst.gen_args,
+                                map(|ty| self.ctxt.tys.get_string_rep(ty))
+                            )
+                            .collect::<Vec<_>>()
+                            .join(", ")
                         )
                     };
 

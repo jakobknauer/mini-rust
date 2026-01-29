@@ -9,7 +9,7 @@ pub fn check_obligations(ctxt: &mut ctxt::Ctxt) -> Result<(), ObligationCheckErr
 
     for obligation in &obligations {
         match *obligation {
-            Obligation::ImplementsTraitInst { ty, ref trait_inst } => {
+            Obligation::ImplementsTraitInst { ty, trait_inst } => {
                 if !ctxt.ty_implements_trait_inst(ty, trait_inst) {
                     return Err(ObligationCheckError {
                         obligation: obligation.clone(),

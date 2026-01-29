@@ -1016,7 +1016,7 @@ impl<'a> AstLowerer<'a> {
                     trait_name: trait_annot.name.clone(),
                 })?;
 
-        let trait_args = self
+        let trait_args: Vec<_> = self
             .ast
             .ty_annot_slice(trait_annot.args)
             .iter()
@@ -1025,7 +1025,7 @@ impl<'a> AstLowerer<'a> {
 
         let trait_inst = traits::TraitInst {
             trait_,
-            gen_args: trait_args,
+            gen_args: self.tys().ty_slice(&trait_args),
         };
         Ok(trait_inst)
     }

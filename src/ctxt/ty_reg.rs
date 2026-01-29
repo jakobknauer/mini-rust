@@ -404,15 +404,16 @@ impl TyReg {
             Closure { ref name, .. } => name.clone(),
             AssocTy {
                 base_ty,
-                ref trait_inst,
+                trait_inst,
                 assoc_ty_idx,
             } => {
-                let trait_arg_names = trait_inst
-                    .gen_args
-                    .iter()
-                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let trait_arg_names = iter_ty_slice!(
+                    self,
+                    trait_inst.gen_args,
+                    map(|ga| self.get_string_rep_with_subst(ga, subst))
+                )
+                .collect::<Vec<_>>()
+                .join(", ");
 
                 // TODO move this method to ctxt so the trait name can be printed
 
@@ -572,12 +573,12 @@ impl TyReg {
                 }
 
                 (
-                    AssocTy {
+                    &AssocTy {
                         base_ty: base_ty1,
                         trait_inst: trait_inst1,
                         assoc_ty_idx: assoc_ty_idx1,
                     },
-                    AssocTy {
+                    &AssocTy {
                         base_ty: base_ty2,
                         trait_inst: trait_inst2,
                         assoc_ty_idx: assoc_ty_idx2,
@@ -587,17 +588,16 @@ impl TyReg {
                     // This could also be done in canonicalize or directly when creating the type
                     // during lowering/type inference
 
-                    let trait_inst = trait_inst1.clone();
-                    let trait_inst2 = trait_inst2.clone();
-
-                    if trait_inst.trait_ != trait_inst2.trait_ || assoc_ty_idx1 != assoc_ty_idx2 {
+                    if trait_inst1.trait_ != trait_inst2.trait_ || assoc_ty_idx1 != assoc_ty_idx2 {
                         return Err(UnificationError::TypeMismatch);
                     }
 
-                    self.unify(*base_ty1, *base_ty2)?;
-                    for (gen_arg1, gen_arg2) in trait_inst.gen_args.iter().zip(&trait_inst2.gen_args) {
-                        self.unify(*gen_arg1, *gen_arg2)?;
-                    }
+                    self.unify(base_ty1, base_ty2)?;
+                    zip_ty_slices!(
+                        self,
+                        (trait_inst1.gen_args, trait_inst2.gen_args),
+                        try_for_each(|ty1, ty2| self.unify(ty1, ty2))
+                    )?;
 
                     Ok(())
                 }
@@ -691,15 +691,16 @@ impl TyReg {
             }
             AssocTy {
                 base_ty,
-                ref trait_inst,
+                trait_inst,
                 assoc_ty_idx,
             } => {
-                let mut new_trait_inst = trait_inst.clone();
-                let new_base_ty = self.substitute_gen_vars(base_ty, subst);
-                for gen_arg in &mut new_trait_inst.gen_args {
-                    *gen_arg = self.substitute_gen_vars(*gen_arg, subst);
-                }
-                self.assoc_ty(new_base_ty, new_trait_inst, assoc_ty_idx)
+                let base_ty = self.substitute_gen_vars(base_ty, subst);
+                let gen_args = self.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
+                let trait_inst = traits::TraitInst {
+                    trait_: trait_inst.trait_,
+                    gen_args,
+                };
+                self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
         }
     }
@@ -709,7 +710,7 @@ impl TyReg {
         self.ty_slice(&slice)
     }
 
-    pub fn substitute_self_ty(&mut self, ty: Ty, substitute: Ty) -> Ty {
+    pub fn substitute_self_ty(&mut self, ty: Ty, subst: Ty) -> Ty {
         use TyDef::*;
 
         let ty = self.canonicalize(ty);
@@ -725,39 +726,39 @@ impl TyReg {
                 var_args,
             } => {
                 let param_tys: Vec<_> =
-                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
-                let return_ty = self.substitute_self_ty(return_ty, substitute);
+                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute_self_ty(ty, subst))).collect();
+                let return_ty = self.substitute_self_ty(return_ty, subst);
                 self.fn_(&param_tys, return_ty, var_args)
             }
             Ref(inner_ty) => {
-                let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
+                let new_inner_ty = self.substitute_self_ty(inner_ty, subst);
                 self.ref_(new_inner_ty)
             }
             Ptr(inner_ty) => {
-                let new_inner_ty = self.substitute_self_ty(inner_ty, substitute);
+                let new_inner_ty = self.substitute_self_ty(inner_ty, subst);
                 self.ptr(new_inner_ty)
             }
             Struct { struct_, gen_args } => {
                 let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, subst))).collect();
                 self.inst_struct(struct_, &gen_args).unwrap()
             }
             Enum { enum_, gen_args } => {
                 let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, subst))).collect();
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
             Primitive(..) => ty,
             Alias(..) => unreachable!("ty should have been canonicalized"),
-            TraitSelf(_) => substitute,
+            TraitSelf(_) => subst,
             Closure {
                 fn_inst,
                 ref name,
                 captures_ty,
             } => {
                 let name = name.clone();
-                let gen_args = self.substitute_self_ty_on_slice(fn_inst.gen_args, substitute);
-                let env_gen_args = self.substitute_self_ty_on_slice(fn_inst.env_gen_args, substitute);
+                let gen_args = self.substitute_self_ty_on_slice(fn_inst.gen_args, subst);
+                let env_gen_args = self.substitute_self_ty_on_slice(fn_inst.env_gen_args, subst);
                 let fn_insnt = fns::FnInst {
                     gen_args,
                     env_gen_args,
@@ -767,21 +768,21 @@ impl TyReg {
                 self.closure(fn_insnt, name, captures_ty)
             }
             Tuple(items) => {
-                let items: Vec<_> =
-                    iter_ty_slice!(self, items, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+                let items: Vec<_> = iter_ty_slice!(self, items, map(|ty| self.substitute_self_ty(ty, subst))).collect();
                 self.tuple(&items)
             }
             AssocTy {
                 base_ty,
-                ref trait_inst,
+                trait_inst,
                 assoc_ty_idx,
             } => {
-                let mut new_trait_inst = trait_inst.clone();
-                let new_base_ty = self.substitute_self_ty(base_ty, substitute);
-                for gen_arg in &mut new_trait_inst.gen_args {
-                    *gen_arg = self.substitute_self_ty(*gen_arg, substitute);
-                }
-                self.assoc_ty(new_base_ty, new_trait_inst, assoc_ty_idx)
+                let base_ty = self.substitute_self_ty(base_ty, subst);
+                let gen_args = self.substitute_self_ty_on_slice(trait_inst.gen_args, subst);
+                let trait_inst = traits::TraitInst {
+                    trait_: trait_inst.trait_,
+                    gen_args,
+                };
+                self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
         }
     }
@@ -1009,11 +1010,11 @@ impl TyReg {
                 ) => {
                     base_ty1 == base_ty2
                         && trait_inst1.trait_ == trait_inst2.trait_
-                        && trait_inst1
-                            .gen_args
-                            .iter()
-                            .zip(&trait_inst2.gen_args)
-                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                        && zip_ty_slices!(
+                            self,
+                            (trait_inst1.gen_args, trait_inst2.gen_args),
+                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                        )
                         && assoc_ty_idx1 == assoc_ty_idx2
                 }
 
@@ -1169,23 +1170,23 @@ impl TyReg {
             (
                 &AssocTy {
                     base_ty: base_ty1,
-                    trait_inst: ref trait_inst1,
+                    trait_inst: trait_inst1,
                     assoc_ty_idx: assoc_ty_idx1,
                 },
                 &AssocTy {
                     base_ty: base_ty2,
-                    trait_inst: ref trait_inst2,
+                    trait_inst: trait_inst2,
                     assoc_ty_idx: assoc_ty_idx2,
                 },
             ) => {
                 self.try_find_instantiation_internal(base_ty1, base_ty2, instantiation)
                     && trait_inst1.trait_ == trait_inst2.trait_
-                    && trait_inst1.gen_args.len() == trait_inst2.gen_args.len()
-                    && trait_inst1
-                        .gen_args
-                        .iter()
-                        .zip(&trait_inst2.gen_args)
-                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+                    && trait_inst1.gen_args.len == trait_inst2.gen_args.len
+                    && zip_ty_slices!(
+                        self,
+                        (trait_inst1.gen_args, trait_inst2.gen_args),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
                     && assoc_ty_idx1 == assoc_ty_idx2
             }
 
@@ -1217,7 +1218,7 @@ impl TyReg {
                 matches!(c.requirement , ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_))
     }
 
-    pub fn implements_trait_inst_constraint_exists(&self, gen_var: GenVar, trait_inst: &TraitInst) -> bool {
+    pub fn implements_trait_inst_constraint_exists(&self, gen_var: GenVar, trait_inst: TraitInst) -> bool {
         self.constraints.iter().any(|c| {
             if c.subject != gen_var {
                 return false;
@@ -1226,12 +1227,12 @@ impl TyReg {
             match &c.requirement {
                 ConstraintRequirement::Trait(trait_inst_2) => {
                     trait_inst.trait_ == trait_inst_2.trait_
-                        && trait_inst.gen_args.len() == trait_inst_2.gen_args.len()
-                        && trait_inst
-                            .gen_args
-                            .iter()
-                            .zip(&trait_inst_2.gen_args)
-                            .all(|(&gen_arg1, &gen_arg2)| self.tys_eq(gen_arg1, gen_arg2))
+                        && trait_inst.gen_args.len == trait_inst_2.gen_args.len
+                        && zip_ty_slices!(
+                            self,
+                            (trait_inst.gen_args, trait_inst_2.gen_args),
+                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                        )
                 }
                 _ => false,
             }

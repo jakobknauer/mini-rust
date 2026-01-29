@@ -241,10 +241,11 @@ impl<'a> Typechecker<'a> {
             for requirement in requirements {
                 match requirement {
                     ty::ConstraintRequirement::Trait(trait_inst) => {
-                        let mut trait_inst = trait_inst.clone();
-                        for gen_arg in &mut trait_inst.gen_args {
-                            *gen_arg = self.ctxt.tys.substitute_gen_vars(*gen_arg, &subst);
-                        }
+                        let gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, &subst);
+                        let trait_inst = traits::TraitInst {
+                            trait_: trait_inst.trait_,
+                            gen_args,
+                        };
                         self.ctxt.tys.add_implements_trait_inst_obligation(gen_arg, trait_inst)
                     }
                     ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
@@ -279,7 +280,7 @@ impl<'a> Typechecker<'a> {
     fn infer_ty_of_trait_mthd(&mut self, trait_mthd_inst: &fns::TraitMthdInst) -> TyResult<ty::Ty> {
         self.ctxt
             .tys
-            .add_implements_trait_inst_obligation(trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst.clone());
+            .add_implements_trait_inst_obligation(trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst);
 
         let signature = self
             .ctxt
@@ -302,8 +303,11 @@ impl<'a> Typechecker<'a> {
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let fn_ty = self.ctxt.tys.fn_(&param_tys, signature.return_ty, signature.var_args);
 
-        let trait_gen_var_subst =
-            ty::GenVarSubst::new(&trait_def.gen_params, &trait_mthd_inst.trait_inst.gen_args).unwrap();
+        let trait_gen_var_subst = ty::GenVarSubst::new(
+            &trait_def.gen_params,
+            self.ctxt.tys.get_ty_slice(trait_mthd_inst.trait_inst.gen_args),
+        )
+        .unwrap();
         let gen_var_subst = ty::GenVarSubst::new(
             &signature.gen_params,
             self.ctxt.tys.get_ty_slice(trait_mthd_inst.gen_args),
@@ -643,11 +647,11 @@ impl<'a> Typechecker<'a> {
             [(trait_, mthd_idx)] => {
                 let trait_def = self.ctxt.traits.get_trait_def(*trait_);
                 let n_gen_params = trait_def.gen_params.len();
-                let gen_args = (0..n_gen_params).map(|_| self.ctxt.tys.undef_ty()).collect();
+                let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.ctxt.tys.undef_ty()).collect();
 
                 let trait_inst = traits::TraitInst {
                     trait_: *trait_,
-                    gen_args,
+                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
                 };
                 Ok(Some(MthdResolution::Trait {
                     trait_inst,

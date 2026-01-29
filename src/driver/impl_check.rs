@@ -55,20 +55,20 @@ pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
         let Some(trait_inst) = ctxt.impls.get_impl_trait_inst(impl_) else {
             continue;
         };
-        check_trait_impl(ctxt, impl_, &trait_inst.clone())?;
+        check_trait_impl(ctxt, impl_, trait_inst)?;
     }
 
     Ok(())
 }
 
-fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) -> Result<(), ImplCheckError> {
+fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: TraitInst) -> Result<(), ImplCheckError> {
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
-    if trait_def.gen_params.len() != trait_inst.gen_args.len() {
+    if trait_def.gen_params.len() != trait_inst.gen_args.len {
         return Err(ImplCheckError {
             impl_,
-            trait_inst: trait_inst.clone(),
+            trait_inst,
             kind: ImplCheckErrorKind::ImplGenParamCountMismatch {
-                actual: trait_inst.gen_args.len(),
+                actual: trait_inst.gen_args.len,
                 expected: trait_def.gen_params.len(),
             },
         });
@@ -79,7 +79,7 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
         if !impl_def.assoc_tys.contains_key(&assoc_ty_idx) {
             return Err(ImplCheckError {
                 impl_,
-                trait_inst: trait_inst.clone(),
+                trait_inst,
                 kind: ImplCheckErrorKind::MissingAssocTy(assoc_ty_name.clone()),
             });
         }
@@ -87,7 +87,7 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
 
     check_mthd_names(ctxt, impl_, trait_inst.trait_).map_err(|kind| ImplCheckError {
         impl_,
-        trait_inst: trait_inst.clone(),
+        trait_inst,
         kind,
     })?;
 
@@ -96,7 +96,8 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
     // Substitution of the generic params of the trait with the arguments of the impl.
     // E.g. if we have a trait `trait Into<T>` and an impl `impl Into<u32> for Foo`,
     // then we have to substitute `T` with `u32`.
-    let trait_gen_params_subst = ty::GenVarSubst::new(&trait_def.gen_params, &trait_inst.gen_args).unwrap();
+    let trait_gen_params_subst =
+        ty::GenVarSubst::new(&trait_def.gen_params, ctxt.tys.get_ty_slice(trait_inst.gen_args)).unwrap();
 
     for &mthd in &impl_def.mthds {
         let impl_mthd_sig = ctxt.fns.get_sig(mthd).unwrap().clone();
@@ -113,7 +114,7 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: &TraitInst) 
         )
         .map_err(|kind| ImplCheckError {
             impl_,
-            trait_inst: trait_inst.clone(),
+            trait_inst,
             kind,
         })?;
     }

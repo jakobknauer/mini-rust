@@ -43,12 +43,13 @@ impl Ctxt {
                 } else {
                     format!(
                         "<{}>",
-                        assoc_trait_inst
-                            .gen_args
-                            .iter()
-                            .map(|&ty| self.tys.get_string_rep(ty))
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        iter_ty_slice!(
+                            self.tys,
+                            assoc_trait_inst.gen_args,
+                            map(|ty| self.tys.get_string_rep(ty))
+                        )
+                        .collect::<Vec<_>>()
+                        .join(", ")
                     )
                 };
 
@@ -124,7 +125,7 @@ impl Ctxt {
             // TODO subst associated_ty?
             associated_ty: signature.associated_ty,
             // TODO subst associated_trait_inst?
-            associated_trait_inst: signature.associated_trait_inst.clone(),
+            associated_trait_inst: signature.associated_trait_inst,
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
             params: inst_params,
@@ -141,7 +142,7 @@ impl Ctxt {
         let trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
 
         let matching_impl_insts: Vec<_> = self
-            .get_impl_insts_for_ty_and_trait_inst(trait_mthd_inst.impl_ty, &trait_mthd_inst.trait_inst)
+            .get_impl_insts_for_ty_and_trait_inst(trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst)
             .collect();
 
         // TODO proper error handling
@@ -183,7 +184,7 @@ impl Ctxt {
     fn get_impl_insts_for_ty_and_trait_inst(
         &mut self,
         ty: ty::Ty,
-        trait_inst: &traits::TraitInst,
+        trait_inst: traits::TraitInst,
     ) -> impl Iterator<Item = impls::ImplInst> {
         let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(ty, trait_inst.trait_).collect();
 
@@ -191,22 +192,22 @@ impl Ctxt {
             let impl_def = self.impls.get_impl_def(impl_inst.impl_).clone();
             let subst = GenVarSubst::new(&impl_def.gen_params, &impl_inst.gen_args).unwrap();
 
-            let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.as_ref().unwrap(), &subst);
+            let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.unwrap(), &subst);
 
-            inst_impl_trait_inst
-                .gen_args
-                .iter()
-                .zip(trait_inst.gen_args.iter())
-                .all(|(gen_arg1, gen_arg2)| self.tys.tys_eq(*gen_arg1, *gen_arg2))
+            zip_ty_slices!(
+                self.tys,
+                (inst_impl_trait_inst.gen_args, trait_inst.gen_args),
+                all(|ty1, ty2| self.tys.tys_eq(ty1, ty2))
+            )
         })
     }
 
-    fn subst_trait_inst(&mut self, trait_inst: &traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
-        let mut trait_inst = trait_inst.clone();
-        for gen_arg in &mut trait_inst.gen_args {
-            *gen_arg = self.tys.substitute_gen_vars(*gen_arg, subst);
+    fn subst_trait_inst(&mut self, trait_inst: traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
+        let gen_args = self.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
+        traits::TraitInst {
+            gen_args,
+            trait_: trait_inst.trait_,
         }
-        trait_inst
     }
 
     fn subst_trait_mthd_inst(
@@ -216,13 +217,13 @@ impl Ctxt {
     ) -> fns::TraitMthdInst {
         fns::TraitMthdInst {
             impl_ty: self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst),
-            trait_inst: self.subst_trait_inst(&trait_mthd_inst.trait_inst, subst),
+            trait_inst: self.subst_trait_inst(trait_mthd_inst.trait_inst, subst),
             gen_args: self.tys.substitute_gen_vars_on_slice(trait_mthd_inst.gen_args, subst),
             mthd_idx: trait_mthd_inst.mthd_idx,
         }
     }
 
-    pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: &traits::TraitInst) -> bool {
+    pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
         if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
             && self.tys.implements_trait_inst_constraint_exists(gen_var, trait_inst)
@@ -378,9 +379,10 @@ impl Ctxt {
         if let Some(&ty::TyDef::TraitSelf(trait_)) = base_ty_def {
             let trait_def = self.traits.get_trait_def(trait_);
             let assoc_ty_index = trait_def.assoc_tys.iter().position(|name| name == ident)?;
+            let gen_args: Vec<_> = trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
             let default_trait_inst = traits::TraitInst {
                 trait_,
-                gen_args: trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect(),
+                gen_args: self.tys.ty_slice(&gen_args),
             };
             let ty = self.tys.assoc_ty(base_ty, default_trait_inst, assoc_ty_index);
             return Some(ty);
@@ -400,7 +402,7 @@ impl Ctxt {
                 let [impl_inst] = &impl_insts[..] else {
                     let trait_inst = traits::TraitInst {
                         trait_: *trait_,
-                        gen_args: vec![], // TODO add gen args
+                        gen_args: self.tys.ty_slice(&[]), // TODO add gen args
                     };
                     return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
@@ -463,13 +465,15 @@ impl Ctxt {
                 assoc_ty_idx,
             } => {
                 let base_ty = self.normalize_ty(base_ty);
+                let gen_args: Vec<_> =
+                    iter_ty_slice!(self.tys, trait_inst.gen_args, map(|ty| self.normalize_ty(ty))).collect();
                 let trait_inst = traits::TraitInst {
                     trait_: trait_inst.trait_,
-                    gen_args: trait_inst.gen_args.iter().map(|ty| self.normalize_ty(*ty)).collect(),
+                    gen_args: self.tys.ty_slice(&gen_args),
                 };
 
                 let impl_insts: Vec<_> = self
-                    .get_impl_insts_for_ty_and_trait_inst(base_ty, &trait_inst)
+                    .get_impl_insts_for_ty_and_trait_inst(base_ty, trait_inst)
                     .collect();
 
                 let [impl_inst] = &impl_insts[..] else { return ty };
