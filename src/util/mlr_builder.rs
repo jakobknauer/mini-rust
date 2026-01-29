@@ -253,9 +253,7 @@ impl<'a> MlrBuilder<'a> {
     }
 
     pub fn insert_trait_mthd_op(&mut self, trait_mthd_inst: fns::TraitMthdInst) -> Result<mlr::Op, AstLoweringError> {
-        self.ctxt
-            .fns
-            .register_trait_mthd_call(self.target_fn, trait_mthd_inst);
+        self.ctxt.fns.register_trait_mthd_call(self.target_fn, trait_mthd_inst);
         let op = mlr::OpDef::TraitMthd(trait_mthd_inst);
         self.insert_op(op)
     }
