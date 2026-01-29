@@ -1082,8 +1082,8 @@ impl<'a> AstLowerer<'a> {
 
                 let fn_inst = fns::FnInst {
                     fn_,
-                    gen_args,
-                    env_gen_args,
+                    gen_args: self.tys().ty_slice(&gen_args),
+                    env_gen_args: self.tys().ty_slice(&env_gen_args),
                 };
 
                 Ok((self.builder.insert_fn_inst_op(fn_inst)?, by_ref))

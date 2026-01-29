@@ -240,14 +240,14 @@ impl<'a> MlrBuilder<'a> {
     ) -> AstLoweringResult<mlr::Op> {
         let fn_inst = fns::FnInst {
             fn_,
-            gen_args,
-            env_gen_args,
+            gen_args: self.ctxt.tys.ty_slice(&gen_args),
+            env_gen_args: self.ctxt.tys.ty_slice(&env_gen_args),
         };
         self.insert_fn_inst_op(fn_inst)
     }
 
     pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> AstLoweringResult<mlr::Op> {
-        self.ctxt.fns.register_fn_call(self.target_fn, fn_inst.clone());
+        self.ctxt.fns.register_fn_call(self.target_fn, fn_inst);
         let op = mlr::OpDef::Fn(fn_inst);
         self.insert_op(op)
     }

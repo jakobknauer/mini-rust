@@ -108,7 +108,7 @@ impl<'a> super::AstLowerer<'a> {
     }
 
     pub fn generate_closure_fn_inst(&mut self, signature: fns::FnSig) -> AstLoweringResult<fns::FnInst> {
-        let env_gen_args = signature
+        let env_gen_args: Vec<_> = signature
             .env_gen_params
             .iter()
             .map(|&gen_var| self.tys().gen_var(gen_var))
@@ -118,12 +118,12 @@ impl<'a> super::AstLowerer<'a> {
 
         let fn_inst = fns::FnInst {
             fn_,
-            gen_args: Vec::new(),
-            env_gen_args,
+            gen_args: self.tys().ty_slice(&[]),
+            env_gen_args: self.tys().ty_slice(&env_gen_args),
         };
 
         let target_fn = self.builder.target_fn();
-        self.fns().register_fn_call(target_fn, fn_inst.clone());
+        self.fns().register_fn_call(target_fn, fn_inst);
 
         Ok(fn_inst)
     }

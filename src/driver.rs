@@ -538,8 +538,8 @@ impl<'a> Driver<'a> {
         let mut open = VecDeque::new();
         open.push_back(fns::FnInst {
             fn_: self.ctxt.fns.get_fn_by_name("main").ok_or(())?,
-            gen_args: Vec::new(),
-            env_gen_args: Vec::new(),
+            gen_args: self.ctxt.tys.ty_slice(&[]),
+            env_gen_args: self.ctxt.tys.ty_slice(&[]),
         });
 
         let mut closed = HashSet::new();
@@ -549,20 +549,11 @@ impl<'a> Driver<'a> {
                 continue;
             }
 
-            let subst = self.ctxt.fns.get_subst_for_fn_inst(&current);
+            let subst = self.ctxt.get_subst_for_fn_inst(&current);
 
             let fn_insts = self.ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
-                let new_gen_args = fn_inst
-                    .gen_args
-                    .iter()
-                    .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &subst))
-                    .collect();
-                let new_env_gen_args = fn_inst
-                    .env_gen_args
-                    .iter()
-                    .map(|&ty| self.ctxt.tys.substitute_gen_vars(ty, &subst))
-                    .collect();
-
+                let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.gen_args, &subst);
+                let new_env_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.env_gen_args, &subst);
                 fns::FnInst {
                     fn_: fn_inst.fn_,
                     gen_args: new_gen_args,

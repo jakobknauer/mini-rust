@@ -1,7 +1,7 @@
 use crate::ctxt::{
     mlr,
     traits::TraitInst,
-    ty::{GenVar, Ty},
+    ty::{GenVar, Ty, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -49,11 +49,11 @@ pub enum FnParamKind {
     SelfByRef,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct FnInst {
     pub fn_: Fn,
-    pub gen_args: Vec<Ty>,
-    pub env_gen_args: Vec<Ty>,
+    pub gen_args: TySlice,
+    pub env_gen_args: TySlice,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]

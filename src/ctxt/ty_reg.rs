@@ -17,6 +17,7 @@ pub struct TyReg {
 
     tys_inv: HashMap<TyDef, Ty>,
     named_tys: HashMap<String, Named>,
+    ty_slices_inv: HashMap<Vec<Ty>, TySlice>, // This is probably very inefficient
 
     constraints: Vec<Constraint>,
     obligations: Vec<Obligation>,
@@ -79,11 +80,17 @@ impl TyReg {
     }
 
     pub fn ty_slice(&mut self, tys: &[Ty]) -> TySlice {
+        if let Some(ty_slice) = self.ty_slices_inv.get(tys) {
+            return *ty_slice;
+        }
+
         self.ty_slices.extend_from_slice(tys);
-        TySlice {
+        let slice = TySlice {
             offset: self.ty_slices.len() - tys.len(),
             len: tys.len(),
-        }
+        };
+        self.ty_slices_inv.insert(tys.to_vec(), slice);
+        slice
     }
 
     pub fn get_ty_slice(&self, slice: TySlice) -> &[Ty] {
@@ -537,22 +544,21 @@ impl TyReg {
                     }
                 }
 
-                (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
-                    if fn_inst1 != fn_inst2 {
+                (&Closure { fn_inst: fn_inst1, .. }, &Closure { fn_inst: fn_inst2, .. }) => {
+                    if fn_inst1.fn_ != fn_inst2.fn_ {
                         return Err(UnificationError::TypeMismatch);
                     }
 
-                    let fn_inst1 = fn_inst1.clone();
-                    let fn_inst2 = fn_inst2.clone();
-
-                    let gen_args_pairs = fn_inst1.gen_args.iter().zip(&fn_inst2.gen_args);
-                    for (arg1, arg2) in gen_args_pairs {
-                        self.unify(*arg1, *arg2)?;
-                    }
-                    let env_gen_args_pairs = fn_inst1.env_gen_args.iter().zip(&fn_inst2.env_gen_args);
-                    for (arg1, arg2) in env_gen_args_pairs {
-                        self.unify(*arg1, *arg2)?;
-                    }
+                    zip_ty_slices!(
+                        self,
+                        (fn_inst1.gen_args, fn_inst2.gen_args),
+                        try_for_each(|ty1, ty2| self.unify(ty1, ty2))
+                    )?;
+                    zip_ty_slices!(
+                        self,
+                        (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
+                        try_for_each(|ty1, ty2| self.unify(ty1, ty2))
+                    )?;
 
                     Ok(())
                 }
@@ -608,6 +614,11 @@ impl TyReg {
         ty
     }
 
+    pub fn canonicalize_ty_slice(&mut self, ty_slice: TySlice) -> TySlice {
+        let tys: Vec<_> = iter_ty_slice!(self, ty_slice, map(|ty| self.canonicalize(ty))).collect();
+        self.ty_slice(&tys)
+    }
+
     #[must_use]
     pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
         use TyDef::*;
@@ -657,22 +668,21 @@ impl TyReg {
             Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => ty,
             Closure {
-                ref fn_inst,
+                fn_inst,
                 ref name,
                 captures_ty,
             } => {
                 let name = name.clone();
-                let mut new_fn_inst = fn_inst.clone();
-                for gen_arg in &mut new_fn_inst.gen_args {
-                    *gen_arg = self.substitute_gen_vars(*gen_arg, subst);
-                }
-                for env_gen_arg in &mut new_fn_inst.env_gen_args {
-                    *env_gen_arg = self.substitute_gen_vars(*env_gen_arg, subst);
-                }
+                let gen_args = self.substitute_gen_vars_on_slice(fn_inst.gen_args, subst);
+                let env_gen_args = self.substitute_gen_vars_on_slice(fn_inst.env_gen_args, subst);
+                let fn_inst = fns::FnInst {
+                    gen_args,
+                    env_gen_args,
+                    ..fn_inst
+                };
 
                 let captures_ty = self.substitute_gen_vars(captures_ty, subst);
-
-                self.closure(new_fn_inst, name, captures_ty)
+                self.closure(fn_inst, name, captures_ty)
             }
             Tuple(items) => {
                 let items: Vec<_> =
@@ -692,6 +702,11 @@ impl TyReg {
                 self.assoc_ty(new_base_ty, new_trait_inst, assoc_ty_idx)
             }
         }
+    }
+
+    pub fn substitute_gen_vars_on_slice(&mut self, slice: TySlice, subst: &GenVarSubst) -> TySlice {
+        let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+        self.ty_slice(&slice)
     }
 
     pub fn substitute_self_ty(&mut self, ty: Ty, substitute: Ty) -> Ty {
@@ -736,20 +751,20 @@ impl TyReg {
             Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => substitute,
             Closure {
-                ref fn_inst,
+                fn_inst,
                 ref name,
                 captures_ty,
             } => {
                 let name = name.clone();
-                let mut new_fn_inst = fn_inst.clone();
-                for gen_arg in &mut new_fn_inst.gen_args {
-                    *gen_arg = self.substitute_self_ty(*gen_arg, substitute);
-                }
-                for env_gen_arg in &mut new_fn_inst.env_gen_args {
-                    *env_gen_arg = self.substitute_self_ty(*env_gen_arg, substitute);
-                }
+                let gen_args = self.substitute_self_ty_on_slice(fn_inst.gen_args, substitute);
+                let env_gen_args = self.substitute_self_ty_on_slice(fn_inst.env_gen_args, substitute);
+                let fn_insnt = fns::FnInst {
+                    gen_args,
+                    env_gen_args,
+                    ..fn_inst
+                };
 
-                self.closure(new_fn_inst, name, captures_ty)
+                self.closure(fn_insnt, name, captures_ty)
             }
             Tuple(items) => {
                 let items: Vec<_> =
@@ -769,6 +784,11 @@ impl TyReg {
                 self.assoc_ty(new_base_ty, new_trait_inst, assoc_ty_idx)
             }
         }
+    }
+
+    pub fn substitute_self_ty_on_slice(&mut self, slice: TySlice, substitute: Ty) -> TySlice {
+        let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
+        self.ty_slice(&slice)
     }
 
     pub fn get_struct_field_ty(&mut self, ty: Ty, index: usize) -> Result<Ty, NotAStruct> {
@@ -956,18 +976,18 @@ impl TyReg {
 
                 (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
                     fn_inst1.fn_ == fn_inst2.fn_
-                        && fn_inst1.gen_args.len() == fn_inst2.gen_args.len()
-                        && fn_inst1
-                            .gen_args
-                            .iter()
-                            .zip(&fn_inst2.gen_args)
-                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
-                        && fn_inst1.env_gen_args.len() == fn_inst2.env_gen_args.len()
-                        && fn_inst1
-                            .env_gen_args
-                            .iter()
-                            .zip(&fn_inst2.env_gen_args)
-                            .all(|(arg1, arg2)| self.tys_eq(*arg1, *arg2))
+                        && fn_inst1.gen_args.len == fn_inst2.gen_args.len
+                        && zip_ty_slices!(
+                            self,
+                            (fn_inst1.gen_args, fn_inst2.gen_args),
+                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                        )
+                        && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
+                        && zip_ty_slices!(
+                            self,
+                            (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
+                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                        )
                 }
 
                 (&Tuple(items1), &Tuple(items2)) => {
@@ -1123,18 +1143,18 @@ impl TyReg {
 
             (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
                 fn_inst1.fn_ == fn_inst2.fn_
-                    && fn_inst1.gen_args.len() == fn_inst2.gen_args.len()
-                    && fn_inst1
-                        .gen_args
-                        .iter()
-                        .zip(&fn_inst2.gen_args)
-                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
-                    && fn_inst1.env_gen_args.len() == fn_inst2.env_gen_args.len()
-                    && fn_inst1
-                        .env_gen_args
-                        .iter()
-                        .zip(&fn_inst2.env_gen_args)
-                        .all(|(arg1, arg2)| self.try_find_instantiation_internal(*arg1, *arg2, instantiation))
+                    && fn_inst1.gen_args.len == fn_inst2.gen_args.len
+                    && zip_ty_slices!(
+                        self,
+                        (fn_inst1.gen_args, fn_inst2.gen_args),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
+                    && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
+                    && zip_ty_slices!(
+                        self,
+                        (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
             }
 
             (&Tuple(items1), &Tuple(items2)) => {

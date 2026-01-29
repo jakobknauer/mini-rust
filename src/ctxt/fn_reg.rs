@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ctxt::{
-    fns::{Fn, FnInst, FnMlr, FnSig, TraitMthdInst},
-    ty::GenVarSubst,
-};
+use crate::ctxt::fns::{Fn, FnInst, FnMlr, FnSig, TraitMthdInst};
 
 #[derive(Default)]
 pub struct FnReg {
@@ -74,13 +71,6 @@ impl FnReg {
 
     pub fn get_called_trait_mthd_insts(&self, caller: Fn) -> &Vec<TraitMthdInst> {
         self.called_trait_mthd_insts.get(&caller).unwrap()
-    }
-
-    pub fn get_subst_for_fn_inst(&self, fn_inst: &FnInst) -> GenVarSubst {
-        let sig = self.get_sig(fn_inst.fn_).unwrap();
-        let gen_param_subst = GenVarSubst::new(&sig.gen_params, &fn_inst.gen_args).unwrap();
-        let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, &fn_inst.env_gen_args).unwrap();
-        GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 
     pub fn get_fn_name(&self, fn_: Fn) -> &str {

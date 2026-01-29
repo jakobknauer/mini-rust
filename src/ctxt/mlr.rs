@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{FnInst, TraitMthdInst},
-    ty::Ty,
+    ty::{Ty, TySlice},
 };
 
 #[derive(Default)]
@@ -198,14 +198,12 @@ impl Mlr {
             .chain(self.val_tys.values_mut())
             .chain(self.place_tys.values_mut())
             .chain(self.op_tys.values_mut())
-            .chain(
-                self.ops
-                    .iter_mut()
-                    .filter_map(|op_def| match op_def {
-                        OpDef::Fn(FnInst { gen_args, .. }) => Some(gen_args),
-                        _ => None,
-                    })
-                    .flatten(),
-            )
+    }
+
+    pub fn get_all_type_slices_mut(&mut self) -> impl Iterator<Item = &mut TySlice> {
+        self.ops.iter_mut().filter_map(|op_def| match op_def {
+            OpDef::Fn(FnInst { gen_args, .. }) => Some(gen_args),
+            _ => None,
+        })
     }
 }

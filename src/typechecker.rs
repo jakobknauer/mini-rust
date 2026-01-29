@@ -224,18 +224,19 @@ impl<'a> Typechecker<'a> {
             .get_sig(fn_inst.fn_)
             .expect("function signature should be registered");
 
-        if signature.gen_params.len() != fn_inst.gen_args.len() {
+        if signature.gen_params.len() != fn_inst.gen_args.len {
             return TyError::FnGenericArgCountMismatch {
                 fn_: fn_inst.fn_,
                 expected: signature.gen_params.len(),
-                actual: fn_inst.gen_args.len(),
+                actual: fn_inst.gen_args.len,
             }
             .into();
         }
 
-        let subst = self.ctxt.fns.get_subst_for_fn_inst(fn_inst);
+        let subst = self.ctxt.get_subst_for_fn_inst(fn_inst);
 
-        for (&gen_var, &gen_arg) in signature.gen_params.iter().zip(&fn_inst.gen_args) {
+        let gen_args = self.ctxt.tys.get_ty_slice(fn_inst.gen_args).to_vec();
+        for (&gen_var, gen_arg) in signature.gen_params.iter().zip(gen_args) {
             let requirements: Vec<_> = self.ctxt.tys.get_requirements_for(gen_var).cloned().collect();
             for requirement in requirements {
                 match requirement {
@@ -258,11 +259,11 @@ impl<'a> Typechecker<'a> {
             }
         }
 
-        if signature.env_gen_params.len() != fn_inst.env_gen_args.len() {
+        if signature.env_gen_params.len() != fn_inst.env_gen_args.len {
             return TyError::FnEnvGenericArgCountMismatch {
                 fn_: fn_inst.fn_,
                 expected: signature.env_gen_params.len(),
-                actual: fn_inst.env_gen_args.len(),
+                actual: fn_inst.env_gen_args.len,
             }
             .into();
         }

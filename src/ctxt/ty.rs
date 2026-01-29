@@ -154,6 +154,8 @@ macro_rules! iter_ty_slice {
     }};
 }
 
+pub(crate) use iter_ty_slice;
+
 macro_rules! zip_ty_slices {
     // $adapter is the iterator method: all, any, try_for_each, etc.
     ($self:expr, ($tys1:expr, $tys2:expr), $adapter:ident(|$a:ident, $b:ident| $body:expr)) => {{

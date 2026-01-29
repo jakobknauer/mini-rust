@@ -42,7 +42,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         let locs = HashMap::new();
         let iw_fn = parent.get_fn(&fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();
-        let subst = parent.mr_ctxt.fns.get_subst_for_fn_inst(&fn_inst);
+        let subst = parent.mr_ctxt.get_subst_for_fn_inst(&fn_inst);
 
         Some(Self {
             parent,
@@ -368,16 +368,8 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
     }
 
     fn build_global_function(&mut self, fn_inst: &mr_fns::FnInst) -> MlrLoweringResult<BasicValueEnum<'iw>> {
-        let substituted_gen_args = fn_inst
-            .gen_args
-            .iter()
-            .map(|&arg| self.substitute(arg))
-            .collect::<Vec<_>>();
-        let substituted_env_gen_args = fn_inst
-            .env_gen_args
-            .iter()
-            .map(|&arg| self.substitute(arg))
-            .collect::<Vec<_>>();
+        let substituted_gen_args = self.substitute_slice(fn_inst.gen_args);
+        let substituted_env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
         let substituted_fn_inst = mr_fns::FnInst {
             fn_: fn_inst.fn_,
             gen_args: substituted_gen_args,
@@ -506,5 +498,9 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
 
     fn substitute(&mut self, ty: mr_ty::Ty) -> mr_ty::Ty {
         self.parent.mr_ctxt.tys.substitute_gen_vars(ty, &self.subst)
+    }
+
+    fn substitute_slice(&mut self, slice: mr_ty::TySlice) -> mr_ty::TySlice {
+        self.parent.mr_ctxt.tys.substitute_gen_vars_on_slice(slice, &self.subst)
     }
 }

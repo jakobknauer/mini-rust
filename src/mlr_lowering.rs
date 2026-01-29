@@ -81,7 +81,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
 
     fn define_functions(&mut self) {
         for fn_inst in self.fn_insts.clone() {
-            let Some(mut fn_gen) = MlrFnLowerer::new(self, fn_inst.clone()) else {
+            let Some(mut fn_gen) = MlrFnLowerer::new(self, fn_inst) else {
                 continue;
             };
             if fn_gen.build_fn().is_err() {

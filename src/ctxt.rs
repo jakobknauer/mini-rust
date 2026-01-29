@@ -68,10 +68,7 @@ impl Ctxt {
         } else {
             format!(
                 "{{{}}}",
-                fn_inst
-                    .env_gen_args
-                    .iter()
-                    .map(|&ty| self.tys.get_string_rep(ty))
+                iter_ty_slice!(self.tys, fn_inst.env_gen_args, map(|ty| self.tys.get_string_rep(ty)))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -82,10 +79,7 @@ impl Ctxt {
         } else {
             format!(
                 "<{}>",
-                fn_inst
-                    .gen_args
-                    .iter()
-                    .map(|&ty| self.tys.get_string_rep(ty))
+                iter_ty_slice!(self.tys, fn_inst.gen_args, map(|ty| self.tys.get_string_rep(ty)))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -96,23 +90,23 @@ impl Ctxt {
 
     pub fn fn_insts_eq(&self, fn_inst1: &fns::FnInst, fn_inst2: &fns::FnInst) -> bool {
         fn_inst1.fn_ == fn_inst2.fn_
-            && fn_inst1.gen_args.len() == fn_inst2.gen_args.len()
-            && fn_inst1
-                .gen_args
-                .iter()
-                .zip(fn_inst2.gen_args.iter())
-                .all(|(a, b)| self.tys.tys_eq(*a, *b))
-            && fn_inst1.env_gen_args.len() == fn_inst2.env_gen_args.len()
-            && fn_inst1
-                .env_gen_args
-                .iter()
-                .zip(fn_inst2.env_gen_args.iter())
-                .all(|(a, b)| self.tys.tys_eq(*a, *b))
+            && fn_inst1.gen_args.len == fn_inst2.gen_args.len
+            && zip_ty_slices!(
+                self.tys,
+                (fn_inst1.gen_args, fn_inst2.gen_args),
+                all(|ty1, ty2| self.tys.tys_eq(ty1, ty2))
+            )
+            && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
+            && zip_ty_slices!(
+                self.tys,
+                (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
+                all(|ty1, ty2| self.tys.tys_eq(ty1, ty2))
+            )
     }
 
     pub fn get_fn_inst_sig(&mut self, fn_inst: &fns::FnInst) -> fns::FnSig {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
-        let subst = self.fns.get_subst_for_fn_inst(fn_inst);
+        let subst = self.get_subst_for_fn_inst(fn_inst);
 
         let inst_params = signature
             .params
@@ -163,8 +157,8 @@ impl Ctxt {
 
         fns::FnInst {
             fn_,
-            gen_args: trait_mthd_inst.gen_args,
-            env_gen_args: impl_inst.gen_args,
+            gen_args: self.tys.ty_slice(&trait_mthd_inst.gen_args),
+            env_gen_args: self.tys.ty_slice(&impl_inst.gen_args),
         }
     }
 
@@ -274,8 +268,7 @@ impl Ctxt {
             && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
         {
             Some((param_tys, return_ty, false))
-        } else if let Some(ty::TyDef::Closure { fn_inst, .. }) = self.tys.get_ty_def(ty) {
-            let fn_inst = fn_inst.clone();
+        } else if let Some(&ty::TyDef::Closure { fn_inst, .. }) = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(&fn_inst);
             Some((
                 signature.params.iter().skip(1).map(|p| p.ty).collect(),
@@ -490,5 +483,13 @@ impl Ctxt {
                 self.tys.substitute_gen_vars(assoc_ty, &subst)
             }
         }
+    }
+
+    pub fn get_subst_for_fn_inst(&self, fn_inst: &fns::FnInst) -> GenVarSubst {
+        let sig = self.fns.get_sig(fn_inst.fn_).unwrap();
+        let gen_param_subst = GenVarSubst::new(&sig.gen_params, self.tys.get_ty_slice(fn_inst.gen_args)).unwrap();
+        let env_gen_param_subst =
+            GenVarSubst::new(&sig.env_gen_params, self.tys.get_ty_slice(fn_inst.env_gen_args)).unwrap();
+        GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 }
