@@ -77,7 +77,7 @@ impl<'a> Typechecker<'a> {
 
         let ty = match *op_def {
             Fn(fn_inst) => self.infer_ty_of_fn(fn_inst),
-            TraitMthd(ref trait_mthd_inst) => self.infer_ty_of_trait_mthd(&trait_mthd_inst.clone()),
+            TraitMthd(trait_mthd_inst) => self.infer_ty_of_trait_mthd(&trait_mthd_inst.clone()),
             Const(ref constant) => self.infer_ty_of_constant(&constant.clone()),
             Copy(place) => self.infer_place_ty(place),
         }?;

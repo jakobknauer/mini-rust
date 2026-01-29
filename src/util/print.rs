@@ -307,7 +307,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
                     write!(self.writer, "fn {}", fn_name)
                 }
-                TraitMthd(ref trait_mthd) => {
+                TraitMthd(trait_mthd) => {
                     let base_ty_name = self.ctxt.tys.get_string_rep(trait_mthd.impl_ty);
                     let trait_name = self.ctxt.traits.get_trait_name(trait_mthd.trait_inst.trait_);
 

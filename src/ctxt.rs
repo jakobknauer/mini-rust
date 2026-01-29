@@ -136,7 +136,7 @@ impl Ctxt {
 
     pub fn resolve_trait_mthd_to_fn(
         &mut self,
-        trait_mthd_inst: &fns::TraitMthdInst,
+        trait_mthd_inst: fns::TraitMthdInst,
         subst: &GenVarSubst,
     ) -> fns::FnInst {
         let trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
@@ -212,7 +212,7 @@ impl Ctxt {
 
     fn subst_trait_mthd_inst(
         &mut self,
-        trait_mthd_inst: &fns::TraitMthdInst,
+        trait_mthd_inst: fns::TraitMthdInst,
         subst: &GenVarSubst,
     ) -> fns::TraitMthdInst {
         fns::TraitMthdInst {
@@ -472,9 +472,7 @@ impl Ctxt {
                     gen_args: self.tys.ty_slice(&gen_args),
                 };
 
-                let impl_insts: Vec<_> = self
-                    .get_impl_insts_for_ty_and_trait_inst(base_ty, trait_inst)
-                    .collect();
+                let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait_inst(base_ty, trait_inst).collect();
 
                 let [impl_inst] = &impl_insts[..] else { return ty };
 

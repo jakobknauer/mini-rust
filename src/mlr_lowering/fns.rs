@@ -356,7 +356,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
 
         match *op {
             Fn(fn_inst) => self.build_global_function(fn_inst),
-            TraitMthd(ref trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst.clone()),
+            TraitMthd(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
             Const(ref constant) => self.build_constant(constant.clone()),
             Copy(place) => {
                 let place_ptr = self.build_place(place)?;
@@ -391,7 +391,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         let fn_inst = self
             .parent
             .mr_ctxt
-            .resolve_trait_mthd_to_fn(&trait_mthd_inst, &self.subst);
+            .resolve_trait_mthd_to_fn(trait_mthd_inst, &self.subst);
         self.build_global_function(fn_inst)
     }
 

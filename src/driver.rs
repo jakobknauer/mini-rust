@@ -563,7 +563,7 @@ impl<'a> Driver<'a> {
             let called_trait_mthd_insts = self.ctxt.fns.get_called_trait_mthd_insts(current.fn_).to_vec();
             let trait_fn_insts = called_trait_mthd_insts
                 .into_iter()
-                .map(|trait_mthd_inst| self.ctxt.resolve_trait_mthd_to_fn(&trait_mthd_inst, &subst));
+                .map(|trait_mthd_inst| self.ctxt.resolve_trait_mthd_to_fn(trait_mthd_inst, &subst));
             open.extend(trait_fn_insts);
 
             closed.insert(current);

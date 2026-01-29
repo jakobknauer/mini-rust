@@ -56,7 +56,7 @@ pub struct FnInst {
     pub env_gen_args: TySlice,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct TraitMthdInst {
     pub trait_inst: TraitInst,
     pub mthd_idx: usize,
