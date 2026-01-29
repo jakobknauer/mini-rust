@@ -76,7 +76,7 @@ impl<'a> Typechecker<'a> {
         let op_def = self.ctxt.mlr.get_op_def(op);
 
         let ty = match *op_def {
-            Fn(ref fn_inst) => self.infer_ty_of_fn(&fn_inst.clone()),
+            Fn(fn_inst) => self.infer_ty_of_fn(fn_inst),
             TraitMthd(ref trait_mthd_inst) => self.infer_ty_of_trait_mthd(&trait_mthd_inst.clone()),
             Const(ref constant) => self.infer_ty_of_constant(&constant.clone()),
             Copy(place) => self.infer_place_ty(place),
@@ -217,7 +217,7 @@ impl<'a> Typechecker<'a> {
         Ok(op_ty)
     }
 
-    fn infer_ty_of_fn(&mut self, fn_inst: &fns::FnInst) -> TyResult<ty::Ty> {
+    fn infer_ty_of_fn(&mut self, fn_inst: fns::FnInst) -> TyResult<ty::Ty> {
         let signature = self
             .ctxt
             .fns

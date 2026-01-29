@@ -31,7 +31,7 @@ pub struct Ctxt {
 }
 
 impl Ctxt {
-    pub fn get_fn_inst_name(&self, fn_inst: &fns::FnInst) -> String {
+    pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst) -> String {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
 
         let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
@@ -88,7 +88,7 @@ impl Ctxt {
         format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
     }
 
-    pub fn fn_insts_eq(&self, fn_inst1: &fns::FnInst, fn_inst2: &fns::FnInst) -> bool {
+    pub fn fn_insts_eq(&self, fn_inst1: fns::FnInst, fn_inst2: fns::FnInst) -> bool {
         fn_inst1.fn_ == fn_inst2.fn_
             && fn_inst1.gen_args.len == fn_inst2.gen_args.len
             && zip_ty_slices!(
@@ -104,7 +104,7 @@ impl Ctxt {
             )
     }
 
-    pub fn get_fn_inst_sig(&mut self, fn_inst: &fns::FnInst) -> fns::FnSig {
+    pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst) -> fns::FnSig {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
         let subst = self.get_subst_for_fn_inst(fn_inst);
 
@@ -268,7 +268,7 @@ impl Ctxt {
         {
             Some((param_tys, return_ty, false))
         } else if let Some(&ty::TyDef::Closure { fn_inst, .. }) = self.tys.get_ty_def(ty) {
-            let signature = self.get_fn_inst_sig(&fn_inst);
+            let signature = self.get_fn_inst_sig(fn_inst);
             Some((
                 signature.params.iter().skip(1).map(|p| p.ty).collect(),
                 signature.return_ty,
@@ -484,7 +484,7 @@ impl Ctxt {
         }
     }
 
-    pub fn get_subst_for_fn_inst(&self, fn_inst: &fns::FnInst) -> GenVarSubst {
+    pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst) -> GenVarSubst {
         let sig = self.fns.get_sig(fn_inst.fn_).unwrap();
         let gen_param_subst = GenVarSubst::new(&sig.gen_params, self.tys.get_ty_slice(fn_inst.gen_args)).unwrap();
         let env_gen_param_subst =

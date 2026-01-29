@@ -40,9 +40,9 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
 
         let builder = parent.iw_ctxt.create_builder();
         let locs = HashMap::new();
-        let iw_fn = parent.get_fn(&fn_inst).unwrap();
+        let iw_fn = parent.get_fn(fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();
-        let subst = parent.mr_ctxt.get_subst_for_fn_inst(&fn_inst);
+        let subst = parent.mr_ctxt.get_subst_for_fn_inst(fn_inst);
 
         Some(Self {
             parent,
@@ -355,7 +355,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         let op = self.mlr().get_op_def(op);
 
         match *op {
-            Fn(ref fn_inst) => self.build_global_function(&fn_inst.clone()),
+            Fn(fn_inst) => self.build_global_function(fn_inst),
             TraitMthd(ref trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst.clone()),
             Const(ref constant) => self.build_constant(constant.clone()),
             Copy(place) => {
@@ -367,7 +367,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         }
     }
 
-    fn build_global_function(&mut self, fn_inst: &mr_fns::FnInst) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_global_function(&mut self, fn_inst: mr_fns::FnInst) -> MlrLoweringResult<BasicValueEnum<'iw>> {
         let substituted_gen_args = self.substitute_slice(fn_inst.gen_args);
         let substituted_env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
         let substituted_fn_inst = mr_fns::FnInst {
@@ -378,7 +378,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
 
         let result = self
             .parent
-            .get_fn(&substituted_fn_inst)
+            .get_fn(substituted_fn_inst)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
             .ok_or(MlrLoweringError)?;
         Ok(result)
@@ -392,7 +392,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
             .parent
             .mr_ctxt
             .resolve_trait_mthd_to_fn(&trait_mthd_inst, &self.subst);
-        self.build_global_function(&fn_inst)
+        self.build_global_function(fn_inst)
     }
 
     fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> MlrLoweringResult<BasicValueEnum<'iw>> {
@@ -404,7 +404,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
             fn_inst, captures_ty, ..
         } = callable_ty_def
         {
-            let fn_ptr = self.build_global_function(&fn_inst)?.into_pointer_value();
+            let fn_ptr = self.build_global_function(fn_inst)?.into_pointer_value();
             let captures: BasicMetadataValueEnum<'iw> = self.build_op(callable)?.into();
 
             let fn_ty = self.get_closure_fn_ty(callable, captures_ty)?;

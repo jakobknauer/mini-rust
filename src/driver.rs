@@ -549,7 +549,7 @@ impl<'a> Driver<'a> {
                 continue;
             }
 
-            let subst = self.ctxt.get_subst_for_fn_inst(&current);
+            let subst = self.ctxt.get_subst_for_fn_inst(current);
 
             let fn_insts = self.ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
                 let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.gen_args, &subst);

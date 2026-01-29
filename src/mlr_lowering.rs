@@ -63,7 +63,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
 
     fn declare_functions(&mut self) {
         for fn_inst in self.fn_insts.clone() {
-            let sig = self.mr_ctxt.get_fn_inst_sig(&fn_inst);
+            let sig = self.mr_ctxt.get_fn_inst_sig(fn_inst);
 
             let param_types: Vec<_> = sig
                 .params
@@ -73,7 +73,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
             let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
             let iw_fn_type = return_type.fn_type(&param_types, sig.var_args);
 
-            let fn_name = self.mr_ctxt.get_fn_inst_name(&fn_inst);
+            let fn_name = self.mr_ctxt.get_fn_inst_name(fn_inst);
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
             self.functions.insert(fn_inst, fn_value);
         }
@@ -85,7 +85,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
                 continue;
             };
             if fn_gen.build_fn().is_err() {
-                let fn_name = self.mr_ctxt.get_fn_inst_name(&fn_inst);
+                let fn_name = self.mr_ctxt.get_fn_inst_name(fn_inst);
                 eprintln!("Failed to define function {fn_name}");
             }
         }
@@ -197,8 +197,8 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
         self.iw_ctxt.struct_type(&iw_field_tys, false).as_any_type_enum()
     }
 
-    fn get_fn(&self, fn_inst: &mr_fns::FnInst) -> Option<FunctionValue<'iw>> {
-        for (fn_inst_2, &fn_value) in &self.functions {
+    fn get_fn(&self, fn_inst: mr_fns::FnInst) -> Option<FunctionValue<'iw>> {
+        for (&fn_inst_2, &fn_value) in &self.functions {
             if self.mr_ctxt.fn_insts_eq(fn_inst, fn_inst_2) {
                 return Some(fn_value);
             }

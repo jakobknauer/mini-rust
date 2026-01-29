@@ -301,7 +301,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
 
         match *op_def {
             Some(operand) => match *operand {
-                Fn(ref fn_inst) => {
+                Fn(fn_inst) => {
                     let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
                     write!(self.writer, "fn {}", fn_name)
                 }
