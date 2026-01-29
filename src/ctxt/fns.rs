@@ -61,7 +61,7 @@ pub struct TraitMthdInst {
     pub trait_inst: TraitInst,
     pub mthd_idx: usize,
     pub impl_ty: Ty,
-    pub gen_args: Vec<Ty>,
+    pub gen_args: TySlice,
 }
 
 #[derive(Debug, Clone)]

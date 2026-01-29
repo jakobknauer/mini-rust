@@ -288,13 +288,13 @@ impl<'a> Typechecker<'a> {
 
         let trait_def = self.ctxt.traits.get_trait_def(trait_mthd_inst.trait_inst.trait_);
 
-        if signature.gen_params.len() != trait_mthd_inst.gen_args.len() {
+        if signature.gen_params.len() != trait_mthd_inst.gen_args.len {
             return TyError::TraitMthdGenericArgCountMismatch {
                 trait_: trait_mthd_inst.trait_inst.trait_,
                 mthd_idx: trait_mthd_inst.mthd_idx,
                 impl_ty: trait_mthd_inst.impl_ty,
                 expected: signature.gen_params.len(),
-                actual: trait_mthd_inst.gen_args.len(),
+                actual: trait_mthd_inst.gen_args.len,
             }
             .into();
         }
@@ -304,7 +304,11 @@ impl<'a> Typechecker<'a> {
 
         let trait_gen_var_subst =
             ty::GenVarSubst::new(&trait_def.gen_params, &trait_mthd_inst.trait_inst.gen_args).unwrap();
-        let gen_var_subst = ty::GenVarSubst::new(&signature.gen_params, &trait_mthd_inst.gen_args).unwrap();
+        let gen_var_subst = ty::GenVarSubst::new(
+            &signature.gen_params,
+            self.ctxt.tys.get_ty_slice(trait_mthd_inst.gen_args),
+        )
+        .unwrap();
         let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
 
         let substituted_fn_ty = self.ctxt.tys.substitute_self_ty(fn_ty, trait_mthd_inst.impl_ty);

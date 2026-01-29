@@ -857,7 +857,7 @@ impl<'a> AstLowerer<'a> {
                 trait_inst,
                 mthd_idx,
                 impl_ty: ty,
-                gen_args,
+                gen_args: self.tys().ty_slice(&gen_args),
             };
             let op = self.builder.insert_trait_mthd_op(trait_mthd_inst)?;
 
@@ -1103,7 +1103,7 @@ impl<'a> AstLowerer<'a> {
                     trait_inst,
                     mthd_idx,
                     impl_ty: obj_ty,
-                    gen_args,
+                    gen_args: self.tys().ty_slice(&gen_args),
                 };
 
                 Ok((self.builder.insert_trait_mthd_op(trait_mthd_inst)?, by_ref))

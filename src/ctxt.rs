@@ -157,7 +157,7 @@ impl Ctxt {
 
         fns::FnInst {
             fn_,
-            gen_args: self.tys.ty_slice(&trait_mthd_inst.gen_args),
+            gen_args: trait_mthd_inst.gen_args,
             env_gen_args: self.tys.ty_slice(&impl_inst.gen_args),
         }
     }
@@ -214,13 +214,12 @@ impl Ctxt {
         trait_mthd_inst: &fns::TraitMthdInst,
         subst: &GenVarSubst,
     ) -> fns::TraitMthdInst {
-        let mut trait_mthd_inst = trait_mthd_inst.clone();
-        trait_mthd_inst.impl_ty = self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst);
-        trait_mthd_inst.trait_inst = self.subst_trait_inst(&trait_mthd_inst.trait_inst, subst);
-        for gen_arg in &mut trait_mthd_inst.gen_args {
-            *gen_arg = self.tys.substitute_gen_vars(*gen_arg, subst);
+        fns::TraitMthdInst {
+            impl_ty: self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst),
+            trait_inst: self.subst_trait_inst(&trait_mthd_inst.trait_inst, subst),
+            gen_args: self.tys.substitute_gen_vars_on_slice(trait_mthd_inst.gen_args, subst),
+            mthd_idx: trait_mthd_inst.mthd_idx,
         }
-        trait_mthd_inst
     }
 
     pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: &traits::TraitInst) -> bool {
