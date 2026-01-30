@@ -1023,18 +1023,19 @@ impl TyReg {
         }
     }
 
-    pub fn try_find_instantiation(&self, target: Ty, generic: Ty, gen_vars: &[GenVar]) -> Result<Vec<Ty>, ()> {
+    pub fn try_find_instantiation(&mut self, target: Ty, generic: Ty, gen_vars: &[GenVar]) -> Result<TySlice, ()> {
         let mut instantiations = HashMap::new();
         for gen_param in gen_vars {
             instantiations.insert(*gen_param, None);
         }
 
         if self.try_find_instantiation_internal(target, generic, &mut instantiations) {
-            gen_vars
+            let inst: Vec<_> = gen_vars
                 .iter()
                 .map(|gen_var| instantiations[gen_var])
                 .collect::<Option<_>>()
-                .ok_or(())
+                .ok_or(())?;
+            Ok(self.ty_slice(&inst))
         } else {
             Err(())
         }

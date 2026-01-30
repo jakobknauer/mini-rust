@@ -3,16 +3,16 @@ use std::collections::HashMap;
 use crate::ctxt::{
     fns::Fn,
     traits::TraitInst,
-    ty::{GenVar, Ty},
+    ty::{GenVar, Ty, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Impl(pub usize);
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ImplInst {
     pub impl_: Impl,
-    pub gen_args: Vec<Ty>,
+    pub gen_args: TySlice,
 }
 
 #[derive(Debug, Clone)]

@@ -159,26 +159,25 @@ impl Ctxt {
         fns::FnInst {
             fn_,
             gen_args: trait_mthd_inst.gen_args,
-            env_gen_args: self.tys.ty_slice(&impl_inst.gen_args),
+            env_gen_args: impl_inst.gen_args,
         }
     }
 
-    fn get_impl_insts_for_ty_and_trait(
-        &self,
-        ty: ty::Ty,
-        trait_: traits::Trait,
-    ) -> impl Iterator<Item = impls::ImplInst> + use<'_> {
-        self.impls.get_impls_for_trait(trait_).filter_map(move |impl_| {
-            let impl_def = self.impls.get_impl_def(impl_).clone();
+    fn get_impl_insts_for_ty_and_trait(&mut self, ty: ty::Ty, trait_: traits::Trait) -> Vec<impls::ImplInst> {
+        self.impls
+            .get_impls_for_trait(trait_)
+            .filter_map(|impl_| {
+                let impl_def = self.impls.get_impl_def(impl_).clone();
 
-            let gen_args = self
-                .tys
-                .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
-                .ok()?;
+                let gen_args = self
+                    .tys
+                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
+                    .ok()?;
 
-            let impl_inst = impls::ImplInst { impl_, gen_args };
-            Some(impl_inst)
-        })
+                let impl_inst = impls::ImplInst { impl_, gen_args };
+                Some(impl_inst)
+            })
+            .collect()
     }
 
     fn get_impl_insts_for_ty_and_trait_inst(
@@ -186,11 +185,11 @@ impl Ctxt {
         ty: ty::Ty,
         trait_inst: traits::TraitInst,
     ) -> impl Iterator<Item = impls::ImplInst> {
-        let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(ty, trait_inst.trait_).collect();
+        let impl_insts = self.get_impl_insts_for_ty_and_trait(ty, trait_inst.trait_);
 
         impl_insts.into_iter().filter(move |impl_inst| {
             let impl_def = self.impls.get_impl_def(impl_inst.impl_).clone();
-            let subst = GenVarSubst::new(&impl_def.gen_params, &impl_inst.gen_args).unwrap();
+            let subst = GenVarSubst::new(&impl_def.gen_params, self.tys.get_ty_slice(impl_inst.gen_args)).unwrap();
 
             let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.unwrap(), &subst);
 
@@ -236,7 +235,7 @@ impl Ctxt {
             .is_some()
     }
 
-    pub fn ty_implements_trait(&self, ty: ty::Ty, trait_: traits::Trait) -> bool {
+    pub fn ty_implements_trait(&mut self, ty: ty::Ty, trait_: traits::Trait) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
         if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
             && self.tys.implements_trait_constraint_exists(gen_var, trait_)
@@ -250,7 +249,7 @@ impl Ctxt {
             return true;
         }
 
-        self.get_impl_insts_for_ty_and_trait(ty, trait_).next().is_some()
+        !self.get_impl_insts_for_ty_and_trait(ty, trait_).is_empty()
     }
 
     // TODO return TySlice instead of Vec
@@ -388,16 +387,16 @@ impl Ctxt {
             return Some(ty);
         }
 
-        let candidate_assoc_tys: Vec<_> = self
-            .traits
-            .get_trait_assoc_ty_with_name(ident)
+        let candidate_assoc_tys: Vec<_> = self.traits.get_trait_assoc_ty_with_name(ident).collect::<Vec<_>>();
+        let candidate_assoc_tys: Vec<_> = candidate_assoc_tys
+            .into_iter()
             .filter(|&(trait_, _)| self.ty_implements_trait(base_ty, trait_))
             .collect();
 
         match &candidate_assoc_tys[..] {
             [] => None,
             [(trait_, assoc_ty_idx)] => {
-                let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_).collect();
+                let impl_insts = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
                     let trait_inst = traits::TraitInst {
@@ -479,7 +478,7 @@ impl Ctxt {
                 let impl_def = self.impls.get_impl_def(impl_inst.impl_);
                 let assoc_ty = impl_def.assoc_tys[&assoc_ty_idx];
 
-                let subst = GenVarSubst::new(&impl_def.gen_params, &impl_inst.gen_args).unwrap();
+                let subst = GenVarSubst::new(&impl_def.gen_params, self.tys.get_ty_slice(impl_inst.gen_args)).unwrap();
 
                 self.tys.substitute_gen_vars(assoc_ty, &subst)
             }

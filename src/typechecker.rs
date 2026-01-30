@@ -594,7 +594,7 @@ impl<'a> Typechecker<'a> {
     }
 
     fn resolve_inherent_mthd(
-        &self,
+        &mut self,
         base_ty: ty::Ty,
         mthd_name: &str,
         must_have_receiver: bool,
@@ -619,7 +619,7 @@ impl<'a> Typechecker<'a> {
             [] => Ok(None),
             [(fn_, subst)] => Ok(Some(MthdResolution::Inherent {
                 fn_: *fn_,
-                env_gen_args: subst.to_vec(),
+                env_gen_args: self.ctxt.tys.get_ty_slice(*subst).to_vec(),
             })),
             [_, _, ..] => TyError::AmbiguousMthd {
                 base_ty,
@@ -639,6 +639,9 @@ impl<'a> Typechecker<'a> {
             .ctxt
             .traits
             .get_trait_mthd_with_name(mthd_name, must_have_receiver)
+            .collect();
+        let candidate_trait_mthds: Vec<_> = candidate_trait_mthds
+            .into_iter()
             .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(base_ty, trait_))
             .collect();
 
