@@ -14,7 +14,7 @@ pub struct Typechecker<'a> {
 pub enum MthdResolution {
     Inherent {
         fn_: fns::Fn,
-        env_gen_args: Vec<ty::Ty>,
+        env_gen_args: ty::TySlice,
     },
     Trait {
         trait_inst: traits::TraitInst,
@@ -619,7 +619,7 @@ impl<'a> Typechecker<'a> {
             [] => Ok(None),
             [(fn_, subst)] => Ok(Some(MthdResolution::Inherent {
                 fn_: *fn_,
-                env_gen_args: self.ctxt.tys.get_ty_slice(*subst).to_vec(),
+                env_gen_args: *subst,
             })),
             [_, _, ..] => TyError::AmbiguousMthd {
                 base_ty,
