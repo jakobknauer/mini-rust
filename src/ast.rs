@@ -13,6 +13,9 @@ pub struct Ast {
     pub exprs: Vec<ExprKind>,
     pub expr_slices: Vec<Expr>,
 
+    pub stmts: Vec<StmtKind>,
+    pub stmt_slices: Vec<Stmt>,
+
     pub ty_annots: Vec<TyAnnotKind>,
     pub ty_annot_slices: Vec<TyAnnot>,
 }
@@ -34,6 +37,24 @@ impl Ast {
 
     pub fn expr_slice(&self, ExprSlice(start, len): ExprSlice) -> &[Expr] {
         &self.expr_slices[start..start + len]
+    }
+
+    pub fn new_stmt(&mut self, stmt: StmtKind) -> Stmt {
+        self.stmts.push(stmt);
+        Stmt(self.stmts.len() - 1)
+    }
+
+    pub fn stmt(&self, stmt: Stmt) -> &StmtKind {
+        &self.stmts[stmt.0]
+    }
+
+    pub fn new_stmt_slice(&mut self, stmts: &[Stmt]) -> StmtSlice {
+        self.stmt_slices.extend_from_slice(stmts);
+        StmtSlice(self.stmt_slices.len() - stmts.len(), stmts.len())
+    }
+
+    pub fn stmt_slice(&self, StmtSlice(start, len): StmtSlice) -> &[Stmt] {
+        &self.stmt_slices[start..start + len]
     }
 
     pub fn new_ty_annot(&mut self, annot: TyAnnotKind) -> TyAnnot {
@@ -160,7 +181,7 @@ pub struct Trait {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
-    pub stmts: Vec<Stmt>,
+    pub stmts: StmtSlice,
     pub return_expr: Option<Expr>,
 }
 
@@ -227,8 +248,15 @@ impl std::fmt::Display for GenPathSegment {
         )
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stmt(usize);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StmtSlice(usize, usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Stmt {
+pub enum StmtKind {
     Let {
         name: String,
         ty_annot: Option<TyAnnot>,

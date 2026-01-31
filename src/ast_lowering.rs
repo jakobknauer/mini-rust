@@ -155,7 +155,7 @@ impl<'a> AstLowerer<'a> {
     fn build_block(&mut self, block: &ast::Block, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
         self.builder.push_scope();
 
-        for stmt in &block.stmts {
+        for &stmt in self.ast.stmt_slice(block.stmts) {
             self.build_stmt(stmt)?;
         }
 
@@ -725,8 +725,10 @@ impl<'a> AstLowerer<'a> {
         self.builder.insert_use_place_val(closure_place)
     }
 
-    fn build_stmt(&mut self, stmt: &ast::Stmt) -> AstLoweringResult<()> {
-        use ast::Stmt::*;
+    fn build_stmt(&mut self, stmt: ast::Stmt) -> AstLoweringResult<()> {
+        use ast::StmtKind::*;
+
+        let stmt = self.ast.stmt(stmt);
 
         match stmt {
             Let { name, value, ty_annot } => self.build_let_stmt(name, *ty_annot, *value),

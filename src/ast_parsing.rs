@@ -48,7 +48,7 @@ struct AstParser<'a> {
 }
 
 #[derive(PartialEq, Eq)]
-enum StmtKind {
+enum StmtType {
     /// A statement that is an expression but is delimited by a closing brace, e.g. if, loop,
     /// match, or a block. This is allowed as the last statement in a block, but is also allowed
     /// to be followed by other statements without requireing a semicolon in between.
@@ -528,7 +528,7 @@ impl<'a> AstParser<'a> {
 
             let (stmt, stmt_kind) = self.parse_stmt()?;
 
-            if stmt_kind == StmtKind::UndelimitedExpr {
+            if stmt_kind == StmtType::UndelimitedExpr {
                 // expect that we are at the end of the block
                 if self.current() != Some(&Token::RBrace) {
                     return Err(ParserErr::UndelimitedStmt);
@@ -536,8 +536,8 @@ impl<'a> AstParser<'a> {
             }
 
             if self.current() == Some(&Token::RBrace) {
-                if stmt_kind == StmtKind::UndelimitedExpr || stmt_kind == StmtKind::BlockExpr {
-                    let Stmt::Expr(expr) = stmt else {
+                if stmt_kind == StmtType::UndelimitedExpr || stmt_kind == StmtType::BlockExpr {
+                    let &StmtKind::Expr(expr) = self.builder.ast().stmt(stmt) else {
                         unreachable!();
                     };
                     return_expr = Some(expr);
@@ -552,55 +552,60 @@ impl<'a> AstParser<'a> {
 
         self.expect_token(Token::RBrace)?;
 
+        let stmts = self.builder.stmt_slice(&stmts);
         Ok(Block { stmts, return_expr })
     }
 
-    fn parse_stmt(&mut self) -> Result<(Stmt, StmtKind), ParserErr> {
+    fn parse_stmt(&mut self) -> Result<(Stmt, StmtType), ParserErr> {
         match self.current() {
             Some(Token::Keyword(Keyword::Let)) => {
                 let stmt = self.parse_let_stmt()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, StmtKind::ExplicitelyDelimited))
+                Ok((stmt, StmtType::ExplicitelyDelimited))
             }
             Some(Token::Keyword(Keyword::Return)) => {
                 let stmt = self.parse_return_stmt()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, StmtKind::ExplicitelyDelimited))
+                Ok((stmt, StmtType::ExplicitelyDelimited))
             }
             Some(Token::Keyword(Keyword::Break)) => {
                 let stmt = self.parse_break_stmt()?;
                 self.expect_token(Token::Semicolon)?;
-                Ok((stmt, StmtKind::ExplicitelyDelimited))
+                Ok((stmt, StmtType::ExplicitelyDelimited))
             }
             Some(Token::LBrace) => {
                 let block = self.parse_block()?;
                 let expr = self.builder.block(block);
-                let stmt = Stmt::Expr(expr);
-                Ok((stmt, StmtKind::BlockExpr))
+                let stmt = self.builder.expr_stmt(expr);
+                Ok((stmt, StmtType::BlockExpr))
             }
             Some(Token::Keyword(Keyword::If)) => {
                 let expr = self.parse_if_expr()?;
-                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
+                let stmt = self.builder.expr_stmt(expr);
+                Ok((stmt, StmtType::BlockExpr))
             }
             Some(Token::Keyword(Keyword::Loop)) => {
                 let expr = self.parse_loop()?;
-                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
+                let stmt = self.builder.expr_stmt(expr);
+                Ok((stmt, StmtType::BlockExpr))
             }
             Some(Token::Keyword(Keyword::While)) => {
                 let expr = self.parse_while()?;
-                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
+                let stmt = self.builder.expr_stmt(expr);
+                Ok((stmt, StmtType::BlockExpr))
             }
             Some(Token::Keyword(Keyword::Match)) => {
                 let expr = self.parse_match()?;
-                Ok((Stmt::Expr(expr), StmtKind::BlockExpr))
+                let stmt = self.builder.expr_stmt(expr);
+                Ok((stmt, StmtType::BlockExpr))
             }
             _ => {
                 let stmt = self.parse_expr_stmt()?;
                 let semicolon = self.advance_if(Token::Semicolon);
                 let stmt_kind = if semicolon {
-                    StmtKind::ExplicitelyDelimited
+                    StmtType::ExplicitelyDelimited
                 } else {
-                    StmtKind::UndelimitedExpr
+                    StmtType::UndelimitedExpr
                 };
                 Ok((stmt, stmt_kind))
             }
@@ -617,27 +622,32 @@ impl<'a> AstParser<'a> {
         };
         self.expect_token(Token::Equal)?;
         let value = self.parse_expr(true)?;
-        Ok(Stmt::Let { name, ty_annot, value })
+        let stmt = self.builder.let_stmt(name.clone(), ty_annot, value);
+        Ok(stmt)
     }
 
     fn parse_return_stmt(&mut self) -> Result<Stmt, ParserErr> {
         self.expect_keyword(Keyword::Return)?;
-        if let Some(Token::Semicolon) = self.current() {
-            Ok(Stmt::Return(None))
+        let return_expr = if let Some(Token::Semicolon) = self.current() {
+            None
         } else {
             let expr = self.parse_expr(true)?;
-            Ok(Stmt::Return(Some(expr)))
-        }
+            Some(expr)
+        };
+        let stmt = self.builder.return_stmt(return_expr);
+        Ok(stmt)
     }
 
     fn parse_break_stmt(&mut self) -> Result<Stmt, ParserErr> {
         self.expect_keyword(Keyword::Break)?;
-        Ok(Stmt::Break)
+        let stmt = self.builder.break_stmt();
+        Ok(stmt)
     }
 
     fn parse_expr_stmt(&mut self) -> Result<Stmt, ParserErr> {
         let expr = self.parse_expr(true)?;
-        Ok(Stmt::Expr(expr))
+        let stmt = self.builder.expr_stmt(expr);
+        Ok(stmt)
     }
 
     fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
@@ -943,7 +953,7 @@ impl<'a> AstParser<'a> {
             let return_expr = self.parse_expr(true)?;
             let block = Block {
                 return_expr: Some(return_expr),
-                stmts: Vec::new(),
+                stmts: self.builder.stmt_slice(&[]),
             };
             Ok(block)
         }

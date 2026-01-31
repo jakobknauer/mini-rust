@@ -133,6 +133,29 @@ impl<'a> AstBuilder<'a> {
     }
 }
 
+// Statements
+impl<'a> AstBuilder<'a> {
+    pub fn let_stmt(&mut self, name: String, ty_annot: Option<TyAnnot>, value: Expr) -> Stmt {
+        self.ast.new_stmt(StmtKind::Let { name,  ty_annot, value })
+    }
+
+    pub fn expr_stmt(&mut self, expr: Expr) -> Stmt {
+        self.ast.new_stmt(StmtKind::Expr(expr))
+    }
+
+    pub fn return_stmt(&mut self, expr: Option<Expr>) -> Stmt {
+        self.ast.new_stmt(StmtKind::Return(expr))
+    }
+
+    pub fn break_stmt(&mut self) -> Stmt {
+        self.ast.new_stmt(StmtKind::Break)
+    }
+
+    pub fn stmt_slice(&mut self, stmts: &[Stmt]) -> StmtSlice {
+        self.ast.new_stmt_slice(stmts)
+    }
+}
+
 // Type annotations
 impl<'a> AstBuilder<'a> {
     pub fn ty_annot_slice(&mut self, ty_annots: &[TyAnnot]) -> TyAnnotSlice {
