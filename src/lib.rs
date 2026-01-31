@@ -3,6 +3,7 @@ mod ast_lowering;
 mod ast_parsing;
 mod ctxt;
 pub mod driver;
+mod hlr;
 mod mlr_lowering;
 mod obligation_check;
 mod typechecker;
