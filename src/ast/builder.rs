@@ -136,7 +136,7 @@ impl<'a> AstBuilder<'a> {
 // Statements
 impl<'a> AstBuilder<'a> {
     pub fn let_stmt(&mut self, name: String, ty_annot: Option<TyAnnot>, value: Expr) -> Stmt {
-        self.ast.new_stmt(StmtKind::Let { name,  ty_annot, value })
+        self.ast.new_stmt(StmtKind::Let { name, ty_annot, value })
     }
 
     pub fn expr_stmt(&mut self, expr: Expr) -> Stmt {
