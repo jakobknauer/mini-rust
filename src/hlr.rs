@@ -1,11 +1,15 @@
-use crate::ctxt::{
-    fns::Fn,
-    ty::{Enum, Struct},
+use crate::{
+    ast::Path,
+    ctxt::{
+        fns::Fn,
+        ty::{Enum, GenVar, Struct},
+    },
 };
 
 pub struct Hlr {
     exprs: Vec<ExprDef>,
     stmts: Vec<StmtDef>,
+    ty_annots: Vec<TyAnnotDef>,
 }
 
 impl Hlr {
@@ -25,6 +29,15 @@ impl Hlr {
 
     pub fn stmt(&self, stmt: Stmt) -> &StmtDef {
         &self.stmts[stmt.0]
+    }
+
+    pub fn new_ty_annot(&mut self, annot: TyAnnotDef) -> TyAnnot {
+        self.ty_annots.push(annot);
+        TyAnnot(self.ty_annots.len() - 1)
+    }
+
+    pub fn ty_annot(&self, ty_annot: TyAnnot) -> &TyAnnotDef {
+        &self.ty_annots[ty_annot.0]
     }
 }
 
@@ -123,5 +136,14 @@ pub enum FieldSpec {
     Index(usize),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TyAnnot(usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TyAnnot {}
+pub enum TyAnnotDef {
+    Path(Path),
+    Ref(TyAnnot),
+    Ptr(TyAnnot),
+    Fn { params: Vec<TyAnnot>, ret: TyAnnot },
+    Wildcard,
+}
