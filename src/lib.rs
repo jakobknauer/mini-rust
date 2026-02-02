@@ -1,6 +1,7 @@
 mod ast;
 mod ast_lowering;
 mod ast_parsing;
+mod ast_to_hlr;
 mod ctxt;
 pub mod driver;
 mod hlr;

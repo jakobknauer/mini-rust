@@ -13,6 +13,14 @@ pub struct Hlr {
 }
 
 impl Hlr {
+    pub fn new() -> Self {
+        Self {
+            exprs: Vec::new(),
+            stmts: Vec::new(),
+            ty_annots: Vec::new(),
+        }
+    }
+
     pub fn new_expr(&mut self, expr: ExprDef) -> Expr {
         self.exprs.push(expr);
         Expr(self.exprs.len() - 1)
@@ -41,17 +49,18 @@ impl Hlr {
     }
 }
 
-type VarId = usize;
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Def {
     Var(VarId),
     Fn(Fn),
     Struct(Struct),
     Variant(Enum, usize),
-    Mthd(TyAnnot, String),
+    Mthd(TyAnnot, usize),
     TraitMthd(TyAnnot, TyAnnot, String),
 }
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct VarId(pub usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Expr(usize);
