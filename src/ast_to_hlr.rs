@@ -108,7 +108,68 @@ impl<'a> AstToHlr<'a> {
         self.hlr.new_expr(block)
     }
 
-    fn build_block(&self, body: &ast::Block) -> AstToHlrResult<hlr::Expr> {
+    fn build_block(&mut self, body: &ast::Block) -> AstToHlrResult<hlr::Expr> {
+        self.scopes.push_back(Scope::default());
+
+        for &stmt in self.ast.stmt_slice(body.stmts) {
+            self.lower_stmt(stmt)?;
+        }
+
+        let output = match body.return_expr {
+            Some(expr) => self.lower_expr(expr)?,
+            None => {
+                let unit_expr = hlr::ExprDef::Tuple(vec![]);
+                self.hlr.new_expr(unit_expr)
+            }
+        };
+
+        self.scopes.pop_back();
+        Ok(output)
+    }
+
+    fn lower_stmt(&mut self, stmt: ast::Stmt) -> AstToHlrResult<()> {
+        use ast::StmtKind::*;
+
+        let stmt = self.ast.stmt(stmt);
+
+        match stmt {
+            &Let {
+                ref name,
+                ty_annot,
+                value,
+            } => self.lower_let_stmt(name, ty_annot, value),
+            Expr(expr) => todo!(),
+            Return(expr) => todo!(),
+            Break => todo!(),
+        }
+    }
+
+    fn lower_expr(&mut self, expr: ast::Expr) -> AstToHlrResult<hlr::Expr> {
+        todo!()
+    }
+
+    fn lower_let_stmt(
+        &mut self,
+        name: &str,
+        ty_annot: Option<ast::TyAnnot>,
+        value: ast::Expr,
+    ) -> Result<(), AstToHlrError> {
+        let init = self.lower_expr(value)?;
+
+        let var = self.get_next_var_id();
+        self.scopes.back_mut().unwrap().bindings.insert(name.to_string(), var);
+
+        let ty = ty_annot.map(|ty_annot| self.lower_ty_annot(ty_annot)).transpose()?;
+
+        let let_stmt = hlr::StmtDef::Let { var, ty, init };
+        let let_stmt = self.hlr.new_stmt(let_stmt);
+
+        self.blocks.back_mut().unwrap().push(let_stmt);
+
+        Ok(())
+    }
+
+    fn lower_ty_annot(&self, ty_annot: ast::TyAnnot) -> AstToHlrResult<hlr::TyAnnot> {
         todo!()
     }
 }
