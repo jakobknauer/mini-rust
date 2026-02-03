@@ -14,7 +14,7 @@ pub fn ast_to_hlr(
     ast: &ast::Ast,
     ast_body: &ast::Block,
 ) -> AstToHlrResult<(hlr::Hlr, hlr::Expr)> {
-    let mut converter = AstToHlr::new(ctxt, fn_, ast);
+    let converter = AstToHlr::new(ctxt, fn_, ast);
     converter.lower_block(ast_body)
 }
 
@@ -132,15 +132,15 @@ impl<'a> AstToHlr<'a> {
 
         let stmt = self.ast.stmt(stmt);
 
-        match stmt {
-            &Let {
+        match *stmt {
+            Let {
                 ref name,
                 ty_annot,
                 value,
             } => self.lower_let_stmt(name, ty_annot, value),
-            Expr(expr) => todo!(),
-            Return(expr) => todo!(),
-            Break => todo!(),
+            Expr(expr) => self.lower_expr_stmt(expr),
+            Return(expr) => self.lower_return_stmt(expr),
+            Break => self.lower_break_stmt(),
         }
     }
 
@@ -148,12 +148,7 @@ impl<'a> AstToHlr<'a> {
         todo!()
     }
 
-    fn lower_let_stmt(
-        &mut self,
-        name: &str,
-        ty_annot: Option<ast::TyAnnot>,
-        value: ast::Expr,
-    ) -> Result<(), AstToHlrError> {
+    fn lower_let_stmt(&mut self, name: &str, ty_annot: Option<ast::TyAnnot>, value: ast::Expr) -> AstToHlrResult<()> {
         let init = self.lower_expr(value)?;
 
         let var = self.get_next_var_id();
@@ -161,11 +156,30 @@ impl<'a> AstToHlr<'a> {
 
         let ty = ty_annot.map(|ty_annot| self.lower_ty_annot(ty_annot)).transpose()?;
 
-        let let_stmt = hlr::StmtDef::Let { var, ty, init };
-        let let_stmt = self.hlr.new_stmt(let_stmt);
+        let stmt = hlr::StmtDef::Let { var, ty, init };
+        self.push_stmt(stmt)
+    }
 
-        self.blocks.back_mut().unwrap().push(let_stmt);
+    fn lower_expr_stmt(&mut self, expr: ast::Expr) -> AstToHlrResult<()> {
+        let expr = self.lower_expr(expr)?;
+        let stmt = hlr::StmtDef::Expr(expr);
+        self.push_stmt(stmt)
+    }
 
+    fn lower_return_stmt(&mut self, expr: Option<ast::Expr>) -> AstToHlrResult<()> {
+        let return_expr = expr.map(|e| self.lower_expr(e)).transpose()?;
+        let stmt = hlr::StmtDef::Return(return_expr);
+        self.push_stmt(stmt)
+    }
+
+    fn lower_break_stmt(&mut self) -> AstToHlrResult<()> {
+        let stmt = hlr::StmtDef::Break;
+        self.push_stmt(stmt)
+    }
+
+    fn push_stmt(&mut self, stmt: hlr::StmtDef) -> AstToHlrResult<()> {
+        let stmt = self.hlr.new_stmt(stmt);
+        self.blocks.back_mut().unwrap().push(stmt);
         Ok(())
     }
 
