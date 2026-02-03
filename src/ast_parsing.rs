@@ -15,6 +15,7 @@ pub fn parse(input: &str, output: &mut Ast) -> Result<(), ParserErr> {
     parser.parse()
 }
 
+#[expect(unused)]
 #[cfg(test)]
 fn parse_block(input: &str) -> Result<Block, ParserErr> {
     let tokens = lexer::get_tokens(input)?;
