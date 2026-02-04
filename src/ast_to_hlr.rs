@@ -144,10 +144,6 @@ impl<'a> AstToHlr<'a> {
         }
     }
 
-    fn lower_expr(&mut self, expr: ast::Expr) -> AstToHlrResult<hlr::Expr> {
-        todo!()
-    }
-
     fn lower_let_stmt(&mut self, name: &str, ty_annot: Option<ast::TyAnnot>, value: ast::Expr) -> AstToHlrResult<()> {
         let init = self.lower_expr(value)?;
 
@@ -181,6 +177,40 @@ impl<'a> AstToHlr<'a> {
         let stmt = self.hlr.new_stmt(stmt);
         self.blocks.back_mut().unwrap().push(stmt);
         Ok(())
+    }
+
+    fn lower_expr(&mut self, expr: ast::Expr) -> AstToHlrResult<hlr::Expr> {
+        use ast::ExprKind::*;
+
+        let expr = self.ast.expr(expr);
+
+        match expr {
+            Lit(lit) => todo!(),
+            Path(path) => todo!(),
+            QualifiedPath(qualified_path) => todo!(),
+            Tuple(expr_slice) => todo!(),
+            BinaryOp { left, operator, right } => todo!(),
+            UnaryOp { operator, operand } => todo!(),
+            Assign { target, value } => todo!(),
+            Call { callee, args } => todo!(),
+            MthdCall { obj, mthd, args } => todo!(),
+            Struct { ty_path, fields } => todo!(),
+            FieldAccess { obj, field } => todo!(),
+            Block(block) => todo!(),
+            If { cond, then, else_ } => todo!(),
+            Loop { body } => todo!(),
+            While { cond, body } => todo!(),
+            Match { scrutinee, arms } => todo!(),
+            Deref { base } => todo!(),
+            AddrOf { base } => todo!(),
+            As { expr, target_ty } => todo!(),
+            Self_ => todo!(),
+            Closure {
+                params,
+                return_ty,
+                body,
+            } => todo!(),
+        }
     }
 
     fn lower_ty_annot(&mut self, ty_annot: ast::TyAnnot) -> AstToHlrResult<hlr::TyAnnot> {
