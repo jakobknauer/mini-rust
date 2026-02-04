@@ -185,11 +185,11 @@ impl<'a> AstToHlr<'a> {
         let expr = self.ast.expr(expr);
 
         match expr {
-            Lit(lit) => todo!(),
+            Lit(lit) => self.lower_lit(lit),
             Path(path) => todo!(),
             QualifiedPath(qualified_path) => todo!(),
-            Tuple(expr_slice) => todo!(),
-            BinaryOp { left, operator, right } => todo!(),
+            &Tuple(fields) => self.lower_tuple_expr(fields),
+            &BinaryOp { left, operator, right } => self.lower_binary_op(left, operator, right),
             UnaryOp { operator, operand } => todo!(),
             Assign { target, value } => todo!(),
             Call { callee, args } => todo!(),
@@ -340,6 +340,42 @@ impl<'a> AstToHlr<'a> {
             }
             ast::PathSegment::Self_ => Ok(hlr::TyAnnotDef::Self_),
         }
+    }
+
+    fn lower_lit(&mut self, lit: &ast::Lit) -> Result<hlr::Expr, AstToHlrError> {
+        use ast::Lit::*;
+
+        let lit = match lit {
+            &Int(i) => hlr::Lit::Int(i),
+            &Bool(b) => hlr::Lit::Bool(b),
+            &CChar(c) => hlr::Lit::CChar(c),
+            CString(items) => hlr::Lit::CString(items.clone()),
+        };
+
+        let expr = hlr::ExprDef::Lit(lit);
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_tuple_expr(&mut self, fields: ast::ExprSlice) -> Result<hlr::Expr, AstToHlrError> {
+        let field_exprs = self
+            .ast
+            .expr_slice(fields)
+            .iter()
+            .map(|&field| self.lower_expr(field))
+            .collect::<AstToHlrResult<_>>()?;
+
+        let expr = hlr::ExprDef::Tuple(field_exprs);
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_binary_op(
+        &self,
+        left: ast::Expr,
+        operator: ast::BinaryOperator,
+        right: ast::Expr,
+    ) -> Result<hlr::Expr, AstToHlrError> {
+        todo!()
+        // Lower to trait method call
     }
 }
 

@@ -135,7 +135,7 @@ pub enum StmtDef {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Lit {
-    Int(i32),
+    Int(i64),
     Bool(bool),
     CChar(u8),
     CString(Vec<u8>),
