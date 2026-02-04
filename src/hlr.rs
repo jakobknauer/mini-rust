@@ -1,9 +1,8 @@
-use crate::{
-    ast::Path,
-    ctxt::{
-        fns::Fn,
-        ty::{Enum, GenVar, Struct},
-    },
+#![allow(unused)]
+
+use crate::ctxt::{
+    fns::Fn,
+    ty::{Enum, GenVar, Struct, Ty},
 };
 
 pub struct Hlr {
@@ -54,9 +53,12 @@ pub enum Def {
     Var(VarId),
     Fn(Fn),
     Struct(Struct),
+    Enum(Enum),
     Variant(Enum, usize),
     Mthd(TyAnnot, usize),
     TraitMthd(TyAnnot, TyAnnot, String),
+    GenVar(GenVar),
+    Ty(Ty),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -150,9 +152,41 @@ pub struct TyAnnot(usize);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TyAnnotDef {
-    Path(Path),
+    Struct(Struct, Option<Vec<TyAnnot>>),
+    Enum(Enum, Option<Vec<TyAnnot>>),
+    Ty(Ty),
+    GenVar(GenVar),
+    AssocTy {
+        base: TyAnnot,
+        trait_: Option<TyAnnot>,
+        name: String,
+    },
     Ref(TyAnnot),
     Ptr(TyAnnot),
-    Fn { params: Vec<TyAnnot>, ret: TyAnnot },
-    Wildcard,
+    Fn {
+        params: Vec<TyAnnot>,
+        ret: Option<TyAnnot>,
+    },
+    Tuple(Vec<TyAnnot>),
+    Infer,
+    Self_,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Path {
+    pub segments: Vec<PathSegment>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PathSegment {
+    Resolved(Def),
+    Ident(String),
+    Generic(GenPathSegment),
+    Self_,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GenPathSegment {
+    pub ident: String,
+    pub gen_args: Vec<TyAnnot>,
 }

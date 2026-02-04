@@ -183,8 +183,133 @@ impl<'a> AstToHlr<'a> {
         Ok(())
     }
 
-    fn lower_ty_annot(&self, ty_annot: ast::TyAnnot) -> AstToHlrResult<hlr::TyAnnot> {
-        todo!()
+    fn lower_ty_annot(&mut self, ty_annot: ast::TyAnnot) -> AstToHlrResult<hlr::TyAnnot> {
+        let ty_annot = self.ast.ty_annot(ty_annot);
+
+        let ty_annot = match ty_annot {
+            ast::TyAnnotKind::Path(path) => self.lower_path_ty_annot(path)?,
+            &ast::TyAnnotKind::Tuple(fields) => {
+                let fields = self
+                    .ast
+                    .ty_annot_slice(fields)
+                    .iter()
+                    .map(|&field| self.lower_ty_annot(field))
+                    .collect::<AstToHlrResult<_>>()?;
+                hlr::TyAnnotDef::Tuple(fields)
+            }
+            &ast::TyAnnotKind::Ref(ty_annot) => hlr::TyAnnotDef::Ref(self.lower_ty_annot(ty_annot)?),
+            &ast::TyAnnotKind::Ptr(ty_annot) => hlr::TyAnnotDef::Ptr(self.lower_ty_annot(ty_annot)?),
+            &ast::TyAnnotKind::Fn { param_tys, return_ty } => {
+                let param_tys = self
+                    .ast
+                    .ty_annot_slice(param_tys)
+                    .iter()
+                    .map(|&param_ty| self.lower_ty_annot(param_ty))
+                    .collect::<AstToHlrResult<_>>()?;
+                let return_ty = return_ty.map(|ret_ty| self.lower_ty_annot(ret_ty)).transpose()?;
+                hlr::TyAnnotDef::Fn {
+                    params: param_tys,
+                    ret: return_ty,
+                }
+            }
+            ast::TyAnnotKind::Wildcard => hlr::TyAnnotDef::Infer,
+        };
+
+        let ty_annot = self.hlr.new_ty_annot(ty_annot);
+        Ok(ty_annot)
+    }
+
+    fn lower_path_ty_annot(&mut self, path: &ast::Path) -> AstToHlrResult<hlr::TyAnnotDef> {
+        match path.segments.as_slice() {
+            [simple] => {
+                let ty_annot = self.lower_path_segment_to_ty_annot(simple)?;
+                Ok(ty_annot)
+            }
+            [parent, sub] => {
+                let parent_ty_annot = self.lower_path_segment_to_ty_annot(parent)?;
+                match sub {
+                    ast::PathSegment::Ident(name) => {
+                        let base = self.lower_path_segment_to_ty_annot(parent)?;
+                        Ok(hlr::TyAnnotDef::AssocTy {
+                            base: self.hlr.new_ty_annot(base),
+                            trait_: None,
+                            name: name.clone(),
+                        })
+                    }
+                    ast::PathSegment::Generic(gen_path_segment) => Err(AstToHlrError {
+                        msg: "Generic associated types are not supported".to_string(),
+                    }),
+                    ast::PathSegment::Self_ => Err(AstToHlrError {
+                        msg: "Invalid use of 'Self' in type annotation".to_string(),
+                    }),
+                }
+            }
+            _ => Err(AstToHlrError {
+                msg: format!("Complex path type annotations are not supported yet: {}", path),
+            }),
+        }
+    }
+
+    fn lower_path_segment_to_ty_annot(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::TyAnnotDef> {
+        match segment {
+            ast::PathSegment::Ident(ident) => {
+                let sig = self.get_signature();
+                // Try to resolve to generic var
+                for &gen_var in &sig.gen_params {
+                    if self.ctxt.tys.get_gen_var_name(gen_var) == ident {
+                        // Resolve to generic var
+                        return Ok(hlr::TyAnnotDef::GenVar(gen_var));
+                    }
+                }
+                // Try to resolve to env generic var
+                for &gen_var in &sig.env_gen_params {
+                    if self.ctxt.tys.get_gen_var_name(gen_var) == ident {
+                        // Resolve to generic var
+                        return Ok(hlr::TyAnnotDef::GenVar(gen_var));
+                    }
+                }
+
+                // Resolve to named type (struct/enum/primitive)
+                let named_ty = self.ctxt.tys.get_ty_by_name(ident).map_err(|_| AstToHlrError {
+                    msg: format!("Unknown type name in type annotation: {}", ident),
+                })?;
+
+                match *named_ty {
+                    ctxt::Named::Ty(ty) => Ok(hlr::TyAnnotDef::Ty(ty)),
+                    ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, None)),
+                    ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, None)),
+                }
+            }
+            ast::PathSegment::Generic(gen_segment) => {
+                // Resolve to named type (struct/enum/primitive)
+                let named_ty = self
+                    .ctxt
+                    .tys
+                    .get_ty_by_name(&gen_segment.ident)
+                    .map_err(|_| AstToHlrError {
+                        msg: format!("Unknown type name in type annotation: {}", gen_segment.ident),
+                    })?;
+
+                let gen_args = gen_segment
+                    .gen_args
+                    .iter()
+                    .map(|&arg| self.lower_ty_annot(arg))
+                    .collect::<AstToHlrResult<_>>()?;
+
+                // Resolve to named type (struct/enum) with generics
+                match *named_ty {
+                    ctxt::Named::Ty(ty) => Err(AstToHlrError {
+                        msg: format!(
+                            "Primitive type '{}' cannot have generic arguments in type annotation",
+                            gen_segment.ident
+                        ),
+                    }),
+                    ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, Some(gen_args))),
+                    ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, Some(gen_args))),
+                }
+            }
+            ast::PathSegment::Self_ => Ok(hlr::TyAnnotDef::Self_),
+        }
     }
 }
 
