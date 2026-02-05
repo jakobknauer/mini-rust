@@ -94,6 +94,7 @@ pub enum ExprDef {
         // not yet resolved
         receiver: Expr,
         method_name: String,
+        gen_args: Option<Vec<TyAnnot>>,
         args: Vec<Expr>,
     },
     /// Struct literal or enum variant constructor

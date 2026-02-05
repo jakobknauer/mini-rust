@@ -191,9 +191,9 @@ impl<'a> AstToHlr<'a> {
             &Tuple(fields) => self.lower_tuple_expr(fields),
             &BinaryOp { left, operator, right } => self.lower_binary_op(left, operator, right),
             &UnaryOp { operator, operand } => self.lower_unary_op(operator, operand),
-            Assign { target, value } => todo!(),
-            Call { callee, args } => todo!(),
-            MthdCall { obj, mthd, args } => todo!(),
+            &Assign { target, value } => self.lower_assign_expr(target, value),
+            &Call { callee, args } => self.lower_call_expr(callee, args),
+            &MthdCall { obj, ref mthd, args } => self.lower_method_call_expr(obj, mthd, args),
             Struct { ty_path, fields } => todo!(),
             FieldAccess { obj, field } => todo!(),
             Block(block) => todo!(),
@@ -385,6 +385,71 @@ impl<'a> AstToHlr<'a> {
         let operand = self.lower_expr(operand)?;
 
         let expr = hlr::ExprDef::UnaryOp { operator, operand };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_assign_expr(&mut self, target: ast::Expr, value: ast::Expr) -> Result<hlr::Expr, AstToHlrError> {
+        let target = self.lower_expr(target)?;
+        let value = self.lower_expr(value)?;
+
+        let expr = hlr::ExprDef::Assign { target, value };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_call_expr(&mut self, callee: ast::Expr, args: ast::ExprSlice) -> Result<hlr::Expr, AstToHlrError> {
+        let callee = self.lower_expr(callee)?;
+        let arg_exprs = self
+            .ast
+            .expr_slice(args)
+            .iter()
+            .map(|&arg| self.lower_expr(arg))
+            .collect::<AstToHlrResult<_>>()?;
+
+        let expr = hlr::ExprDef::Call {
+            callee,
+            args: arg_exprs,
+        };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_method_call_expr(
+        &mut self,
+        obj: ast::Expr,
+        mthd: &ast::PathSegment,
+        args: ast::ExprSlice,
+    ) -> Result<hlr::Expr, AstToHlrError> {
+        let obj = self.lower_expr(obj)?;
+        let arg = self
+            .ast
+            .expr_slice(args)
+            .iter()
+            .map(|&arg| self.lower_expr(arg))
+            .collect::<AstToHlrResult<_>>()?;
+
+        let (method_name, gen_args) = match mthd {
+            ast::PathSegment::Ident(name) => (name.clone(), None),
+            ast::PathSegment::Generic(gen_path_segment) => {
+                let method_name = gen_path_segment.ident.clone();
+                let gen_args = gen_path_segment
+                    .gen_args
+                    .iter()
+                    .map(|&arg| self.lower_ty_annot(arg))
+                    .collect::<AstToHlrResult<_>>()?;
+                (method_name, Some(gen_args))
+            }
+            ast::PathSegment::Self_ => {
+                return Err(AstToHlrError {
+                    msg: "Invalid use of 'Self' as method name".to_string(),
+                });
+            }
+        };
+
+        let expr = hlr::ExprDef::MethodCall {
+            receiver: obj,
+            method_name,
+            gen_args,
+            args: arg,
+        };
         Ok(self.hlr.new_expr(expr))
     }
 }
