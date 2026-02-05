@@ -194,7 +194,7 @@ impl<'a> AstToHlr<'a> {
             &Assign { target, value } => self.lower_assign_expr(target, value),
             &Call { callee, args } => self.lower_call_expr(callee, args),
             &MthdCall { obj, ref mthd, args } => self.lower_method_call_expr(obj, mthd, args),
-            Struct { ty_path, fields } => todo!(),
+            Struct { ty_path, fields } => self.lower_struct_expr(ty_path, fields),
             FieldAccess { obj, field } => todo!(),
             Block(block) => todo!(),
             If { cond, then, else_ } => todo!(),
@@ -342,7 +342,7 @@ impl<'a> AstToHlr<'a> {
         }
     }
 
-    fn lower_lit(&mut self, lit: &ast::Lit) -> Result<hlr::Expr, AstToHlrError> {
+    fn lower_lit(&mut self, lit: &ast::Lit) -> AstToHlrResult<hlr::Expr> {
         use ast::Lit::*;
 
         let lit = match lit {
@@ -356,7 +356,7 @@ impl<'a> AstToHlr<'a> {
         Ok(self.hlr.new_expr(expr))
     }
 
-    fn lower_tuple_expr(&mut self, fields: ast::ExprSlice) -> Result<hlr::Expr, AstToHlrError> {
+    fn lower_tuple_expr(&mut self, fields: ast::ExprSlice) -> AstToHlrResult<hlr::Expr> {
         let field_exprs = self
             .ast
             .expr_slice(fields)
@@ -373,7 +373,7 @@ impl<'a> AstToHlr<'a> {
         left: ast::Expr,
         operator: ast::BinaryOperator,
         right: ast::Expr,
-    ) -> Result<hlr::Expr, AstToHlrError> {
+    ) -> AstToHlrResult<hlr::Expr> {
         let left = self.lower_expr(left)?;
         let right = self.lower_expr(right)?;
 
@@ -381,14 +381,14 @@ impl<'a> AstToHlr<'a> {
         Ok(self.hlr.new_expr(expr))
     }
 
-    fn lower_unary_op(&mut self, operator: ast::UnaryOperator, operand: ast::Expr) -> Result<hlr::Expr, AstToHlrError> {
+    fn lower_unary_op(&mut self, operator: ast::UnaryOperator, operand: ast::Expr) -> AstToHlrResult<hlr::Expr> {
         let operand = self.lower_expr(operand)?;
 
         let expr = hlr::ExprDef::UnaryOp { operator, operand };
         Ok(self.hlr.new_expr(expr))
     }
 
-    fn lower_assign_expr(&mut self, target: ast::Expr, value: ast::Expr) -> Result<hlr::Expr, AstToHlrError> {
+    fn lower_assign_expr(&mut self, target: ast::Expr, value: ast::Expr) -> AstToHlrResult<hlr::Expr> {
         let target = self.lower_expr(target)?;
         let value = self.lower_expr(value)?;
 
@@ -396,7 +396,7 @@ impl<'a> AstToHlr<'a> {
         Ok(self.hlr.new_expr(expr))
     }
 
-    fn lower_call_expr(&mut self, callee: ast::Expr, args: ast::ExprSlice) -> Result<hlr::Expr, AstToHlrError> {
+    fn lower_call_expr(&mut self, callee: ast::Expr, args: ast::ExprSlice) -> AstToHlrResult<hlr::Expr> {
         let callee = self.lower_expr(callee)?;
         let arg_exprs = self
             .ast
@@ -417,7 +417,7 @@ impl<'a> AstToHlr<'a> {
         obj: ast::Expr,
         mthd: &ast::PathSegment,
         args: ast::ExprSlice,
-    ) -> Result<hlr::Expr, AstToHlrError> {
+    ) -> AstToHlrResult<hlr::Expr> {
         let obj = self.lower_expr(obj)?;
         let arg = self
             .ast
@@ -451,6 +451,129 @@ impl<'a> AstToHlr<'a> {
             args: arg,
         };
         Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_struct_expr(&mut self, ty_path: &ast::Path, fields: &[(String, ast::Expr)]) -> AstToHlrResult<hlr::Expr> {
+        let (constructor, gen_args) = self.resolve_path_to_constructor(ty_path)?;
+
+        let fields = fields
+            .iter()
+            .map(|(field_name, field_expr)| {
+                let expr = self.lower_expr(*field_expr)?;
+                let field = hlr::FieldSpec::Name(field_name.clone());
+                Ok((field, expr))
+            })
+            .collect::<AstToHlrResult<_>>()?;
+
+        let expr = hlr::ExprDef::Struct {
+            constructor,
+            fields,
+            gen_args,
+        };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn resolve_path_to_constructor(
+        &mut self,
+        ty_path: &ast::Path,
+    ) -> AstToHlrResult<(hlr::Def, Option<Vec<hlr::TyAnnot>>)> {
+        match ty_path.segments.as_slice() {
+            [simple] => {
+                let (struct_, gen_args) = match simple {
+                    ast::PathSegment::Ident(ident) => {
+                        let struct_ = self.ctxt.tys.get_struct_by_name(ident).ok_or_else(|| AstToHlrError {
+                            msg: format!("Unknown struct name in struct literal: {}", ident),
+                        })?;
+                        (struct_, None)
+                    }
+                    ast::PathSegment::Generic(gen_segment) => {
+                        let struct_ =
+                            self.ctxt
+                                .tys
+                                .get_struct_by_name(&gen_segment.ident)
+                                .ok_or_else(|| AstToHlrError {
+                                    msg: format!("Unknown struct name in struct literal: {}", gen_segment.ident),
+                                })?;
+                        let gen_args = gen_segment
+                            .gen_args
+                            .iter()
+                            .map(|&arg| self.lower_ty_annot(arg))
+                            .collect::<AstToHlrResult<_>>()?;
+                        (struct_, Some(gen_args))
+                    }
+                    ast::PathSegment::Self_ => {
+                        return Err(AstToHlrError {
+                            msg: "Invalid use of 'Self' as struct literal constructor".to_string(),
+                        });
+                    }
+                };
+                Ok((hlr::Def::Struct(struct_), gen_args))
+            }
+            [enum_, variant_name] => {
+                let (enum_, gen_args) = match enum_ {
+                    ast::PathSegment::Ident(ident) => {
+                        let enum_ = self.ctxt.tys.get_enum_by_name(ident).ok_or_else(|| AstToHlrError {
+                            msg: format!("Unknown enum name in struct literal: {}", ident),
+                        })?;
+                        (enum_, None)
+                    }
+                    ast::PathSegment::Generic(gen_segment) => {
+                        let enum_ =
+                            self.ctxt
+                                .tys
+                                .get_enum_by_name(&gen_segment.ident)
+                                .ok_or_else(|| AstToHlrError {
+                                    msg: format!("Unknown enum name in struct literal: {}", gen_segment.ident),
+                                })?;
+                        let gen_args = gen_segment
+                            .gen_args
+                            .iter()
+                            .map(|&arg| self.lower_ty_annot(arg))
+                            .collect::<AstToHlrResult<_>>()?;
+                        (enum_, Some(gen_args))
+                    }
+                    ast::PathSegment::Self_ => {
+                        return Err(AstToHlrError {
+                            msg: "Invalid use of 'Self' as enum literal constructor".to_string(),
+                        });
+                    }
+                };
+
+                let variant_name = match variant_name {
+                    ast::PathSegment::Ident(name) => name,
+                    ast::PathSegment::Generic(_) => {
+                        return Err(AstToHlrError {
+                            msg: "Generic parameters are not allowed on enum variants in struct literals".to_string(),
+                        });
+                    }
+                    ast::PathSegment::Self_ => {
+                        return Err(AstToHlrError {
+                            msg: "Invalid use of 'Self' as enum variant name in struct literal".to_string(),
+                        });
+                    }
+                };
+
+                let variant_index = self
+                    .ctxt
+                    .tys
+                    .get_enum_def(enum_)
+                    .unwrap()
+                    .variants
+                    .iter()
+                    .position(|variant| &variant.name == variant_name)
+                    .ok_or_else(|| AstToHlrError {
+                        msg: format!(
+                            "Unknown variant '{}' for enum '{}' in struct literal",
+                            variant_name, enum_.0
+                        ),
+                    })?;
+
+                Ok((hlr::Def::Variant(enum_, variant_index), gen_args))
+            }
+            _ => Err(AstToHlrError {
+                msg: format!("Complex paths in struct literals are not supported yet: {}", ty_path),
+            }),
+        }
     }
 }
 

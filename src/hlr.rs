@@ -98,8 +98,9 @@ pub enum ExprDef {
         args: Vec<Expr>,
     },
     /// Struct literal or enum variant constructor
-    Construct {
-        def: Def, // StructId or VariantId
+    Struct {
+        constructor: Def, // StructId or VariantId
+        gen_args: Option<Vec<TyAnnot>>,
         fields: Vec<(FieldSpec, Expr)>,
     },
     FieldAccess {
