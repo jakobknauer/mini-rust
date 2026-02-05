@@ -195,7 +195,7 @@ impl<'a> AstToHlr<'a> {
             &Call { callee, args } => self.lower_call_expr(callee, args),
             &MthdCall { obj, ref mthd, args } => self.lower_method_call_expr(obj, mthd, args),
             Struct { ty_path, fields } => self.lower_struct_expr(ty_path, fields),
-            FieldAccess { obj, field } => todo!(),
+            &FieldAccess { obj, ref field } => self.lower_field_access_expr(obj, field),
             Block(block) => todo!(),
             If { cond, then, else_ } => todo!(),
             Loop { body } => todo!(),
@@ -574,6 +574,28 @@ impl<'a> AstToHlr<'a> {
                 msg: format!("Complex paths in struct literals are not supported yet: {}", ty_path),
             }),
         }
+    }
+
+    fn lower_field_access_expr(&mut self, obj: ast::Expr, field: &ast::FieldDescriptor) -> AstToHlrResult<hlr::Expr> {
+        let obj = self.lower_expr(obj)?;
+
+        let field_spec = match field {
+            ast::FieldDescriptor::Named(path_segment) => match path_segment {
+                ast::PathSegment::Ident(name) => hlr::FieldSpec::Name(name.clone()),
+                _ => {
+                    return Err(AstToHlrError {
+                        msg: "Only identifiers are allowed as fields, got generic.".to_string(),
+                    });
+                }
+            },
+            ast::FieldDescriptor::Indexed(index) => hlr::FieldSpec::Index(*index),
+        };
+
+        let expr = hlr::ExprDef::FieldAccess {
+            base: obj,
+            field: field_spec,
+        };
+        Ok(self.hlr.new_expr(expr))
     }
 }
 
