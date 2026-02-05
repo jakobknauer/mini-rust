@@ -190,7 +190,7 @@ impl<'a> AstToHlr<'a> {
             QualifiedPath(qualified_path) => todo!(),
             &Tuple(fields) => self.lower_tuple_expr(fields),
             &BinaryOp { left, operator, right } => self.lower_binary_op(left, operator, right),
-            UnaryOp { operator, operand } => todo!(),
+            &UnaryOp { operator, operand } => self.lower_unary_op(operator, operand),
             Assign { target, value } => todo!(),
             Call { callee, args } => todo!(),
             MthdCall { obj, mthd, args } => todo!(),
@@ -369,13 +369,23 @@ impl<'a> AstToHlr<'a> {
     }
 
     fn lower_binary_op(
-        &self,
+        &mut self,
         left: ast::Expr,
         operator: ast::BinaryOperator,
         right: ast::Expr,
     ) -> Result<hlr::Expr, AstToHlrError> {
-        todo!()
-        // Lower to trait method call
+        let left = self.lower_expr(left)?;
+        let right = self.lower_expr(right)?;
+
+        let expr = hlr::ExprDef::BinaryOp { left, operator, right };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_unary_op(&mut self, operator: ast::UnaryOperator, operand: ast::Expr) -> Result<hlr::Expr, AstToHlrError> {
+        let operand = self.lower_expr(operand)?;
+
+        let expr = hlr::ExprDef::UnaryOp { operator, operand };
+        Ok(self.hlr.new_expr(expr))
     }
 }
 

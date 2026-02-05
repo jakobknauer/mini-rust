@@ -1,8 +1,11 @@
 #![allow(unused)]
 
-use crate::ctxt::{
-    fns::Fn,
-    ty::{Enum, GenVar, Struct, Ty},
+use crate::{
+    ast,
+    ctxt::{
+        fns::Fn,
+        ty::{Enum, GenVar, Struct, Ty},
+    },
 };
 
 pub struct Hlr {
@@ -74,6 +77,15 @@ pub struct Stmt(usize);
 pub enum ExprDef {
     Lit(Lit),
     Def(Def), // variable or function reference
+    BinaryOp {
+        left: Expr,
+        right: Expr,
+        operator: ast::BinaryOperator,
+    },
+    UnaryOp {
+        operand: Expr,
+        operator: ast::UnaryOperator,
+    },
     Call {
         callee: Expr,
         args: Vec<Expr>,
