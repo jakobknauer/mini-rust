@@ -198,8 +198,8 @@ impl<'a> AstToHlr<'a> {
             &FieldAccess { obj, ref field } => self.lower_field_access_expr(obj, field),
             &Block(block) => self.build_block(block),
             &If { cond, then, else_ } => self.lower_if_expr(cond, then, else_),
-            Loop { body } => todo!(),
-            While { cond, body } => todo!(),
+            &Loop { body } => self.lower_loop_expr(body),
+            &While { cond, body } => self.lower_while_expr(cond, body),
             Match { scrutinee, arms } => todo!(),
             Deref { base } => todo!(),
             AddrOf { base } => todo!(),
@@ -603,7 +603,7 @@ impl<'a> AstToHlr<'a> {
         cond: ast::Expr,
         then: ast::Block,
         else_: Option<ast::Block>,
-    ) -> Result<hlr::Expr, AstToHlrError> {
+    ) -> AstToHlrResult<hlr::Expr> {
         let cond = self.lower_expr(cond)?;
 
         self.start_new_block();
@@ -617,6 +617,40 @@ impl<'a> AstToHlr<'a> {
 
         let expr = hlr::ExprDef::If { cond, then, else_ };
         Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_loop_expr(&mut self, body: ast::Block) -> AstToHlrResult<hlr::Expr> {
+        self.start_new_block();
+        let body = self.build_block(body)?;
+        let body = self.release_current_block(body);
+
+        let expr = hlr::ExprDef::Loop { body };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_while_expr(&mut self, cond: ast::Expr, body: ast::Block) -> AstToHlrResult<hlr::Expr> {
+        self.start_new_block();
+
+        let cond = self.lower_expr(cond)?;
+
+        self.start_new_block();
+        let result = self.build_block(body)?;
+        let then_block = self.release_current_block(result);
+
+        self.start_new_block();
+        self.lower_break_stmt()?;
+        let unit = self.hlr.new_expr(hlr::ExprDef::Tuple(vec![]));
+        let else_block = self.release_current_block(unit);
+
+        let expr = hlr::ExprDef::If {
+            cond,
+            then: then_block,
+            else_: Some(else_block),
+        };
+        let loop_expr = hlr::ExprDef::Loop {
+            body: self.hlr.new_expr(expr),
+        };
+        Ok(self.hlr.new_expr(loop_expr))
     }
 }
 
