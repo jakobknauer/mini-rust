@@ -130,6 +130,10 @@ pub enum ExprDef {
     Loop {
         body: Expr,
     },
+    Match {
+        scrutinee: Expr,
+        arms: Vec<MatchArm>,
+    },
     Block {
         stmts: Vec<Stmt>,
         trailing: Expr,
@@ -159,6 +163,29 @@ pub enum Lit {
 pub enum FieldSpec {
     Name(String),
     Index(usize),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body: Expr,
+}
+
+type Pattern = StructPattern;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StructPattern {
+    pub variant: String, // TODO: change the syntax to match to something like 'Option::Some(x)' instead of 'Some(x)', then we can resolve the variant in the pattern and store a Def::Variant here instead of just the name
+    pub fields: Vec<StructPatternField>,
+}
+
+// TODO with the changes above (to variant), we can resolve field_name and binding_name (as index
+// and VarId respectively) in the pattern and store those instead of the names, which would make
+// lowering and codegen easier
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StructPatternField {
+    pub field_name: String,
+    pub binding_name: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
