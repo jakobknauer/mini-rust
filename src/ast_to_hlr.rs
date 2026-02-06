@@ -12,7 +12,7 @@ pub fn ast_to_hlr(
     ctxt: &ctxt::Ctxt,
     fn_: fns::Fn,
     ast: &ast::Ast,
-    ast_body: &ast::Block,
+    ast_body: ast::Block,
 ) -> AstToHlrResult<(hlr::Hlr, hlr::Expr)> {
     let converter = AstToHlr::new(ctxt, fn_, ast);
     converter.lower_block(ast_body)
@@ -52,7 +52,7 @@ impl<'a> AstToHlr<'a> {
         }
     }
 
-    pub fn lower_block(mut self, block: &ast::Block) -> AstToHlrResult<(hlr::Hlr, hlr::Expr)> {
+    pub fn lower_block(mut self, block: ast::Block) -> AstToHlrResult<(hlr::Hlr, hlr::Expr)> {
         let signature = self.get_signature();
         if signature.var_args {
             return Err(AstToHlrError {
@@ -108,7 +108,7 @@ impl<'a> AstToHlr<'a> {
         self.hlr.new_expr(block)
     }
 
-    fn build_block(&mut self, body: &ast::Block) -> AstToHlrResult<hlr::Expr> {
+    fn build_block(&mut self, body: ast::Block) -> AstToHlrResult<hlr::Expr> {
         self.scopes.push_back(Scope::default());
 
         for &stmt in self.ast.stmt_slice(body.stmts) {
@@ -196,8 +196,8 @@ impl<'a> AstToHlr<'a> {
             &MthdCall { obj, ref mthd, args } => self.lower_method_call_expr(obj, mthd, args),
             Struct { ty_path, fields } => self.lower_struct_expr(ty_path, fields),
             &FieldAccess { obj, ref field } => self.lower_field_access_expr(obj, field),
-            Block(block) => self.build_block(block),
-            If { cond, then, else_ } => todo!(),
+            &Block(block) => self.build_block(block),
+            &If { cond, then, else_ } => self.lower_if_expr(cond, then, else_),
             Loop { body } => todo!(),
             While { cond, body } => todo!(),
             Match { scrutinee, arms } => todo!(),
@@ -595,6 +595,27 @@ impl<'a> AstToHlr<'a> {
             base: obj,
             field: field_spec,
         };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_if_expr(
+        &mut self,
+        cond: ast::Expr,
+        then: ast::Block,
+        else_: Option<ast::Block>,
+    ) -> Result<hlr::Expr, AstToHlrError> {
+        let cond = self.lower_expr(cond)?;
+
+        self.start_new_block();
+        let then = self.build_block(then)?;
+        let then = self.release_current_block(then);
+
+        let else_ = else_
+            .map(|else_| self.build_block(else_))
+            .transpose()?
+            .map(|else_| self.release_current_block(else_));
+
+        let expr = hlr::ExprDef::If { cond, then, else_ };
         Ok(self.hlr.new_expr(expr))
     }
 }

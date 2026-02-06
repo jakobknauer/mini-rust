@@ -179,7 +179,7 @@ pub struct Trait {
     pub assoc_ty_names: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Block {
     pub stmts: StmtSlice,
     pub return_expr: Option<Expr>,
