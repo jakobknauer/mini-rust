@@ -196,7 +196,7 @@ impl<'a> AstToHlr<'a> {
             &MthdCall { obj, ref mthd, args } => self.lower_method_call_expr(obj, mthd, args),
             Struct { ty_path, fields } => self.lower_struct_expr(ty_path, fields),
             &FieldAccess { obj, ref field } => self.lower_field_access_expr(obj, field),
-            Block(block) => todo!(),
+            Block(block) => self.build_block(block),
             If { cond, then, else_ } => todo!(),
             Loop { body } => todo!(),
             While { cond, body } => todo!(),
