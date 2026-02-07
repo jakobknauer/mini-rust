@@ -1,9 +1,12 @@
 #![allow(unused)]
 
+mod resolve_util;
+
 use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ast,
+    ast_to_hlr::resolve_util::TyResolution,
     ctxt::{self, fns},
     hlr,
 };
@@ -283,42 +286,18 @@ impl<'a> AstToHlr<'a> {
     fn lower_path_segment_to_ty_annot(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::TyAnnotDef> {
         match segment {
             ast::PathSegment::Ident(ident) => {
-                let sig = self.get_signature();
-                // Try to resolve to generic var
-                for &gen_var in &sig.gen_params {
-                    if self.ctxt.tys.get_gen_var_name(gen_var) == ident {
-                        // Resolve to generic var
-                        return Ok(hlr::TyAnnotDef::GenVar(gen_var));
-                    }
-                }
-                // Try to resolve to env generic var
-                for &gen_var in &sig.env_gen_params {
-                    if self.ctxt.tys.get_gen_var_name(gen_var) == ident {
-                        // Resolve to generic var
-                        return Ok(hlr::TyAnnotDef::GenVar(gen_var));
-                    }
-                }
-
-                // Resolve to named type (struct/enum/primitive)
-                let named_ty = self.ctxt.tys.get_ty_by_name(ident).map_err(|_| AstToHlrError {
-                    msg: format!("Unknown type name in type annotation: {}", ident),
-                })?;
-
-                match *named_ty {
-                    ctxt::Named::Ty(ty) => Ok(hlr::TyAnnotDef::Ty(ty)),
-                    ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, None)),
-                    ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, None)),
+                let resolved_ty = self.resolve_ident_to_ty(ident)?;
+                match resolved_ty {
+                    TyResolution::GenVar(gen_var) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),
+                    TyResolution::NamedTy(named_ty) => match named_ty {
+                        ctxt::Named::Ty(ty) => Ok(hlr::TyAnnotDef::Ty(ty)),
+                        ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, None)),
+                        ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, None)),
+                    },
                 }
             }
             ast::PathSegment::Generic(gen_segment) => {
-                // Resolve to named type (struct/enum/primitive)
-                let named_ty = self
-                    .ctxt
-                    .tys
-                    .get_ty_by_name(&gen_segment.ident)
-                    .map_err(|_| AstToHlrError {
-                        msg: format!("Unknown type name in type annotation: {}", gen_segment.ident),
-                    })?;
+                let resolved_ty = self.resolve_ident_to_ty(&gen_segment.ident)?;
 
                 let gen_args = gen_segment
                     .gen_args
@@ -326,16 +305,23 @@ impl<'a> AstToHlr<'a> {
                     .map(|&arg| self.lower_ty_annot(arg))
                     .collect::<AstToHlrResult<_>>()?;
 
-                // Resolve to named type (struct/enum) with generics
-                match *named_ty {
-                    ctxt::Named::Ty(ty) => Err(AstToHlrError {
+                match resolved_ty {
+                    TyResolution::GenVar(gen_var) => Err(AstToHlrError {
                         msg: format!(
-                            "Primitive type '{}' cannot have generic arguments in type annotation",
+                            "Generic type variable '{}' cannot have generic arguments in type annotation",
                             gen_segment.ident
                         ),
                     }),
-                    ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, Some(gen_args))),
-                    ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, Some(gen_args))),
+                    TyResolution::NamedTy(named_ty) => match named_ty {
+                        ctxt::Named::Ty(ty) => Err(AstToHlrError {
+                            msg: format!(
+                                "Primitive type '{}' cannot have generic arguments in type annotation",
+                                gen_segment.ident
+                            ),
+                        }),
+                        ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, Some(gen_args))),
+                        ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, Some(gen_args))),
+                    },
                 }
             }
             ast::PathSegment::Self_ => Ok(hlr::TyAnnotDef::Self_),
@@ -471,109 +457,6 @@ impl<'a> AstToHlr<'a> {
             gen_args,
         };
         Ok(self.hlr.new_expr(expr))
-    }
-
-    fn resolve_path_to_constructor(
-        &mut self,
-        ty_path: &ast::Path,
-    ) -> AstToHlrResult<(hlr::Def, Option<Vec<hlr::TyAnnot>>)> {
-        match ty_path.segments.as_slice() {
-            [simple] => {
-                let (struct_, gen_args) = match simple {
-                    ast::PathSegment::Ident(ident) => {
-                        let struct_ = self.ctxt.tys.get_struct_by_name(ident).ok_or_else(|| AstToHlrError {
-                            msg: format!("Unknown struct name in struct literal: {}", ident),
-                        })?;
-                        (struct_, None)
-                    }
-                    ast::PathSegment::Generic(gen_segment) => {
-                        let struct_ =
-                            self.ctxt
-                                .tys
-                                .get_struct_by_name(&gen_segment.ident)
-                                .ok_or_else(|| AstToHlrError {
-                                    msg: format!("Unknown struct name in struct literal: {}", gen_segment.ident),
-                                })?;
-                        let gen_args = gen_segment
-                            .gen_args
-                            .iter()
-                            .map(|&arg| self.lower_ty_annot(arg))
-                            .collect::<AstToHlrResult<_>>()?;
-                        (struct_, Some(gen_args))
-                    }
-                    ast::PathSegment::Self_ => {
-                        return Err(AstToHlrError {
-                            msg: "Invalid use of 'Self' as struct literal constructor".to_string(),
-                        });
-                    }
-                };
-                Ok((hlr::Def::Struct(struct_), gen_args))
-            }
-            [enum_, variant_name] => {
-                let (enum_, gen_args) = match enum_ {
-                    ast::PathSegment::Ident(ident) => {
-                        let enum_ = self.ctxt.tys.get_enum_by_name(ident).ok_or_else(|| AstToHlrError {
-                            msg: format!("Unknown enum name in struct literal: {}", ident),
-                        })?;
-                        (enum_, None)
-                    }
-                    ast::PathSegment::Generic(gen_segment) => {
-                        let enum_ =
-                            self.ctxt
-                                .tys
-                                .get_enum_by_name(&gen_segment.ident)
-                                .ok_or_else(|| AstToHlrError {
-                                    msg: format!("Unknown enum name in struct literal: {}", gen_segment.ident),
-                                })?;
-                        let gen_args = gen_segment
-                            .gen_args
-                            .iter()
-                            .map(|&arg| self.lower_ty_annot(arg))
-                            .collect::<AstToHlrResult<_>>()?;
-                        (enum_, Some(gen_args))
-                    }
-                    ast::PathSegment::Self_ => {
-                        return Err(AstToHlrError {
-                            msg: "Invalid use of 'Self' as enum literal constructor".to_string(),
-                        });
-                    }
-                };
-
-                let variant_name = match variant_name {
-                    ast::PathSegment::Ident(name) => name,
-                    ast::PathSegment::Generic(_) => {
-                        return Err(AstToHlrError {
-                            msg: "Generic parameters are not allowed on enum variants in struct literals".to_string(),
-                        });
-                    }
-                    ast::PathSegment::Self_ => {
-                        return Err(AstToHlrError {
-                            msg: "Invalid use of 'Self' as enum variant name in struct literal".to_string(),
-                        });
-                    }
-                };
-
-                let variant_index = self
-                    .ctxt
-                    .tys
-                    .get_enum_def(enum_)
-                    .unwrap()
-                    .variants
-                    .iter()
-                    .position(|variant| &variant.name == variant_name)
-                    .ok_or_else(|| AstToHlrError {
-                        msg: format!(
-                            "Unknown variant '{}' for enum '{}' in struct literal",
-                            variant_name, enum_.0
-                        ),
-                    })?;
-
-                Ok((hlr::Def::Variant(enum_, variant_index), gen_args))
-            }
-            _ => Err(AstToHlrError {
-                msg: format!("Complex paths in struct literals are not supported yet: {}", ty_path),
-            }),
-        }
     }
 
     fn lower_field_access_expr(&mut self, obj: ast::Expr, field: &ast::FieldDescriptor) -> AstToHlrResult<hlr::Expr> {
