@@ -4,7 +4,9 @@ use std::collections::HashSet;
 
 pub use err::{TyError, TyResult};
 
-use crate::ctxt::{self, fns, mlr::*, traits, ty};
+use crate::{
+    ctxt::{self, fns, mlr::*, traits, ty},
+};
 
 pub struct Typechecker<'a> {
     ctxt: &'a mut ctxt::Ctxt,
@@ -522,51 +524,6 @@ impl<'a> Typechecker<'a> {
             .collect::<Result<_, _>>()?;
 
         Ok(field_indices)
-    }
-
-    pub fn resolve_enum_variants<'b>(
-        &self,
-        enum_ty: ty::Ty,
-        variant_names: impl IntoIterator<Item = &'b str>,
-    ) -> TyResult<Vec<usize>> {
-        let provided_names: Vec<&str> = variant_names.into_iter().collect();
-        let provided_names_set: HashSet<&str> = provided_names.iter().cloned().collect();
-
-        let expected_names: Vec<&str> = self.ctxt.tys.get_enum_variant_names(enum_ty)?.collect();
-        let expected_names_set: HashSet<&str> = expected_names.iter().cloned().collect();
-
-        let missing_variants: Vec<&str> = expected_names_set.difference(&provided_names_set).cloned().collect();
-        if !missing_variants.is_empty() {
-            return TyError::MissingVariants {
-                ty: enum_ty,
-                missing_variants: missing_variants.iter().map(|s| s.to_string()).collect(),
-            }
-            .into();
-        }
-
-        let extra_variants: Vec<&str> = provided_names_set.difference(&expected_names_set).cloned().collect();
-        if !extra_variants.is_empty() {
-            return TyError::ExtraVariants {
-                ty: enum_ty,
-                extra_variants: extra_variants.iter().map(|s| s.to_string()).collect(),
-            }
-            .into();
-        }
-
-        let variant_indices = provided_names
-            .iter()
-            .map(|variant_name| {
-                expected_names
-                    .iter()
-                    .position(|name| name == variant_name)
-                    .ok_or_else(|| TyError::NotAnEnumVariant {
-                        ty: enum_ty,
-                        variant_name: variant_name.to_string(),
-                    })
-            })
-            .collect::<TyResult<_>>()?;
-
-        Ok(variant_indices)
     }
 
     pub fn get_enum_variant_ty(&mut self, ty: ty::Ty, variant_index: usize) -> TyResult<ty::Ty> {

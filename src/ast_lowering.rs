@@ -637,9 +637,27 @@ impl<'a> AstLowerer<'a> {
         let discriminant_place = self.builder.insert_enum_discriminant_place(scrutinee_place)?;
         let discriminant = self.builder.insert_copy_op(discriminant_place)?;
 
-        let arm_indices = self
-            .typechecker()
-            .resolve_enum_variants(enum_ty, arms.iter().map(|arm| arm.pattern.variant.as_str()))?;
+        // now check if all arms are for the same enum type, namely enum_ty, and extract the
+        // variant indices
+        let arm_indices = arms
+            .iter()
+            .map(|arm| self.resolve_path_to_struct_or_enum_variant(&arm.pattern.variant))
+            .collect::<AstLoweringResult<Vec<_>>>()?
+            .iter()
+            .map(|variant| match variant {
+                StructOrEnumResolution::Struct(_) => Err(AstLoweringError::MatchArmPatternNotEnumVariant),
+                StructOrEnumResolution::EnumVariant(variant_enum_ty, variant_index) => {
+                    if self.tys().unify(*variant_enum_ty, enum_ty).is_ok() {
+                        Ok(*variant_index)
+                    } else {
+                        Err(AstLoweringError::MatchArmPatternWrongEnum {
+                            expected: enum_ty,
+                            found: *variant_enum_ty,
+                        })
+                    }
+                }
+            })
+            .collect::<AstLoweringResult<Vec<_>>>()?;
 
         // resolve equality function for discriminant comparisons once
         let eq_fn = {

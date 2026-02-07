@@ -879,16 +879,6 @@ impl TyReg {
         Ok(struct_def.fields.iter().map(|field| field.name.as_str()))
     }
 
-    pub fn get_enum_variant_names(&self, ty: Ty) -> Result<impl Iterator<Item = &str>, NotAnEnum> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Enum { enum_, .. } = ty_def else {
-            return Err(NotAnEnum(ty));
-        };
-
-        let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
-        Ok(enum_def.variants.iter().map(|variant| variant.name.as_str()))
-    }
-
     pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
         let ty_def = self.get_ty_def(struct_ty).expect("type should be registered");
         let &TyDef::Struct { struct_, .. } = ty_def else {

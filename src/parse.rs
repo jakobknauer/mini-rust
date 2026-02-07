@@ -1054,7 +1054,7 @@ impl<'a> AstParser<'a> {
     }
 
     fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserErr> {
-        let variant = self.expect_identifier()?;
+        let variant = self.parse_path(true)?;
 
         self.expect_token(Token::LBrace)?;
 

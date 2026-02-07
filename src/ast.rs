@@ -399,7 +399,7 @@ type Pattern = StructPattern;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructPattern {
-    pub variant: String,
+    pub variant: Path,
     pub fields: Vec<StructPatternField>,
 }
 

@@ -58,6 +58,12 @@ pub fn print_mlr_builder_error(fn_name: &str, err: ast_lowering::AstLoweringErro
         UnresolvableTraitAnnot { trait_name } => format!("Cannot resolve trait name '{}'", trait_name),
         NotATypeName(ty_name) => format!("'{}' is not a type name", ty_name),
         NotAGenericType(ty) => format!("'{}' is not a generic type", ctxt.tys.get_string_rep(ty)),
+        MatchArmPatternNotEnumVariant => "Match arm pattern is not an enum variant".to_string(),
+        MatchArmPatternWrongEnum { expected, found } => format!(
+            "Match arm pattern has enum type '{}', but expected '{}'",
+            ctxt.tys.get_string_rep(found),
+            ctxt.tys.get_string_rep(expected)
+        ),
     }
 }
 

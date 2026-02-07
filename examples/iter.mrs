@@ -28,11 +28,11 @@ fn for_each<T, F>(iter: T, f: F)
     let current = iter.next();
     loop {
         match current {
-            Some { item: x } => {
+            Option::Some { item: x } => {
                 f(x);
                 current = iter.next();
             },
-            None {} => {
+            Option::None {} => {
                 break;
             }
         }

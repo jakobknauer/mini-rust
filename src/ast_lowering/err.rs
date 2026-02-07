@@ -22,6 +22,8 @@ pub enum AstLoweringError {
     UnresolvableTraitAnnot { trait_name: String },
     NotATypeName(String),
     NotAGenericType(Ty),
+    MatchArmPatternNotEnumVariant,
+    MatchArmPatternWrongEnum { expected: Ty, found: Ty },
 }
 
 impl<T> From<AstLoweringError> for AstLoweringResult<T> {
