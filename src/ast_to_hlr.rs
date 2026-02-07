@@ -201,10 +201,10 @@ impl<'a> AstToHlr<'a> {
             &Loop { body } => self.lower_loop_expr(body),
             &While { cond, body } => self.lower_while_expr(cond, body),
             &Match { scrutinee, ref arms } => self.lower_match_expr(scrutinee, arms),
-            Deref { base } => todo!(),
-            AddrOf { base } => todo!(),
-            As { expr, target_ty } => todo!(),
-            Self_ => todo!(),
+            &Deref { base } => self.lower_deref_expr(base),
+            &AddrOf { base } => self.lower_addr_of_expr(base),
+            &As { expr, target_ty } => self.lower_as_expr(expr, target_ty),
+            Self_ => self.lower_self_expr(),
             Closure {
                 params,
                 return_ty,
@@ -653,7 +653,7 @@ impl<'a> AstToHlr<'a> {
         Ok(self.hlr.new_expr(loop_expr))
     }
 
-    fn lower_match_expr(&mut self, scrutinee: ast::Expr, arms: &[ast::MatchArm]) -> Result<hlr::Expr, AstToHlrError> {
+    fn lower_match_expr(&mut self, scrutinee: ast::Expr, arms: &[ast::MatchArm]) -> AstToHlrResult<hlr::Expr> {
         let scrutinee = self.lower_expr(scrutinee)?;
 
         let hlr_arms = arms
@@ -727,6 +727,33 @@ impl<'a> AstToHlr<'a> {
             gen_args,
             fields,
         })
+    }
+
+    fn lower_deref_expr(&mut self, base: ast::Expr) -> AstToHlrResult<hlr::Expr> {
+        let base = self.lower_expr(base)?;
+        let expr = hlr::ExprDef::Deref(base);
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_addr_of_expr(&mut self, base: ast::Expr) -> AstToHlrResult<hlr::Expr> {
+        let base = self.lower_expr(base)?;
+        let expr = hlr::ExprDef::AddrOf(base);
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_as_expr(&mut self, expr: ast::Expr, target_ty: ast::TyAnnot) -> AstToHlrResult<hlr::Expr> {
+        let expr = self.lower_expr(expr)?;
+        let ty = self.lower_ty_annot(target_ty)?;
+        let expr = hlr::ExprDef::As { expr, ty };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_self_expr(&mut self) -> AstToHlrResult<hlr::Expr> {
+        let self_var_id = self.self_var_id.ok_or_else(|| AstToHlrError {
+            msg: "Cannot use 'self' outside of a method".to_string(),
+        })?;
+        let expr = hlr::ExprDef::Def(hlr::Def::Var(self_var_id));
+        Ok(self.hlr.new_expr(expr))
     }
 }
 
