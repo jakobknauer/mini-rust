@@ -200,7 +200,7 @@ impl<'a> AstToHlr<'a> {
             &If { cond, then, else_ } => self.lower_if_expr(cond, then, else_),
             &Loop { body } => self.lower_loop_expr(body),
             &While { cond, body } => self.lower_while_expr(cond, body),
-            Match { scrutinee, arms } => todo!(),
+            &Match { scrutinee, ref arms } => self.lower_match_expr(scrutinee, arms),
             Deref { base } => todo!(),
             AddrOf { base } => todo!(),
             As { expr, target_ty } => todo!(),
@@ -651,6 +651,82 @@ impl<'a> AstToHlr<'a> {
             body: self.hlr.new_expr(expr),
         };
         Ok(self.hlr.new_expr(loop_expr))
+    }
+
+    fn lower_match_expr(&mut self, scrutinee: ast::Expr, arms: &[ast::MatchArm]) -> Result<hlr::Expr, AstToHlrError> {
+        let scrutinee = self.lower_expr(scrutinee)?;
+
+        let hlr_arms = arms
+            .iter()
+            .map(|arm| {
+                self.scopes.push_back(Scope::default());
+                let pattern = self.lower_pattern(&arm.pattern)?;
+                let body = self.lower_expr(arm.value)?;
+                self.scopes.pop_back();
+                Ok(hlr::MatchArm { pattern, body })
+            })
+            .collect::<AstToHlrResult<_>>()?;
+
+        let expr = hlr::ExprDef::Match {
+            scrutinee,
+            arms: hlr_arms,
+        };
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_pattern(&mut self, pattern: &ast::VariantPattern) -> AstToHlrResult<hlr::Pattern> {
+        let (variant, gen_args) = self.resolve_path_to_constructor(&pattern.variant)?;
+
+        let hlr::Def::Variant(enum_, variant_index) = variant.clone() else {
+            return Err(AstToHlrError {
+                msg: format!("Only enum variants are supported in patterns, found {:?}", variant),
+            });
+        };
+
+        let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
+        let variant_struct = self.ctxt.tys.get_struct_def(variant_struct).unwrap();
+
+        if pattern.fields.len() != variant_struct.fields.len() {
+            return Err(AstToHlrError {
+                msg: format!(
+                    "Pattern for variant has wrong number of fields: expected {}, found {}",
+                    variant_struct.fields.len(),
+                    pattern.fields.len()
+                ),
+            });
+        }
+
+        let fields = pattern
+            .fields
+            .iter()
+            .map(|field| {
+                let field_index = variant_struct
+                    .fields
+                    .iter()
+                    .position(|f| f.name == field.field_name)
+                    .ok_or_else(|| AstToHlrError {
+                        msg: format!(
+                            "Unknown field '{}' in pattern for variant '{}'",
+                            field.field_name, enum_.0
+                        ),
+                    })?;
+
+                let binding = self.get_next_var_id();
+                self.scopes
+                    .back_mut()
+                    .unwrap()
+                    .bindings
+                    .insert(field.binding_name.clone(), binding);
+
+                Ok(hlr::VariantPatternField { field_index, binding })
+            })
+            .collect::<AstToHlrResult<_>>()?;
+
+        Ok(hlr::VariantPattern {
+            variant,
+            gen_args,
+            fields,
+        })
     }
 }
 
