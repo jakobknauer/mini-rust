@@ -395,16 +395,16 @@ pub struct MatchArm {
     pub value: Expr,
 }
 
-type Pattern = StructPattern;
+type Pattern = VariantPattern;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StructPattern {
+pub struct VariantPattern {
     pub variant: Path,
-    pub fields: Vec<StructPatternField>,
+    pub fields: Vec<VariantPatternField>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StructPatternField {
+pub struct VariantPatternField {
     pub field_name: String,
     pub binding_name: String,
 }

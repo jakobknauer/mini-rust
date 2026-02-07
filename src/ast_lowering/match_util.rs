@@ -105,7 +105,7 @@ impl<'a> super::AstLowerer<'a> {
         let variant_place = self
             .builder
             .insert_project_to_variant_place(base_place, variant_index)?;
-        for (ast::StructPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
+        for (ast::VariantPatternField { binding_name, .. }, field_index) in arm.pattern.fields.iter().zip(field_indices)
         {
             let field_place = self.builder.insert_field_access_place(variant_place, field_index)?;
             let field_ty = self.mlr().get_place_ty(field_place);

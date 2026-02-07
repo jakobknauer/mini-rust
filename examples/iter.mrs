@@ -32,7 +32,7 @@ fn for_each<T, F>(iter: T, f: F)
                 f(x);
                 current = iter.next();
             },
-            Option::None {} => {
+            Option::None => {
                 break;
             }
         }

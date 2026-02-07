@@ -7,7 +7,7 @@ impl<T> Option<T> {
     fn unwrap_or(self, default: T) -> T {
         match self {
             Option::Some { item: item } => item,
-            Option::None {} => default,
+            Option::None => default,
         }
     }
 
@@ -16,7 +16,7 @@ impl<T> Option<T> {
     {
         match self {
             Option::Some { item: item } => Option::Some { item: f(item) },
-            Option::None {} => Option::None {},
+            Option::None => Option::None {},
         }
     }
 
@@ -25,21 +25,21 @@ impl<T> Option<T> {
     {
         match self {
             Option::Some { item: item } => f(item),
-            Option::None {} => {}
+            Option::None => {}
         }
     }
 
     fn as_ref(&self) -> Option<&T> {
         match self {
             Option::Some { item: item } => Option::Some { item: item },
-            Option::None {} => Option::None {},
+            Option::None => Option::None {},
         }
     }
 
     fn is_some(&self) -> bool {
         match self {
             Option::Some { item: item } => true,
-            Option::None {} => false,
+            Option::None => false,
         }
     }
 

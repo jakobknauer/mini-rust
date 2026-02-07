@@ -1036,7 +1036,7 @@ impl<'a> AstParser<'a> {
         self.expect_token(Token::LBrace)?;
 
         while Some(&Token::RBrace) != self.current() {
-            let pattern = self.parse_struct_pattern()?;
+            let pattern = self.parse_variant_pattern()?;
             self.expect_token(Token::BoldArrow)?;
             let value = self.parse_expr(true)?; // Allow top-level struct expr in match arm body
 
@@ -1053,31 +1053,34 @@ impl<'a> AstParser<'a> {
         Ok(expr)
     }
 
-    fn parse_struct_pattern(&mut self) -> Result<StructPattern, ParserErr> {
+    fn parse_variant_pattern(&mut self) -> Result<VariantPattern, ParserErr> {
         let variant = self.parse_path(true)?;
 
-        self.expect_token(Token::LBrace)?;
+        let fields = if self.advance_if(Token::LBrace) {
+            let mut fields = Vec::new();
+            while let Some(Token::Identifier(field_name)) = self.current() {
+                let field_name = field_name.clone();
+                self.position += 1; // consume field name
+                self.expect_token(Token::Colon)?;
+                let binding_name = self.expect_identifier()?;
 
-        let mut fields = Vec::new();
-        while let Some(Token::Identifier(field_name)) = self.current() {
-            let field_name = field_name.clone();
-            self.position += 1; // consume field name
-            self.expect_token(Token::Colon)?;
-            let binding_name = self.expect_identifier()?;
+                fields.push(VariantPatternField {
+                    field_name,
+                    binding_name,
+                });
 
-            fields.push(StructPatternField {
-                field_name,
-                binding_name,
-            });
-
-            if !self.advance_if(Token::Comma) {
-                break;
+                if !self.advance_if(Token::Comma) {
+                    break;
+                }
             }
-        }
 
-        self.expect_token(Token::RBrace)?;
+            self.expect_token(Token::RBrace)?;
+            fields
+        } else {
+            Vec::new()
+        };
 
-        Ok(StructPattern { variant, fields })
+        Ok(VariantPattern { variant, fields })
     }
 
     fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
