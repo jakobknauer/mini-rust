@@ -4,9 +4,7 @@ use std::collections::HashSet;
 
 pub use err::{TyError, TyResult};
 
-use crate::{
-    ctxt::{self, fns, mlr::*, traits, ty},
-};
+use crate::ctxt::{self, fns, mlr::*, traits, ty};
 
 pub struct Typechecker<'a> {
     ctxt: &'a mut ctxt::Ctxt,
