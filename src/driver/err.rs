@@ -1,11 +1,12 @@
 use crate::{
-    ast_lowering, parse,
+    ast_lowering,
     ctxt::{
         self,
         ty::{Obligation, iter_ty_slice},
     },
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     obligation_check::ObligationCheckError,
+    parse,
     typechecker::TyError,
 };
 

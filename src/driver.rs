@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast, ast_lowering, parse,
+    ast, ast_lowering,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -20,6 +20,7 @@ use crate::{
     },
     mlr_lowering,
     obligation_check::check_obligations,
+    parse,
     util::print,
 };
 

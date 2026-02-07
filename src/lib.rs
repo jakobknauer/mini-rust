@@ -1,11 +1,11 @@
 mod ast;
 mod ast_lowering;
-mod parse;
 mod ast_to_hlr;
 mod ctxt;
 pub mod driver;
 mod hlr;
 mod mlr_lowering;
 mod obligation_check;
+mod parse;
 mod typechecker;
 mod util;
