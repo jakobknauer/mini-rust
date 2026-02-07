@@ -4,7 +4,7 @@ mod token;
 #[macro_use]
 mod macros;
 
-use crate::{ast::builder::AstBuilder, ast::*, ast_parsing::token::Keyword};
+use crate::{ast::builder::AstBuilder, ast::*, parse::token::Keyword};
 
 pub use lexer::LexerErr;
 pub use token::Token;

@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast, ast_lowering, ast_parsing,
+    ast, ast_lowering, parse,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -70,7 +70,7 @@ impl<'a> Driver<'a> {
         self.print_pretty("Building AST from source");
         let mut ast = ast::Ast::default();
         for source in &self.sources {
-            ast_parsing::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
+            parse::parse(source, &mut ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
         }
 
         self.print_pretty("Building context");

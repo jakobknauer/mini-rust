@@ -1,5 +1,5 @@
 use crate::{
-    ast_lowering, ast_parsing,
+    ast_lowering, parse,
     ctxt::{
         self,
         ty::{Obligation, iter_ty_slice},
@@ -9,8 +9,8 @@ use crate::{
     typechecker::TyError,
 };
 
-pub fn print_parser_err(err: &ast_parsing::ParserErr, _: &str) -> String {
-    use ast_parsing::ParserErr::*;
+pub fn print_parser_err(err: &parse::ParserErr, _: &str) -> String {
+    use parse::ParserErr::*;
 
     match err {
         LexerErr(lexer_err) => format!("Lexer error at position {}", lexer_err.position),
