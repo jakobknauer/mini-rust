@@ -31,3 +31,11 @@ The compiler as of now outputs LLVM IR, which can be compiled to machine code us
 ## Architecture
 
 TODO
+
+
+## Contributing
+
+The repository contains [a custom pre-commit hook](.githooks/pre-commit). To enable, run
+```bash
+git config --local core.hooksPath .githooks
+```
