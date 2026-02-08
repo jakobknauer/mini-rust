@@ -1,7 +1,8 @@
 use crate::{
     ast,
     ast_to_hlr::{AstToHlr, AstToHlrError, AstToHlrResult},
-    ctxt, hlr,
+    ctxt::{self, fns},
+    hlr,
 };
 
 impl<'a> AstToHlr<'a> {
@@ -131,6 +132,33 @@ impl<'a> AstToHlr<'a> {
         })?;
 
         Ok(TyResolution::NamedTy(*named_ty))
+    }
+
+    pub fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Def> {
+        // First try to resolve to a local variable
+        if let Some(var_id) = self.resolve_ident_to_var(name) {
+            return Some(hlr::Def::Var(var_id));
+        }
+
+        // Then try to resolve to a function
+        if let Some(fn_) = self.resolve_ident_to_fn(name) {
+            return Some(hlr::Def::Fn(fn_));
+        }
+
+        None
+    }
+
+    pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId> {
+        self.scopes
+            .iter()
+            .rev()
+            .filter_map(|scope| scope.bindings.get(name))
+            .next()
+            .cloned()
+    }
+
+    pub(super) fn resolve_ident_to_fn(&mut self, name: &str) -> Option<fns::Fn> {
+        self.ctxt.fns.get_fn_by_name(name)
     }
 }
 

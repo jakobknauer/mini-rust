@@ -189,7 +189,7 @@ impl<'a> AstToHlr<'a> {
 
         match expr {
             Lit(lit) => self.lower_lit(lit),
-            Path(path) => todo!(),
+            Path(path) => self.lower_path(path),
             QualifiedPath(qualified_path) => todo!(),
             &Tuple(fields) => self.lower_tuple_expr(fields),
             &BinaryOp { left, operator, right } => self.lower_binary_op(left, operator, right),
@@ -340,6 +340,75 @@ impl<'a> AstToHlr<'a> {
 
         let expr = hlr::ExprDef::Lit(lit);
         Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_path(&mut self, path: &ast::Path) -> AstToHlrResult<hlr::Expr> {
+        let expr: hlr::ExprDef = match path.segments.as_slice() {
+            [ast::PathSegment::Ident(ident)] => self
+                .resolve_ident_to_val_def(ident)
+                .map(hlr::ExprDef::Def)
+                .ok_or_else(|| AstToHlrError {
+                    msg: format!("Unresolvable path: {}", ident),
+                })?,
+            [ast::PathSegment::Generic(gen_path_segment)] => {
+                let base_val = self
+                    .resolve_ident_to_val_def(&gen_path_segment.ident)
+                    .ok_or_else(|| AstToHlrError {
+                        msg: format!("Unresolvable path: {}", gen_path_segment.ident),
+                    })?;
+
+                match base_val {
+                    hlr::Def::Fn(fn_) => {
+                        let gen_args = gen_path_segment
+                            .gen_args
+                            .iter()
+                            .map(|&annot| self.lower_ty_annot(annot))
+                            .collect::<AstToHlrResult<_>>()?;
+                        hlr::ExprDef::GenDef {
+                            base: hlr::Def::Fn(fn_),
+                            gen_args,
+                        }
+                    }
+                    _ => {
+                        return Err(AstToHlrError {
+                            msg: format!("Only functions can be used in generic paths, found {:?}", base_val),
+                        });
+                    }
+                }
+            }
+            [ty_path, mthd_name] => {
+                let ty = self.lower_path_segment_to_ty_annot(ty_path)?;
+                let ty = self.hlr.new_ty_annot(ty);
+
+                match mthd_name {
+                    ast::PathSegment::Ident(ident) => hlr::ExprDef::Def(hlr::Def::Mthd(ty, ident.clone())),
+                    ast::PathSegment::Generic(gen_path_segment) => {
+                        let gen_args = gen_path_segment
+                            .gen_args
+                            .iter()
+                            .map(|&annot| self.lower_ty_annot(annot))
+                            .collect::<AstToHlrResult<_>>()?;
+                        hlr::ExprDef::GenDef {
+                            base: hlr::Def::Mthd(ty, gen_path_segment.ident.clone()),
+                            gen_args,
+                        }
+                    }
+                    ast::PathSegment::Self_ => {
+                        return Err(AstToHlrError {
+                            msg: "Invalid use of 'Self' as method name".to_string(),
+                        });
+                    }
+                }
+            }
+            _ => {
+                return Err(AstToHlrError {
+                    msg: format!("Complex paths are not supported yet: {}", path),
+                });
+            }
+        };
+
+        let expr = self.hlr.new_expr(expr);
+        Ok(expr)
     }
 
     fn lower_tuple_expr(&mut self, fields: ast::ExprSlice) -> AstToHlrResult<hlr::Expr> {

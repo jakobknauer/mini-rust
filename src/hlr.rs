@@ -58,7 +58,7 @@ pub enum Def {
     Struct(Struct),
     Enum(Enum),
     Variant(Enum, usize),
-    Mthd(TyAnnot, usize),
+    Mthd(TyAnnot, String),
     TraitMthd(TyAnnot, TyAnnot, String),
     GenVar(GenVar),
     Ty(Ty),
@@ -77,6 +77,10 @@ pub struct Stmt(usize);
 pub enum ExprDef {
     Lit(Lit),
     Def(Def), // variable or function reference
+    GenDef {
+        base: Def,
+        gen_args: Vec<TyAnnot>,
+    },
     BinaryOp {
         left: Expr,
         right: Expr,
