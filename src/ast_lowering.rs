@@ -233,42 +233,46 @@ impl<'a> AstLowerer<'a> {
 
     fn lower_path(&mut self, path: &ast::Path) -> AstLoweringResult<Lowered> {
         let lowered: Lowered = match path.segments.as_slice() {
-            [ast::PathSegment::Ident(ident)] => {
-                if let Some(place) = self.resolve_name_to_place(ident) {
-                    place.into()
-                } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
-                    let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
-                    let gen_args = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
-                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
-                } else {
-                    return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
-                }
-            }
-            [ast::PathSegment::Generic(gen_path_segment)] => {
-                if let Some(fn_) = self.fns().get_fn_by_name(&gen_path_segment.ident) {
-                    let gen_args = gen_path_segment
-                        .gen_args
-                        .iter()
-                        .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
-                        .collect::<AstLoweringResult<_>>()?;
-                    self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
-                } else {
-                    return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
-                }
-            }
-            [ty_path, mthd_name] => {
-                let ty = self.resolve_path_segment_to_ty(ty_path)?;
-
-                let (fn_name, gen_args) = match mthd_name {
-                    ast::PathSegment::Ident(ident) => (ident, None),
-                    ast::PathSegment::Generic(gen_path_segment) => {
-                        (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
+            [single_segment] => match single_segment {
+                ast::PathSegment {
+                    ident,
+                    args: None,
+                    is_self: false,
+                } => {
+                    if let Some(place) = self.resolve_name_to_place(ident) {
+                        place.into()
+                    } else if let Some(fn_) = self.fns().get_fn_by_name(ident) {
+                        let n_gen_params = self.fns().get_sig(fn_).unwrap().gen_params.len();
+                        let gen_args = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
+                        self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
+                    } else {
+                        return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
                     }
-                    ast::PathSegment::Self_ => return AstLoweringError::UnresolvablePath { path: path.clone() }.into(),
-                };
+                }
+                &ast::PathSegment {
+                    ref ident,
+                    args: Some(args),
+                    is_self: false,
+                } => {
+                    if let Some(fn_) = self.fns().get_fn_by_name(ident) {
+                        let args = self
+                            .ast
+                            .ty_annot_slice(args)
+                            .iter()
+                            .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
+                            .collect::<AstLoweringResult<_>>()?;
+                        self.builder.insert_gen_fn_op(fn_, args, Vec::new())?.into()
+                    } else {
+                        return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
+                    }
+                }
+                _ => return Err(AstLoweringError::UnresolvablePath { path: path.clone() }),
+            },
 
-                let mthd_resolution = self.typechecker().resolve_mthd(ty, fn_name, false)?;
-                let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, gen_args)?;
+            [ty_path, mthd_name] if !mthd_name.is_self => {
+                let ty = self.resolve_path_segment_to_ty(ty_path)?;
+                let mthd_resolution = self.typechecker().resolve_mthd(ty, &mthd_name.ident, false)?;
+                let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, mthd_name.args)?;
                 Lowered::Op(mthd)
             }
             _ => return Err(AstLoweringError::UnresolvablePath { path: path.clone() }),
@@ -409,16 +413,12 @@ impl<'a> AstLowerer<'a> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
 
-        let (ident, gen_args) = match mthd {
-            ast::PathSegment::Ident(ident) => (ident, None),
-            ast::PathSegment::Generic(gen_path_segment) => {
-                (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
-            }
-            ast::PathSegment::Self_ => unreachable!(),
-        };
+        if mthd.is_self {
+            unreachable!("Self is not a valid method name");
+        }
 
-        let mthd_resolution = self.typechecker().resolve_mthd(base_ty, ident, true)?;
-        let (callee, by_ref) = self.mthd_resolution_to_op(mthd_resolution, base_ty, gen_args)?;
+        let mthd_resolution = self.typechecker().resolve_mthd(base_ty, &mthd.ident, true)?;
+        let (callee, by_ref) = self.mthd_resolution_to_op(mthd_resolution, base_ty, mthd.args)?;
 
         let base = if by_ref {
             let base_addr = self.builder.insert_addr_of_val(base_place)?;
@@ -820,11 +820,11 @@ impl<'a> AstLowerer<'a> {
 
         let field_resolution = match field_desc {
             ast::FieldDescriptor::Named(path) => {
-                let ast::PathSegment::Ident(field_name) = path else {
+                if path.is_self || path.args.is_some() {
                     return Err(AstLoweringError::NotAPlace);
                 };
 
-                self.typechecker().resolve_struct_field(obj_ty, field_name)?
+                self.typechecker().resolve_struct_field(obj_ty, &path.ident)?
             }
             &ast::FieldDescriptor::Indexed(index) => self.typechecker().resolve_tuple_field(obj_ty, index)?,
         };
@@ -849,28 +849,31 @@ impl<'a> AstLowerer<'a> {
         if let Some(trait_) = &qual_path.trait_ {
             let trait_inst = self.resolve_trait_annot(trait_)?;
 
-            let (mthd_idx, gen_args) = match qual_path.path.segments.as_slice() {
-                [ast::PathSegment::Ident(ident)] => {
-                    let trait_mthd_idx = self.traits().resolve_trait_method(trait_inst.trait_, ident).unwrap();
-                    (trait_mthd_idx, vec![])
-                }
-                [ast::PathSegment::Generic(gen_path_segment)] => {
-                    let trait_mthd_idx = self
-                        .traits()
-                        .resolve_trait_method(trait_inst.trait_, &gen_path_segment.ident)
-                        .unwrap();
-                    let gen_args = gen_path_segment
-                        .gen_args
-                        .iter()
-                        .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
-                        .collect::<AstLoweringResult<_>>()?;
-                    (trait_mthd_idx, gen_args)
-                }
-                _ => {
-                    return Err(AstLoweringError::UnresolvablePath {
-                        path: qual_path.path.clone(),
-                    });
-                }
+            let [segment] = qual_path.path.segments.as_slice() else {
+                return Err(AstLoweringError::UnresolvablePath {
+                    path: qual_path.path.clone(),
+                });
+            };
+
+            if segment.is_self {
+                return Err(AstLoweringError::UnresolvablePath {
+                    path: qual_path.path.clone(),
+                });
+            }
+
+            let mthd_idx = self
+                .traits()
+                .resolve_trait_method(trait_inst.trait_, &segment.ident)
+                .unwrap();
+
+            let gen_args: Vec<_> = match &segment.args {
+                &Some(args) => self
+                    .ast
+                    .ty_annot_slice(args)
+                    .iter()
+                    .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
+                    .collect::<AstLoweringResult<_>>()?,
+                None => Vec::new(),
             };
 
             let trait_mthd_inst = fns::TraitMthdInst {
@@ -879,35 +882,38 @@ impl<'a> AstLowerer<'a> {
                 impl_ty: ty,
                 gen_args: self.tys().ty_slice(&gen_args),
             };
+
             let op = self.builder.insert_trait_mthd_op(trait_mthd_inst)?;
 
             Ok(Lowered::Op(op))
         } else {
-            let (fn_name, gen_args) = match qual_path.path.segments.as_slice() {
-                [ast::PathSegment::Ident(ident)] => (ident, None),
-                [ast::PathSegment::Generic(gen_path_segment)] => {
-                    (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
-                }
-                _ => {
-                    return Err(AstLoweringError::UnresolvablePath {
-                        path: qual_path.path.clone(),
-                    });
-                }
+            let [segment] = qual_path.path.segments.as_slice() else {
+                return Err(AstLoweringError::UnresolvablePath {
+                    path: qual_path.path.clone(),
+                });
             };
 
-            let mthd_resolution = self.typechecker().resolve_mthd(ty, fn_name, false)?;
-            let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, gen_args)?;
+            if segment.is_self {
+                return Err(AstLoweringError::UnresolvablePath {
+                    path: qual_path.path.clone(),
+                });
+            }
+
+            let mthd_resolution = self.typechecker().resolve_mthd(ty, &segment.ident, false)?;
+            let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, segment.args)?;
             Ok(Lowered::Op(mthd))
         }
     }
 
     fn resolve_gen_args_or_insert_fresh_variables(
         &mut self,
-        gen_args: Option<&[ast::TyAnnot]>,
+        gen_args: Option<ast::TyAnnotSlice>,
         n_expected: usize,
     ) -> AstLoweringResult<Vec<ty::Ty>> {
         match gen_args {
-            Some(gen_args) => gen_args
+            Some(gen_args) => self
+                .ast
+                .ty_annot_slice(gen_args)
                 .iter()
                 .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                 .collect::<AstLoweringResult<_>>(),
@@ -956,62 +962,59 @@ impl<'a> AstLowerer<'a> {
         path: &ast::Path,
     ) -> AstLoweringResult<StructOrEnumResolution> {
         match path.segments.as_slice() {
-            [ident] => {
-                let (struct_, gen_args) = match ident {
-                    ast::PathSegment::Ident(ident) => {
-                        let struct_ = self
-                            .tys()
-                            .get_struct_by_name(ident)
-                            .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
+            [segment] => {
+                if segment.is_self {
+                    return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                }
+
+                let struct_ = self
+                    .tys()
+                    .get_struct_by_name(&segment.ident)
+                    .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
+
+                let args: Vec<_> = match segment.args {
+                    None => {
                         let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
-                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
-                        (struct_, gen_args)
+                        (0..n_gen_params).map(|_| self.tys().undef_ty()).collect()
                     }
-                    ast::PathSegment::Generic(gen_path_segment) => {
-                        let struct_ = self.tys().get_struct_by_name(&gen_path_segment.ident).unwrap();
-                        let gen_args = gen_path_segment
-                            .gen_args
-                            .iter()
-                            .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
-                            .collect::<AstLoweringResult<_>>()?;
-                        (struct_, gen_args)
-                    }
-                    ast::PathSegment::Self_ => {
-                        return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
-                    }
+                    Some(args) => self
+                        .ast
+                        .ty_annot_slice(args)
+                        .iter()
+                        .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
+                        .collect::<AstLoweringResult<_>>()?,
                 };
-                let ty = self.tys().inst_struct(struct_, &gen_args)?;
+
+                let ty = self.tys().inst_struct(struct_, &args)?;
                 Ok(StructOrEnumResolution::Struct(ty))
             }
-            [enum_, variant_name] => {
-                let (enum_, gen_args) = match enum_ {
-                    ast::PathSegment::Ident(ident) => {
-                        let enum_ = self
-                            .tys()
-                            .get_enum_by_name(ident)
-                            .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
-                        let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
-                        let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
-                        (enum_, gen_args)
-                    }
-                    ast::PathSegment::Generic(gen_path_segment) => {
-                        let struct_ = self.tys().get_enum_by_name(&gen_path_segment.ident).unwrap();
-                        let gen_args = gen_path_segment
-                            .gen_args
-                            .iter()
-                            .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
-                            .collect::<AstLoweringResult<_>>()?;
-                        (struct_, gen_args)
-                    }
-                    ast::PathSegment::Self_ => {
-                        return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
-                    }
-                };
-                let ty = self.tys().inst_enum(enum_, &gen_args)?;
-
-                let ast::PathSegment::Ident(variant_name) = &variant_name else {
+            [enum_seg, variant_name] => {
+                if enum_seg.is_self {
                     return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                }
+
+                let enum_ = self
+                    .tys()
+                    .get_enum_by_name(&enum_seg.ident)
+                    .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
+
+                let args: Vec<_> = match enum_seg.args {
+                    None => {
+                        let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
+                        (0..n_gen_params).map(|_| self.tys().undef_ty()).collect()
+                    }
+                    Some(args) => self
+                        .ast
+                        .ty_annot_slice(args)
+                        .iter()
+                        .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
+                        .collect::<AstLoweringResult<_>>()?,
                 };
+                let ty = self.tys().inst_enum(enum_, &args)?;
+
+                if variant_name.is_self || variant_name.args.is_some() {
+                    return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                }
 
                 let variant_index = self
                     .tys()
@@ -1019,7 +1022,7 @@ impl<'a> AstLowerer<'a> {
                     .unwrap()
                     .variants
                     .iter()
-                    .position(|variant| &variant.name == variant_name)
+                    .position(|variant| variant.name == variant_name.ident)
                     .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
 
                 Ok(StructOrEnumResolution::EnumVariant(ty, variant_index))
@@ -1036,12 +1039,15 @@ impl<'a> AstLowerer<'a> {
                     trait_name: trait_annot.name.clone(),
                 })?;
 
-        let trait_args: Vec<_> = self
-            .ast
-            .ty_annot_slice(trait_annot.args)
-            .iter()
-            .map(|&arg| self.builder.resolve_ast_ty_annot(self.ast, arg))
-            .collect::<Result<_, _>>()?;
+        let trait_args: Vec<_> = match trait_annot.args {
+            Some(args) => self
+                .ast
+                .ty_annot_slice(args)
+                .iter()
+                .map(|&arg| self.builder.resolve_ast_ty_annot(self.ast, arg))
+                .collect::<Result<_, _>>()?,
+            None => Vec::new(),
+        };
 
         let trait_inst = traits::TraitInst {
             trait_,
@@ -1053,23 +1059,19 @@ impl<'a> AstLowerer<'a> {
     fn resolve_path_segment_to_ty(&mut self, ty_path: &ast::PathSegment) -> AstLoweringResult<ty::Ty> {
         use ctxt::Named::*;
 
-        let (ty_name, gen_args) = match ty_path {
-            ast::PathSegment::Ident(ident) => (ident, None),
-            ast::PathSegment::Generic(gen_path_segment) => {
-                (&gen_path_segment.ident, Some(gen_path_segment.gen_args.as_slice()))
-            }
-            ast::PathSegment::Self_ => todo!(),
-        };
+        if ty_path.is_self {
+            unreachable!("Self is not a valid type name");
+        }
 
         // TODO allow generic variables
-        let named_ty = *self.tys().get_ty_by_name(ty_name)?;
+        let named_ty = *self.tys().get_ty_by_name(&ty_path.ident)?;
 
-        let ty = match (named_ty, gen_args) {
+        let ty = match (named_ty, ty_path.args) {
             (Ty(ty), None) => ty,
             (Ty(ty), Some(_)) => return AstLoweringError::NotAGenericType(ty).into(),
-            (Struct(struct_), gen_args) => {
+            (Struct(struct_), args) => {
                 let n_gen_args = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
-                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(gen_args, n_gen_args)?;
+                let gen_args = self.resolve_gen_args_or_insert_fresh_variables(args, n_gen_args)?;
                 self.tys().inst_struct(struct_, &gen_args)?
             }
             (Enum(enum_), gen_args) => {
@@ -1086,7 +1088,7 @@ impl<'a> AstLowerer<'a> {
         &mut self,
         mthd_resolution: MthdResolution,
         obj_ty: ty::Ty,
-        gen_args: Option<&[ast::TyAnnot]>,
+        gen_args: Option<ast::TyAnnotSlice>,
     ) -> AstLoweringResult<(mlr::Op, bool)> {
         match mthd_resolution {
             MthdResolution::Inherent { fn_, env_gen_args } => {

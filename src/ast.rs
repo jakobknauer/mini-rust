@@ -168,7 +168,7 @@ pub struct AssocTy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraitAnnot {
     pub name: String,
-    pub args: TyAnnotSlice,
+    pub args: Option<TyAnnotSlice>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -190,20 +190,6 @@ pub struct Path {
     pub segments: Vec<PathSegment>,
 }
 
-impl std::fmt::Display for Path {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.segments
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>()
-                .join("::")
-        )
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QualifiedPath {
     pub ty: TyAnnot,
@@ -212,41 +198,10 @@ pub struct QualifiedPath {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PathSegment {
-    Ident(String),
-    Generic(GenPathSegment),
-    Self_,
-}
-
-impl std::fmt::Display for PathSegment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PathSegment::Ident(ident) => write!(f, "{}", ident),
-            PathSegment::Generic(segment) => write!(f, "{}", segment),
-            PathSegment::Self_ => write!(f, "Self"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GenPathSegment {
+pub struct PathSegment {
     pub ident: String,
-    pub gen_args: Vec<TyAnnot>,
-}
-
-impl std::fmt::Display for GenPathSegment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}<{}>",
-            self.ident,
-            self.gen_args
-                .iter()
-                .map(|annot| format!("{}", annot.0))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    }
+    pub args: Option<TyAnnotSlice>,
+    pub is_self: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

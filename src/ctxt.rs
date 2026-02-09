@@ -292,12 +292,12 @@ impl Ctxt {
         match ast.ty_annot(annot) {
             Path(path) => match path.segments.as_slice() {
                 [segment] => self.try_resolve_ast_path_segment_to_ty(ast, segment, gen_vars, self_ty, allow_wildcards),
-                [base_ty, ast::PathSegment::Ident(_ident)] => {
+                [base_ty, assoc_ty] if !assoc_ty.is_self && assoc_ty.args.is_none() => {
                     let base_ty =
                         self.try_resolve_ast_path_segment_to_ty(ast, base_ty, gen_vars, self_ty, allow_wildcards)?;
 
                     let ty = self
-                        .resolve_associated_ty_completely(base_ty, _ident)
+                        .resolve_associated_ty_completely(base_ty, &assoc_ty.ident)
                         .expect("associated type not found");
                     Some(ty)
                 }
@@ -344,7 +344,8 @@ impl Ctxt {
         allow_wildcards: bool,
     ) -> Option<ty::Ty> {
         match path_segment {
-            ast::PathSegment::Ident(ident) => {
+            ast::PathSegment { is_self: true, .. } => Some(self_ty.expect("self type not available")),
+            ast::PathSegment { ident, args: None, .. } => {
                 if let Some(&gv) = gen_vars.iter().find(|&&gv| self.tys.get_gen_var_name(gv) == *ident) {
                     let ty = self.tys.gen_var(gv);
                     return Some(ty);
@@ -356,8 +357,13 @@ impl Ctxt {
                     self::Named::Enum(enum_) => self.tys.inst_enum(enum_, &[]).ok(),
                 }
             }
-            ast::PathSegment::Generic(ast::GenPathSegment { ident, gen_args }) => {
-                let gen_args: Vec<ty::Ty> = gen_args
+            &ast::PathSegment {
+                ref ident,
+                args: Some(args),
+                ..
+            } => {
+                let gen_args: Vec<ty::Ty> = ast
+                    .ty_annot_slice(args)
                     .iter()
                     .map(|arg_annot| self.try_resolve_ast_ty_annot(ast, *arg_annot, gen_vars, self_ty, allow_wildcards))
                     .collect::<Option<Vec<_>>>()?;
@@ -368,7 +374,6 @@ impl Ctxt {
                     self::Named::Ty(..) => None,
                 }
             }
-            ast::PathSegment::Self_ => Some(self_ty.expect("self type not available")),
         }
     }
 

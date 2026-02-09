@@ -399,17 +399,10 @@ impl<'a> AstParser<'a> {
             let ty2 = self.parse_ty_annot()?;
             match self.builder.ast().ty_annot(ty) {
                 TyAnnotKind::Path(path) => match path.segments.as_slice() {
-                    [PathSegment::Ident(ident)] => (
+                    [segment] if !segment.is_self => (
                         Some(TraitAnnot {
-                            name: ident.clone(),
-                            args: self.builder.ty_annot_slice(&[]),
-                        }),
-                        ty2,
-                    ),
-                    [PathSegment::Generic(GenPathSegment { ident, gen_args })] => (
-                        Some(TraitAnnot {
-                            name: ident.clone(),
-                            args: self.builder.ty_annot_slice(&gen_args.clone()),
+                            name: segment.ident.clone(),
+                            args: segment.args,
                         }),
                         ty2,
                     ),
@@ -977,27 +970,35 @@ impl<'a> AstParser<'a> {
 
     fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment, ParserErr> {
         if self.advance_if(Token::Keyword(Keyword::SelfTy)) {
-            return Ok(PathSegment::Self_);
+            return Ok(PathSegment {
+                ident: "Self".to_string(),
+                args: None,
+                is_self: true,
+            });
         }
 
         let ident = self.expect_identifier()?;
 
-        let segment = if (!in_expression && self.advance_if(Token::Smaller)) || self.advance_if_turbofish() {
-            let mut gen_args = Vec::new();
+        let args = if (!in_expression && self.advance_if(Token::Smaller)) || self.advance_if_turbofish() {
+            let mut args = Vec::new();
             while self.current() != Some(&Token::Greater) {
                 let gen_arg = self.parse_ty_annot()?;
-                gen_args.push(gen_arg);
+                args.push(gen_arg);
                 if !self.advance_if(Token::Comma) {
                     break;
                 }
             }
             self.expect_token(Token::Greater)?;
-            PathSegment::Generic(GenPathSegment { ident, gen_args })
+            Some(self.builder.ty_annot_slice(&args))
         } else {
-            PathSegment::Ident(ident)
+            None
         };
 
-        Ok(segment)
+        Ok(PathSegment {
+            ident,
+            args,
+            is_self: false,
+        })
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
@@ -1169,13 +1170,9 @@ impl<'a> AstParser<'a> {
         let ty_annot = self.builder.ast().ty_annot(ty_annot);
         match ty_annot {
             TyAnnotKind::Path(path) => match path.segments.as_slice() {
-                [PathSegment::Ident(ident)] => Ok(TraitAnnot {
-                    name: ident.clone(),
-                    args: self.builder.ty_annot_slice(&[]),
-                }),
-                [PathSegment::Generic(GenPathSegment { ident, gen_args })] => Ok(TraitAnnot {
-                    name: ident.clone(),
-                    args: self.builder.ty_annot_slice(&gen_args.clone()),
+                [segment] => Ok(TraitAnnot {
+                    name: segment.ident.clone(),
+                    args: segment.args,
                 }),
                 _ => Err(ParserErr::ExpectedTraitName),
             },

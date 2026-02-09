@@ -427,15 +427,18 @@ impl<'a> Driver<'a> {
                 .map(|trait_annot| {
                     let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
 
-                    let trait_args: Vec<_> = ast
-                        .ty_annot_slice(trait_annot.args)
-                        .iter()
-                        .map(|&arg| {
-                            self.ctxt
-                                .try_resolve_ast_ty_annot(ast, arg, &gen_params, None, false)
-                                .ok_or(())
-                        })
-                        .collect::<Result<_, _>>()?;
+                    let trait_args: Vec<_> = match &trait_annot.args {
+                        &Some(args) => ast
+                            .ty_annot_slice(args)
+                            .iter()
+                            .map(|&arg| {
+                                self.ctxt
+                                    .try_resolve_ast_ty_annot(ast, arg, &gen_params, None, false)
+                                    .ok_or(())
+                            })
+                            .collect::<Result<_, _>>()?,
+                        None => vec![],
+                    };
 
                     let trait_inst = TraitInst {
                         trait_,
