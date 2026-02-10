@@ -260,47 +260,52 @@ impl<'a> AstToHlr<'a> {
             }
             [parent, sub] => {
                 let parent_ty_annot = self.lower_path_segment_to_ty_annot(parent)?;
-                match sub {
-                    ast::PathSegment::Ident(name) => {
-                        let base = self.lower_path_segment_to_ty_annot(parent)?;
-                        Ok(hlr::TyAnnotDef::AssocTy {
-                            base: self.hlr.new_ty_annot(base),
-                            trait_: None,
-                            name: name.clone(),
-                        })
-                    }
-                    ast::PathSegment::Generic(gen_path_segment) => Err(AstToHlrError {
-                        msg: "Generic associated types are not supported".to_string(),
-                    }),
-                    ast::PathSegment::Self_ => Err(AstToHlrError {
+
+                if sub.is_self {
+                    return Err(AstToHlrError {
                         msg: "Invalid use of 'Self' in type annotation".to_string(),
-                    }),
+                    });
                 }
+
+                if sub.args.is_some() {
+                    return Err(AstToHlrError {
+                        msg: "Generic associated types are not supported".to_string(),
+                    });
+                }
+
+                let base = self.lower_path_segment_to_ty_annot(parent)?;
+                Ok(hlr::TyAnnotDef::AssocTy {
+                    base: self.hlr.new_ty_annot(base),
+                    trait_: None,
+                    name: sub.ident.clone(),
+                })
             }
             _ => Err(AstToHlrError {
-                msg: format!("Complex path type annotations are not supported yet: {}", path),
+                msg: format!("Complex path type annotations are not supported yet: {:#?}", path),
             }),
         }
     }
 
     fn lower_path_segment_to_ty_annot(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::TyAnnotDef> {
-        match segment {
-            ast::PathSegment::Ident(ident) => {
-                let resolved_ty = self.resolve_ident_to_ty(ident)?;
-                match resolved_ty {
-                    TyResolution::GenVar(gen_var) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),
-                    TyResolution::NamedTy(named_ty) => match named_ty {
-                        ctxt::Named::Ty(ty) => Ok(hlr::TyAnnotDef::Ty(ty)),
-                        ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, None)),
-                        ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, None)),
-                    },
-                }
-            }
-            ast::PathSegment::Generic(gen_segment) => {
-                let resolved_ty = self.resolve_ident_to_ty(&gen_segment.ident)?;
+        if segment.is_self {
+            return Ok(hlr::TyAnnotDef::Self_);
+        }
 
-                let gen_args = gen_segment
-                    .gen_args
+        let resolved_ty = self.resolve_ident_to_ty(&segment.ident)?;
+
+        match segment.args {
+            None => match resolved_ty {
+                TyResolution::GenVar(gen_var) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),
+                TyResolution::NamedTy(named_ty) => match named_ty {
+                    ctxt::Named::Ty(ty) => Ok(hlr::TyAnnotDef::Ty(ty)),
+                    ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, None)),
+                    ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, None)),
+                },
+            },
+            Some(args) => {
+                let gen_args = self
+                    .ast
+                    .ty_annot_slice(args)
                     .iter()
                     .map(|&arg| self.lower_ty_annot(arg))
                     .collect::<AstToHlrResult<_>>()?;
@@ -309,14 +314,14 @@ impl<'a> AstToHlr<'a> {
                     TyResolution::GenVar(gen_var) => Err(AstToHlrError {
                         msg: format!(
                             "Generic type variable '{}' cannot have generic arguments in type annotation",
-                            gen_segment.ident
+                            segment.ident
                         ),
                     }),
                     TyResolution::NamedTy(named_ty) => match named_ty {
                         ctxt::Named::Ty(ty) => Err(AstToHlrError {
                             msg: format!(
                                 "Primitive type '{}' cannot have generic arguments in type annotation",
-                                gen_segment.ident
+                                segment.ident
                             ),
                         }),
                         ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, Some(gen_args))),
@@ -324,7 +329,6 @@ impl<'a> AstToHlr<'a> {
                     },
                 }
             }
-            ast::PathSegment::Self_ => Ok(hlr::TyAnnotDef::Self_),
         }
     }
 
@@ -344,65 +348,76 @@ impl<'a> AstToHlr<'a> {
 
     fn lower_path(&mut self, path: &ast::Path) -> AstToHlrResult<hlr::Expr> {
         let expr: hlr::ExprDef = match path.segments.as_slice() {
-            [ast::PathSegment::Ident(ident)] => self
-                .resolve_ident_to_val_def(ident)
-                .map(hlr::ExprDef::Def)
-                .ok_or_else(|| AstToHlrError {
-                    msg: format!("Unresolvable path: {}", ident),
-                })?,
-            [ast::PathSegment::Generic(gen_path_segment)] => {
-                let base_val = self
-                    .resolve_ident_to_val_def(&gen_path_segment.ident)
+            [segment] if segment.is_self => {
+                return Err(AstToHlrError {
+                    msg: "Invalid use of 'Self' as value".to_string(),
+                });
+            }
+            [segment] => match segment.args {
+                None => self
+                    .resolve_ident_to_val_def(&segment.ident)
+                    .map(hlr::ExprDef::Def)
                     .ok_or_else(|| AstToHlrError {
-                        msg: format!("Unresolvable path: {}", gen_path_segment.ident),
-                    })?;
+                        msg: format!("Unresolvable path: {}", &segment.ident),
+                    })?,
 
-                match base_val {
-                    hlr::Def::Fn(fn_) => {
-                        let gen_args = gen_path_segment
-                            .gen_args
-                            .iter()
-                            .map(|&annot| self.lower_ty_annot(annot))
-                            .collect::<AstToHlrResult<_>>()?;
-                        hlr::ExprDef::GenDef {
-                            base: hlr::Def::Fn(fn_),
-                            gen_args,
+                Some(args) => {
+                    let base_val = self
+                        .resolve_ident_to_val_def(&segment.ident)
+                        .ok_or_else(|| AstToHlrError {
+                            msg: format!("Unresolvable path: {}", segment.ident),
+                        })?;
+
+                    match base_val {
+                        hlr::Def::Fn(fn_) => {
+                            let gen_args = self
+                                .ast
+                                .ty_annot_slice(args)
+                                .iter()
+                                .map(|&annot| self.lower_ty_annot(annot))
+                                .collect::<AstToHlrResult<_>>()?;
+                            hlr::ExprDef::GenDef {
+                                base: hlr::Def::Fn(fn_),
+                                gen_args,
+                            }
+                        }
+                        _ => {
+                            return Err(AstToHlrError {
+                                msg: format!("Only functions can be used in generic paths, found {:?}", base_val),
+                            });
                         }
                     }
-                    _ => {
-                        return Err(AstToHlrError {
-                            msg: format!("Only functions can be used in generic paths, found {:?}", base_val),
-                        });
-                    }
                 }
-            }
+            },
             [ty_path, mthd_name] => {
                 let ty = self.lower_path_segment_to_ty_annot(ty_path)?;
                 let ty = self.hlr.new_ty_annot(ty);
 
-                match mthd_name {
-                    ast::PathSegment::Ident(ident) => hlr::ExprDef::Def(hlr::Def::Mthd(ty, ident.clone())),
-                    ast::PathSegment::Generic(gen_path_segment) => {
-                        let gen_args = gen_path_segment
-                            .gen_args
+                if mthd_name.is_self {
+                    return Err(AstToHlrError {
+                        msg: "Invalid use of 'Self' as method name".to_string(),
+                    });
+                }
+
+                match mthd_name.args {
+                    None => hlr::ExprDef::Def(hlr::Def::Mthd(ty, mthd_name.ident.clone())),
+                    Some(args) => {
+                        let gen_args = self
+                            .ast
+                            .ty_annot_slice(args)
                             .iter()
                             .map(|&annot| self.lower_ty_annot(annot))
                             .collect::<AstToHlrResult<_>>()?;
                         hlr::ExprDef::GenDef {
-                            base: hlr::Def::Mthd(ty, gen_path_segment.ident.clone()),
+                            base: hlr::Def::Mthd(ty, mthd_name.ident.clone()),
                             gen_args,
                         }
-                    }
-                    ast::PathSegment::Self_ => {
-                        return Err(AstToHlrError {
-                            msg: "Invalid use of 'Self' as method name".to_string(),
-                        });
                     }
                 }
             }
             _ => {
                 return Err(AstToHlrError {
-                    msg: format!("Complex paths are not supported yet: {}", path),
+                    msg: format!("Complex paths are not supported yet: {:#?}", path),
                 });
             }
         };
@@ -474,37 +489,37 @@ impl<'a> AstToHlr<'a> {
         args: ast::ExprSlice,
     ) -> AstToHlrResult<hlr::Expr> {
         let obj = self.lower_expr(obj)?;
-        let arg = self
+        let args = self
             .ast
             .expr_slice(args)
             .iter()
             .map(|&arg| self.lower_expr(arg))
             .collect::<AstToHlrResult<_>>()?;
 
-        let (method_name, gen_args) = match mthd {
-            ast::PathSegment::Ident(name) => (name.clone(), None),
-            ast::PathSegment::Generic(gen_path_segment) => {
-                let method_name = gen_path_segment.ident.clone();
-                let gen_args = gen_path_segment
-                    .gen_args
+        if mthd.is_self {
+            return Err(AstToHlrError {
+                msg: "Invalid use of 'Self' as method name".to_string(),
+            });
+        }
+
+        let gen_args = mthd
+            .args
+            .map(|args| {
+                self.ast
+                    .ty_annot_slice(args)
                     .iter()
                     .map(|&arg| self.lower_ty_annot(arg))
-                    .collect::<AstToHlrResult<_>>()?;
-                (method_name, Some(gen_args))
-            }
-            ast::PathSegment::Self_ => {
-                return Err(AstToHlrError {
-                    msg: "Invalid use of 'Self' as method name".to_string(),
-                });
-            }
-        };
+                    .collect::<AstToHlrResult<_>>()
+            })
+            .transpose()?;
 
         let expr = hlr::ExprDef::MethodCall {
             receiver: obj,
-            method_name,
+            method_name: mthd.ident.clone(),
             gen_args,
-            args: arg,
+            args,
         };
+
         Ok(self.hlr.new_expr(expr))
     }
 
@@ -523,7 +538,7 @@ impl<'a> AstToHlr<'a> {
         let expr = hlr::ExprDef::Struct {
             constructor,
             fields,
-            gen_args,
+            gen_args: Some(gen_args),
         };
         Ok(self.hlr.new_expr(expr))
     }
@@ -532,14 +547,19 @@ impl<'a> AstToHlr<'a> {
         let obj = self.lower_expr(obj)?;
 
         let field_spec = match field {
-            ast::FieldDescriptor::Named(path_segment) => match path_segment {
-                ast::PathSegment::Ident(name) => hlr::FieldSpec::Name(name.clone()),
-                _ => {
+            ast::FieldDescriptor::Named(name) => {
+                if name.is_self {
                     return Err(AstToHlrError {
-                        msg: "Only identifiers are allowed as fields, got generic.".to_string(),
+                        msg: "Invalid use of 'Self' as field name".to_string(),
                     });
                 }
-            },
+                if name.args.is_some() {
+                    return Err(AstToHlrError {
+                        msg: "Generic field names are not valid".to_string(),
+                    });
+                }
+                hlr::FieldSpec::Name(name.ident.clone())
+            }
             ast::FieldDescriptor::Indexed(index) => hlr::FieldSpec::Index(*index),
         };
 
@@ -676,7 +696,7 @@ impl<'a> AstToHlr<'a> {
 
         Ok(hlr::VariantPattern {
             variant,
-            gen_args,
+            gen_args: Some(gen_args),
             fields,
         })
     }
