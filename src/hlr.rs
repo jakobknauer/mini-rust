@@ -52,16 +52,13 @@ impl Hlr {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Def {
+pub enum Val {
     Var(VarId),
-    Fn(Fn),
-    Struct(Struct),
-    Enum(Enum),
-    Variant(Enum, usize),
-    Mthd(TyAnnot, String),
+    Fn(Fn, Option<Vec<TyAnnot>>),
+    Struct(Struct, Option<Vec<TyAnnot>>),
+    Variant(Enum, usize, Option<Vec<TyAnnot>>),
+    Mthd(TyAnnot, String, Option<Vec<TyAnnot>>),
     TraitMthd(TyAnnot, TyAnnot, String),
-    GenVar(GenVar),
-    Ty(Ty),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -76,11 +73,7 @@ pub struct Stmt(usize);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExprDef {
     Lit(Lit),
-    Def(Def), // variable or function reference
-    GenDef {
-        base: Def,
-        gen_args: Vec<TyAnnot>,
-    },
+    Val(Val),
     BinaryOp {
         left: Expr,
         right: Expr,
@@ -95,16 +88,13 @@ pub enum ExprDef {
         args: Vec<Expr>,
     },
     MethodCall {
-        // not yet resolved
         receiver: Expr,
         method_name: String,
         gen_args: Option<Vec<TyAnnot>>,
         args: Vec<Expr>,
     },
-    /// Struct literal or enum variant constructor
     Struct {
-        constructor: Def, // StructId or VariantId
-        gen_args: Option<Vec<TyAnnot>>,
+        constructor: Val,
         fields: Vec<(FieldSpec, Expr)>,
     },
     FieldAccess {
@@ -179,8 +169,7 @@ pub type Pattern = VariantPattern;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VariantPattern {
-    pub variant: Def,
-    pub gen_args: Option<Vec<TyAnnot>>,
+    pub variant: Val,
     pub fields: Vec<VariantPatternField>,
 }
 
@@ -213,23 +202,4 @@ pub enum TyAnnotDef {
     Tuple(Vec<TyAnnot>),
     Infer,
     Self_,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Path {
-    pub segments: Vec<PathSegment>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PathSegment {
-    Resolved(Def),
-    Ident(String),
-    Generic(GenPathSegment),
-    Self_,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GenPathSegment {
-    pub ident: String,
-    pub gen_args: Vec<TyAnnot>,
 }

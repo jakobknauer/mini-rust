@@ -292,43 +292,30 @@ impl<'a> AstToHlr<'a> {
         }
 
         let resolved_ty = self.resolve_ident_to_ty(&segment.ident)?;
-
-        match segment.args {
-            None => match resolved_ty {
-                TyResolution::GenVar(gen_var) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),
-                TyResolution::NamedTy(named_ty) => match named_ty {
-                    ctxt::Named::Ty(ty) => Ok(hlr::TyAnnotDef::Ty(ty)),
-                    ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, None)),
-                    ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, None)),
-                },
-            },
-            Some(args) => {
-                let gen_args = self
-                    .ast
+        let args: Option<Vec<_>> = segment
+            .args
+            .map(|args| {
+                self.ast
                     .ty_annot_slice(args)
                     .iter()
                     .map(|&arg| self.lower_ty_annot(arg))
-                    .collect::<AstToHlrResult<_>>()?;
+                    .collect::<AstToHlrResult<_>>()
+            })
+            .transpose()?;
 
-                match resolved_ty {
-                    TyResolution::GenVar(gen_var) => Err(AstToHlrError {
-                        msg: format!(
-                            "Generic type variable '{}' cannot have generic arguments in type annotation",
-                            segment.ident
-                        ),
-                    }),
-                    TyResolution::NamedTy(named_ty) => match named_ty {
-                        ctxt::Named::Ty(ty) => Err(AstToHlrError {
-                            msg: format!(
-                                "Primitive type '{}' cannot have generic arguments in type annotation",
-                                segment.ident
-                            ),
-                        }),
-                        ctxt::Named::Struct(struct_) => Ok(hlr::TyAnnotDef::Struct(struct_, Some(gen_args))),
-                        ctxt::Named::Enum(enum_) => Ok(hlr::TyAnnotDef::Enum(enum_, Some(gen_args))),
-                    },
-                }
-            }
+        match (resolved_ty, args) {
+            (TyResolution::GenVar(gen_var), None) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),
+            (TyResolution::NamedTy(ctxt::Named::Ty(ty)), None) => Ok(hlr::TyAnnotDef::Ty(ty)),
+
+            (TyResolution::NamedTy(ctxt::Named::Struct(struct_)), args) => Ok(hlr::TyAnnotDef::Struct(struct_, args)),
+            (TyResolution::NamedTy(ctxt::Named::Enum(enum_)), args) => Ok(hlr::TyAnnotDef::Enum(enum_, args)),
+
+            ((TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_))) => Err(AstToHlrError {
+                msg: format!(
+                    "Type '{}' cannot have generic arguments in type annotation",
+                    segment.ident
+                ),
+            }),
         }
     }
 
@@ -353,67 +340,56 @@ impl<'a> AstToHlr<'a> {
                     msg: "Invalid use of 'Self' as value".to_string(),
                 });
             }
-            [segment] => match segment.args {
-                None => self
-                    .resolve_ident_to_val_def(&segment.ident)
-                    .map(hlr::ExprDef::Def)
-                    .ok_or_else(|| AstToHlrError {
-                        msg: format!("Unresolvable path: {}", &segment.ident),
-                    })?,
+            [segment] => {
+                let val = self.resolve_ident_to_val_def(&segment.ident);
+                let args = segment.args.map(|args| {
+                    self.ast
+                        .ty_annot_slice(args)
+                        .iter()
+                        .map(|&annot| self.lower_ty_annot(annot))
+                        .collect::<AstToHlrResult<_>>()
+                });
 
-                Some(args) => {
-                    let base_val = self
-                        .resolve_ident_to_val_def(&segment.ident)
-                        .ok_or_else(|| AstToHlrError {
+                match (val, args) {
+                    (Some(val), None) => hlr::ExprDef::Val(val),
+                    (Some(hlr::Val::Fn(fn_, _)), Some(args)) => {
+                        let args = args?;
+                        hlr::ExprDef::Val(hlr::Val::Fn(fn_, Some(args)))
+                    }
+                    (Some(other_val), Some(_)) => {
+                        return Err(AstToHlrError {
+                            msg: format!("Only functions can be used in generic paths, found {:?}", other_val),
+                        });
+                    }
+                    (None, _) => {
+                        return Err(AstToHlrError {
                             msg: format!("Unresolvable path: {}", segment.ident),
-                        })?;
-
-                    match base_val {
-                        hlr::Def::Fn(fn_) => {
-                            let gen_args = self
-                                .ast
-                                .ty_annot_slice(args)
-                                .iter()
-                                .map(|&annot| self.lower_ty_annot(annot))
-                                .collect::<AstToHlrResult<_>>()?;
-                            hlr::ExprDef::GenDef {
-                                base: hlr::Def::Fn(fn_),
-                                gen_args,
-                            }
-                        }
-                        _ => {
-                            return Err(AstToHlrError {
-                                msg: format!("Only functions can be used in generic paths, found {:?}", base_val),
-                            });
-                        }
+                        });
                     }
                 }
-            },
-            [ty_path, mthd_name] => {
+            }
+            [ty_path, mthd] => {
                 let ty = self.lower_path_segment_to_ty_annot(ty_path)?;
                 let ty = self.hlr.new_ty_annot(ty);
 
-                if mthd_name.is_self {
+                if mthd.is_self {
                     return Err(AstToHlrError {
                         msg: "Invalid use of 'Self' as method name".to_string(),
                     });
                 }
 
-                match mthd_name.args {
-                    None => hlr::ExprDef::Def(hlr::Def::Mthd(ty, mthd_name.ident.clone())),
-                    Some(args) => {
-                        let gen_args = self
-                            .ast
+                let args = mthd
+                    .args
+                    .map(|args| {
+                        self.ast
                             .ty_annot_slice(args)
                             .iter()
                             .map(|&annot| self.lower_ty_annot(annot))
-                            .collect::<AstToHlrResult<_>>()?;
-                        hlr::ExprDef::GenDef {
-                            base: hlr::Def::Mthd(ty, mthd_name.ident.clone()),
-                            gen_args,
-                        }
-                    }
-                }
+                            .collect::<AstToHlrResult<_>>()
+                    })
+                    .transpose()?;
+
+                hlr::ExprDef::Val(hlr::Val::Mthd(ty, mthd.ident.clone(), args))
             }
             _ => {
                 return Err(AstToHlrError {
@@ -524,7 +500,7 @@ impl<'a> AstToHlr<'a> {
     }
 
     fn lower_struct_expr(&mut self, ty_path: &ast::Path, fields: &[(String, ast::Expr)]) -> AstToHlrResult<hlr::Expr> {
-        let (constructor, gen_args) = self.resolve_path_to_constructor(ty_path)?;
+        let constructor = self.resolve_path_to_constructor(ty_path)?;
 
         let fields = fields
             .iter()
@@ -535,11 +511,7 @@ impl<'a> AstToHlr<'a> {
             })
             .collect::<AstToHlrResult<_>>()?;
 
-        let expr = hlr::ExprDef::Struct {
-            constructor,
-            fields,
-            gen_args: Some(gen_args),
-        };
+        let expr = hlr::ExprDef::Struct { constructor, fields };
         Ok(self.hlr.new_expr(expr))
     }
 
@@ -647,9 +619,9 @@ impl<'a> AstToHlr<'a> {
     }
 
     fn lower_pattern(&mut self, pattern: &ast::VariantPattern) -> AstToHlrResult<hlr::Pattern> {
-        let (variant, gen_args) = self.resolve_path_to_constructor(&pattern.variant)?;
+        let variant = self.resolve_path_to_constructor(&pattern.variant)?;
 
-        let hlr::Def::Variant(enum_, variant_index) = variant.clone() else {
+        let hlr::Val::Variant(enum_, variant_index, ref args) = variant else {
             return Err(AstToHlrError {
                 msg: format!("Only enum variants are supported in patterns, found {:?}", variant),
             });
@@ -694,11 +666,7 @@ impl<'a> AstToHlr<'a> {
             })
             .collect::<AstToHlrResult<_>>()?;
 
-        Ok(hlr::VariantPattern {
-            variant,
-            gen_args: Some(gen_args),
-            fields,
-        })
+        Ok(hlr::VariantPattern { variant, fields })
     }
 
     fn lower_deref_expr(&mut self, base: ast::Expr) -> AstToHlrResult<hlr::Expr> {
@@ -724,7 +692,7 @@ impl<'a> AstToHlr<'a> {
         let self_var_id = self.self_var_id.ok_or_else(|| AstToHlrError {
             msg: "Cannot use 'self' outside of a method".to_string(),
         })?;
-        let expr = hlr::ExprDef::Def(hlr::Def::Var(self_var_id));
+        let expr = hlr::ExprDef::Val(hlr::Val::Var(self_var_id));
         Ok(self.hlr.new_expr(expr))
     }
 }
