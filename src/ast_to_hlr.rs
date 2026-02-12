@@ -190,13 +190,13 @@ impl<'a> AstToHlr<'a> {
         match expr {
             Lit(lit) => self.lower_lit(lit),
             Path(path) => self.lower_path(path),
-            QualifiedPath(qualified_path) => todo!(),
+            QualifiedPath(qualified_path) => self.lower_qualified_path(qualified_path),
             &Tuple(fields) => self.lower_tuple_expr(fields),
             &BinaryOp { left, operator, right } => self.lower_binary_op(left, operator, right),
             &UnaryOp { operator, operand } => self.lower_unary_op(operator, operand),
             &Assign { target, value } => self.lower_assign_expr(target, value),
             &Call { callee, args } => self.lower_call_expr(callee, args),
-            &MthdCall { obj, ref mthd, args } => self.lower_method_call_expr(obj, mthd, args),
+            &MthdCall { obj, ref mthd, args } => self.lower_mthd_call_expr(obj, mthd, args),
             Struct { ty_path, fields } => self.lower_struct_expr(ty_path, fields),
             &FieldAccess { obj, ref field } => self.lower_field_access_expr(obj, field),
             &Block(block) => self.build_block(block),
@@ -402,6 +402,66 @@ impl<'a> AstToHlr<'a> {
         Ok(expr)
     }
 
+    fn lower_qualified_path(&mut self, qualified_path: &ast::QualifiedPath) -> Result<hlr::Expr, AstToHlrError> {
+        let ty = self.lower_ty_annot(qualified_path.ty)?;
+
+        let trait_ = qualified_path
+            .trait_
+            .as_ref()
+            .map(|trait_annot| {
+                self.ctxt
+                    .traits
+                    .resolve_trait_name(&trait_annot.name)
+                    .ok_or_else(|| AstToHlrError {
+                        msg: format!("Unknown trait '{}'", trait_annot.name),
+                    })
+            })
+            .transpose()?;
+
+        let trait_args = qualified_path
+            .trait_
+            .as_ref()
+            .and_then(|trait_| trait_.args.as_ref())
+            .map(|&args| {
+                self.ast
+                    .ty_annot_slice(args)
+                    .iter()
+                    .map(|&arg| self.lower_ty_annot(arg))
+                    .collect::<AstToHlrResult<_>>()
+            })
+            .transpose()?;
+
+        let [segment] = qualified_path.path.segments.as_slice() else {
+            return Err(AstToHlrError {
+                msg: format!(
+                    "Only simple qualified paths are supported, found: {:#?}",
+                    qualified_path.path
+                ),
+            });
+        };
+        let mthd_name = segment.ident.clone();
+
+        let args = segment
+            .args
+            .map(|args| {
+                self.ast
+                    .ty_annot_slice(args)
+                    .iter()
+                    .map(|&arg| self.lower_ty_annot(arg))
+                    .collect::<AstToHlrResult<_>>()
+            })
+            .transpose()?;
+
+        let expr = hlr::ExprDef::QualifiedMthd {
+            ty,
+            trait_,
+            trait_args,
+            mthd_name,
+            args,
+        };
+        Ok(self.hlr.new_expr(expr))
+    }
+
     fn lower_tuple_expr(&mut self, fields: ast::ExprSlice) -> AstToHlrResult<hlr::Expr> {
         let field_exprs = self
             .ast
@@ -458,7 +518,7 @@ impl<'a> AstToHlr<'a> {
         Ok(self.hlr.new_expr(expr))
     }
 
-    fn lower_method_call_expr(
+    fn lower_mthd_call_expr(
         &mut self,
         obj: ast::Expr,
         mthd: &ast::PathSegment,
@@ -489,9 +549,9 @@ impl<'a> AstToHlr<'a> {
             })
             .transpose()?;
 
-        let expr = hlr::ExprDef::MethodCall {
+        let expr = hlr::ExprDef::MthdCall {
             receiver: obj,
-            method_name: mthd.ident.clone(),
+            mthd_name: mthd.ident.clone(),
             gen_args,
             args,
         };

@@ -4,6 +4,7 @@ use crate::{
     ast,
     ctxt::{
         fns::Fn,
+        traits,
         ty::{Enum, GenVar, Struct, Ty},
     },
 };
@@ -87,9 +88,9 @@ pub enum ExprDef {
         callee: Expr,
         args: Vec<Expr>,
     },
-    MethodCall {
+    MthdCall {
         receiver: Expr,
-        method_name: String,
+        mthd_name: String,
         gen_args: Option<Vec<TyAnnot>>,
         args: Vec<Expr>,
     },
@@ -131,6 +132,13 @@ pub enum ExprDef {
     Block {
         stmts: Vec<Stmt>,
         trailing: Expr,
+    },
+    QualifiedMthd {
+        ty: TyAnnot,
+        trait_: Option<traits::Trait>,
+        trait_args: Option<Vec<TyAnnot>>,
+        mthd_name: String,
+        args: Option<Vec<TyAnnot>>,
     },
 }
 
