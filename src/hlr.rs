@@ -2,6 +2,8 @@
 
 use std::marker::PhantomData;
 
+use bumpalo::Bump;
+
 use crate::{
     ast::{self},
     ctxt::{
@@ -13,66 +15,40 @@ use crate::{
 
 #[derive(Default)]
 pub struct Hlr<'hlr> {
-    exprs: Vec<ExprDef<'hlr>>,
-    stmts: Vec<StmtDef<'hlr>>,
-
-    ty_annots: Vec<TyAnnotDef<'hlr>>,
-    ty_annot_slices: Vec<TyAnnot<'hlr>>,
+    arena: bumpalo::Bump,
+    _marker: PhantomData<&'hlr ()>,
 }
 
 impl<'hlr> Hlr<'hlr> {
-    pub fn new_expr(&mut self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
-        self.exprs.push(expr);
-        Expr(self.exprs.len() - 1, PhantomData)
+    pub fn new() -> Self {
+        Self {
+            arena: Bump::new(),
+            _marker: PhantomData,
+        }
     }
 
-    pub fn expr(&self, expr: Expr<'hlr>) -> &ExprDef<'hlr> {
-        &self.exprs[expr.0]
+    pub fn new_expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
+        self.arena.alloc(expr)
     }
 
-    pub fn new_stmt(&mut self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
-        self.stmts.push(stmt);
-        Stmt(self.stmts.len() - 1, PhantomData)
+    pub fn new_stmt(&'hlr self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
+        self.arena.alloc(stmt)
     }
 
-    pub fn stmt(&self, stmt: Stmt<'hlr>) -> &StmtDef<'hlr> {
-        &self.stmts[stmt.0]
+    pub fn new_ty_annot(&'hlr self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
+        self.arena.alloc(annot)
     }
 
-    pub fn new_ty_annot(&mut self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
-        self.ty_annots.push(annot);
-        TyAnnot(self.ty_annots.len() - 1, PhantomData)
-    }
-
-    pub fn ty_annot(&self, ty_annot: TyAnnot<'hlr>) -> &TyAnnotDef<'hlr> {
-        &self.ty_annots[ty_annot.0]
-    }
-
-    pub fn new_ty_annot_slice(&mut self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
-        self.ty_annot_slices.extend_from_slice(ty_annots);
-        TyAnnotSlice(
-            self.ty_annot_slices.len() - ty_annots.len(),
-            ty_annots.len(),
-            PhantomData,
-        )
-    }
-
-    pub fn ty_annot_slice(&self, TyAnnotSlice(start, len, _): TyAnnotSlice<'hlr>) -> &[TyAnnot<'hlr>] {
-        &self.ty_annot_slices[start..start + len]
+    pub fn new_ty_annot_slice(&'hlr self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
+        self.arena.alloc_slice_copy(ty_annots)
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct Expr<'hlr>(usize, PhantomData<&'hlr Hlr<'hlr>>);
+pub type Expr<'hlr> = &'hlr ExprDef<'hlr>;
+pub type Stmt<'hlr> = &'hlr StmtDef<'hlr>;
+pub type TyAnnot<'hlr> = &'hlr TyAnnotDef<'hlr>;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct Stmt<'hlr>(usize, PhantomData<&'hlr Hlr<'hlr>>);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TyAnnot<'hlr>(usize, PhantomData<&'hlr Hlr<'hlr>>);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TyAnnotSlice<'hlr>(usize, usize, PhantomData<&'hlr Hlr<'hlr>>);
+pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Val<'hlr> {
@@ -87,7 +63,7 @@ pub enum Val<'hlr> {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct VarId(pub usize);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum ExprDef<'hlr> {
     Lit(Lit),
     Val(Val<'hlr>),
@@ -174,6 +150,7 @@ pub enum ExprDef<'hlr> {
     },
 }
 
+#[derive(Clone, Debug)]
 pub enum StmtDef<'hlr> {
     Expr(Expr<'hlr>),
 
@@ -200,7 +177,7 @@ pub enum FieldSpec {
     Index(usize),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct MatchArm<'hlr> {
     pub pattern: Pattern<'hlr>,
     pub body: Expr<'hlr>,

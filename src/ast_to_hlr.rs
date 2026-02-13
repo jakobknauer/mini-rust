@@ -16,17 +16,17 @@ pub fn ast_to_hlr<'hlr>(
     fn_: fns::Fn,
     ast: &ast::Ast,
     ast_body: ast::Block,
-    hlr: &'hlr mut hlr::Hlr<'hlr>,
+    hlr: &'hlr hlr::Hlr<'hlr>,
 ) -> AstToHlrResult<hlr::Expr<'hlr>> {
     let converter = AstToHlr::new(ctxt, fn_, ast, hlr);
     converter.lower_block(ast_body)
 }
 
-struct AstToHlr<'a, 'ctxt, 'hlr> {
+struct AstToHlr<'ctxt, 'hlr> {
     ctxt: &'ctxt ctxt::Ctxt,
     fn_: fns::Fn,
     ast: &'ctxt ast::Ast,
-    hlr: &'a mut hlr::Hlr<'hlr>,
+    hlr: &'hlr hlr::Hlr<'hlr>,
 
     scopes: VecDeque<Scope>,
     blocks: VecDeque<Vec<hlr::Stmt<'hlr>>>,
@@ -40,8 +40,8 @@ pub struct AstToHlrError {
     msg: String,
 }
 
-impl<'a, 'ctxt, 'hlr> AstToHlr<'a, 'ctxt, 'hlr> {
-    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ctxt ast::Ast, hlr: &'a mut hlr::Hlr<'hlr>) -> Self {
+impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
+    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ctxt ast::Ast, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             ctxt,
             fn_,

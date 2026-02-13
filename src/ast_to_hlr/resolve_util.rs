@@ -5,7 +5,7 @@ use crate::{
     hlr,
 };
 
-impl<'a, 'ctxt, 'hlr> AstToHlr<'a, 'ctxt, 'hlr> {
+impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
     pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstToHlrResult<hlr::Val<'hlr>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),

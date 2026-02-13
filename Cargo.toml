@@ -8,6 +8,7 @@ default = ["hlr"]
 hlr = []
 
 [dependencies]
+bumpalo = "3.19.1"
 clap = { version = "4.5.53", features = ["derive"] }
 colored = "3.0.0"
 inkwell = { version = "0.7.0", features = ["llvm21-1"] }
