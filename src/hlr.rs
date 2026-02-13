@@ -1,7 +1,9 @@
 #![allow(unused)]
 
+use std::marker::PhantomData;
+
 use crate::{
-    ast,
+    ast::{self},
     ctxt::{
         fns::Fn,
         traits,
@@ -10,153 +12,180 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct Hlr {
-    exprs: Vec<ExprDef>,
-    stmts: Vec<StmtDef>,
+pub struct Hlr<'hlr> {
+    exprs: Vec<ExprDef<'hlr>>,
+    stmts: Vec<StmtDef<'hlr>>,
 
-    ty_annots: Vec<TyAnnotDef>,
-    ty_annot_slices: Vec<TyAnnot>,
+    ty_annots: Vec<TyAnnotDef<'hlr>>,
+    ty_annot_slices: Vec<TyAnnot<'hlr>>,
 }
 
-impl Hlr {
-    pub fn new_expr(&mut self, expr: ExprDef) -> Expr {
+impl<'hlr> Hlr<'hlr> {
+    pub fn new_expr(&mut self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
         self.exprs.push(expr);
-        Expr(self.exprs.len() - 1)
+        Expr(self.exprs.len() - 1, PhantomData)
     }
 
-    pub fn expr(&self, expr: Expr) -> &ExprDef {
+    pub fn expr(&self, expr: Expr<'hlr>) -> &ExprDef<'hlr> {
         &self.exprs[expr.0]
     }
 
-    pub fn new_stmt(&mut self, stmt: StmtDef) -> Stmt {
+    pub fn new_stmt(&mut self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
         self.stmts.push(stmt);
-        Stmt(self.stmts.len() - 1)
+        Stmt(self.stmts.len() - 1, PhantomData)
     }
 
-    pub fn stmt(&self, stmt: Stmt) -> &StmtDef {
+    pub fn stmt(&self, stmt: Stmt<'hlr>) -> &StmtDef<'hlr> {
         &self.stmts[stmt.0]
     }
 
-    pub fn new_ty_annot(&mut self, annot: TyAnnotDef) -> TyAnnot {
+    pub fn new_ty_annot(&mut self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
         self.ty_annots.push(annot);
-        TyAnnot(self.ty_annots.len() - 1)
+        TyAnnot(self.ty_annots.len() - 1, PhantomData)
     }
 
-    pub fn ty_annot(&self, ty_annot: TyAnnot) -> &TyAnnotDef {
+    pub fn ty_annot(&self, ty_annot: TyAnnot<'hlr>) -> &TyAnnotDef<'hlr> {
         &self.ty_annots[ty_annot.0]
     }
 
-    pub fn new_ty_annot_slice(&mut self, ty_annots: &[TyAnnot]) -> TyAnnotSlice {
+    pub fn new_ty_annot_slice(&mut self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
         self.ty_annot_slices.extend_from_slice(ty_annots);
-        TyAnnotSlice(self.ty_annot_slices.len() - ty_annots.len(), ty_annots.len())
+        TyAnnotSlice(
+            self.ty_annot_slices.len() - ty_annots.len(),
+            ty_annots.len(),
+            PhantomData,
+        )
     }
 
-    pub fn ty_annot_slice(&self, TyAnnotSlice(start, len): TyAnnotSlice) -> &[TyAnnot] {
+    pub fn ty_annot_slice(&self, TyAnnotSlice(start, len, _): TyAnnotSlice<'hlr>) -> &[TyAnnot<'hlr>] {
         &self.ty_annot_slices[start..start + len]
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Expr<'hlr>(usize, PhantomData<&'hlr Hlr<'hlr>>);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Stmt<'hlr>(usize, PhantomData<&'hlr Hlr<'hlr>>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TyAnnot<'hlr>(usize, PhantomData<&'hlr Hlr<'hlr>>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TyAnnotSlice<'hlr>(usize, usize, PhantomData<&'hlr Hlr<'hlr>>);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Val {
+pub enum Val<'hlr> {
     Var(VarId),
-    Fn(Fn, Option<TyAnnotSlice>),
-    Struct(Struct, Option<TyAnnotSlice>),
-    Variant(Enum, usize, Option<TyAnnotSlice>),
-    Mthd(TyAnnot, String, Option<TyAnnotSlice>),
-    TraitMthd(TyAnnot, TyAnnot, String),
+    Fn(Fn, Option<TyAnnotSlice<'hlr>>),
+    Struct(Struct, Option<TyAnnotSlice<'hlr>>),
+    Variant(Enum, usize, Option<TyAnnotSlice<'hlr>>),
+    Mthd(TyAnnot<'hlr>, String, Option<TyAnnotSlice<'hlr>>),
+    TraitMthd(TyAnnot<'hlr>, TyAnnot<'hlr>, String),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct VarId(pub usize);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct Expr(usize);
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct Stmt(usize);
-
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ExprDef {
+pub enum ExprDef<'hlr> {
     Lit(Lit),
-    Val(Val),
+    Val(Val<'hlr>),
+
     BinaryOp {
-        left: Expr,
-        right: Expr,
+        left: Expr<'hlr>,
+        right: Expr<'hlr>,
         operator: ast::BinaryOperator,
     },
+
     UnaryOp {
-        operand: Expr,
+        operand: Expr<'hlr>,
         operator: ast::UnaryOperator,
     },
+
     Call {
-        callee: Expr,
-        args: Vec<Expr>,
+        callee: Expr<'hlr>,
+        args: Vec<Expr<'hlr>>,
     },
+
     MthdCall {
-        receiver: Expr,
+        receiver: Expr<'hlr>,
         mthd_name: String,
-        gen_args: Option<TyAnnotSlice>,
-        args: Vec<Expr>,
+        gen_args: Option<TyAnnotSlice<'hlr>>,
+        args: Vec<Expr<'hlr>>,
     },
+
     Struct {
-        constructor: Val,
-        fields: Vec<(FieldSpec, Expr)>,
+        constructor: Val<'hlr>,
+        fields: Vec<(FieldSpec, Expr<'hlr>)>,
     },
+
     FieldAccess {
-        base: Expr,
+        base: Expr<'hlr>,
         field: FieldSpec,
     },
-    Tuple(Vec<Expr>),
+
+    Tuple(Vec<Expr<'hlr>>),
+
     Assign {
-        target: Expr,
-        value: Expr,
+        target: Expr<'hlr>,
+        value: Expr<'hlr>,
     },
-    Deref(Expr),
-    AddrOf(Expr),
+
+    Deref(Expr<'hlr>),
+    AddrOf(Expr<'hlr>),
+
     As {
-        expr: Expr,
-        ty: TyAnnot,
+        expr: Expr<'hlr>,
+        ty: TyAnnot<'hlr>,
     },
+
     Closure {
-        params: Vec<(VarId, Option<TyAnnot>)>,
-        body: Expr,
+        params: Vec<(VarId, Option<TyAnnot<'hlr>>)>,
+        body: Expr<'hlr>,
     },
+
     If {
-        cond: Expr,
-        then: Expr,
-        else_: Option<Expr>,
+        cond: Expr<'hlr>,
+        then: Expr<'hlr>,
+        else_: Option<Expr<'hlr>>,
     },
+
     Loop {
-        body: Expr,
+        body: Expr<'hlr>,
     },
+
     Match {
-        scrutinee: Expr,
-        arms: Vec<MatchArm>,
+        scrutinee: Expr<'hlr>,
+        arms: Vec<MatchArm<'hlr>>,
     },
+
     Block {
-        stmts: Vec<Stmt>,
-        trailing: Expr,
+        stmts: Vec<Stmt<'hlr>>,
+        trailing: Expr<'hlr>,
     },
+
     QualifiedMthd {
-        ty: TyAnnot,
+        ty: TyAnnot<'hlr>,
         trait_: Option<traits::Trait>,
-        trait_args: Option<TyAnnotSlice>,
+        trait_args: Option<TyAnnotSlice<'hlr>>,
         mthd_name: String,
-        args: Option<TyAnnotSlice>,
+        args: Option<TyAnnotSlice<'hlr>>,
     },
 }
 
-pub enum StmtDef {
-    Expr(Expr),
+pub enum StmtDef<'hlr> {
+    Expr(Expr<'hlr>),
+
     Let {
         var: VarId,
-        ty: Option<TyAnnot>,
-        init: Expr,
+        ty: Option<TyAnnot<'hlr>>,
+        init: Expr<'hlr>,
     },
-    Break,
-    Return(Option<Expr>),
-}
 
+    Break,
+    Return(Option<Expr<'hlr>>),
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Lit {
     Int(i64),
@@ -172,16 +201,16 @@ pub enum FieldSpec {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MatchArm {
-    pub pattern: Pattern,
-    pub body: Expr,
+pub struct MatchArm<'hlr> {
+    pub pattern: Pattern<'hlr>,
+    pub body: Expr<'hlr>,
 }
 
-pub type Pattern = VariantPattern;
+pub type Pattern<'hlr> = VariantPattern<'hlr>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VariantPattern {
-    pub variant: Val,
+pub struct VariantPattern<'hlr> {
+    pub variant: Val<'hlr>,
     pub fields: Vec<VariantPatternField>,
 }
 
@@ -191,30 +220,29 @@ pub struct VariantPatternField {
     pub binding: VarId,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TyAnnot(usize);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TyAnnotSlice(usize, usize);
-
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TyAnnotDef {
-    Struct(Struct, Option<TyAnnotSlice>),
-    Enum(Enum, Option<TyAnnotSlice>),
+pub enum TyAnnotDef<'hlr> {
+    Struct(Struct, Option<TyAnnotSlice<'hlr>>),
+    Enum(Enum, Option<TyAnnotSlice<'hlr>>),
     Ty(Ty),
     GenVar(GenVar),
+
     AssocTy {
-        base: TyAnnot,
-        trait_: Option<TyAnnot>,
+        base: TyAnnot<'hlr>,
+        trait_: Option<TyAnnot<'hlr>>,
         name: String,
     },
-    Ref(TyAnnot),
-    Ptr(TyAnnot),
+
+    Ref(TyAnnot<'hlr>),
+    Ptr(TyAnnot<'hlr>),
+
     Fn {
-        params: TyAnnotSlice,
-        ret: Option<TyAnnot>,
+        params: TyAnnotSlice<'hlr>,
+        ret: Option<TyAnnot<'hlr>>,
     },
-    Tuple(TyAnnotSlice),
+
+    Tuple(TyAnnotSlice<'hlr>),
+
     Infer,
     Self_,
 }

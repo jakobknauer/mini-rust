@@ -5,8 +5,8 @@ use crate::{
     hlr,
 };
 
-impl<'a> AstToHlr<'a> {
-    pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstToHlrResult<hlr::Val> {
+impl<'a, 'ctxt, 'hlr> AstToHlr<'a, 'ctxt, 'hlr> {
+    pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstToHlrResult<hlr::Val<'hlr>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),
             [enum_seg, variant_seg] => self.resolve_path_segments_to_variant(enum_seg, variant_seg),
@@ -16,7 +16,7 @@ impl<'a> AstToHlr<'a> {
         }
     }
 
-    fn resolve_path_segment_to_struct(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::Val> {
+    fn resolve_path_segment_to_struct(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::Val<'hlr>> {
         if segment.is_self {
             return Err(AstToHlrError {
                 msg: "Invalid use of 'Self' as struct literal constructor".to_string(),
@@ -40,7 +40,7 @@ impl<'a> AstToHlr<'a> {
         &mut self,
         enum_seg: &ast::PathSegment,
         variant_seg: &ast::PathSegment,
-    ) -> AstToHlrResult<hlr::Val> {
+    ) -> AstToHlrResult<hlr::Val<'hlr>> {
         if enum_seg.is_self || variant_seg.is_self {
             return Err(AstToHlrError {
                 msg: "Invalid use of 'Self' in enum variant path".to_string(),
@@ -103,7 +103,7 @@ impl<'a> AstToHlr<'a> {
         Ok(TyResolution::NamedTy(*named_ty))
     }
 
-    pub(super) fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Val> {
+    pub(super) fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Val<'hlr>> {
         // First try to resolve to a local variable
         if let Some(var_id) = self.resolve_ident_to_var(name) {
             return Some(hlr::Val::Var(var_id));
