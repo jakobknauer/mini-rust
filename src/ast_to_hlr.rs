@@ -108,6 +108,7 @@ impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
 
     fn release_current_block(&mut self, trailing: hlr::Expr<'hlr>) -> hlr::Expr<'hlr> {
         let stmts = self.blocks.pop_back().expect("self.blocks should never be empty");
+        let stmts = self.hlr.new_stmt_slice(&stmts);
         let block = hlr::ExprDef::Block { stmts, trailing };
         self.hlr.new_expr(block)
     }
@@ -122,7 +123,7 @@ impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
         let output = match body.return_expr {
             Some(expr) => self.lower_expr(expr)?,
             None => {
-                let unit_expr = hlr::ExprDef::Tuple(vec![]);
+                let unit_expr = hlr::ExprDef::Tuple(self.hlr.new_expr_slice(&[]));
                 self.hlr.new_expr(unit_expr)
             }
         };
@@ -421,12 +422,13 @@ impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
     }
 
     fn lower_tuple_expr(&mut self, fields: ast::ExprSlice) -> AstToHlrResult<hlr::Expr<'hlr>> {
-        let field_exprs = self
+        let field_exprs: Vec<_> = self
             .ast
             .expr_slice(fields)
             .iter()
             .map(|&field| self.lower_expr(field))
             .collect::<AstToHlrResult<_>>()?;
+        let field_exprs = self.hlr.new_expr_slice(&field_exprs);
 
         let expr = hlr::ExprDef::Tuple(field_exprs);
         Ok(self.hlr.new_expr(expr))
@@ -462,17 +464,15 @@ impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
 
     fn lower_call_expr(&mut self, callee: ast::Expr, args: ast::ExprSlice) -> AstToHlrResult<hlr::Expr<'hlr>> {
         let callee = self.lower_expr(callee)?;
-        let arg_exprs = self
+        let args: Vec<_> = self
             .ast
             .expr_slice(args)
             .iter()
             .map(|&arg| self.lower_expr(arg))
             .collect::<AstToHlrResult<_>>()?;
+        let args = self.hlr.new_expr_slice(&args);
 
-        let expr = hlr::ExprDef::Call {
-            callee,
-            args: arg_exprs,
-        };
+        let expr = hlr::ExprDef::Call { callee, args };
         Ok(self.hlr.new_expr(expr))
     }
 
@@ -483,12 +483,13 @@ impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
         args: ast::ExprSlice,
     ) -> AstToHlrResult<hlr::Expr<'hlr>> {
         let obj = self.lower_expr(obj)?;
-        let args = self
+        let args: Vec<_> = self
             .ast
             .expr_slice(args)
             .iter()
             .map(|&arg| self.lower_expr(arg))
             .collect::<AstToHlrResult<_>>()?;
+        let args = self.hlr.new_expr_slice(&args);
 
         if mthd.is_self {
             return Err(AstToHlrError {
@@ -600,7 +601,7 @@ impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
 
         self.start_new_block();
         self.lower_break_stmt()?;
-        let unit = self.hlr.new_expr(hlr::ExprDef::Tuple(vec![]));
+        let unit = self.hlr.new_expr(hlr::ExprDef::Tuple(self.hlr.new_expr_slice(&[])));
         let else_block = self.release_current_block(unit);
 
         let expr = hlr::ExprDef::If {

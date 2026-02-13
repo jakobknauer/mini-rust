@@ -39,6 +39,14 @@ impl<'hlr> Hlr<'hlr> {
         self.arena.alloc(annot)
     }
 
+    pub fn new_expr_slice(&'hlr self, exprs: &[Expr<'hlr>]) -> ExprSlice<'hlr> {
+        self.arena.alloc_slice_copy(exprs)
+    }
+
+    pub fn new_stmt_slice(&'hlr self, stmts: &[Stmt<'hlr>]) -> StmtSlice<'hlr> {
+        self.arena.alloc_slice_copy(stmts)
+    }
+
     pub fn new_ty_annot_slice(&'hlr self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
         self.arena.alloc_slice_copy(ty_annots)
     }
@@ -48,6 +56,8 @@ pub type Expr<'hlr> = &'hlr ExprDef<'hlr>;
 pub type Stmt<'hlr> = &'hlr StmtDef<'hlr>;
 pub type TyAnnot<'hlr> = &'hlr TyAnnotDef<'hlr>;
 
+pub type ExprSlice<'hlr> = &'hlr [Expr<'hlr>];
+pub type StmtSlice<'hlr> = &'hlr [Stmt<'hlr>];
 pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -81,14 +91,14 @@ pub enum ExprDef<'hlr> {
 
     Call {
         callee: Expr<'hlr>,
-        args: Vec<Expr<'hlr>>,
+        args: ExprSlice<'hlr>,
     },
 
     MthdCall {
         receiver: Expr<'hlr>,
         mthd_name: String,
         gen_args: Option<TyAnnotSlice<'hlr>>,
-        args: Vec<Expr<'hlr>>,
+        args: ExprSlice<'hlr>,
     },
 
     Struct {
@@ -101,7 +111,7 @@ pub enum ExprDef<'hlr> {
         field: FieldSpec,
     },
 
-    Tuple(Vec<Expr<'hlr>>),
+    Tuple(ExprSlice<'hlr>),
 
     Assign {
         target: Expr<'hlr>,
@@ -137,7 +147,7 @@ pub enum ExprDef<'hlr> {
     },
 
     Block {
-        stmts: Vec<Stmt<'hlr>>,
+        stmts: StmtSlice<'hlr>,
         trailing: Expr<'hlr>,
     },
 
