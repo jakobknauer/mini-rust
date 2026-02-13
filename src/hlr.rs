@@ -9,21 +9,16 @@ use crate::{
     },
 };
 
+#[derive(Default)]
 pub struct Hlr {
     exprs: Vec<ExprDef>,
     stmts: Vec<StmtDef>,
+
     ty_annots: Vec<TyAnnotDef>,
+    ty_annot_slices: Vec<TyAnnot>,
 }
 
 impl Hlr {
-    pub fn new() -> Self {
-        Self {
-            exprs: Vec::new(),
-            stmts: Vec::new(),
-            ty_annots: Vec::new(),
-        }
-    }
-
     pub fn new_expr(&mut self, expr: ExprDef) -> Expr {
         self.exprs.push(expr);
         Expr(self.exprs.len() - 1)
@@ -50,15 +45,24 @@ impl Hlr {
     pub fn ty_annot(&self, ty_annot: TyAnnot) -> &TyAnnotDef {
         &self.ty_annots[ty_annot.0]
     }
+
+    pub fn new_ty_annot_slice(&mut self, ty_annots: &[TyAnnot]) -> TyAnnotSlice {
+        self.ty_annot_slices.extend_from_slice(ty_annots);
+        TyAnnotSlice(self.ty_annot_slices.len() - ty_annots.len(), ty_annots.len())
+    }
+
+    pub fn ty_annot_slice(&self, TyAnnotSlice(start, len): TyAnnotSlice) -> &[TyAnnot] {
+        &self.ty_annot_slices[start..start + len]
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Val {
     Var(VarId),
-    Fn(Fn, Option<Vec<TyAnnot>>),
-    Struct(Struct, Option<Vec<TyAnnot>>),
-    Variant(Enum, usize, Option<Vec<TyAnnot>>),
-    Mthd(TyAnnot, String, Option<Vec<TyAnnot>>),
+    Fn(Fn, Option<TyAnnotSlice>),
+    Struct(Struct, Option<TyAnnotSlice>),
+    Variant(Enum, usize, Option<TyAnnotSlice>),
+    Mthd(TyAnnot, String, Option<TyAnnotSlice>),
     TraitMthd(TyAnnot, TyAnnot, String),
 }
 
@@ -91,7 +95,7 @@ pub enum ExprDef {
     MthdCall {
         receiver: Expr,
         mthd_name: String,
-        gen_args: Option<Vec<TyAnnot>>,
+        gen_args: Option<TyAnnotSlice>,
         args: Vec<Expr>,
     },
     Struct {
@@ -136,9 +140,9 @@ pub enum ExprDef {
     QualifiedMthd {
         ty: TyAnnot,
         trait_: Option<traits::Trait>,
-        trait_args: Option<Vec<TyAnnot>>,
+        trait_args: Option<TyAnnotSlice>,
         mthd_name: String,
-        args: Option<Vec<TyAnnot>>,
+        args: Option<TyAnnotSlice>,
     },
 }
 
@@ -190,10 +194,13 @@ pub struct VariantPatternField {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TyAnnot(usize);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TyAnnotSlice(usize, usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TyAnnotDef {
-    Struct(Struct, Option<Vec<TyAnnot>>),
-    Enum(Enum, Option<Vec<TyAnnot>>),
+    Struct(Struct, Option<TyAnnotSlice>),
+    Enum(Enum, Option<TyAnnotSlice>),
     Ty(Ty),
     GenVar(GenVar),
     AssocTy {
@@ -204,10 +211,10 @@ pub enum TyAnnotDef {
     Ref(TyAnnot),
     Ptr(TyAnnot),
     Fn {
-        params: Vec<TyAnnot>,
+        params: TyAnnotSlice,
         ret: Option<TyAnnot>,
     },
-    Tuple(Vec<TyAnnot>),
+    Tuple(TyAnnotSlice),
     Infer,
     Self_,
 }

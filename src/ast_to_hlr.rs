@@ -45,7 +45,7 @@ impl<'a> AstToHlr<'a> {
             ctxt,
             fn_,
             ast,
-            hlr: hlr::Hlr::new(),
+            hlr: hlr::Hlr::default(),
 
             scopes: VecDeque::new(),
             blocks: VecDeque::new(),
@@ -300,12 +300,13 @@ impl<'a> AstToHlr<'a> {
         }
     }
 
-    fn lower_ty_annots(&mut self, ty_annots: ast::TyAnnotSlice) -> AstToHlrResult<Vec<hlr::TyAnnot>> {
+    fn lower_ty_annots(&mut self, ty_annots: ast::TyAnnotSlice) -> AstToHlrResult<hlr::TyAnnotSlice> {
         self.ast
             .ty_annot_slice(ty_annots)
             .iter()
             .map(|&annot| self.lower_ty_annot(annot))
-            .collect::<AstToHlrResult<_>>()
+            .collect::<AstToHlrResult<Vec<_>>>()
+            .map(|annot_vec| self.hlr.new_ty_annot_slice(&annot_vec))
     }
 
     fn lower_lit(&mut self, lit: &ast::Lit) -> AstToHlrResult<hlr::Expr> {
