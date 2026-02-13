@@ -1,11 +1,11 @@
 use crate::{
     ast,
-    ast_to_hlr::{AstToHlr, AstToHlrError, AstToHlrResult},
+    ast_to_hlr::{AstToHlrError, AstToHlrResult},
     ctxt::{self, fns},
     hlr,
 };
 
-impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
+impl<'ast, 'ctxt, 'hlr> super::AstToHlr<'ast, 'ctxt, 'hlr> {
     pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstToHlrResult<hlr::Val<'hlr>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),

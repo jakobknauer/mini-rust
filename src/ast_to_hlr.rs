@@ -22,10 +22,10 @@ pub fn ast_to_hlr<'hlr>(
     converter.lower_block(ast_body)
 }
 
-struct AstToHlr<'ctxt, 'hlr> {
+struct AstToHlr<'ast, 'ctxt, 'hlr> {
     ctxt: &'ctxt ctxt::Ctxt,
     fn_: fns::Fn,
-    ast: &'ctxt ast::Ast,
+    ast: &'ast ast::Ast,
     hlr: &'hlr hlr::Hlr<'hlr>,
 
     scopes: VecDeque<Scope>,
@@ -40,8 +40,8 @@ pub struct AstToHlrError {
     msg: String,
 }
 
-impl<'ctxt, 'hlr> AstToHlr<'ctxt, 'hlr> {
-    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ctxt ast::Ast, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
+impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
+    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ast ast::Ast, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             ctxt,
             fn_,
