@@ -36,6 +36,7 @@ struct AstToHlr<'ast, 'ctxt, 'hlr> {
 }
 
 pub type AstToHlrResult<T> = Result<T, AstToHlrError>;
+#[derive(Debug)]
 pub struct AstToHlrError {
     msg: String,
 }
@@ -210,11 +211,11 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             &AddrOf { base } => self.lower_addr_of_expr(base),
             &As { expr, target_ty } => self.lower_as_expr(expr, target_ty),
             Self_ => self.lower_self_expr(),
-            Closure {
-                params,
+            &Closure {
+                ref params,
                 return_ty,
                 body,
-            } => todo!(),
+            } => self.lower_closure_expr(params, return_ty, body),
         }
     }
 
@@ -711,6 +712,16 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             msg: "Cannot use 'self' outside of a method".to_string(),
         })?;
         let expr = hlr::ExprDef::Val(hlr::Val::Var(self_var_id));
+        Ok(self.hlr.new_expr(expr))
+    }
+
+    fn lower_closure_expr(
+        &self,
+        _params: &[ast::ClosureParam],
+        _return_ty: Option<ast::TyAnnot>,
+        _body: ast::Block,
+    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+        let expr = hlr::ExprDef::Lit(hlr::Lit::Int(55)); // TODO
         Ok(self.hlr.new_expr(expr))
     }
 }

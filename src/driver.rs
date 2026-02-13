@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast, ast_lowering,
+    ast, ast_lowering, ast_to_hlr,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -18,7 +18,7 @@ use crate::{
         err::{print_impl_check_error, print_obligation_check_error},
         impl_check::check_trait_impls,
     },
-    mlr_lowering,
+    hlr, mlr_lowering,
     obligation_check::check_obligations,
     parse,
     util::print,
@@ -88,6 +88,9 @@ impl<'a> Driver<'a> {
             .map_err(|_| "Error registering impl methods")?;
 
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
+
+        self.print_pretty("Building HLR from AST (not used for anything yet)");
+        self.lower_ast_to_hlr(&ast);
 
         self.print_pretty("Building MLR from AST");
         self.build_function_mlrs(&ast)
@@ -483,6 +486,20 @@ impl<'a> Driver<'a> {
         }
 
         Ok(())
+    }
+
+    fn lower_ast_to_hlr(&mut self, ast: &ast::Ast) {
+        let hlr = hlr::Hlr::new();
+        for (idx, &ast_fn) in ast.free_fns.iter().enumerate() {
+            let ast_fn = ast.fn_(ast_fn);
+            let Some(body) = ast_fn.body else {
+                continue;
+            };
+
+            let target_fn = self.ast_meta.fn_ids[&idx];
+
+            ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, &hlr).unwrap();
+        }
     }
 
     fn build_function_mlrs(&mut self, ast: &ast::Ast) -> Result<(), String> {
