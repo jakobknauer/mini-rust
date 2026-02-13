@@ -8,7 +8,7 @@ use crate::{
 impl<'a> AstToHlr<'a> {
     pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstToHlrResult<hlr::Val> {
         match ty_path.segments.as_slice() {
-            [segment] => self.resolve_path_segment_to_enum(segment),
+            [segment] => self.resolve_path_segment_to_struct(segment),
             [enum_seg, variant_seg] => self.resolve_path_segments_to_variant(enum_seg, variant_seg),
             _ => Err(AstToHlrError {
                 msg: format!("Complex paths in struct literals are not supported yet: {:#?}", ty_path),
@@ -16,7 +16,7 @@ impl<'a> AstToHlr<'a> {
         }
     }
 
-    fn resolve_path_segment_to_enum(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::Val> {
+    fn resolve_path_segment_to_struct(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::Val> {
         if segment.is_self {
             return Err(AstToHlrError {
                 msg: "Invalid use of 'Self' as struct literal constructor".to_string(),
@@ -31,22 +31,18 @@ impl<'a> AstToHlr<'a> {
                 msg: format!("Unknown struct name in struct literal: {}", &segment.ident),
             })?;
 
-        let args: Vec<_> = match segment.args {
-            None => {
-                let n_gen_params = self.ctxt.tys.get_struct_def(struct_).unwrap().gen_params.len();
-                (0..n_gen_params)
-                    .map(|_| self.hlr.new_ty_annot(hlr::TyAnnotDef::Infer))
-                    .collect()
-            }
-            Some(args) => self
-                .ast
-                .ty_annot_slice(args)
-                .iter()
-                .map(|&annot| self.lower_ty_annot(annot))
-                .collect::<AstToHlrResult<_>>()?,
-        };
+        let args = segment
+            .args
+            .map(|args| {
+                self.ast
+                    .ty_annot_slice(args)
+                    .iter()
+                    .map(|&annot| self.lower_ty_annot(annot))
+                    .collect::<AstToHlrResult<_>>()
+            })
+            .transpose()?;
 
-        Ok(hlr::Val::Struct(struct_, Some(args)))
+        Ok(hlr::Val::Struct(struct_, args))
     }
 
     fn resolve_path_segments_to_variant(
@@ -60,6 +56,12 @@ impl<'a> AstToHlr<'a> {
             });
         }
 
+        if variant_seg.args.is_some() {
+            return Err(AstToHlrError {
+                msg: "Generic arguments on enum variants are not supported yet".to_string(),
+            });
+        }
+
         let enum_ = self
             .ctxt
             .tys
@@ -67,6 +69,17 @@ impl<'a> AstToHlr<'a> {
             .ok_or_else(|| AstToHlrError {
                 msg: format!("Unknown enum name in enum variant path: {}", &enum_seg.ident),
             })?;
+
+        let args = enum_seg
+            .args
+            .map(|args| {
+                self.ast
+                    .ty_annot_slice(args)
+                    .iter()
+                    .map(|&annot| self.lower_ty_annot(annot))
+                    .collect::<AstToHlrResult<_>>()
+            })
+            .transpose()?;
 
         let enum_def = self.ctxt.tys.get_enum_def(enum_).unwrap();
         let variant_index = enum_def
@@ -80,7 +93,7 @@ impl<'a> AstToHlr<'a> {
                 ),
             })?;
 
-        Ok(hlr::Val::Variant(enum_, variant_index, None))
+        Ok(hlr::Val::Variant(enum_, variant_index, args))
     }
 
     pub(super) fn resolve_ident_to_ty(&mut self, ident: &str) -> AstToHlrResult<TyResolution> {
