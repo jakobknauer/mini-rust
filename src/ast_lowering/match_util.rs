@@ -4,7 +4,7 @@ use crate::{
     ctxt::{mlr, ty},
 };
 
-impl<'a> super::AstLowerer<'a> {
+impl<'ast, 'ctxt> super::AstLowerer<'ast, 'ctxt> {
     #[allow(clippy::too_many_arguments)]
     pub fn build_match_arms(
         &mut self,

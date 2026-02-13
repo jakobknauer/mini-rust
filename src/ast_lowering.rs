@@ -45,10 +45,10 @@ pub fn ast_to_mlr_with_external_scope(
     Ok(captured_values)
 }
 
-struct AstLowerer<'a> {
-    builder: MlrBuilder<'a>,
+struct AstLowerer<'ast, 'ctxt> {
+    builder: MlrBuilder<'ctxt>,
     closure_counter: u32,
-    ast: &'a ast::Ast,
+    ast: &'ast ast::Ast,
 
     /// The available local variables in scope surrounding this function (i.e. only relevant for closures)
     outer_scope: HashMap<String, mlr::Loc>,
@@ -58,11 +58,11 @@ struct AstLowerer<'a> {
     captured_values: HashMap<mlr::Loc, usize>,
 }
 
-impl<'a> AstLowerer<'a> {
+impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
     pub fn new(
         target_fn: fns::Fn,
-        ctxt: &'a mut ctxt::Ctxt,
-        ast: &'a ast::Ast,
+        ctxt: &'ctxt mut ctxt::Ctxt,
+        ast: &'ast ast::Ast,
         external_scope: HashMap<String, mlr::Loc>,
         captures_ty: Option<ty::Ty>,
     ) -> Self {
@@ -79,7 +79,7 @@ impl<'a> AstLowerer<'a> {
         }
     }
 
-    pub fn lower_block(mut self, body: &'a ast::Block) -> AstLoweringResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
+    pub fn lower_block(mut self, body: &'ast ast::Block) -> AstLoweringResult<(fns::FnMlr, HashMap<mlr::Loc, usize>)> {
         let signature = self.builder.get_signature();
         if signature.var_args {
             return Err(AstLoweringError::VarArgsNotSupported);

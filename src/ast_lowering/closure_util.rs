@@ -5,7 +5,7 @@ use crate::{
     ctxt::{fns, mlr, ty},
 };
 
-impl<'a> super::AstLowerer<'a> {
+impl<'ast, 'ctxt> super::AstLowerer<'ast, 'ctxt> {
     pub fn match_param_and_return_ty(
         &mut self,
         param_tys: &[ty::Ty],

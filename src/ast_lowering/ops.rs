@@ -1,6 +1,6 @@
 use crate::{
     ast,
-    ast_lowering::{self, AstLoweringError, AstLoweringResult},
+    ast_lowering::{AstLoweringError, AstLoweringResult},
     ctxt::{fns, ty},
 };
 
@@ -30,7 +30,7 @@ macro_rules! op_match {
     }};
 }
 
-impl<'a> ast_lowering::AstLowerer<'a> {
+impl<'ast, 'ctxt> super::AstLowerer<'ast, 'ctxt> {
     pub fn resolve_binary_operator(
         &mut self,
         operator: ast::BinaryOperator,
