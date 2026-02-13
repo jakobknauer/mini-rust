@@ -222,23 +222,13 @@ impl<'a> AstToHlr<'a> {
         let ty_annot = match ty_annot {
             ast::TyAnnotKind::Path(path) => self.lower_path_ty_annot(path)?,
             &ast::TyAnnotKind::Tuple(fields) => {
-                let fields = self
-                    .ast
-                    .ty_annot_slice(fields)
-                    .iter()
-                    .map(|&field| self.lower_ty_annot(field))
-                    .collect::<AstToHlrResult<_>>()?;
+                let fields = self.lower_ty_annots(fields)?;
                 hlr::TyAnnotDef::Tuple(fields)
             }
             &ast::TyAnnotKind::Ref(ty_annot) => hlr::TyAnnotDef::Ref(self.lower_ty_annot(ty_annot)?),
             &ast::TyAnnotKind::Ptr(ty_annot) => hlr::TyAnnotDef::Ptr(self.lower_ty_annot(ty_annot)?),
             &ast::TyAnnotKind::Fn { param_tys, return_ty } => {
-                let param_tys = self
-                    .ast
-                    .ty_annot_slice(param_tys)
-                    .iter()
-                    .map(|&param_ty| self.lower_ty_annot(param_ty))
-                    .collect::<AstToHlrResult<_>>()?;
+                let param_tys = self.lower_ty_annots(param_tys)?;
                 let return_ty = return_ty.map(|ret_ty| self.lower_ty_annot(ret_ty)).transpose()?;
                 hlr::TyAnnotDef::Fn {
                     params: param_tys,
@@ -292,16 +282,7 @@ impl<'a> AstToHlr<'a> {
         }
 
         let resolved_ty = self.resolve_ident_to_ty(&segment.ident)?;
-        let args: Option<Vec<_>> = segment
-            .args
-            .map(|args| {
-                self.ast
-                    .ty_annot_slice(args)
-                    .iter()
-                    .map(|&arg| self.lower_ty_annot(arg))
-                    .collect::<AstToHlrResult<_>>()
-            })
-            .transpose()?;
+        let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
         match (resolved_ty, args) {
             (TyResolution::GenVar(gen_var), None) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),
@@ -317,6 +298,14 @@ impl<'a> AstToHlr<'a> {
                 ),
             }),
         }
+    }
+
+    fn lower_ty_annots(&mut self, ty_annots: ast::TyAnnotSlice) -> AstToHlrResult<Vec<hlr::TyAnnot>> {
+        self.ast
+            .ty_annot_slice(ty_annots)
+            .iter()
+            .map(|&annot| self.lower_ty_annot(annot))
+            .collect::<AstToHlrResult<_>>()
     }
 
     fn lower_lit(&mut self, lit: &ast::Lit) -> AstToHlrResult<hlr::Expr> {
@@ -341,29 +330,20 @@ impl<'a> AstToHlr<'a> {
                 });
             }
             [segment] => {
-                let val = self.resolve_ident_to_val_def(&segment.ident);
-                let args = segment.args.map(|args| {
-                    self.ast
-                        .ty_annot_slice(args)
-                        .iter()
-                        .map(|&annot| self.lower_ty_annot(annot))
-                        .collect::<AstToHlrResult<_>>()
-                });
+                let val = self
+                    .resolve_ident_to_val_def(&segment.ident)
+                    .ok_or_else(|| AstToHlrError {
+                        msg: format!("Unresolvable path: {}", segment.ident),
+                    })?;
+                let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
                 match (val, args) {
-                    (Some(val), None) => hlr::ExprDef::Val(val),
-                    (Some(hlr::Val::Fn(fn_, _)), Some(args)) => {
-                        let args = args?;
-                        hlr::ExprDef::Val(hlr::Val::Fn(fn_, Some(args)))
-                    }
-                    (Some(other_val), Some(_)) => {
+                    (val, None) => hlr::ExprDef::Val(val),
+                    (hlr::Val::Fn(fn_, _), args) => hlr::ExprDef::Val(hlr::Val::Fn(fn_, args)),
+
+                    (other_val, Some(_)) => {
                         return Err(AstToHlrError {
                             msg: format!("Only functions can be used in generic paths, found {:?}", other_val),
-                        });
-                    }
-                    (None, _) => {
-                        return Err(AstToHlrError {
-                            msg: format!("Unresolvable path: {}", segment.ident),
                         });
                     }
                 }
@@ -378,16 +358,7 @@ impl<'a> AstToHlr<'a> {
                     });
                 }
 
-                let args = mthd
-                    .args
-                    .map(|args| {
-                        self.ast
-                            .ty_annot_slice(args)
-                            .iter()
-                            .map(|&annot| self.lower_ty_annot(annot))
-                            .collect::<AstToHlrResult<_>>()
-                    })
-                    .transpose()?;
+                let args = mthd.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
                 hlr::ExprDef::Val(hlr::Val::Mthd(ty, mthd.ident.clone(), args))
             }
@@ -421,14 +392,8 @@ impl<'a> AstToHlr<'a> {
         let trait_args = qualified_path
             .trait_
             .as_ref()
-            .and_then(|trait_| trait_.args.as_ref())
-            .map(|&args| {
-                self.ast
-                    .ty_annot_slice(args)
-                    .iter()
-                    .map(|&arg| self.lower_ty_annot(arg))
-                    .collect::<AstToHlrResult<_>>()
-            })
+            .and_then(|trait_| trait_.args)
+            .map(|args| self.lower_ty_annots(args))
             .transpose()?;
 
         let [segment] = qualified_path.path.segments.as_slice() else {
@@ -441,16 +406,7 @@ impl<'a> AstToHlr<'a> {
         };
         let mthd_name = segment.ident.clone();
 
-        let args = segment
-            .args
-            .map(|args| {
-                self.ast
-                    .ty_annot_slice(args)
-                    .iter()
-                    .map(|&arg| self.lower_ty_annot(arg))
-                    .collect::<AstToHlrResult<_>>()
-            })
-            .transpose()?;
+        let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
         let expr = hlr::ExprDef::QualifiedMthd {
             ty,
@@ -538,16 +494,7 @@ impl<'a> AstToHlr<'a> {
             });
         }
 
-        let gen_args = mthd
-            .args
-            .map(|args| {
-                self.ast
-                    .ty_annot_slice(args)
-                    .iter()
-                    .map(|&arg| self.lower_ty_annot(arg))
-                    .collect::<AstToHlrResult<_>>()
-            })
-            .transpose()?;
+        let gen_args = mthd.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
         let expr = hlr::ExprDef::MthdCall {
             receiver: obj,

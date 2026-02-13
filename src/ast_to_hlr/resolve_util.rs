@@ -31,16 +31,7 @@ impl<'a> AstToHlr<'a> {
                 msg: format!("Unknown struct name in struct literal: {}", &segment.ident),
             })?;
 
-        let args = segment
-            .args
-            .map(|args| {
-                self.ast
-                    .ty_annot_slice(args)
-                    .iter()
-                    .map(|&annot| self.lower_ty_annot(annot))
-                    .collect::<AstToHlrResult<_>>()
-            })
-            .transpose()?;
+        let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
         Ok(hlr::Val::Struct(struct_, args))
     }
@@ -70,16 +61,7 @@ impl<'a> AstToHlr<'a> {
                 msg: format!("Unknown enum name in enum variant path: {}", &enum_seg.ident),
             })?;
 
-        let args = enum_seg
-            .args
-            .map(|args| {
-                self.ast
-                    .ty_annot_slice(args)
-                    .iter()
-                    .map(|&annot| self.lower_ty_annot(annot))
-                    .collect::<AstToHlrResult<_>>()
-            })
-            .transpose()?;
+        let args = enum_seg.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
         let enum_def = self.ctxt.tys.get_enum_def(enum_).unwrap();
         let variant_index = enum_def
