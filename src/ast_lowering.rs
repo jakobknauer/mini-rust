@@ -21,20 +21,20 @@ use crate::{
 pub use err::{AstLoweringError, AstLoweringResult};
 use lowered::Lowered;
 
-pub fn ast_to_mlr(
+pub fn ast_to_mlr<'ast>(
     ctxt: &mut ctxt::Ctxt,
-    ast: &ast::Ast,
-    ast_body: &ast::Block,
+    ast: &'ast ast::Ast<'ast>,
+    ast_body: &'ast ast::Block<'ast>,
     target_fn: fns::Fn,
 ) -> AstLoweringResult<()> {
     ast_to_mlr_with_external_scope(ctxt, ast, ast_body, target_fn, HashMap::new(), None)?;
     Ok(())
 }
 
-pub fn ast_to_mlr_with_external_scope(
+pub fn ast_to_mlr_with_external_scope<'ast>(
     ctxt: &mut ctxt::Ctxt,
-    ast: &ast::Ast,
-    ast_body: &ast::Block,
+    ast: &'ast ast::Ast<'ast>,
+    ast_body: &'ast ast::Block<'ast>,
     target_fn: fns::Fn,
     external_scope: HashMap<String, mlr::Loc>,
     captures_ty: Option<ty::Ty>,
@@ -48,7 +48,7 @@ pub fn ast_to_mlr_with_external_scope(
 struct AstLowerer<'ast, 'ctxt> {
     builder: MlrBuilder<'ctxt>,
     closure_counter: u32,
-    ast: &'ast ast::Ast,
+    ast: &'ast ast::Ast<'ast>,
 
     /// The available local variables in scope surrounding this function (i.e. only relevant for closures)
     outer_scope: HashMap<String, mlr::Loc>,
@@ -62,7 +62,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
     pub fn new(
         target_fn: fns::Fn,
         ctxt: &'ctxt mut ctxt::Ctxt,
-        ast: &'ast ast::Ast,
+        ast: &'ast ast::Ast<'ast>,
         external_scope: HashMap<String, mlr::Loc>,
         captures_ty: Option<ty::Ty>,
     ) -> Self {
@@ -152,10 +152,10 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
     /// all while in a new scope.
     ///
     /// This method does not start or end a new MLR block; but it does push and pop a new scope.
-    fn build_block(&mut self, block: &ast::Block, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
+    fn build_block(&mut self, block: &ast::Block<'ast>, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
         self.builder.push_scope();
 
-        for &stmt in self.ast.stmt_slice(block.stmts) {
+        for &stmt in block.stmts {
             self.build_stmt(stmt)?;
         }
 
@@ -172,10 +172,8 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         Ok(output)
     }
 
-    fn lower(&mut self, expr: ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<Lowered> {
+    fn lower(&mut self, expr: ast::Expr<'ast>, expected: Option<ty::Ty>) -> AstLoweringResult<Lowered> {
         use ast::ExprKind::*;
-
-        let expr = self.ast.expr(expr);
 
         let lowered = match expr {
             Lit(lit) => self.build_literal(lit)?.into(),
@@ -186,14 +184,14 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
             &UnaryOp { operator, operand } => self.build_unary_op(operator, operand)?.into(),
             &Assign { target, value } => self.build_assignment(target, value)?.into(),
             &Call { callee, args } => self.build_call(callee, args)?.into(),
-            MthdCall { obj, mthd, args } => self.build_mthd_call(*obj, mthd, *args)?.into(),
+            MthdCall { obj, mthd, args } => self.build_mthd_call(obj, mthd, args)?.into(),
             Struct { ty_path, fields } => self.build_struct_or_enum_val(ty_path, fields)?.into(),
-            FieldAccess { obj, field } => self.lower_field_access_to_place(*obj, field)?.into(),
+            FieldAccess { obj, field } => self.lower_field_access_to_place(obj, field)?.into(),
             Block(block) => self.build_block(block, expected)?.into(),
-            If { cond, then, else_ } => self.build_if(*cond, then, else_.as_ref(), expected)?.into(),
+            If { cond, then, else_ } => self.build_if(cond, then, else_.as_ref(), expected)?.into(),
             Loop { body } => self.build_loop(body)?.into(),
-            While { cond, body } => self.build_while(*cond, body)?.into(),
-            Match { scrutinee, arms } => self.build_match_expr(*scrutinee, arms, expected)?.into(),
+            While { cond, body } => self.build_while(cond, body)?.into(),
+            Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expected)?.into(),
             &Deref { base } => self.lower_deref(base)?.into(),
             &AddrOf { base } => self.build_addr_of_val(base)?.into(),
             &As { expr, target_ty } => self.build_as_expr(expr, target_ty)?.into(),
@@ -208,15 +206,15 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         Ok(lowered)
     }
 
-    fn lower_to_val(&mut self, expr: ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
+    fn lower_to_val(&mut self, expr: ast::Expr<'ast>, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Val> {
         self.lower(expr, expected)?.into_val(&mut self.builder)
     }
 
-    fn lower_to_place(&mut self, expr: ast::Expr) -> AstLoweringResult<mlr::Place> {
+    fn lower_to_place(&mut self, expr: ast::Expr<'ast>) -> AstLoweringResult<mlr::Place> {
         self.lower(expr, None)?.into_place(&mut self.builder)
     }
 
-    fn lower_to_op(&mut self, expr: ast::Expr, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Op> {
+    fn lower_to_op(&mut self, expr: ast::Expr<'ast>, expected: Option<ty::Ty>) -> AstLoweringResult<mlr::Op> {
         self.lower(expr, expected)?.into_op(&mut self.builder)
     }
 
@@ -246,7 +244,9 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                         let gen_args = (0..n_gen_params).map(|_| self.tys().undef_ty()).collect();
                         self.builder.insert_gen_fn_op(fn_, gen_args, Vec::new())?.into()
                     } else {
-                        return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
+                        return Err(AstLoweringError::UnresolvablePath {
+                            path: format!("{path:#?}"),
+                        });
                     }
                 }
                 &ast::PathSegment {
@@ -255,18 +255,22 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                     is_self: false,
                 } => {
                     if let Some(fn_) = self.fns().get_fn_by_name(ident) {
-                        let args = self
-                            .ast
-                            .ty_annot_slice(args)
+                        let args = args
                             .iter()
                             .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                             .collect::<AstLoweringResult<_>>()?;
                         self.builder.insert_gen_fn_op(fn_, args, Vec::new())?.into()
                     } else {
-                        return Err(AstLoweringError::UnresolvablePath { path: path.clone() });
+                        return Err(AstLoweringError::UnresolvablePath {
+                            path: format!("{path:#?}"),
+                        });
                     }
                 }
-                _ => return Err(AstLoweringError::UnresolvablePath { path: path.clone() }),
+                _ => {
+                    return Err(AstLoweringError::UnresolvablePath {
+                        path: format!("{path:#?}"),
+                    });
+                }
             },
 
             [ty_path, mthd_name] if !mthd_name.is_self => {
@@ -275,7 +279,11 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                 let (mthd, _) = self.mthd_resolution_to_op(mthd_resolution, ty, mthd_name.args)?;
                 Lowered::Op(mthd)
             }
-            _ => return Err(AstLoweringError::UnresolvablePath { path: path.clone() }),
+            _ => {
+                return Err(AstLoweringError::UnresolvablePath {
+                    path: format!("{path:#?}"),
+                });
+            }
         };
 
         Ok(lowered)
@@ -283,9 +291,9 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
 
     fn build_binary_op(
         &mut self,
-        left: ast::Expr,
+        left: ast::Expr<'ast>,
         operator: ast::BinaryOperator,
-        right: ast::Expr,
+        right: ast::Expr<'ast>,
     ) -> AstLoweringResult<mlr::Val> {
         match operator {
             ast::BinaryOperator::LogicalAnd => self.build_logical_and(left, right),
@@ -309,7 +317,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
     fn build_unary_op(
         &mut self,
         operator: ast::UnaryOperator,
-        operand: ast::Expr,
+        operand: ast::Expr<'ast>,
     ) -> Result<mlr::Val, AstLoweringError> {
         let operand = self.lower_to_op(operand, None)?;
         let operand_ty = self.mlr().get_op_ty(operand);
@@ -319,7 +327,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_call_val(op, vec![operand])
     }
 
-    fn build_logical_and(&mut self, left: ast::Expr, right: ast::Expr) -> AstLoweringResult<mlr::Val> {
+    fn build_logical_and(&mut self, left: ast::Expr<'ast>, right: ast::Expr<'ast>) -> AstLoweringResult<mlr::Val> {
         let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
@@ -345,7 +353,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_logical_or(&mut self, left: ast::Expr, right: ast::Expr) -> AstLoweringResult<mlr::Val> {
+    fn build_logical_or(&mut self, left: ast::Expr<'ast>, right: ast::Expr<'ast>) -> AstLoweringResult<mlr::Val> {
         let bool_ty = self.tys().primitive(ty::Primitive::Boolean);
         let result_place = self.builder.insert_alloc_with_ty(bool_ty)?;
 
@@ -371,7 +379,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_assignment(&mut self, target: ast::Expr, value: ast::Expr) -> AstLoweringResult<mlr::Val> {
+    fn build_assignment(&mut self, target: ast::Expr<'ast>, value: ast::Expr<'ast>) -> AstLoweringResult<mlr::Val> {
         let loc = self.lower_to_place(target)?;
         let value = self.lower_to_val(value, None)?;
         self.builder.insert_assign_stmt(loc, value)?;
@@ -380,7 +388,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_val(output)
     }
 
-    fn build_call(&mut self, callee: ast::Expr, args: ast::ExprSlice) -> AstLoweringResult<mlr::Val> {
+    fn build_call(&mut self, callee: ast::Expr<'ast>, args: ast::ExprSlice<'ast>) -> AstLoweringResult<mlr::Val> {
         let callee = self.lower_to_op(callee, None)?;
         let callee_ty = self.mlr().get_op_ty(callee);
 
@@ -390,9 +398,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
             .map(|(param_tys, ..)| param_tys)
             .unwrap_or_default();
 
-        let args: Vec<_> = self
-            .ast
-            .expr_slice(args)
+        let args: Vec<_> = args
             .iter()
             .enumerate()
             .map(|(idx, &arg)| {
@@ -406,9 +412,9 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
 
     fn build_mthd_call(
         &mut self,
-        obj: ast::Expr,
+        obj: ast::Expr<'ast>,
         mthd: &ast::PathSegment,
-        args: ast::ExprSlice,
+        args: ast::ExprSlice<'ast>,
     ) -> AstLoweringResult<mlr::Val> {
         let base_place = self.lower_to_place(obj)?;
         let base_ty = self.mlr().get_place_ty(base_place);
@@ -437,7 +443,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
             .unwrap_or_default();
 
         let args = std::iter::once(Ok(base))
-            .chain(self.ast.expr_slice(args).iter().enumerate().map(|(idx, &arg)| {
+            .chain(args.iter().enumerate().map(|(idx, &arg)| {
                 let expected = param_tys.get(idx + 1).cloned(); // possibly None, skip self param
                 self.lower_to_op(arg, expected)
             }))
@@ -448,9 +454,9 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
 
     fn build_if(
         &mut self,
-        condition: ast::Expr,
-        then_block: &ast::Block,
-        else_block: Option<&ast::Block>,
+        condition: ast::Expr<'ast>,
+        then_block: &ast::Block<'ast>,
+        else_block: Option<&ast::Block<'ast>>,
         expected: Option<ty::Ty>,
     ) -> AstLoweringResult<mlr::Val> {
         let cond = self.lower_to_op(condition, None)?;
@@ -477,7 +483,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_place_val(result_place)
     }
 
-    fn build_loop(&mut self, body: &ast::Block) -> AstLoweringResult<mlr::Val> {
+    fn build_loop(&mut self, body: &ast::Block<'ast>) -> AstLoweringResult<mlr::Val> {
         self.builder.start_new_block();
         self.build_block(body, None)?;
         let body = self.builder.release_current_block();
@@ -487,7 +493,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_val(unit)
     }
 
-    fn build_while(&mut self, condition: ast::Expr, body: &ast::Block) -> AstLoweringResult<mlr::Val> {
+    fn build_while(&mut self, condition: ast::Expr<'ast>, body: &ast::Block<'ast>) -> AstLoweringResult<mlr::Val> {
         self.builder.start_new_block();
 
         // build 'if condition, then break'
@@ -523,7 +529,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
     fn build_struct_or_enum_val(
         &mut self,
         ty_path: &ast::Path,
-        fields: &[(String, ast::Expr)],
+        fields: &[(String, ast::Expr<'ast>)],
     ) -> AstLoweringResult<mlr::Val> {
         match self.resolve_path_to_struct_or_enum_variant(ty_path)? {
             StructOrEnumResolution::Struct(ty) => self.build_struct_val(ty, fields),
@@ -531,7 +537,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         }
     }
 
-    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, ast::Expr)]) -> AstLoweringResult<mlr::Val> {
+    fn build_struct_val(&mut self, ty: ty::Ty, fields: &[(String, ast::Expr<'ast>)]) -> AstLoweringResult<mlr::Val> {
         let struct_val_place = self.builder.insert_alloc_with_ty(ty)?;
         self.build_struct_field_init_stmts(ty, fields, struct_val_place)?;
         self.builder.insert_use_place_val(struct_val_place)
@@ -541,7 +547,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         &mut self,
         ty: ty::Ty,
         variant_index: usize,
-        fields: &[(String, ast::Expr)],
+        fields: &[(String, ast::Expr<'ast>)],
     ) -> AstLoweringResult<mlr::Val> {
         // Create empty enum value
         let base_place = self.builder.insert_alloc_with_ty(ty)?;
@@ -566,7 +572,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
     fn build_struct_field_init_stmts(
         &mut self,
         ty: ty::Ty,
-        fields: &[(String, ast::Expr)],
+        fields: &[(String, ast::Expr<'ast>)],
         base_place: mlr::Place,
     ) -> AstLoweringResult<()> {
         let field_indices = self
@@ -585,10 +591,8 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         Ok(())
     }
 
-    fn build_tuple_val(&mut self, exprs: ast::ExprSlice) -> AstLoweringResult<mlr::Val> {
-        let exprs = self
-            .ast
-            .expr_slice(exprs)
+    fn build_tuple_val(&mut self, exprs: ast::ExprSlice<'ast>) -> AstLoweringResult<mlr::Val> {
+        let exprs = exprs
             .iter()
             .map(|&expr| self.lower_to_val(expr, None))
             .collect::<AstLoweringResult<Vec<_>>>()?;
@@ -610,8 +614,8 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
 
     fn build_match_expr(
         &mut self,
-        scrutinee: ast::Expr,
-        arms: &[ast::MatchArm],
+        scrutinee: ast::Expr<'ast>,
+        arms: &[ast::MatchArm<'ast>],
         expected: Option<ty::Ty>,
     ) -> AstLoweringResult<mlr::Val> {
         let scrutinee_place = self.lower_to_place(scrutinee)?;
@@ -684,12 +688,12 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_val(result_op)
     }
 
-    fn build_addr_of_val(&mut self, base: ast::Expr) -> AstLoweringResult<mlr::Val> {
+    fn build_addr_of_val(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<mlr::Val> {
         let base = self.lower_to_place(base)?;
         self.builder.insert_addr_of_val(base)
     }
 
-    fn build_as_expr(&mut self, expr: ast::Expr, target_ty: ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
+    fn build_as_expr(&mut self, expr: ast::Expr<'ast>, target_ty: ast::TyAnnot) -> AstLoweringResult<mlr::Val> {
         let expr_op = self.lower_to_op(expr, None)?;
         let target_ty = self.builder.resolve_ast_ty_annot(self.ast, target_ty)?;
         self.builder.insert_as_val(expr_op, target_ty)
@@ -707,7 +711,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         &mut self,
         params: &[ast::ClosureParam],
         return_ty: Option<ast::TyAnnot>,
-        body: &ast::Block,
+        body: &'ast ast::Block<'ast>,
         expected: Option<ty::Ty>,
     ) -> AstLoweringResult<mlr::Val> {
         let param_tys = params
@@ -743,13 +747,11 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         self.builder.insert_use_place_val(closure_place)
     }
 
-    fn build_stmt(&mut self, stmt: ast::Stmt) -> AstLoweringResult<()> {
+    fn build_stmt(&mut self, stmt: ast::Stmt<'ast>) -> AstLoweringResult<()> {
         use ast::StmtKind::*;
 
-        let stmt = self.ast.stmt(stmt);
-
         match stmt {
-            Let { name, value, ty_annot } => self.build_let_stmt(name, *ty_annot, *value),
+            Let { name, value, ty_annot } => self.build_let_stmt(name, *ty_annot, value),
             &Expr(expr) => self.build_expr_stmt(expr),
             &Return(expr) => self.build_return_stmt(expr),
             Break => self.build_break_stmt(),
@@ -760,7 +762,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         &mut self,
         name: &str,
         ty_annot: Option<ast::TyAnnot>,
-        value: ast::Expr,
+        value: ast::Expr<'ast>,
     ) -> AstLoweringResult<()> {
         let annot_ty = match ty_annot {
             Some(ty_annot) => self.builder.resolve_ast_ty_annot(self.ast, ty_annot)?,
@@ -780,14 +782,14 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         Ok(())
     }
 
-    fn build_expr_stmt(&mut self, expr: ast::Expr) -> AstLoweringResult<()> {
+    fn build_expr_stmt(&mut self, expr: ast::Expr<'ast>) -> AstLoweringResult<()> {
         self.builder.start_new_block();
         let _ = assign_to_fresh_alloc!(self, self.lower_to_val(expr, None)?);
         self.builder.end_and_insert_current_block();
         Ok(())
     }
 
-    fn build_return_stmt(&mut self, expr: Option<ast::Expr>) -> AstLoweringResult<()> {
+    fn build_return_stmt(&mut self, expr: Option<ast::Expr<'ast>>) -> AstLoweringResult<()> {
         self.builder.start_new_block();
 
         let return_ty = self.builder.get_signature().return_ty;
@@ -812,7 +814,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
 
     fn lower_field_access_to_place(
         &mut self,
-        obj: ast::Expr,
+        obj: ast::Expr<'ast>,
         field_desc: &ast::FieldDescriptor,
     ) -> AstLoweringResult<mlr::Place> {
         let mut obj = self.lower_to_place(obj)?;
@@ -838,7 +840,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
             .insert_field_access_place(obj, field_resolution.field_index)
     }
 
-    fn lower_deref(&mut self, base: ast::Expr) -> AstLoweringResult<mlr::Place> {
+    fn lower_deref(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<mlr::Place> {
         let base_op = self.lower_to_op(base, None)?;
         self.builder.insert_deref_place(base_op)
     }
@@ -851,13 +853,13 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
 
             let [segment] = qual_path.path.segments.as_slice() else {
                 return Err(AstLoweringError::UnresolvablePath {
-                    path: qual_path.path.clone(),
+                    path: format!("{:#?}", qual_path.path),
                 });
             };
 
             if segment.is_self {
                 return Err(AstLoweringError::UnresolvablePath {
-                    path: qual_path.path.clone(),
+                    path: format!("{:#?}", qual_path.path),
                 });
             }
 
@@ -867,9 +869,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                 .unwrap();
 
             let gen_args: Vec<_> = match &segment.args {
-                &Some(args) => self
-                    .ast
-                    .ty_annot_slice(args)
+                &Some(args) => args
                     .iter()
                     .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                     .collect::<AstLoweringResult<_>>()?,
@@ -889,13 +889,13 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         } else {
             let [segment] = qual_path.path.segments.as_slice() else {
                 return Err(AstLoweringError::UnresolvablePath {
-                    path: qual_path.path.clone(),
+                    path: format!("{:#?}", qual_path.path),
                 });
             };
 
             if segment.is_self {
                 return Err(AstLoweringError::UnresolvablePath {
-                    path: qual_path.path.clone(),
+                    path: format!("{:#?}", qual_path.path),
                 });
             }
 
@@ -911,9 +911,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         n_expected: usize,
     ) -> AstLoweringResult<Vec<ty::Ty>> {
         match gen_args {
-            Some(gen_args) => self
-                .ast
-                .ty_annot_slice(gen_args)
+            Some(gen_args) => gen_args
                 .iter()
                 .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                 .collect::<AstLoweringResult<_>>(),
@@ -964,22 +962,24 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
         match path.segments.as_slice() {
             [segment] => {
                 if segment.is_self {
-                    return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                    return AstLoweringError::UnresolvableStructOrEnum {
+                        path: format!("{path:#?}"),
+                    }
+                    .into();
                 }
 
-                let struct_ = self
-                    .tys()
-                    .get_struct_by_name(&segment.ident)
-                    .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
+                let struct_ = self.tys().get_struct_by_name(&segment.ident).ok_or(
+                    AstLoweringError::UnresolvableStructOrEnum {
+                        path: format!("{path:#?}"),
+                    },
+                )?;
 
                 let args: Vec<_> = match segment.args {
                     None => {
                         let n_gen_params = self.tys().get_struct_def(struct_).unwrap().gen_params.len();
                         (0..n_gen_params).map(|_| self.tys().undef_ty()).collect()
                     }
-                    Some(args) => self
-                        .ast
-                        .ty_annot_slice(args)
+                    Some(args) => args
                         .iter()
                         .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                         .collect::<AstLoweringResult<_>>()?,
@@ -990,22 +990,25 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
             }
             [enum_seg, variant_name] => {
                 if enum_seg.is_self {
-                    return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                    return AstLoweringError::UnresolvableStructOrEnum {
+                        path: format!("{path:#?}"),
+                    }
+                    .into();
                 }
 
-                let enum_ = self
-                    .tys()
-                    .get_enum_by_name(&enum_seg.ident)
-                    .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
+                let enum_ =
+                    self.tys()
+                        .get_enum_by_name(&enum_seg.ident)
+                        .ok_or(AstLoweringError::UnresolvableStructOrEnum {
+                            path: format!("{path:#?}"),
+                        })?;
 
                 let args: Vec<_> = match enum_seg.args {
                     None => {
                         let n_gen_params = self.tys().get_enum_def(enum_).unwrap().gen_params.len();
                         (0..n_gen_params).map(|_| self.tys().undef_ty()).collect()
                     }
-                    Some(args) => self
-                        .ast
-                        .ty_annot_slice(args)
+                    Some(args) => args
                         .iter()
                         .map(|&annot| self.builder.resolve_ast_ty_annot(self.ast, annot))
                         .collect::<AstLoweringResult<_>>()?,
@@ -1013,7 +1016,10 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                 let ty = self.tys().inst_enum(enum_, &args)?;
 
                 if variant_name.is_self || variant_name.args.is_some() {
-                    return AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into();
+                    return AstLoweringError::UnresolvableStructOrEnum {
+                        path: format!("{path:#?}"),
+                    }
+                    .into();
                 }
 
                 let variant_index = self
@@ -1023,11 +1029,16 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                     .variants
                     .iter()
                     .position(|variant| variant.name == variant_name.ident)
-                    .ok_or(AstLoweringError::UnresolvableStructOrEnum { path: path.clone() })?;
+                    .ok_or(AstLoweringError::UnresolvableStructOrEnum {
+                        path: format!("{path:#?}"),
+                    })?;
 
                 Ok(StructOrEnumResolution::EnumVariant(ty, variant_index))
             }
-            _ => AstLoweringError::UnresolvableStructOrEnum { path: path.clone() }.into(),
+            _ => AstLoweringError::UnresolvableStructOrEnum {
+                path: format!("{path:#?}"),
+            }
+            .into(),
         }
     }
 
@@ -1040,9 +1051,7 @@ impl<'ast, 'ctxt> AstLowerer<'ast, 'ctxt> {
                 })?;
 
         let trait_args: Vec<_> = match trait_annot.args {
-            Some(args) => self
-                .ast
-                .ty_annot_slice(args)
+            Some(args) => args
                 .iter()
                 .map(|&arg| self.builder.resolve_ast_ty_annot(self.ast, arg))
                 .collect::<Result<_, _>>()?,

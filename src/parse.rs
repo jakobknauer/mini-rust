@@ -9,19 +9,10 @@ use crate::{ast::builder::AstBuilder, ast::*, parse::token::Keyword};
 pub use lexer::LexerErr;
 pub use token::Token;
 
-pub fn parse(input: &str, output: &mut Ast) -> Result<(), ParserErr> {
+pub fn parse<'ast>(input: &str, output: &'ast Ast<'ast>) -> Result<(), ParserErr> {
     let tokens = lexer::get_tokens(input)?;
     let mut parser = AstParser::new(&tokens[..], output);
     parser.parse()
-}
-
-#[expect(unused)]
-#[cfg(test)]
-fn parse_block(input: &str) -> Result<Block, ParserErr> {
-    let tokens = lexer::get_tokens(input)?;
-    let mut ast = Ast::default();
-    let mut parser = AstParser::new(&tokens[..], &mut ast);
-    parser.parse_block()
 }
 
 #[derive(Debug)]
@@ -42,10 +33,10 @@ impl From<LexerErr> for ParserErr {
     }
 }
 
-struct AstParser<'a> {
-    input: &'a [Token],
+struct AstParser<'ast, 'token> {
+    input: &'token [Token],
     position: usize,
-    builder: AstBuilder<'a>,
+    builder: AstBuilder<'ast>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -62,8 +53,8 @@ enum StmtType {
     ExplicitelyDelimited,
 }
 
-impl<'a> AstParser<'a> {
-    fn new(input: &'a [Token], ast: &'a mut Ast) -> Self {
+impl<'ast, 'token> AstParser<'ast, 'token> {
+    fn new(input: &'token [Token], ast: &'ast Ast<'ast>) -> Self {
         AstParser {
             input,
             position: 0,
@@ -162,7 +153,7 @@ impl<'a> AstParser<'a> {
         Ok(())
     }
 
-    fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn, ParserErr> {
+    fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 
@@ -199,7 +190,7 @@ impl<'a> AstParser<'a> {
         Ok(self.builder.add_fn(fn_def))
     }
 
-    fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param>, bool), ParserErr> {
+    fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param<'ast>>, bool), ParserErr> {
         let mut params = Vec::new();
         let mut first = true;
         while !matches!(self.current(), Some(&Token::RParen | &Token::Dots)) {
@@ -215,7 +206,7 @@ impl<'a> AstParser<'a> {
         Ok((params, var_args))
     }
 
-    fn parse_fn_param(&mut self, allow_receiver: bool) -> Result<Param, ParserErr> {
+    fn parse_fn_param(&mut self, allow_receiver: bool) -> Result<Param<'ast>, ParserErr> {
         if self.current() == Some(&Token::Keyword(Keyword::Self_)) {
             self.position += 1;
             if !allow_receiver {
@@ -237,7 +228,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot>, ParserErr> {
+    fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot<'ast>>, ParserErr> {
         if self.advance_if(Token::Arrow) {
             let return_type = self.parse_ty_annot()?;
             Ok(Some(return_type))
@@ -246,7 +237,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_function_constraints(&mut self) -> Result<Vec<Constraint>, ParserErr> {
+    fn parse_function_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
         let mut constraints = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             constraints.push(self.parse_constraint()?);
@@ -257,14 +248,14 @@ impl<'a> AstParser<'a> {
         Ok(constraints)
     }
 
-    fn parse_constraint(&mut self) -> Result<Constraint, ParserErr> {
+    fn parse_constraint(&mut self) -> Result<Constraint<'ast>, ParserErr> {
         let subject = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let requirement = self.parse_constraint_requirement()?;
         Ok(Constraint { subject, requirement })
     }
 
-    fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement, ParserErr> {
+    fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
         let requirement = match self.current() {
             Some(Token::Keyword(Keyword::FnTrait)) => {
                 self.position += 1;
@@ -315,7 +306,7 @@ impl<'a> AstParser<'a> {
         Ok(requirement)
     }
 
-    fn parse_struct(&mut self) -> Result<Struct, ParserErr> {
+    fn parse_struct(&mut self) -> Result<Struct<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Struct)?;
         let name = self.expect_identifier()?;
         let gen_params = self.parse_gen_params()?;
@@ -331,7 +322,7 @@ impl<'a> AstParser<'a> {
         })
     }
 
-    fn parse_struct_fields(&mut self) -> Result<Vec<StructField>, ParserErr> {
+    fn parse_struct_fields(&mut self) -> Result<Vec<StructField<'ast>>, ParserErr> {
         let mut fields = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             fields.push(self.parse_struct_field()?);
@@ -343,14 +334,14 @@ impl<'a> AstParser<'a> {
         Ok(fields)
     }
 
-    fn parse_struct_field(&mut self) -> Result<StructField, ParserErr> {
+    fn parse_struct_field(&mut self) -> Result<StructField<'ast>, ParserErr> {
         let name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let ty = self.parse_ty_annot()?;
         Ok(StructField { name, ty })
     }
 
-    fn parse_enum(&mut self) -> Result<Enum, ParserErr> {
+    fn parse_enum(&mut self) -> Result<Enum<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Enum)?;
         let name = self.expect_identifier()?;
         let gen_params = self.parse_gen_params()?;
@@ -366,7 +357,7 @@ impl<'a> AstParser<'a> {
         })
     }
 
-    fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant>, ParserErr> {
+    fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant<'ast>>, ParserErr> {
         let mut variants = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             variants.push(self.parse_enum_variant()?);
@@ -378,7 +369,7 @@ impl<'a> AstParser<'a> {
         Ok(variants)
     }
 
-    fn parse_enum_variant(&mut self) -> Result<EnumVariant, ParserErr> {
+    fn parse_enum_variant(&mut self) -> Result<EnumVariant<'ast>, ParserErr> {
         let name = self.expect_identifier()?;
         let fields = if self.advance_if(Token::LBrace) {
             let fields = self.parse_struct_fields()?;
@@ -390,14 +381,14 @@ impl<'a> AstParser<'a> {
         Ok(EnumVariant { name, fields })
     }
 
-    fn parse_impl(&mut self) -> Result<Impl, ParserErr> {
+    fn parse_impl(&mut self) -> Result<Impl<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Impl)?;
         let gen_params = self.parse_gen_params()?;
         let ty = self.parse_ty_annot()?;
 
         let (trait_annot, ty) = if self.advance_if(Token::Keyword(Keyword::For)) {
             let ty2 = self.parse_ty_annot()?;
-            match self.builder.ast().ty_annot(ty) {
+            match ty {
                 TyAnnotKind::Path(path) => match path.segments.as_slice() {
                     [segment] if !segment.is_self => (
                         Some(TraitAnnot {
@@ -449,7 +440,7 @@ impl<'a> AstParser<'a> {
         })
     }
 
-    fn parse_trait(&mut self) -> Result<Trait, ParserErr> {
+    fn parse_trait(&mut self) -> Result<Trait<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Trait)?;
         let name = self.expect_identifier()?;
 
@@ -468,7 +459,7 @@ impl<'a> AstParser<'a> {
                 }
                 Some(Token::Keyword(Keyword::Fn)) => {
                     let mthd = self.parse_function(true)?;
-                    if self.builder.ast().fn_(mthd).body.is_some() {
+                    if mthd.body.is_some() {
                         return Err(ParserErr::TraitMthdWithBody);
                     }
                     mthds.push(mthd);
@@ -507,7 +498,7 @@ impl<'a> AstParser<'a> {
         Ok(params)
     }
 
-    fn parse_block(&mut self) -> Result<Block, ParserErr> {
+    fn parse_block(&mut self) -> Result<Block<'ast>, ParserErr> {
         let mut stmts = Vec::new();
         let mut return_expr = None;
 
@@ -531,7 +522,7 @@ impl<'a> AstParser<'a> {
 
             if self.current() == Some(&Token::RBrace) {
                 if stmt_kind == StmtType::UndelimitedExpr || stmt_kind == StmtType::BlockExpr {
-                    let &StmtKind::Expr(expr) = self.builder.ast().stmt(stmt) else {
+                    let &StmtKind::Expr(expr) = stmt else {
                         unreachable!();
                     };
                     return_expr = Some(expr);
@@ -550,7 +541,7 @@ impl<'a> AstParser<'a> {
         Ok(Block { stmts, return_expr })
     }
 
-    fn parse_stmt(&mut self) -> Result<(Stmt, StmtType), ParserErr> {
+    fn parse_stmt(&mut self) -> Result<(Stmt<'ast>, StmtType), ParserErr> {
         match self.current() {
             Some(Token::Keyword(Keyword::Let)) => {
                 let stmt = self.parse_let_stmt()?;
@@ -606,7 +597,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_let_stmt(&mut self) -> Result<Stmt, ParserErr> {
+    fn parse_let_stmt(&mut self) -> Result<Stmt<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Let)?;
         let name = self.expect_identifier()?;
         let ty_annot = if self.advance_if(Token::Colon) {
@@ -620,7 +611,7 @@ impl<'a> AstParser<'a> {
         Ok(stmt)
     }
 
-    fn parse_return_stmt(&mut self) -> Result<Stmt, ParserErr> {
+    fn parse_return_stmt(&mut self) -> Result<Stmt<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Return)?;
         let return_expr = if let Some(Token::Semicolon) = self.current() {
             None
@@ -632,23 +623,23 @@ impl<'a> AstParser<'a> {
         Ok(stmt)
     }
 
-    fn parse_break_stmt(&mut self) -> Result<Stmt, ParserErr> {
+    fn parse_break_stmt(&mut self) -> Result<Stmt<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Break)?;
         let stmt = self.builder.break_stmt();
         Ok(stmt)
     }
 
-    fn parse_expr_stmt(&mut self) -> Result<Stmt, ParserErr> {
+    fn parse_expr_stmt(&mut self) -> Result<Stmt<'ast>, ParserErr> {
         let expr = self.parse_expr(true)?;
         let stmt = self.builder.expr_stmt(expr);
         Ok(stmt)
     }
 
-    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
         self.parse_assign_expr(allow_top_level_struct_expr)
     }
 
-    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
         let target = self.parse_conversion_expr(allow_top_level_struct_expr)?;
         if self.advance_if(Token::Equal) {
             let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
@@ -659,7 +650,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
         let mut expr = self.parse_disjunction(allow_top_level_struct_expr)?;
         while self.advance_if(Token::Keyword(Keyword::As)) {
             let ty_annot = self.parse_ty_annot()?;
@@ -701,7 +692,7 @@ impl<'a> AstParser<'a> {
         Token::Percent => BinaryOperator::Remainder
     ]);
 
-    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
         // TODO refactor to a match
         if self.advance_if(Token::Asterisk) {
             let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
@@ -729,7 +720,10 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_function_call_and_field_access(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_function_call_and_field_access(
+        &mut self,
+        allow_top_level_struct_expr: bool,
+    ) -> Result<Expr<'ast>, ParserErr> {
         let mut acc = self.parse_primary_expr(allow_top_level_struct_expr)?;
 
         loop {
@@ -779,7 +773,7 @@ impl<'a> AstParser<'a> {
         Ok(acc)
     }
 
-    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr, ParserErr> {
+    fn parse_primary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
 
         match current {
@@ -849,7 +843,6 @@ impl<'a> AstParser<'a> {
                 if inner_exprs.len() == 1 && !trailing_comma {
                     Ok(inner_exprs.remove(0))
                 } else {
-                    // let inner_exprs = self.ast.new_expr_slice(inner_exprs);
                     let expr = self.builder.tuple(&inner_exprs);
                     Ok(expr)
                 }
@@ -930,7 +923,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_closure_param(&mut self) -> Result<ClosureParam, ParserErr> {
+    fn parse_closure_param(&mut self) -> Result<ClosureParam<'ast>, ParserErr> {
         let name = self.expect_identifier()?;
         let ty = if self.advance_if(Token::Colon) {
             Some(self.parse_ty_annot()?)
@@ -940,7 +933,7 @@ impl<'a> AstParser<'a> {
         Ok(ClosureParam { name, ty })
     }
 
-    fn parse_closure_body(&mut self, force_block: bool) -> Result<Block, ParserErr> {
+    fn parse_closure_body(&mut self, force_block: bool) -> Result<Block<'ast>, ParserErr> {
         if self.current() == Some(&Token::LBrace) || force_block {
             self.parse_block()
         } else {
@@ -953,7 +946,7 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_path(&mut self, in_expression: bool) -> Result<Path, ParserErr> {
+    fn parse_path(&mut self, in_expression: bool) -> Result<Path<'ast>, ParserErr> {
         let mut segments = Vec::new();
 
         loop {
@@ -968,7 +961,7 @@ impl<'a> AstParser<'a> {
         Ok(Path { segments })
     }
 
-    fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment, ParserErr> {
+    fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment<'ast>, ParserErr> {
         if self.advance_if(Token::Keyword(Keyword::SelfTy)) {
             return Ok(PathSegment {
                 ident: "Self".to_string(),
@@ -1001,7 +994,7 @@ impl<'a> AstParser<'a> {
         })
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_if_expr(&mut self) -> Result<Expr<'ast>, ParserErr> {
         self.expect_keyword(Keyword::If)?;
         let cond = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
@@ -1014,14 +1007,14 @@ impl<'a> AstParser<'a> {
         Ok(expr)
     }
 
-    fn parse_loop(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_loop(&mut self) -> Result<Expr<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Loop)?;
         let body = self.parse_block()?;
         let expr = self.builder.loop_(body);
         Ok(expr)
     }
 
-    fn parse_while(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_while(&mut self) -> Result<Expr<'ast>, ParserErr> {
         self.expect_keyword(Keyword::While)?;
         let cond = self.parse_expr(false)?; // Don't allow top-level struct in while condition
         let body = self.parse_block()?;
@@ -1029,7 +1022,7 @@ impl<'a> AstParser<'a> {
         Ok(expr)
     }
 
-    fn parse_match(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_match(&mut self) -> Result<Expr<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Match)?;
         let scrutinee = self.parse_expr(false)?; // Don't allow top-level struct in match scrutinee
 
@@ -1054,7 +1047,7 @@ impl<'a> AstParser<'a> {
         Ok(expr)
     }
 
-    fn parse_variant_pattern(&mut self) -> Result<VariantPattern, ParserErr> {
+    fn parse_variant_pattern(&mut self) -> Result<VariantPattern<'ast>, ParserErr> {
         let variant = self.parse_path(true)?;
 
         let fields = if self.advance_if(Token::LBrace) {
@@ -1084,7 +1077,7 @@ impl<'a> AstParser<'a> {
         Ok(VariantPattern { variant, fields })
     }
 
-    fn parse_ty_annot(&mut self) -> Result<TyAnnot, ParserErr> {
+    fn parse_ty_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
         let current = self.current().ok_or(ParserErr::UnexpectedEOF)?;
         match current {
             Token::Identifier(_) | Token::Keyword(Keyword::SelfTy) => {
@@ -1165,9 +1158,8 @@ impl<'a> AstParser<'a> {
         }
     }
 
-    fn parse_trait_annot(&mut self) -> Result<TraitAnnot, ParserErr> {
+    fn parse_trait_annot(&mut self) -> Result<TraitAnnot<'ast>, ParserErr> {
         let ty_annot = self.parse_ty_annot()?;
-        let ty_annot = self.builder.ast().ty_annot(ty_annot);
         match ty_annot {
             TyAnnotKind::Path(path) => match path.segments.as_slice() {
                 [segment] => Ok(TraitAnnot {

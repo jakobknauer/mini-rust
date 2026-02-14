@@ -1,5 +1,4 @@
 use crate::{
-    ast::Path,
     ctxt::{NotATypeName, ty::Ty},
     typechecker::TyError,
 };
@@ -13,8 +12,8 @@ pub enum AstLoweringError {
     NotAPlace,
     TyErr(TyError),
     OperatorResolutionFailed { operator: String, operand_tys: (Ty, Ty) },
-    UnresolvableStructOrEnum { path: Path },
-    UnresolvablePath { path: Path },
+    UnresolvableStructOrEnum { path: String },
+    UnresolvablePath { path: String },
     UnresolvableTyAnnot,
     VarArgsNotSupported,
     NonMatchableScrutinee { ty: Ty },
