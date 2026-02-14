@@ -104,17 +104,9 @@ impl<'ast, 'ctxt, 'hlr> super::AstToHlr<'ast, 'ctxt, 'hlr> {
     }
 
     pub(super) fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Val<'hlr>> {
-        // First try to resolve to a local variable
-        if let Some(var_id) = self.resolve_ident_to_var(name) {
-            return Some(hlr::Val::Var(var_id));
-        }
-
-        // Then try to resolve to a function
-        if let Some(fn_) = self.resolve_ident_to_fn(name) {
-            return Some(hlr::Val::Fn(fn_, None));
-        }
-
-        None
+        self.resolve_ident_to_var(name)
+            .map(hlr::Val::Var)
+            .or_else(|| self.resolve_ident_to_fn(name).map(|fn_| hlr::Val::Fn(fn_, None)))
     }
 
     pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId<'hlr>> {
