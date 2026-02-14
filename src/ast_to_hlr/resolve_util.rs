@@ -117,7 +117,7 @@ impl<'ast, 'ctxt, 'hlr> super::AstToHlr<'ast, 'ctxt, 'hlr> {
         None
     }
 
-    pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId> {
+    pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId<'hlr>> {
         self.scopes
             .iter()
             .rev()

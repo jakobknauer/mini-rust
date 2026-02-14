@@ -27,43 +27,46 @@ impl<'hlr> Hlr<'hlr> {
         }
     }
 
-    pub fn new_expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
+    pub fn expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
         self.arena.alloc(expr)
     }
 
-    pub fn new_stmt(&'hlr self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
+    pub fn stmt(&'hlr self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
         self.arena.alloc(stmt)
     }
 
-    pub fn new_ty_annot(&'hlr self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
+    pub fn ty_annot(&'hlr self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
         self.arena.alloc(annot)
     }
 
-    pub fn new_expr_slice(&'hlr self, exprs: &[Expr<'hlr>]) -> ExprSlice<'hlr> {
+    pub fn expr_slice(&'hlr self, exprs: &[Expr<'hlr>]) -> ExprSlice<'hlr> {
         self.arena.alloc_slice_copy(exprs)
     }
 
-    pub fn new_stmt_slice(&'hlr self, stmts: &[Stmt<'hlr>]) -> StmtSlice<'hlr> {
+    pub fn stmt_slice(&'hlr self, stmts: &[Stmt<'hlr>]) -> StmtSlice<'hlr> {
         self.arena.alloc_slice_copy(stmts)
     }
 
-    pub fn new_ty_annot_slice(&'hlr self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
+    pub fn ty_annot_slice(&'hlr self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 
-    pub fn new_struct_expr_field_slice(&'hlr self, fields: &[(FieldSpec, Expr<'hlr>)]) -> StructFields<'hlr> {
+    pub fn struct_expr_field_slice(&'hlr self, fields: &[(FieldSpec, Expr<'hlr>)]) -> StructFields<'hlr> {
         self.arena.alloc_slice_clone(fields)
     }
 
-    pub fn new_closure_params(&'hlr self, params: &[(VarId, Option<TyAnnot<'hlr>>)]) -> ClosureParams<'hlr> {
+    pub fn closure_params(&'hlr self, params: &[(VarId<'hlr>, Option<TyAnnot<'hlr>>)]) -> ClosureParams<'hlr> {
         self.arena.alloc_slice_copy(params)
     }
 
-    pub fn new_match_arms(&'hlr self, arms: &[MatchArm<'hlr>]) -> &'hlr [MatchArm<'hlr>] {
+    pub fn match_arms(&'hlr self, arms: &[MatchArm<'hlr>]) -> &'hlr [MatchArm<'hlr>] {
         self.arena.alloc_slice_clone(arms)
     }
 
-    pub fn new_variant_pattern_fields(&'hlr self, fields: &[VariantPatternField]) -> &'hlr [VariantPatternField] {
+    pub fn variant_pattern_fields(
+        &'hlr self,
+        fields: &[VariantPatternField<'hlr>],
+    ) -> &'hlr [VariantPatternField<'hlr>] {
         self.arena.alloc_slice_clone(fields)
     }
 }
@@ -78,7 +81,7 @@ pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Val<'hlr> {
-    Var(VarId),
+    Var(VarId<'hlr>),
     Fn(Fn, Option<TyAnnotSlice<'hlr>>),
     Struct(Struct, Option<TyAnnotSlice<'hlr>>),
     Variant(Enum, usize, Option<TyAnnotSlice<'hlr>>),
@@ -87,7 +90,19 @@ pub enum Val<'hlr> {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct VarId(pub usize);
+pub struct VarId<'hlr>(pub usize, PhantomData<&'hlr ()>);
+
+impl<'hlr> VarId<'hlr> {
+    pub fn new() -> Self {
+        VarId(0, PhantomData)
+    }
+
+    pub fn get_and_increment(&mut self) -> VarId<'hlr> {
+        let id = self.0;
+        self.0 += 1;
+        VarId(id, PhantomData)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum ExprDef<'hlr> {
@@ -181,7 +196,7 @@ pub enum StmtDef<'hlr> {
     Expr(Expr<'hlr>),
 
     Let {
-        var: VarId,
+        var: VarId<'hlr>,
         ty: Option<TyAnnot<'hlr>>,
         init: Expr<'hlr>,
     },
@@ -205,7 +220,7 @@ pub enum FieldSpec {
 
 pub type StructFields<'hlr> = &'hlr [(FieldSpec, Expr<'hlr>)];
 
-pub type ClosureParams<'hlr> = &'hlr [(VarId, Option<TyAnnot<'hlr>>)];
+pub type ClosureParams<'hlr> = &'hlr [(VarId<'hlr>, Option<TyAnnot<'hlr>>)];
 
 #[derive(Clone, Debug)]
 pub struct MatchArm<'hlr> {
@@ -218,13 +233,13 @@ pub type Pattern<'hlr> = VariantPattern<'hlr>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VariantPattern<'hlr> {
     pub variant: Val<'hlr>,
-    pub fields: &'hlr [VariantPatternField],
+    pub fields: &'hlr [VariantPatternField<'hlr>],
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VariantPatternField {
+pub struct VariantPatternField<'hlr> {
     pub field_index: usize,
-    pub binding: VarId,
+    pub binding: VarId<'hlr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
