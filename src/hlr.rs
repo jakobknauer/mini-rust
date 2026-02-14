@@ -50,6 +50,22 @@ impl<'hlr> Hlr<'hlr> {
     pub fn new_ty_annot_slice(&'hlr self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
         self.arena.alloc_slice_copy(ty_annots)
     }
+
+    pub fn new_struct_expr_field_slice(&'hlr self, fields: &[(FieldSpec, Expr<'hlr>)]) -> StructFields<'hlr> {
+        self.arena.alloc_slice_clone(fields)
+    }
+
+    pub fn new_closure_params(&'hlr self, params: &[(VarId, Option<TyAnnot<'hlr>>)]) -> ClosureParams<'hlr> {
+        self.arena.alloc_slice_copy(params)
+    }
+
+    pub fn new_match_arms(&'hlr self, arms: &[MatchArm<'hlr>]) -> &'hlr [MatchArm<'hlr>] {
+        self.arena.alloc_slice_clone(arms)
+    }
+
+    pub fn new_variant_pattern_fields(&'hlr self, fields: &[VariantPatternField]) -> &'hlr [VariantPatternField] {
+        self.arena.alloc_slice_clone(fields)
+    }
 }
 
 pub type Expr<'hlr> = &'hlr ExprDef<'hlr>;
@@ -103,7 +119,7 @@ pub enum ExprDef<'hlr> {
 
     Struct {
         constructor: Val<'hlr>,
-        fields: Vec<(FieldSpec, Expr<'hlr>)>,
+        fields: StructFields<'hlr>,
     },
 
     FieldAccess {
@@ -127,7 +143,7 @@ pub enum ExprDef<'hlr> {
     },
 
     Closure {
-        params: Vec<(VarId, Option<TyAnnot<'hlr>>)>,
+        params: &'hlr ClosureParams<'hlr>,
         body: Expr<'hlr>,
     },
 
@@ -143,7 +159,7 @@ pub enum ExprDef<'hlr> {
 
     Match {
         scrutinee: Expr<'hlr>,
-        arms: Vec<MatchArm<'hlr>>,
+        arms: &'hlr [MatchArm<'hlr>],
     },
 
     Block {
@@ -187,6 +203,10 @@ pub enum FieldSpec {
     Index(usize),
 }
 
+pub type StructFields<'hlr> = &'hlr [(FieldSpec, Expr<'hlr>)];
+
+pub type ClosureParams<'hlr> = &'hlr [(VarId, Option<TyAnnot<'hlr>>)];
+
 #[derive(Clone, Debug)]
 pub struct MatchArm<'hlr> {
     pub pattern: Pattern<'hlr>,
@@ -198,7 +218,7 @@ pub type Pattern<'hlr> = VariantPattern<'hlr>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VariantPattern<'hlr> {
     pub variant: Val<'hlr>,
-    pub fields: Vec<VariantPatternField>,
+    pub fields: &'hlr [VariantPatternField],
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

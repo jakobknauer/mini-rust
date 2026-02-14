@@ -517,7 +517,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     ) -> AstToHlrResult<hlr::Expr<'hlr>> {
         let constructor = self.resolve_path_to_constructor(ty_path)?;
 
-        let fields = fields
+        let fields: Vec<_> = fields
             .iter()
             .map(|(field_name, field_expr)| {
                 let expr = self.lower_expr(*field_expr)?;
@@ -525,6 +525,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 Ok((field, expr))
             })
             .collect::<AstToHlrResult<_>>()?;
+        let fields = self.hlr.new_struct_expr_field_slice(&fields);
 
         let expr = hlr::ExprDef::Struct { constructor, fields };
         Ok(self.hlr.new_expr(expr))
@@ -619,7 +620,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     fn lower_match_expr(&mut self, scrutinee: ast::Expr, arms: &[ast::MatchArm]) -> AstToHlrResult<hlr::Expr<'hlr>> {
         let scrutinee = self.lower_expr(scrutinee)?;
 
-        let hlr_arms = arms
+        let hlr_arms: Vec<_> = arms
             .iter()
             .map(|arm| {
                 self.scopes.push_back(Scope::default());
@@ -629,6 +630,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 Ok(hlr::MatchArm { pattern, body })
             })
             .collect::<AstToHlrResult<_>>()?;
+        let hlr_arms = self.hlr.new_match_arms(&hlr_arms);
 
         let expr = hlr::ExprDef::Match {
             scrutinee,
@@ -659,7 +661,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             });
         }
 
-        let fields = pattern
+        let fields: Vec<_> = pattern
             .fields
             .iter()
             .map(|field| {
@@ -684,6 +686,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 Ok(hlr::VariantPatternField { field_index, binding })
             })
             .collect::<AstToHlrResult<_>>()?;
+        let fields = self.hlr.new_variant_pattern_fields(&fields);
 
         Ok(hlr::VariantPattern { variant, fields })
     }
