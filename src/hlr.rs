@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::marker::PhantomData;
+use std::{cell::RefCell, marker::PhantomData};
 
 use bumpalo::Bump;
 
@@ -17,6 +17,8 @@ use crate::{
 pub struct Hlr<'hlr> {
     arena: bumpalo::Bump,
     _marker: PhantomData<&'hlr ()>,
+
+    next_expr_id: RefCell<ExprId>,
 }
 
 impl<'hlr> Hlr<'hlr> {
@@ -24,11 +26,15 @@ impl<'hlr> Hlr<'hlr> {
         Self {
             arena: Bump::new(),
             _marker: PhantomData,
+            next_expr_id: RefCell::new(ExprId(0)),
         }
     }
 
     pub fn expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
-        self.arena.alloc(expr)
+        Expr(
+            self.arena.alloc(expr),
+            self.next_expr_id.replace(ExprId(self.next_expr_id.borrow().0 + 1)),
+        )
     }
 
     pub fn stmt(&'hlr self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
@@ -71,7 +77,12 @@ impl<'hlr> Hlr<'hlr> {
     }
 }
 
-pub type Expr<'hlr> = &'hlr ExprDef<'hlr>;
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct ExprId(usize);
+
+#[derive(Debug, Clone, Copy)]
+pub struct Expr<'hlr>(&'hlr ExprDef<'hlr>, ExprId);
+
 pub type Stmt<'hlr> = &'hlr StmtDef<'hlr>;
 pub type TyAnnot<'hlr> = &'hlr TyAnnotDef<'hlr>;
 
