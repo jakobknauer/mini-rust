@@ -23,8 +23,9 @@ pub fn ast_to_hlr<'ast, 'hlr>(
 }
 
 struct AstToHlr<'ast, 'ctxt, 'hlr> {
-    ctxt: &'ctxt ctxt::Ctxt,
     fn_: fns::Fn,
+
+    ctxt: &'ctxt ctxt::Ctxt,
     ast: &'ast ast::Ast<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 
@@ -44,8 +45,9 @@ pub struct AstToHlrError {
 impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ast ast::Ast<'ast>, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
-            ctxt,
             fn_,
+
+            ctxt,
             ast,
             hlr,
 
@@ -725,12 +727,39 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     }
 
     fn lower_closure_expr(
-        &self,
-        _params: &[ast::ClosureParam],
-        _return_ty: Option<ast::TyAnnot>,
-        _body: ast::Block,
+        &mut self,
+        params: &[ast::ClosureParam<'ast>],
+        return_ty: Option<ast::TyAnnot<'ast>>,
+        body: ast::Block<'ast>,
     ) -> AstToHlrResult<hlr::Expr<'hlr>> {
-        let expr = hlr::ExprDef::Lit(hlr::Lit::Int(55)); // TODO
+        self.scopes.push_back(Scope::default());
+
+        let params = params
+            .iter()
+            .map(|param| -> AstToHlrResult<hlr::ClosureParam<'hlr>> {
+                let ty = param.ty.map(|ty| self.lower_ty_annot(ty)).transpose()?;
+                let var_id = self.get_next_var_id();
+                self.scopes
+                    .back_mut()
+                    .unwrap()
+                    .bindings
+                    .insert(param.name.clone(), var_id);
+                Ok(hlr::ClosureParam(var_id, ty))
+            })
+            .collect::<AstToHlrResult<Vec<_>>>()?;
+        let params = self.hlr.closure_params(&params);
+
+        let body = self.build_block(body)?;
+
+        let return_ty = return_ty.map(|ty| self.lower_ty_annot(ty)).transpose()?;
+        self.scopes.pop_back();
+
+        let expr = hlr::ExprDef::Closure {
+            params,
+            return_ty,
+            body,
+        };
+
         Ok(self.hlr.expr(expr))
     }
 }

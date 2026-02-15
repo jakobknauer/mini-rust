@@ -55,7 +55,7 @@ impl<'hlr> Hlr<'hlr> {
         self.arena.alloc_slice_clone(fields)
     }
 
-    pub fn closure_params(&'hlr self, params: &[(VarId<'hlr>, Option<TyAnnot<'hlr>>)]) -> ClosureParams<'hlr> {
+    pub fn closure_params(&'hlr self, params: &[ClosureParam<'hlr>]) -> ClosureParams<'hlr> {
         self.arena.alloc_slice_copy(params)
     }
 
@@ -86,7 +86,6 @@ pub enum Val<'hlr> {
     Struct(Struct, Option<TyAnnotSlice<'hlr>>),
     Variant(Enum, usize, Option<TyAnnotSlice<'hlr>>),
     Mthd(TyAnnot<'hlr>, String, Option<TyAnnotSlice<'hlr>>),
-    TraitMthd(TyAnnot<'hlr>, TyAnnot<'hlr>, String),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -158,7 +157,8 @@ pub enum ExprDef<'hlr> {
     },
 
     Closure {
-        params: &'hlr ClosureParams<'hlr>,
+        params: ClosureParams<'hlr>,
+        return_ty: Option<TyAnnot<'hlr>>,
         body: Expr<'hlr>,
     },
 
@@ -220,7 +220,10 @@ pub enum FieldSpec {
 
 pub type StructFields<'hlr> = &'hlr [(FieldSpec, Expr<'hlr>)];
 
-pub type ClosureParams<'hlr> = &'hlr [(VarId<'hlr>, Option<TyAnnot<'hlr>>)];
+#[derive(Clone, Copy, Debug)]
+pub struct ClosureParam<'hlr>(pub VarId<'hlr>, pub Option<TyAnnot<'hlr>>);
+
+pub type ClosureParams<'hlr> = &'hlr [ClosureParam<'hlr>];
 
 #[derive(Clone, Debug)]
 pub struct MatchArm<'hlr> {
