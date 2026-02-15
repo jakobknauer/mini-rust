@@ -17,7 +17,7 @@ pub fn ast_to_hlr<'ast, 'hlr>(
     ast: &'ast ast::Ast<'ast>,
     ast_body: ast::Block<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
-) -> AstToHlrResult<FnHlr<'hlr>> {
+) -> AstToHlrResult<hlr::FnHlr<'hlr>> {
     let converter = AstToHlr::new(ctxt, fn_, ast, hlr);
     converter.lower_function_body(ast_body)
 }
@@ -41,12 +41,6 @@ pub struct AstToHlrError {
     msg: String,
 }
 
-pub struct FnHlr<'hlr> {
-    fn_: fns::Fn,
-    body: hlr::Expr<'hlr>,
-    param_var_ids: Vec<hlr::VarId>,
-}
-
 impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ast ast::Ast<'ast>, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
@@ -63,7 +57,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         }
     }
 
-    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstToHlrResult<FnHlr<'hlr>> {
+    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstToHlrResult<hlr::FnHlr<'hlr>> {
         let signature = self.get_signature();
         if signature.var_args {
             return Err(AstToHlrError {
@@ -98,7 +92,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         let return_val = self.build_block(block)?;
         let body = self.release_current_block(return_val);
 
-        Ok(FnHlr {
+        Ok(hlr::FnHlr {
             fn_: self.fn_,
             body,
             param_var_ids,
