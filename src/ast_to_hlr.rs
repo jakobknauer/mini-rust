@@ -29,11 +29,10 @@ struct AstToHlr<'ast, 'ctxt, 'hlr> {
     ast: &'ast ast::Ast<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 
-    scopes: VecDeque<Scope<'hlr>>,
+    scopes: VecDeque<Scope>,
     blocks: VecDeque<Vec<hlr::Stmt<'hlr>>>,
 
-    next_var_id: hlr::VarId<'hlr>,
-    self_var_id: Option<hlr::VarId<'hlr>>,
+    self_var_id: Option<hlr::VarId>,
 }
 
 pub type AstToHlrResult<T> = Result<T, AstToHlrError>;
@@ -54,7 +53,6 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             scopes: VecDeque::new(),
             blocks: VecDeque::new(),
 
-            next_var_id: hlr::VarId::new(),
             self_var_id: None,
         }
     }
@@ -71,7 +69,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
 
         self.scopes.push_back(Scope::default());
         for fns::FnParam { kind: name, ty } in params {
-            let var_id = self.get_next_var_id();
+            let var_id = self.hlr.var_id();
 
             match name {
                 fns::FnParamKind::Regular(name) => {
@@ -95,8 +93,8 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(body)
     }
 
-    fn get_next_var_id(&mut self) -> hlr::VarId<'hlr> {
-        self.next_var_id.get_and_increment()
+    fn get_next_var_id(&mut self) -> hlr::VarId {
+        self.hlr.var_id()
     }
 
     fn get_signature(&self) -> &fns::FnSig {
@@ -156,7 +154,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     ) -> AstToHlrResult<()> {
         let init = self.lower_expr(value)?;
 
-        let var = self.get_next_var_id();
+        let var = self.hlr.var_id();
         self.scopes.back_mut().unwrap().bindings.insert(name.to_string(), var);
 
         let ty = ty_annot.map(|ty_annot| self.lower_ty_annot(ty_annot)).transpose()?;
@@ -684,7 +682,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                         ),
                     })?;
 
-                let binding = self.get_next_var_id();
+                let binding = self.hlr.var_id();
                 self.scopes
                     .back_mut()
                     .unwrap()
@@ -738,7 +736,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             .iter()
             .map(|param| -> AstToHlrResult<hlr::ClosureParam<'hlr>> {
                 let ty = param.ty.map(|ty| self.lower_ty_annot(ty)).transpose()?;
-                let var_id = self.get_next_var_id();
+                let var_id = self.hlr.var_id();
                 self.scopes
                     .back_mut()
                     .unwrap()
@@ -765,6 +763,6 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
 }
 
 #[derive(Default)]
-struct Scope<'hlr> {
-    bindings: HashMap<String, hlr::VarId<'hlr>>,
+struct Scope {
+    bindings: HashMap<String, hlr::VarId>,
 }

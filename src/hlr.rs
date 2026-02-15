@@ -18,6 +18,7 @@ pub struct Hlr<'hlr> {
     arena: bumpalo::Bump,
     _marker: PhantomData<&'hlr ()>,
 
+    next_var_id: RefCell<VarId>,
     next_expr_id: RefCell<ExprId>,
 }
 
@@ -26,14 +27,20 @@ impl<'hlr> Hlr<'hlr> {
         Self {
             arena: Bump::new(),
             _marker: PhantomData,
+
+            next_var_id: RefCell::new(VarId(0)),
             next_expr_id: RefCell::new(ExprId(0)),
         }
+    }
+
+    pub fn var_id(&self) -> VarId {
+        self.next_var_id.replace_with(|id| VarId(id.0 + 1))
     }
 
     pub fn expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
         Expr(
             self.arena.alloc(expr),
-            self.next_expr_id.replace(ExprId(self.next_expr_id.borrow().0 + 1)),
+            self.next_expr_id.replace_with(|id| ExprId(id.0 + 1)),
         )
     }
 
@@ -69,16 +76,16 @@ impl<'hlr> Hlr<'hlr> {
         self.arena.alloc_slice_clone(arms)
     }
 
-    pub fn variant_pattern_fields(
-        &'hlr self,
-        fields: &[VariantPatternField<'hlr>],
-    ) -> &'hlr [VariantPatternField<'hlr>] {
+    pub fn variant_pattern_fields(&'hlr self, fields: &[VariantPatternField]) -> &'hlr [VariantPatternField] {
         self.arena.alloc_slice_clone(fields)
     }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct ExprId(usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct VarId(usize);
 
 #[derive(Debug, Clone, Copy)]
 pub struct Expr<'hlr>(&'hlr ExprDef<'hlr>, ExprId);
@@ -92,26 +99,11 @@ pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Val<'hlr> {
-    Var(VarId<'hlr>),
+    Var(VarId),
     Fn(Fn, Option<TyAnnotSlice<'hlr>>),
     Struct(Struct, Option<TyAnnotSlice<'hlr>>),
     Variant(Enum, usize, Option<TyAnnotSlice<'hlr>>),
     Mthd(TyAnnot<'hlr>, String, Option<TyAnnotSlice<'hlr>>),
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct VarId<'hlr>(pub usize, PhantomData<&'hlr ()>);
-
-impl<'hlr> VarId<'hlr> {
-    pub fn new() -> Self {
-        VarId(0, PhantomData)
-    }
-
-    pub fn get_and_increment(&mut self) -> VarId<'hlr> {
-        let id = self.0;
-        self.0 += 1;
-        VarId(id, PhantomData)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -207,7 +199,7 @@ pub enum StmtDef<'hlr> {
     Expr(Expr<'hlr>),
 
     Let {
-        var: VarId<'hlr>,
+        var: VarId,
         ty: Option<TyAnnot<'hlr>>,
         init: Expr<'hlr>,
     },
@@ -232,7 +224,7 @@ pub enum FieldSpec {
 pub type StructFields<'hlr> = &'hlr [(FieldSpec, Expr<'hlr>)];
 
 #[derive(Clone, Copy, Debug)]
-pub struct ClosureParam<'hlr>(pub VarId<'hlr>, pub Option<TyAnnot<'hlr>>);
+pub struct ClosureParam<'hlr>(pub VarId, pub Option<TyAnnot<'hlr>>);
 
 pub type ClosureParams<'hlr> = &'hlr [ClosureParam<'hlr>];
 
@@ -247,13 +239,13 @@ pub type Pattern<'hlr> = VariantPattern<'hlr>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VariantPattern<'hlr> {
     pub variant: Val<'hlr>,
-    pub fields: &'hlr [VariantPatternField<'hlr>],
+    pub fields: &'hlr [VariantPatternField],
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VariantPatternField<'hlr> {
+pub struct VariantPatternField {
     pub field_index: usize,
-    pub binding: VarId<'hlr>,
+    pub binding: VarId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -109,7 +109,7 @@ impl<'ast, 'ctxt, 'hlr> super::AstToHlr<'ast, 'ctxt, 'hlr> {
             .or_else(|| self.resolve_ident_to_fn(name).map(|fn_| hlr::Val::Fn(fn_, None)))
     }
 
-    pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId<'hlr>> {
+    pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId> {
         self.scopes
             .iter()
             .rev()
