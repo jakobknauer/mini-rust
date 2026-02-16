@@ -1,0 +1,88 @@
+#![allow(unused)]
+
+use std::collections::HashMap;
+
+use crate::{
+    ctxt::{self, ty},
+    hlr,
+};
+
+#[derive(Default)]
+pub struct HlrTyping {
+    pub var_types: HashMap<hlr::VarId, ty::Ty>,
+    pub expr_types: HashMap<hlr::ExprId, ty::Ty>,
+}
+
+pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, hlr: &'hlr hlr::Hlr<'hlr>, fn_: &'hlr hlr::FnHlr<'hlr>) -> HlrTyping {
+    let typeck = Typeck {
+        ctxt,
+        hlr,
+        fn_,
+        type_vars: HashMap::new(),
+        typing: Default::default(),
+    };
+
+    typeck.check()
+}
+
+struct Typeck<'ctxt, 'hlr> {
+    ctxt: &'ctxt mut ctxt::Ctxt,
+    hlr: &'hlr hlr::Hlr<'hlr>,
+    fn_: &'hlr hlr::FnHlr<'hlr>,
+
+    type_vars: HashMap<ty::InfVar, ty::Ty>,
+    typing: HlrTyping,
+}
+
+impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
+    fn check(mut self) -> HlrTyping {
+        let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
+
+        for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
+            self.typing.var_types.insert(*param_var_id, param.ty);
+        }
+
+        self.check_expr(self.fn_.body);
+
+        self.typing
+    }
+
+    fn check_expr(&mut self, expr: hlr::Expr<'hlr>) {
+        match expr.0 {
+            hlr::ExprDef::Lit(lit) => todo!(),
+            hlr::ExprDef::Val(val) => todo!(),
+            hlr::ExprDef::BinaryOp { left, right, operator } => todo!(),
+            hlr::ExprDef::UnaryOp { operand, operator } => todo!(),
+            hlr::ExprDef::Call { callee, args } => todo!(),
+            hlr::ExprDef::MthdCall {
+                receiver,
+                mthd_name,
+                gen_args,
+                args,
+            } => todo!(),
+            hlr::ExprDef::Struct { constructor, fields } => todo!(),
+            hlr::ExprDef::FieldAccess { base, field } => todo!(),
+            hlr::ExprDef::Tuple(exprs) => todo!(),
+            hlr::ExprDef::Assign { target, value } => todo!(),
+            hlr::ExprDef::Deref(expr) => todo!(),
+            hlr::ExprDef::AddrOf(expr) => todo!(),
+            hlr::ExprDef::As { expr, ty } => todo!(),
+            hlr::ExprDef::Closure {
+                params,
+                return_ty,
+                body,
+            } => todo!(),
+            hlr::ExprDef::If { cond, then, else_ } => todo!(),
+            hlr::ExprDef::Loop { body } => todo!(),
+            hlr::ExprDef::Match { scrutinee, arms } => todo!(),
+            hlr::ExprDef::Block { stmts, trailing } => todo!(),
+            hlr::ExprDef::QualifiedMthd {
+                ty,
+                trait_,
+                trait_args,
+                mthd_name,
+                args,
+            } => todo!(),
+        }
+    }
+}

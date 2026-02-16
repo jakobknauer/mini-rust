@@ -8,7 +8,7 @@ use crate::{
 pub struct ExprId(pub(super) usize);
 
 #[derive(Debug, Clone, Copy)]
-pub struct Expr<'hlr>(pub(super) &'hlr ExprDef<'hlr>, pub(super) ExprId);
+pub struct Expr<'hlr>(pub &'hlr ExprDef<'hlr>, pub ExprId);
 
 pub type ExprSlice<'hlr> = &'hlr [Expr<'hlr>];
 
