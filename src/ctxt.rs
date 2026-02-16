@@ -484,6 +484,7 @@ impl Ctxt {
 
                 self.tys.substitute_gen_vars(assoc_ty, &subst)
             }
+            InfVar(_) => unreachable!(),
         }
     }
 

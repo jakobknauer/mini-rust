@@ -124,6 +124,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
                 let ty = self.mr_ctxt.normalize_ty(ty);
                 self.get_or_define_ty(ty).unwrap()
             }
+            InfVar(_) => unreachable!(),
         };
 
         Some(*self.types.entry(ty).or_insert(inkwell_type))

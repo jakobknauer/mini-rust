@@ -26,6 +26,9 @@ pub struct Enum(pub usize);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct GenVar(pub usize);
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct InfVar(pub usize);
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
     Primitive(Primitive),
@@ -58,6 +61,7 @@ pub enum TyDef {
         trait_inst: traits::TraitInst,
         assoc_ty_idx: usize,
     },
+    InfVar(InfVar),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

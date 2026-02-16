@@ -425,6 +425,7 @@ impl TyReg {
                     assoc_ty_idx
                 )
             }
+            InfVar(_) => unreachable!(),
         }
     }
 
@@ -702,6 +703,7 @@ impl TyReg {
                 };
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
+            InfVar(_) => unreachable!(),
         }
     }
 
@@ -784,6 +786,7 @@ impl TyReg {
                 };
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
+            InfVar(_) => unreachable!(),
         }
     }
 
