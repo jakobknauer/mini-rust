@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+mod err;
+
 use std::collections::HashMap;
 
 use crate::{
@@ -7,13 +9,19 @@ use crate::{
     hlr,
 };
 
+pub use err::*;
+
 #[derive(Default)]
 pub struct HlrTyping {
     pub var_types: HashMap<hlr::VarId, ty::Ty>,
     pub expr_types: HashMap<hlr::ExprId, ty::Ty>,
 }
 
-pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, hlr: &'hlr hlr::Hlr<'hlr>, fn_: &'hlr hlr::FnHlr<'hlr>) -> HlrTyping {
+pub fn typeck<'hlr>(
+    ctxt: &mut ctxt::Ctxt,
+    hlr: &'hlr hlr::Hlr<'hlr>,
+    fn_: &'hlr hlr::FnHlr<'hlr>,
+) -> TypeckResult<HlrTyping> {
     let typeck = Typeck {
         ctxt,
         hlr,
@@ -35,21 +43,29 @@ struct Typeck<'ctxt, 'hlr> {
 }
 
 impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
-    fn check(mut self) -> HlrTyping {
+    fn check(mut self) -> TypeckResult<HlrTyping> {
         let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
 
         for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
             self.typing.var_types.insert(*param_var_id, param.ty);
         }
 
-        self.check_expr(self.fn_.body);
+        let return_ty = sig.return_ty;
+        let body_ty = self.check_expr(self.fn_.body, Some(return_ty))?;
 
-        self.typing
+        if !self.ctxt.tys.tys_eq(body_ty, return_ty) {
+            return Err(TypeckError::ReturnTypeMismatch {
+                expected: return_ty,
+                actual: body_ty,
+            });
+        }
+
+        Ok(self.typing)
     }
 
-    fn check_expr(&mut self, expr: hlr::Expr<'hlr>) {
-        match expr.0 {
-            hlr::ExprDef::Lit(lit) => todo!(),
+    fn check_expr(&mut self, expr: hlr::Expr<'hlr>, expected: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
+        let ty = match expr.0 {
+            hlr::ExprDef::Lit(lit) => self.check_lit(lit),
             hlr::ExprDef::Val(val) => todo!(),
             hlr::ExprDef::BinaryOp { left, right, operator } => todo!(),
             hlr::ExprDef::UnaryOp { operand, operator } => todo!(),
@@ -83,6 +99,24 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 mthd_name,
                 args,
             } => todo!(),
-        }
+        }?;
+
+        self.typing.expr_types.insert(expr.1, ty);
+
+        Ok(ty)
+    }
+
+    fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
+        let ty = match lit {
+            hlr::Lit::Int(_) => self.ctxt.tys.primitive(ty::Primitive::Integer32),
+            hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
+            hlr::Lit::CChar(_) => self.ctxt.tys.primitive(ty::Primitive::CChar),
+            hlr::Lit::CString(_) => {
+                let c_char_ty = self.ctxt.tys.primitive(ty::Primitive::CChar);
+                self.ctxt.tys.ptr(c_char_ty)
+            }
+        };
+
+        Ok(ty)
     }
 }
