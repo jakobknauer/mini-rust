@@ -21,6 +21,8 @@ pub struct TyReg {
 
     constraints: Vec<Constraint>,
     obligations: Vec<Obligation>,
+
+    next_inf_var: InfVar,
 }
 
 #[derive(Clone, Copy)]
@@ -230,6 +232,13 @@ impl TyReg {
             assoc_ty_idx,
         };
         self.register_ty(assoc_ty)
+    }
+
+    pub fn inf_var(&mut self) -> Ty {
+        let id = self.next_inf_var;
+        self.next_inf_var.0 += 1;
+        let inf_var = TyDef::InfVar(id);
+        self.register_ty(inf_var)
     }
 
     pub fn inst_struct(&mut self, struct_: Struct, gen_args: &[Ty]) -> Result<Ty, TyInstError> {

@@ -1,11 +1,12 @@
 #![allow(unused)]
 
 mod err;
+mod ty_annots;
 
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{self, ty},
+    ctxt::{self, fns, ty},
     hlr,
 };
 
@@ -51,7 +52,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
 
         let return_ty = sig.return_ty;
-        let body_ty = self.check_expr(self.fn_.body, Some(return_ty))?;
+        let body_ty = self.infer_expr_ty(self.fn_.body, Some(return_ty))?;
 
         if !self.ctxt.tys.tys_eq(body_ty, return_ty) {
             return Err(TypeckError::ReturnTypeMismatch {
@@ -63,10 +64,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(self.typing)
     }
 
-    fn check_expr(&mut self, expr: hlr::Expr<'hlr>, expected: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
+    fn infer_expr_ty(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
         let ty = match expr.0 {
-            hlr::ExprDef::Lit(lit) => self.check_lit(lit),
-            hlr::ExprDef::Val(val) => todo!(),
+            hlr::ExprDef::Lit(lit) => self.infer_lit_ty(lit),
+            hlr::ExprDef::Val(val) => self.infer_val_ty(val, hint),
             hlr::ExprDef::BinaryOp { left, right, operator } => todo!(),
             hlr::ExprDef::UnaryOp { operand, operator } => todo!(),
             hlr::ExprDef::Call { callee, args } => todo!(),
@@ -106,7 +107,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
+    fn infer_lit_ty(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
         let ty = match lit {
             hlr::Lit::Int(_) => self.ctxt.tys.primitive(ty::Primitive::Integer32),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
@@ -118,5 +119,40 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         };
 
         Ok(ty)
+    }
+
+    fn infer_val_ty(&mut self, val: &hlr::Val<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
+        let ty = match val {
+            hlr::Val::Var(var_id) => self.typing.var_types.get(var_id).copied().unwrap(),
+            &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(fn_, args)?,
+            hlr::Val::Struct(struct_, args) => todo!(),
+            hlr::Val::Variant(_, _, ty_annot_defs) => todo!(),
+            hlr::Val::Mthd(ty_annot_def, _, ty_annot_defs) => todo!(),
+        };
+
+        Ok(ty)
+    }
+
+    fn infer_fn_ty(&mut self, fn_: fns::Fn, args: Option<hlr::TyAnnotSlice<'hlr>>) -> TypeckResult<ty::Ty> {
+        let gen_arg_count = self.ctxt.fns.get_sig(fn_).unwrap().gen_params.len();
+
+        let args =
+            self.resolve_optional_gen_args(args, gen_arg_count, |actual| TypeckError::FnGenArgCountMismatch {
+                fn_,
+                expected: gen_arg_count,
+                actual,
+            })?;
+
+        let signature = self.ctxt.fns.get_sig(fn_).unwrap();
+
+        let subst = ty::GenVarSubst::new(&signature.gen_params, args).unwrap();
+
+        // TODO check generic constraints
+
+        let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
+        let fn_ty = self.ctxt.tys.fn_(&param_tys, signature.return_ty, signature.var_args);
+        let fn_inst_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
+
+        Ok(fn_inst_ty)
     }
 }

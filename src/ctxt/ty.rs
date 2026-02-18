@@ -26,7 +26,7 @@ pub struct Enum(pub usize);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct GenVar(pub usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct InfVar(pub usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
