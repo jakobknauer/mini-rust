@@ -12,4 +12,18 @@ pub enum TypeckError {
         expected: usize,
         actual: usize,
     },
+    StructGenArgCountMismatch {
+        struct_: ty::Struct,
+        expected: usize,
+        actual: usize,
+    },
+    EnumGenArgCountMismatch {
+        enum_: ty::Enum,
+        expected: usize,
+        actual: usize,
+    },
+    UnresolvableAssocTy {
+        base: ty::Ty,
+        name: String,
+    },
 }
