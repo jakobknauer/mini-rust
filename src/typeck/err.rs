@@ -26,4 +26,17 @@ pub enum TypeckError {
         base: ty::Ty,
         name: String,
     },
+    MthdResolutionFailed {
+        base_ty: ty::Ty,
+        mthd_name: String,
+    },
+    AmbiguousMthd {
+        base_ty: ty::Ty,
+        mthd_name: String,
+    },
+    MthdGenArgCountMismatch {
+        mthd_name: String,
+        expected: usize,
+        actual: usize,
+    },
 }

@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 mod err;
+mod mthd;
 mod ty_annots;
 
 use std::collections::HashMap;
@@ -11,11 +12,13 @@ use crate::{
 };
 
 pub use err::*;
+pub use mthd::MthdResolution;
 
 #[derive(Default)]
 pub struct HlrTyping {
     pub var_types: HashMap<hlr::VarId, ty::Ty>,
     pub expr_types: HashMap<hlr::ExprId, ty::Ty>,
+    pub val_mthd_resolutions: HashMap<hlr::ExprId, MthdResolution>,
 }
 
 pub fn typeck<'hlr>(
@@ -67,7 +70,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn infer_expr_ty(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
         let ty = match expr.0 {
             hlr::ExprDef::Lit(lit) => self.infer_lit_ty(lit),
-            hlr::ExprDef::Val(val) => self.infer_val_ty(val, hint),
+            hlr::ExprDef::Val(val) => self.infer_val_ty(expr.1, val, hint),
             hlr::ExprDef::BinaryOp { left, right, operator } => todo!(),
             hlr::ExprDef::UnaryOp { operand, operator } => todo!(),
             hlr::ExprDef::Call { callee, args } => todo!(),
@@ -121,13 +124,20 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn infer_val_ty(&mut self, val: &hlr::Val<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
+    fn infer_val_ty(
+        &mut self,
+        expr_id: hlr::ExprId,
+        val: &hlr::Val<'hlr>,
+        hint: Option<ty::Ty>,
+    ) -> TypeckResult<ty::Ty> {
         let ty = match val {
             hlr::Val::Var(var_id) => self.typing.var_types.get(var_id).copied().unwrap(),
             &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(fn_, args)?,
-            hlr::Val::Struct(struct_, args) => todo!(),
-            hlr::Val::Variant(_, _, ty_annot_defs) => todo!(),
-            hlr::Val::Mthd(ty_annot_def, _, ty_annot_defs) => todo!(),
+            hlr::Val::Struct(..) => unreachable!("raw struct values are not supported"),
+            hlr::Val::Variant(..) => unreachable!("raw variant values are not supported"),
+            hlr::Val::Mthd(base_ty, mthd_name, gen_args) => {
+                self.infer_mthd_ty(expr_id, base_ty, mthd_name, *gen_args)?
+            }
         };
 
         Ok(ty)
@@ -154,5 +164,20 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let fn_inst_ty = self.ctxt.tys.substitute_gen_vars(fn_ty, &subst);
 
         Ok(fn_inst_ty)
+    }
+
+    fn infer_mthd_ty(
+        &mut self,
+        expr_id: hlr::ExprId,
+        base_ty: hlr::TyAnnot<'hlr>,
+        mthd_name: &str,
+        gen_args: Option<hlr::TyAnnotSlice<'hlr>>,
+    ) -> TypeckResult<ty::Ty> {
+        let base_ty = self.resolve_ty_annot(base_ty)?;
+        let found = self.resolve_mthd(base_ty, mthd_name, false)?;
+        let resolution = self.instantiate_mthd(found, base_ty, mthd_name, gen_args)?;
+        let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
+        self.typing.val_mthd_resolutions.insert(expr_id, resolution);
+        Ok(fn_ty)
     }
 }
