@@ -86,7 +86,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 gen_args,
                 args,
             } => todo!(),
-            hlr::ExprDef::Struct { constructor, fields } => todo!(),
+            hlr::ExprDef::Struct { constructor, fields } => self.infer_struct_expr_ty(constructor, fields),
             hlr::ExprDef::FieldAccess { base, field } => todo!(),
             hlr::ExprDef::Tuple(exprs) => todo!(),
             hlr::ExprDef::Assign { target, value } => todo!(),
@@ -276,6 +276,68 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             },
         );
         Ok(result_ty)
+    }
+
+    fn infer_struct_expr_ty(
+        &mut self,
+        constructor: &hlr::Val<'hlr>,
+        fields: hlr::StructFields<'hlr>,
+    ) -> TypeckResult<ty::Ty> {
+        let (return_ty, fields_ty) = match constructor {
+            hlr::Val::Struct(struct_, gen_args) => {
+                let n_gen_params = self.ctxt.tys.get_struct_def(*struct_).unwrap().gen_params.len();
+                let gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
+                    TypeckError::StructGenArgCountMismatch {
+                        struct_: *struct_,
+                        expected: n_gen_params,
+                        actual,
+                    }
+                })?;
+                let ty = self.ctxt.tys.inst_struct(*struct_, &gen_args).unwrap();
+                (ty, ty)
+            }
+            hlr::Val::Variant(enum_, variant_idx, gen_args) => {
+                let n_gen_params = self.ctxt.tys.get_enum_def(*enum_).unwrap().gen_params.len();
+                let gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
+                    TypeckError::EnumGenArgCountMismatch {
+                        enum_: *enum_,
+                        expected: n_gen_params,
+                        actual,
+                    }
+                })?;
+                let enum_ty = self.ctxt.tys.inst_enum(*enum_, &gen_args).unwrap();
+                let variant_ty = self.ctxt.tys.get_enum_variant_ty(enum_ty, *variant_idx).unwrap();
+                (enum_ty, variant_ty)
+            }
+            _ => unreachable!("struct expression constructor must be Val::Struct or Val::Variant"),
+        };
+
+        for (field_spec, field_expr) in fields {
+            let field_idx = match field_spec {
+                hlr::FieldSpec::Name(name) => {
+                    self.ctxt
+                        .tys
+                        .get_struct_field_index_by_name(fields_ty, name)
+                        .map_err(|_| TypeckError::StructFieldNotFound {
+                            struct_ty: fields_ty,
+                            field: name.clone(),
+                        })?
+                }
+                hlr::FieldSpec::Index(idx) => *idx,
+            };
+            let field_ty = self.ctxt.tys.get_struct_field_ty(fields_ty, field_idx).unwrap();
+            let expr_ty = self.infer_expr_ty(*field_expr, Some(field_ty))?;
+            if !self.unify(expr_ty, field_ty) {
+                return Err(TypeckError::StructFieldTypeMismatch {
+                    struct_ty: fields_ty,
+                    field_idx,
+                    expected: field_ty,
+                    actual: expr_ty,
+                });
+            }
+        }
+
+        Ok(return_ty)
     }
 
     fn infer_call_ty(

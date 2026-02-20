@@ -42,6 +42,16 @@ pub enum TypeckError {
         expected: usize,
         actual: usize,
     },
+    StructFieldNotFound {
+        struct_ty: ty::Ty,
+        field: String,
+    },
+    StructFieldTypeMismatch {
+        struct_ty: ty::Ty,
+        field_idx: usize,
+        expected: ty::Ty,
+        actual: ty::Ty,
+    },
     CalleeNotCallable {
         ty: ty::Ty,
     },
