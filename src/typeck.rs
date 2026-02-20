@@ -60,11 +60,12 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let return_ty = sig.return_ty;
         let body_ty = self.infer_expr_ty(self.fn_.body, Some(return_ty))?;
 
-        self.unify(body_ty, return_ty)
-            .map_err(|_| TypeckError::ReturnTypeMismatch {
+        if !self.unify(body_ty, return_ty) {
+            return Err(TypeckError::ReturnTypeMismatch {
                 expected: return_ty,
                 actual: body_ty,
-            })?;
+            });
+        }
 
         Ok(self.typing)
     }
