@@ -1,4 +1,7 @@
-use crate::ctxt::{fns, ty};
+use crate::{
+    ctxt::{fns, ty},
+    hlr,
+};
 
 pub type TypeckResult<T> = Result<T, TypeckError>;
 
@@ -38,5 +41,14 @@ pub enum TypeckError {
         mthd_name: String,
         expected: usize,
         actual: usize,
+    },
+    BinaryOpTypeMismatch {
+        operator: hlr::BinaryOperator,
+        left_ty: ty::Ty,
+        right_ty: ty::Ty,
+    },
+    UnaryOpTypeMismatch {
+        operator: hlr::UnaryOperator,
+        operand_ty: ty::Ty,
     },
 }
