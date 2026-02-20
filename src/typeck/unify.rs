@@ -9,6 +9,8 @@ pub enum UnificationResult {
 
 impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     pub(super) fn unify(&mut self, ty1: ty::Ty, ty2: ty::Ty) -> bool {
+        let ty1 = self.ctxt.normalize_ty(ty1);
+        let ty2 = self.ctxt.normalize_ty(ty2);
         let unify = Unify::new(&self.ctxt.tys, &self.type_vars);
         let result = unify.run(ty1, ty2);
         match result {
