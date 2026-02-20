@@ -180,7 +180,7 @@ impl Ctxt {
             .collect()
     }
 
-    fn get_impl_insts_for_ty_and_trait_inst(
+    pub(crate) fn get_impl_insts_for_ty_and_trait_inst(
         &mut self,
         ty: ty::Ty,
         trait_inst: traits::TraitInst,

@@ -2,6 +2,7 @@
 
 mod err;
 mod mthd;
+mod normalize;
 mod ty_annots;
 mod unify;
 
