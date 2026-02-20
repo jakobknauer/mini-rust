@@ -42,6 +42,19 @@ pub enum TypeckError {
         expected: usize,
         actual: usize,
     },
+    CalleeNotCallable {
+        ty: ty::Ty,
+    },
+    CallArgCountMismatch {
+        expected: usize,
+        actual: usize,
+        var_args: bool,
+    },
+    CallArgTypeMismatch {
+        index: usize,
+        expected: ty::Ty,
+        actual: ty::Ty,
+    },
     BinaryOpTypeMismatch {
         operator: hlr::BinaryOperator,
         left_ty: ty::Ty,

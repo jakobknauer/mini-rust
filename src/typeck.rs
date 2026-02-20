@@ -79,7 +79,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 self.infer_binary_op_ty(expr.1, *left, *right, *operator)
             }
             hlr::ExprDef::UnaryOp { operand, operator } => self.infer_unary_op_ty(expr.1, *operand, *operator),
-            hlr::ExprDef::Call { callee, args } => todo!(),
+            hlr::ExprDef::Call { callee, args } => self.infer_call_ty(*callee, args, hint),
             hlr::ExprDef::MthdCall {
                 receiver,
                 mthd_name,
@@ -276,5 +276,49 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             },
         );
         Ok(result_ty)
+    }
+
+    fn infer_call_ty(
+        &mut self,
+        callee: hlr::Expr<'hlr>,
+        args: hlr::ExprSlice<'hlr>,
+        hint: Option<ty::Ty>,
+    ) -> TypeckResult<ty::Ty> {
+        let callee_ty = self.infer_expr_ty(callee, None)?;
+        let callee_ty = self.normalize(callee_ty);
+
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(callee_ty) else {
+            return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
+        };
+
+        if let Some(hint) = hint {
+            self.unify(return_ty, hint);
+        }
+
+        let n_args = args.len();
+        let n_params = param_tys.len();
+        if (var_args && n_args < n_params) || (!var_args && n_args != n_params) {
+            return Err(TypeckError::CallArgCountMismatch {
+                expected: n_params,
+                actual: n_args,
+                var_args,
+            });
+        }
+
+        for (i, arg) in args.iter().enumerate() {
+            let param_hint = param_tys.get(i).copied();
+            let arg_ty = self.infer_expr_ty(*arg, param_hint)?;
+            if let Some(&param_ty) = param_tys.get(i)
+                && !self.unify(arg_ty, param_ty)
+            {
+                return Err(TypeckError::CallArgTypeMismatch {
+                    index: i,
+                    expected: param_ty,
+                    actual: arg_ty,
+                });
+            }
+        }
+
+        Ok(return_ty)
     }
 }
