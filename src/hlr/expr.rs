@@ -20,12 +20,12 @@ pub enum ExprDef<'hlr> {
     BinaryOp {
         left: Expr<'hlr>,
         right: Expr<'hlr>,
-        operator: ast::BinaryOperator,
+        operator: BinaryOperator,
     },
 
     UnaryOp {
         operand: Expr<'hlr>,
-        operator: ast::UnaryOperator,
+        operator: UnaryOperator,
     },
 
     Call {
@@ -148,4 +148,60 @@ pub struct VariantPattern<'hlr> {
 pub struct VariantPatternField {
     pub field_index: usize,
     pub binding: VarId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Equal,
+    NotEqual,
+    LessThan,
+    GreaterThan,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
+    Remainder,
+    BitOr,
+    BitAnd,
+    LogicalAnd,
+    LogicalOr,
+}
+
+impl From<ast::BinaryOperator> for BinaryOperator {
+    fn from(op: ast::BinaryOperator) -> Self {
+        match op {
+            ast::BinaryOperator::Add => Self::Add,
+            ast::BinaryOperator::Subtract => Self::Subtract,
+            ast::BinaryOperator::Multiply => Self::Multiply,
+            ast::BinaryOperator::Divide => Self::Divide,
+            ast::BinaryOperator::Equal => Self::Equal,
+            ast::BinaryOperator::NotEqual => Self::NotEqual,
+            ast::BinaryOperator::LessThan => Self::LessThan,
+            ast::BinaryOperator::GreaterThan => Self::GreaterThan,
+            ast::BinaryOperator::LessThanOrEqual => Self::LessThanOrEqual,
+            ast::BinaryOperator::GreaterThanOrEqual => Self::GreaterThanOrEqual,
+            ast::BinaryOperator::Remainder => Self::Remainder,
+            ast::BinaryOperator::BitOr => Self::BitOr,
+            ast::BinaryOperator::BitAnd => Self::BitAnd,
+            ast::BinaryOperator::LogicalAnd => Self::LogicalAnd,
+            ast::BinaryOperator::LogicalOr => Self::LogicalOr,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Not,
+    Negative,
+}
+
+impl From<ast::UnaryOperator> for UnaryOperator {
+    fn from(op: ast::UnaryOperator) -> Self {
+        match op {
+            ast::UnaryOperator::Not => Self::Not,
+            ast::UnaryOperator::Negative => Self::Negative,
+        }
+    }
 }

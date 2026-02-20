@@ -444,7 +444,11 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         let left = self.lower_expr(left)?;
         let right = self.lower_expr(right)?;
 
-        let expr = hlr::ExprDef::BinaryOp { left, operator, right };
+        let expr = hlr::ExprDef::BinaryOp {
+            left,
+            operator: operator.into(),
+            right,
+        };
         Ok(self.hlr.expr(expr))
     }
 
@@ -455,7 +459,10 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     ) -> AstToHlrResult<hlr::Expr<'hlr>> {
         let operand = self.lower_expr(operand)?;
 
-        let expr = hlr::ExprDef::UnaryOp { operator, operand };
+        let expr = hlr::ExprDef::UnaryOp {
+            operator: operator.into(),
+            operand,
+        };
         Ok(self.hlr.expr(expr))
     }
 
