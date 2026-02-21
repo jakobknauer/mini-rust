@@ -103,7 +103,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 return_ty,
                 body,
             } => todo!(),
-            hlr::ExprDef::If { cond, then, else_ } => todo!(),
+            hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
             hlr::ExprDef::Loop { body } => todo!(),
             hlr::ExprDef::Match { scrutinee, arms } => todo!(),
             hlr::ExprDef::Block { stmts, trailing } => todo!(),
@@ -551,5 +551,31 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 target_ty,
             }),
         }
+    }
+
+    fn infer_if_ty(
+        &mut self,
+        cond: hlr::Expr<'hlr>,
+        then: hlr::Expr<'hlr>,
+        else_: Option<hlr::Expr<'hlr>>,
+    ) -> TypeckResult<ty::Ty> {
+        let cond_ty = self.infer_expr_ty(cond, None)?;
+        let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
+
+        if !self.unify(cond_ty, bool_ty) {
+            return Err(TypeckError::IfConditionNotBoolean);
+        }
+
+        let then_ty = self.infer_expr_ty(then, None)?;
+        let else_ty = else_
+            .map(|expr| self.infer_expr_ty(expr, None))
+            .transpose()?
+            .unwrap_or(self.ctxt.tys.unit());
+
+        if !self.unify(then_ty, else_ty) {
+            return Err(TypeckError::IfBranchesTypeMismatch { then_ty, else_ty });
+        }
+
+        Ok(then_ty)
     }
 }

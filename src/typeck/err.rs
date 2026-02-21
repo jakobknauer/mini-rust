@@ -94,4 +94,9 @@ pub enum TypeckError {
         op_ty: ty::Ty,
         target_ty: ty::Ty,
     },
+    IfConditionNotBoolean,
+    IfBranchesTypeMismatch {
+        then_ty: ty::Ty,
+        else_ty: ty::Ty,
+    },
 }
