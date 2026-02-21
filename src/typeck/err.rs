@@ -42,6 +42,12 @@ pub enum TypeckError {
         expected: usize,
         actual: usize,
     },
+    NamedFieldAccessOnNonStruct {
+        ty: ty::Ty,
+    },
+    IndexedFieldAccessOnNonTuple {
+        ty: ty::Ty,
+    },
     StructFieldNotFound {
         struct_ty: ty::Ty,
         field: String,

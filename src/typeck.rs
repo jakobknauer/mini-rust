@@ -23,6 +23,8 @@ pub struct HlrTyping {
     pub val_mthd_resolutions: HashMap<hlr::ExprId, MthdResolution>,
     pub binary_op_resolutions: HashMap<hlr::ExprId, fns::FnInst>,
     pub unary_op_resolutions: HashMap<hlr::ExprId, fns::FnInst>,
+    pub field_access_derefs: HashMap<hlr::ExprId, usize>,
+    pub field_access_indices: HashMap<hlr::ExprId, usize>,
 }
 
 pub fn typeck<'hlr>(
@@ -87,7 +89,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 args,
             } => todo!(),
             hlr::ExprDef::Struct { constructor, fields } => self.infer_struct_expr_ty(constructor, fields),
-            hlr::ExprDef::FieldAccess { base, field } => todo!(),
+            hlr::ExprDef::FieldAccess { base, field } => self.infer_field_access_ty(expr.1, *base, field),
             hlr::ExprDef::Tuple(exprs) => todo!(),
             hlr::ExprDef::Assign { target, value } => todo!(),
             hlr::ExprDef::Deref(expr) => todo!(),
@@ -276,6 +278,51 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             },
         );
         Ok(result_ty)
+    }
+
+    fn infer_field_access_ty(
+        &mut self,
+        expr_id: hlr::ExprId,
+        base: hlr::Expr<'hlr>,
+        field: &hlr::FieldSpec,
+    ) -> TypeckResult<ty::Ty> {
+        let base_ty = self.infer_expr_ty(base, None)?;
+        let mut base_ty = self.normalize(base_ty);
+
+        let mut num_derefs = 0;
+        while let Some(ty::TyDef::Ref(inner) | ty::TyDef::Ptr(inner)) = self.ctxt.tys.get_ty_def(base_ty).cloned() {
+            base_ty = self.normalize(inner);
+            num_derefs += 1;
+        }
+
+        if num_derefs > 0 {
+            self.typing.field_access_derefs.insert(expr_id, num_derefs);
+        }
+
+        match field {
+            hlr::FieldSpec::Name(name) => {
+                let Some(ty::TyDef::Struct { .. }) = self.ctxt.tys.get_ty_def(base_ty) else {
+                    return Err(TypeckError::NamedFieldAccessOnNonStruct { ty: base_ty });
+                };
+                let field_idx = self
+                    .ctxt
+                    .tys
+                    .get_struct_field_index_by_name(base_ty, name)
+                    .map_err(|_| TypeckError::StructFieldNotFound {
+                        struct_ty: base_ty,
+                        field: name.clone(),
+                    })?;
+                self.typing.field_access_indices.insert(expr_id, field_idx);
+                Ok(self.ctxt.tys.get_struct_field_ty(base_ty, field_idx).unwrap())
+            }
+            hlr::FieldSpec::Index(idx) => match self.ctxt.tys.get_ty_def(base_ty) {
+                Some(ty::TyDef::Tuple(_)) => {
+                    self.typing.field_access_indices.insert(expr_id, *idx);
+                    Ok(self.ctxt.tys.get_tuple_field_tys(base_ty).unwrap()[*idx])
+                }
+                _ => Err(TypeckError::IndexedFieldAccessOnNonTuple { ty: base_ty }),
+            },
+        }
     }
 
     fn infer_struct_expr_ty(
