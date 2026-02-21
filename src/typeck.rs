@@ -457,14 +457,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
     fn infer_deref_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
         let expr_ty = self.infer_expr_ty(expr, None)?;
-        let expr_ty_def = self.ctxt.tys.get_ty_def(expr_ty).unwrap();
+        let expr_ty = self.normalize(expr_ty);
 
-        match expr_ty_def {
-            ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty) => {
-                if self.ctxt.tys.is_c_void_ty(*base_ty) {
+        match self.ctxt.tys.get_ty_def(expr_ty).cloned() {
+            Some(ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty)) => {
+                if self.ctxt.tys.is_c_void_ty(base_ty) {
                     Err(TypeckError::DereferenceOfCVoid { ty: expr_ty })
                 } else {
-                    Ok(*base_ty)
+                    Ok(base_ty)
                 }
             }
             _ => Err(TypeckError::DereferenceOfNonRef { ty: expr_ty }),
