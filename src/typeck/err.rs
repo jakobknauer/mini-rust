@@ -119,4 +119,8 @@ pub enum TypeckError {
         expected: ty::Ty,
         actual: ty::Ty,
     },
+    LetTypeMismatch {
+        expected: ty::Ty,
+        actual: ty::Ty,
+    },
 }

@@ -716,7 +716,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         hint: Option<ty::Ty>,
     ) -> TypeckResult<ty::Ty> {
         for stmt in stmts {
-            self.check_stmt(stmt);
+            self.check_stmt(stmt)?;
         }
         self.infer_expr_ty(trailing, hint)
     }
@@ -727,9 +727,19 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         ty: Option<hlr::TyAnnot<'hlr>>,
         init: hlr::Expr<'hlr>,
     ) -> TypeckResult<()> {
-        let hint = ty.map(|ty| self.resolve_ty_annot(ty)).transpose()?;
-        let init_ty = self.infer_expr_ty(init, hint)?;
-        self.typing.var_types.insert(var, init_ty);
+        let annot_ty = ty.map(|ty| self.resolve_ty_annot(ty)).transpose()?;
+        let init_ty = self.infer_expr_ty(init, annot_ty)?;
+        if let Some(annot_ty) = annot_ty {
+            if !self.unify(init_ty, annot_ty) {
+                return Err(TypeckError::LetTypeMismatch {
+                    expected: annot_ty,
+                    actual: init_ty,
+                });
+            }
+            self.typing.var_types.insert(var, annot_ty);
+        } else {
+            self.typing.var_types.insert(var, init_ty);
+        }
         Ok(())
     }
 
