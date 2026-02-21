@@ -93,7 +93,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             } => todo!(),
             hlr::ExprDef::Struct { constructor, fields } => self.infer_struct_expr_ty(constructor, fields),
             hlr::ExprDef::FieldAccess { base, field } => self.infer_field_access_ty(expr.1, *base, field),
-            hlr::ExprDef::Tuple(exprs) => todo!(),
+            hlr::ExprDef::Tuple(exprs) => self.infer_tuple_expr_ty(exprs),
             hlr::ExprDef::Assign { target, value } => todo!(),
             hlr::ExprDef::Deref(expr) => todo!(),
             hlr::ExprDef::AddrOf(expr) => todo!(),
@@ -431,5 +431,15 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
 
         Ok(return_ty)
+    }
+
+    fn infer_tuple_expr_ty(&mut self, exprs: hlr::ExprSlice<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_tys: Vec<_> = exprs
+            .iter()
+            .map(|expr| self.infer_expr_ty(*expr, None))
+            .collect::<TypeckResult<_>>()?;
+
+        let tuple_ty = self.ctxt.tys.tuple(&expr_tys);
+        Ok(tuple_ty)
     }
 }
