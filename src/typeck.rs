@@ -104,7 +104,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 body,
             } => todo!(),
             hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
-            hlr::ExprDef::Loop { body } => todo!(),
+            hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
             hlr::ExprDef::Match { scrutinee, arms } => todo!(),
             hlr::ExprDef::Block { stmts, trailing } => todo!(),
             hlr::ExprDef::QualifiedMthd {
@@ -577,5 +577,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
 
         Ok(then_ty)
+    }
+
+    fn infer_loop_ty(&mut self, body: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        self.infer_expr_ty(body, None)?;
+        Ok(self.ctxt.tys.unit())
     }
 }
