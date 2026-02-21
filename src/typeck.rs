@@ -96,7 +96,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             hlr::ExprDef::Tuple(exprs) => self.infer_tuple_expr_ty(exprs),
             hlr::ExprDef::Assign { target, value } => self.infer_assignment_ty(*target, *value),
             hlr::ExprDef::Deref(expr) => self.infer_deref_ty(*expr),
-            hlr::ExprDef::AddrOf(expr) => todo!(),
+            hlr::ExprDef::AddrOf(expr) => self.infer_addr_of_ty(*expr),
             hlr::ExprDef::As { expr, ty } => todo!(),
             hlr::ExprDef::Closure {
                 params,
@@ -469,5 +469,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             }
             _ => Err(TypeckError::DereferenceOfNonRef { ty: expr_ty }),
         }
+    }
+
+    fn infer_addr_of_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_ty = self.infer_expr_ty(expr, None)?;
+        Ok(self.ctxt.tys.ref_(expr_ty))
     }
 }
