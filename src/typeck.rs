@@ -452,7 +452,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 actual: value_ty,
             });
         }
-        Ok(target_ty)
+        Ok(self.ctxt.tys.unit())
     }
 
     fn infer_deref_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
