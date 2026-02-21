@@ -106,7 +106,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
             hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
             hlr::ExprDef::Match { scrutinee, arms } => self.infer_match_ty(*scrutinee, arms),
-            hlr::ExprDef::Block { stmts, trailing } => self.infer_block_ty(stmts, *trailing),
+            hlr::ExprDef::Block { stmts, trailing } => self.infer_block_ty(stmts, *trailing, hint),
             hlr::ExprDef::QualifiedMthd {
                 ty,
                 trait_,
@@ -121,8 +121,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn infer_stmt_ty(&mut self, stmt: hlr::Stmt<'hlr>) -> TypeckResult<ty::Ty> {
-        todo!()
+    fn check_stmt(&mut self, stmt: hlr::Stmt<'hlr>) -> TypeckResult<()> {
+        match stmt {
+            hlr::StmtDef::Expr(expr) => self.infer_expr_ty(*expr, None).map(|_| ()),
+            hlr::StmtDef::Let { var, ty, init } => self.check_let_stmt(*var, *ty, *init),
+            hlr::StmtDef::Break => Ok(()),
+            hlr::StmtDef::Return(expr) => self.check_return_stmt(*expr),
+        }
     }
 
     fn infer_lit_ty(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
@@ -704,10 +709,43 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(result_ty.unwrap_or_else(|| self.ctxt.tys.unit()))
     }
 
-    fn infer_block_ty(&mut self, stmts: hlr::StmtSlice<'hlr>, trailing: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+    fn infer_block_ty(
+        &mut self,
+        stmts: hlr::StmtSlice<'hlr>,
+        trailing: hlr::Expr<'hlr>,
+        hint: Option<ty::Ty>,
+    ) -> TypeckResult<ty::Ty> {
         for stmt in stmts {
-            self.infer_stmt_ty(stmt);
+            self.check_stmt(stmt);
         }
-        self.infer_expr_ty(trailing, None)
+        self.infer_expr_ty(trailing, hint)
+    }
+
+    fn check_let_stmt(
+        &mut self,
+        var: hlr::VarId,
+        ty: Option<hlr::TyAnnot<'hlr>>,
+        init: hlr::Expr<'hlr>,
+    ) -> TypeckResult<()> {
+        let hint = ty.map(|ty| self.resolve_ty_annot(ty)).transpose()?;
+        let init_ty = self.infer_expr_ty(init, hint)?;
+        self.typing.var_types.insert(var, init_ty);
+        Ok(())
+    }
+
+    fn check_return_stmt(&mut self, expr: Option<hlr::Expr<'hlr>>) -> TypeckResult<()> {
+        let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
+        let expected = sig.return_ty;
+
+        let actual = expr
+            .map(|expr| self.infer_expr_ty(expr, Some(expected)))
+            .transpose()?
+            .unwrap_or(self.ctxt.tys.unit());
+
+        if self.unify(actual, expected) {
+            Ok(())
+        } else {
+            Err(TypeckError::ReturnExprTypeMismatch { expected, actual })
+        }
     }
 }
