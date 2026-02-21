@@ -90,4 +90,8 @@ pub enum TypeckError {
     DereferenceOfCVoid {
         ty: ty::Ty,
     },
+    InvalidAsConversion {
+        op_ty: ty::Ty,
+        target_ty: ty::Ty,
+    },
 }

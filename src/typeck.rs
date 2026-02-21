@@ -97,7 +97,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             hlr::ExprDef::Assign { target, value } => self.infer_assignment_ty(*target, *value),
             hlr::ExprDef::Deref(expr) => self.infer_deref_ty(*expr),
             hlr::ExprDef::AddrOf(expr) => self.infer_addr_of_ty(*expr),
-            hlr::ExprDef::As { expr, ty } => todo!(),
+            hlr::ExprDef::As { expr, ty } => self.infer_as_ty(*expr, ty),
             hlr::ExprDef::Closure {
                 params,
                 return_ty,
@@ -474,5 +474,34 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn infer_addr_of_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
         let expr_ty = self.infer_expr_ty(expr, None)?;
         Ok(self.ctxt.tys.ref_(expr_ty))
+    }
+
+    fn infer_as_ty(&mut self, expr: hlr::Expr<'hlr>, target_ty: hlr::TyAnnot<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_ty = self.infer_expr_ty(expr, None)?;
+        let expr_ty = self.normalize(expr_ty);
+
+        let target_ty = self.resolve_ty_annot(target_ty)?;
+        let target_ty = self.normalize(target_ty);
+
+        let expr_ty_def = self.ctxt.tys.get_ty_def(expr_ty).unwrap();
+        let target_ty_def = self.ctxt.tys.get_ty_def(target_ty).unwrap();
+
+        match (expr_ty_def, target_ty_def) {
+            (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => Ok(target_ty),
+            (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty)) => {
+                if self.unify(op_base_ty, target_base_ty) {
+                    Ok(target_ty)
+                } else {
+                    Err(TypeckError::InvalidAsConversion {
+                        op_ty: expr_ty,
+                        target_ty,
+                    })
+                }
+            }
+            _ => Err(TypeckError::InvalidAsConversion {
+                op_ty: expr_ty,
+                target_ty,
+            }),
+        }
     }
 }
