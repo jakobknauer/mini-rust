@@ -20,11 +20,14 @@ pub use mthd::MthdResolution;
 pub struct HlrTyping {
     pub var_types: HashMap<hlr::VarId, ty::Ty>,
     pub expr_types: HashMap<hlr::ExprId, ty::Ty>,
-    pub val_mthd_resolutions: HashMap<hlr::ExprId, MthdResolution>,
-    pub binary_op_resolutions: HashMap<hlr::ExprId, fns::FnInst>,
-    pub unary_op_resolutions: HashMap<hlr::ExprId, fns::FnInst>,
-    pub field_access_derefs: HashMap<hlr::ExprId, usize>,
-    pub field_access_indices: HashMap<hlr::ExprId, usize>,
+    pub expr_extra: HashMap<hlr::ExprId, ExprExtra>,
+}
+
+pub enum ExprExtra {
+    ValMthd(MthdResolution),
+    BinaryOp(fns::FnInst),
+    UnaryOp(fns::FnInst),
+    FieldAccess { derefs: usize, index: usize },
 }
 
 pub fn typeck<'hlr>(
@@ -178,7 +181,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let found = self.resolve_mthd(base_ty, mthd_name, false)?;
         let resolution = self.instantiate_mthd(found, base_ty, mthd_name, gen_args)?;
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
-        self.typing.val_mthd_resolutions.insert(expr_id, resolution);
+        self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
         Ok(fn_ty)
     }
 
@@ -233,13 +236,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             .get_fn_by_name(fn_name)
             .expect("operator impl should be registered");
         let empty = self.ctxt.tys.ty_slice(&[]);
-        self.typing.binary_op_resolutions.insert(
+        self.typing.expr_extra.insert(
             expr_id,
-            fns::FnInst {
+            ExprExtra::BinaryOp(fns::FnInst {
                 fn_,
                 gen_args: empty,
                 env_gen_args: empty,
-            },
+            }),
         );
         Ok(result_ty)
     }
@@ -269,13 +272,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             .get_fn_by_name(fn_name)
             .expect("operator impl should be registered");
         let empty = self.ctxt.tys.ty_slice(&[]);
-        self.typing.unary_op_resolutions.insert(
+        self.typing.expr_extra.insert(
             expr_id,
-            fns::FnInst {
+            ExprExtra::UnaryOp(fns::FnInst {
                 fn_,
                 gen_args: empty,
                 env_gen_args: empty,
-            },
+            }),
         );
         Ok(result_ty)
     }
@@ -295,16 +298,12 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             num_derefs += 1;
         }
 
-        if num_derefs > 0 {
-            self.typing.field_access_derefs.insert(expr_id, num_derefs);
-        }
-
         match field {
             hlr::FieldSpec::Name(name) => {
                 let Some(ty::TyDef::Struct { .. }) = self.ctxt.tys.get_ty_def(base_ty) else {
                     return Err(TypeckError::NamedFieldAccessOnNonStruct { ty: base_ty });
                 };
-                let field_idx = self
+                let index = self
                     .ctxt
                     .tys
                     .get_struct_field_index_by_name(base_ty, name)
@@ -312,13 +311,25 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                         struct_ty: base_ty,
                         field: name.clone(),
                     })?;
-                self.typing.field_access_indices.insert(expr_id, field_idx);
-                Ok(self.ctxt.tys.get_struct_field_ty(base_ty, field_idx).unwrap())
+                self.typing.expr_extra.insert(
+                    expr_id,
+                    ExprExtra::FieldAccess {
+                        derefs: num_derefs,
+                        index,
+                    },
+                );
+                Ok(self.ctxt.tys.get_struct_field_ty(base_ty, index).unwrap())
             }
-            hlr::FieldSpec::Index(idx) => match self.ctxt.tys.get_ty_def(base_ty) {
+            hlr::FieldSpec::Index(index) => match self.ctxt.tys.get_ty_def(base_ty) {
                 Some(ty::TyDef::Tuple(_)) => {
-                    self.typing.field_access_indices.insert(expr_id, *idx);
-                    Ok(self.ctxt.tys.get_tuple_field_tys(base_ty).unwrap()[*idx])
+                    self.typing.expr_extra.insert(
+                        expr_id,
+                        ExprExtra::FieldAccess {
+                            derefs: num_derefs,
+                            index: *index,
+                        },
+                    );
+                    Ok(self.ctxt.tys.get_tuple_field_tys(base_ty).unwrap()[*index])
                 }
                 _ => Err(TypeckError::IndexedFieldAccessOnNonTuple { ty: base_ty }),
             },
