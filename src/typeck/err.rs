@@ -80,4 +80,8 @@ pub enum TypeckError {
         operator: hlr::UnaryOperator,
         operand_ty: ty::Ty,
     },
+    AssignmentTypeMismatch {
+        expected: ty::Ty,
+        actual: ty::Ty,
+    },
 }

@@ -94,7 +94,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             hlr::ExprDef::Struct { constructor, fields } => self.infer_struct_expr_ty(constructor, fields),
             hlr::ExprDef::FieldAccess { base, field } => self.infer_field_access_ty(expr.1, *base, field),
             hlr::ExprDef::Tuple(exprs) => self.infer_tuple_expr_ty(exprs),
-            hlr::ExprDef::Assign { target, value } => todo!(),
+            hlr::ExprDef::Assign { target, value } => self.infer_assignment_ty(*target, *value),
             hlr::ExprDef::Deref(expr) => todo!(),
             hlr::ExprDef::AddrOf(expr) => todo!(),
             hlr::ExprDef::As { expr, ty } => todo!(),
@@ -441,5 +441,17 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
         let tuple_ty = self.ctxt.tys.tuple(&expr_tys);
         Ok(tuple_ty)
+    }
+
+    fn infer_assignment_ty(&mut self, target: hlr::Expr<'hlr>, value: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        let target_ty = self.infer_expr_ty(target, None)?;
+        let value_ty = self.infer_expr_ty(value, None)?;
+        if !self.unify(target_ty, value_ty) {
+            return Err(TypeckError::AssignmentTypeMismatch {
+                expected: target_ty,
+                actual: value_ty,
+            });
+        }
+        Ok(target_ty)
     }
 }
