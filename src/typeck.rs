@@ -90,7 +90,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 mthd_name,
                 gen_args,
                 args,
-            } => todo!(),
+            } => self.infer_mthd_call_ty(expr.1, *receiver, mthd_name, *gen_args, args),
             hlr::ExprDef::Struct { constructor, fields } => self.infer_struct_expr_ty(constructor, fields),
             hlr::ExprDef::FieldAccess { base, field } => self.infer_field_access_ty(expr.1, *base, field),
             hlr::ExprDef::Tuple(exprs) => self.infer_tuple_expr_ty(exprs),
@@ -391,6 +391,54 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     field_idx,
                     expected: field_ty,
                     actual: expr_ty,
+                });
+            }
+        }
+
+        Ok(return_ty)
+    }
+
+    fn infer_mthd_call_ty(
+        &mut self,
+        expr_id: hlr::ExprId,
+        receiver: hlr::Expr<'hlr>,
+        mthd_name: &str,
+        gen_args: Option<hlr::TyAnnotSlice<'hlr>>,
+        args: hlr::ExprSlice<'hlr>,
+    ) -> TypeckResult<ty::Ty> {
+        let receiver_ty = self.infer_expr_ty(receiver, None)?;
+        let receiver_ty = self.normalize(receiver_ty);
+
+        let found = self.resolve_mthd(receiver_ty, mthd_name, true)?;
+        let resolution = self.instantiate_mthd(found, receiver_ty, mthd_name, gen_args)?;
+        let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
+        self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
+
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(fn_ty) else {
+            unreachable!("method resolution always produces a callable type");
+        };
+
+        // param_tys[0] is self; user-supplied args map to param_tys[1..]
+        let n_params = param_tys.len().saturating_sub(1);
+        let n_args = args.len();
+        if (var_args && n_args < n_params) || (!var_args && n_args != n_params) {
+            return Err(TypeckError::CallArgCountMismatch {
+                expected: n_params,
+                actual: n_args,
+                var_args,
+            });
+        }
+
+        for (i, arg) in args.iter().enumerate() {
+            let param_hint = param_tys.get(i + 1).copied();
+            let arg_ty = self.infer_expr_ty(*arg, param_hint)?;
+            if let Some(&param_ty) = param_tys.get(i + 1)
+                && !self.unify(arg_ty, param_ty)
+            {
+                return Err(TypeckError::CallArgTypeMismatch {
+                    index: i,
+                    expected: param_ty,
+                    actual: arg_ty,
                 });
             }
         }
