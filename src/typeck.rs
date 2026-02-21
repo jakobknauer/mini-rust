@@ -106,7 +106,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
             hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
             hlr::ExprDef::Match { scrutinee, arms } => self.infer_match_ty(*scrutinee, arms),
-            hlr::ExprDef::Block { stmts, trailing } => todo!(),
+            hlr::ExprDef::Block { stmts, trailing } => self.infer_block_ty(stmts, *trailing),
             hlr::ExprDef::QualifiedMthd {
                 ty,
                 trait_,
@@ -119,6 +119,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         self.typing.expr_types.insert(expr.1, ty);
 
         Ok(ty)
+    }
+
+    fn infer_stmt_ty(&mut self, stmt: hlr::Stmt<'hlr>) -> TypeckResult<ty::Ty> {
+        todo!()
     }
 
     fn infer_lit_ty(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
@@ -651,5 +655,12 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
 
         Ok(result_ty.unwrap_or_else(|| self.ctxt.tys.unit()))
+    }
+
+    fn infer_block_ty(&mut self, stmts: hlr::StmtSlice<'hlr>, trailing: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        for stmt in stmts {
+            self.infer_stmt_ty(stmt);
+        }
+        self.infer_expr_ty(trailing, None)
     }
 }
