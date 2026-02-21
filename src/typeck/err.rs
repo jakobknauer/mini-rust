@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::{fns, ty},
+    ctxt::{fns, traits, ty},
     hlr,
 };
 
@@ -107,6 +107,15 @@ pub enum TypeckError {
         found: ty::Ty,
     },
     MatchArmTypeMismatch {
+        expected: ty::Ty,
+        actual: ty::Ty,
+    },
+    TraitGenArgCountMismatch {
+        trait_: traits::Trait,
+        expected: usize,
+        actual: usize,
+    },
+    ReturnExprTypeMismatch {
         expected: ty::Ty,
         actual: ty::Ty,
     },

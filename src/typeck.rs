@@ -9,7 +9,7 @@ mod unify;
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{self, fns, ty},
+    ctxt::{self, fns, traits, ty},
     hlr,
 };
 
@@ -113,7 +113,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 trait_args,
                 mthd_name,
                 args,
-            } => todo!(),
+            } => self.infer_qualified_mthd_ty(expr.1, ty, *trait_, *trait_args, mthd_name, *args),
         }?;
 
         self.typing.expr_types.insert(expr.1, ty);
@@ -184,6 +184,53 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let base_ty = self.resolve_ty_annot(base_ty)?;
         let found = self.resolve_mthd(base_ty, mthd_name, false)?;
         let resolution = self.instantiate_mthd(found, base_ty, mthd_name, gen_args)?;
+        let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
+        self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
+        Ok(fn_ty)
+    }
+
+    fn infer_qualified_mthd_ty(
+        &mut self,
+        expr_id: hlr::ExprId,
+        ty: hlr::TyAnnot<'hlr>,
+        trait_: Option<traits::Trait>,
+        trait_args: Option<hlr::TyAnnotSlice<'hlr>>,
+        mthd_name: &str,
+        args: Option<hlr::TyAnnotSlice<'hlr>>,
+    ) -> TypeckResult<ty::Ty> {
+        let base_ty = self.resolve_ty_annot(ty)?;
+
+        let found = match trait_ {
+            None => self.resolve_mthd(base_ty, mthd_name, false)?,
+            Some(trait_) => {
+                let n_trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+                let trait_gen_args = self.resolve_optional_gen_args(trait_args, n_trait_gen_params, |actual| {
+                    TypeckError::TraitGenArgCountMismatch {
+                        trait_,
+                        expected: n_trait_gen_params,
+                        actual,
+                    }
+                })?;
+                let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
+                let trait_inst = traits::TraitInst {
+                    trait_,
+                    gen_args: trait_gen_args,
+                };
+
+                let mthd_idx = self
+                    .ctxt
+                    .traits
+                    .resolve_trait_method(trait_, mthd_name)
+                    .ok_or_else(|| TypeckError::MthdResolutionFailed {
+                        base_ty,
+                        mthd_name: mthd_name.to_string(),
+                    })?;
+
+                mthd::FoundMthd::Trait { trait_inst, mthd_idx }
+            }
+        };
+
+        let resolution = self.instantiate_mthd(found, base_ty, mthd_name, args)?;
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
         Ok(fn_ty)
