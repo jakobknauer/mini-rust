@@ -105,7 +105,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             } => todo!(),
             hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
             hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
-            hlr::ExprDef::Match { scrutinee, arms } => todo!(),
+            hlr::ExprDef::Match { scrutinee, arms } => self.infer_match_ty(*scrutinee, arms),
             hlr::ExprDef::Block { stmts, trailing } => todo!(),
             hlr::ExprDef::QualifiedMthd {
                 ty,
@@ -582,5 +582,74 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn infer_loop_ty(&mut self, body: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
         self.infer_expr_ty(body, None)?;
         Ok(self.ctxt.tys.unit())
+    }
+
+    fn infer_match_ty(&mut self, scrutinee: hlr::Expr<'hlr>, arms: &[hlr::MatchArm<'hlr>]) -> TypeckResult<ty::Ty> {
+        let scrutinee_ty = self.infer_expr_ty(scrutinee, None)?;
+        let scrutinee_ty = self.normalize(scrutinee_ty);
+
+        let (enum_ty, by_ref) = match self.ctxt.tys.get_ty_def(scrutinee_ty).cloned() {
+            Some(ty::TyDef::Enum { .. }) => (scrutinee_ty, false),
+            Some(ty::TyDef::Ref(inner)) => {
+                let inner = self.normalize(inner);
+                match self.ctxt.tys.get_ty_def(inner) {
+                    Some(ty::TyDef::Enum { .. }) => (inner, true),
+                    _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+                }
+            }
+            _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+        };
+
+        let mut result_ty: Option<ty::Ty> = None;
+
+        for arm in arms {
+            let hlr::Val::Variant(arm_enum, variant_idx, gen_args) = &arm.pattern.variant else {
+                unreachable!("match arm pattern must be Val::Variant");
+            };
+
+            let n_gen_params = self.ctxt.tys.get_enum_def(*arm_enum).unwrap().gen_params.len();
+            let arm_gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
+                TypeckError::EnumGenArgCountMismatch {
+                    enum_: *arm_enum,
+                    expected: n_gen_params,
+                    actual,
+                }
+            })?;
+            let arm_enum_ty = self.ctxt.tys.inst_enum(*arm_enum, &arm_gen_args).unwrap();
+
+            if !self.unify(arm_enum_ty, enum_ty) {
+                return Err(TypeckError::MatchArmWrongEnum {
+                    expected: enum_ty,
+                    found: arm_enum_ty,
+                });
+            }
+
+            let variant_ty = self.ctxt.tys.get_enum_variant_ty(enum_ty, *variant_idx).unwrap();
+
+            for field in arm.pattern.fields {
+                let field_ty = self
+                    .ctxt
+                    .tys
+                    .get_struct_field_ty(variant_ty, field.field_index)
+                    .unwrap();
+                let binding_ty = if by_ref { self.ctxt.tys.ref_(field_ty) } else { field_ty };
+                self.typing.var_types.insert(field.binding, binding_ty);
+            }
+
+            let arm_ty = self.infer_expr_ty(arm.body, result_ty)?;
+
+            if let Some(ty) = result_ty {
+                if !self.unify(arm_ty, ty) {
+                    return Err(TypeckError::MatchArmTypeMismatch {
+                        expected: ty,
+                        actual: arm_ty,
+                    });
+                }
+            } else {
+                result_ty = Some(arm_ty);
+            }
+        }
+
+        Ok(result_ty.unwrap_or_else(|| self.ctxt.tys.unit()))
     }
 }

@@ -99,4 +99,15 @@ pub enum TypeckError {
         then_ty: ty::Ty,
         else_ty: ty::Ty,
     },
+    NonMatchableScrutinee {
+        ty: ty::Ty,
+    },
+    MatchArmWrongEnum {
+        expected: ty::Ty,
+        found: ty::Ty,
+    },
+    MatchArmTypeMismatch {
+        expected: ty::Ty,
+        actual: ty::Ty,
+    },
 }
