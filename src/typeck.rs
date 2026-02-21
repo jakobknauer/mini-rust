@@ -95,7 +95,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             hlr::ExprDef::FieldAccess { base, field } => self.infer_field_access_ty(expr.1, *base, field),
             hlr::ExprDef::Tuple(exprs) => self.infer_tuple_expr_ty(exprs),
             hlr::ExprDef::Assign { target, value } => self.infer_assignment_ty(*target, *value),
-            hlr::ExprDef::Deref(expr) => todo!(),
+            hlr::ExprDef::Deref(expr) => self.infer_deref_ty(*expr),
             hlr::ExprDef::AddrOf(expr) => todo!(),
             hlr::ExprDef::As { expr, ty } => todo!(),
             hlr::ExprDef::Closure {
@@ -453,5 +453,21 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             });
         }
         Ok(target_ty)
+    }
+
+    fn infer_deref_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_ty = self.infer_expr_ty(expr, None)?;
+        let expr_ty_def = self.ctxt.tys.get_ty_def(expr_ty).unwrap();
+
+        match expr_ty_def {
+            ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty) => {
+                if self.ctxt.tys.is_c_void_ty(*base_ty) {
+                    Err(TypeckError::DereferenceOfCVoid { ty: expr_ty })
+                } else {
+                    Ok(*base_ty)
+                }
+            }
+            _ => Err(TypeckError::DereferenceOfNonRef { ty: expr_ty }),
+        }
     }
 }

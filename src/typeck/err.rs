@@ -84,4 +84,10 @@ pub enum TypeckError {
         expected: ty::Ty,
         actual: ty::Ty,
     },
+    DereferenceOfNonRef {
+        ty: ty::Ty,
+    },
+    DereferenceOfCVoid {
+        ty: ty::Ty,
+    },
 }
