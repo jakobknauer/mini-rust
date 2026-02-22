@@ -5,6 +5,8 @@ use crate::{
 
 pub type TypeckResult<T> = Result<T, TypeckError>;
 
+#[derive(Debug)]
+#[allow(unused)]
 pub enum TypeckError {
     ReturnTypeMismatch {
         expected: ty::Ty,

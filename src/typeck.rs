@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 mod closures;
 mod err;
 mod mthd;
@@ -7,7 +5,7 @@ mod normalize;
 mod ty_annots;
 mod unify;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::{
     ctxt::{self, fns, traits, ty},
@@ -24,6 +22,7 @@ pub struct HlrTyping {
     pub expr_extra: HashMap<hlr::ExprId, ExprExtra>,
 }
 
+#[allow(unused)]
 pub enum ExprExtra {
     ValMthd(MthdResolution),
     BinaryOp(fns::FnInst),
@@ -38,14 +37,9 @@ pub enum ExprExtra {
     },
 }
 
-pub fn typeck<'hlr>(
-    ctxt: &mut ctxt::Ctxt,
-    hlr: &'hlr hlr::Hlr<'hlr>,
-    fn_: &'hlr hlr::FnHlr<'hlr>,
-) -> TypeckResult<HlrTyping> {
+pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckResult<HlrTyping> {
     let typeck = Typeck {
         ctxt,
-        hlr,
         fn_,
         type_vars: HashMap::new(),
         typing: Default::default(),
@@ -59,8 +53,7 @@ pub fn typeck<'hlr>(
 
 struct Typeck<'ctxt, 'hlr> {
     ctxt: &'ctxt mut ctxt::Ctxt,
-    hlr: &'hlr hlr::Hlr<'hlr>,
-    fn_: &'hlr hlr::FnHlr<'hlr>,
+    fn_: &'hlr hlr::Fn<'hlr>,
 
     type_vars: HashMap<ty::InfVar, ty::Ty>,
     typing: HlrTyping,
@@ -94,7 +87,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn infer_expr_ty(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
         let ty = match expr.0 {
             hlr::ExprDef::Lit(lit) => self.infer_lit_ty(lit),
-            hlr::ExprDef::Val(val) => self.infer_val_ty(expr.1, val, hint),
+            hlr::ExprDef::Val(val) => self.infer_val_ty(expr.1, val),
             hlr::ExprDef::BinaryOp { left, right, operator } => {
                 self.infer_binary_op_ty(expr.1, *left, *right, *operator)
             }
@@ -159,12 +152,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn infer_val_ty(
-        &mut self,
-        expr_id: hlr::ExprId,
-        val: &hlr::Val<'hlr>,
-        hint: Option<ty::Ty>,
-    ) -> TypeckResult<ty::Ty> {
+    fn infer_val_ty(&mut self, expr_id: hlr::ExprId, val: &hlr::Val<'hlr>) -> TypeckResult<ty::Ty> {
         match val {
             hlr::Val::Var(var_id) => {
                 self.var_uses.push(*var_id);

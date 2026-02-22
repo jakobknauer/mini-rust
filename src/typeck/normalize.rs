@@ -1,4 +1,4 @@
-use crate::ctxt::{impls, traits, ty};
+use crate::ctxt::{traits, ty};
 
 impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     pub(super) fn normalize(&mut self, ty: ty::Ty) -> ty::Ty {

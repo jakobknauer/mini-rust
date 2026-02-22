@@ -17,7 +17,7 @@ pub fn ast_to_hlr<'ast, 'hlr>(
     ast: &'ast ast::Ast<'ast>,
     ast_body: ast::Block<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
-) -> AstToHlrResult<hlr::FnHlr<'hlr>> {
+) -> AstToHlrResult<hlr::Fn<'hlr>> {
     let converter = AstToHlr::new(ctxt, fn_, ast, hlr);
     converter.lower_function_body(ast_body)
 }
@@ -57,7 +57,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         }
     }
 
-    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstToHlrResult<hlr::FnHlr<'hlr>> {
+    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstToHlrResult<hlr::Fn<'hlr>> {
         let signature = self.get_signature();
         if signature.var_args {
             return Err(AstToHlrError {
@@ -92,7 +92,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         let return_val = self.build_block(block)?;
         let body = self.release_current_block(return_val);
 
-        Ok(hlr::FnHlr {
+        Ok(hlr::Fn {
             fn_: self.fn_,
             body,
             param_var_ids,

@@ -20,7 +20,7 @@ use crate::{
     },
     hlr, mlr_lowering,
     obligation_check::check_obligations,
-    parse,
+    parse, typeck,
     util::print,
 };
 
@@ -489,9 +489,12 @@ impl<'a> Driver<'a> {
                 continue;
             };
 
+            let fn_name = &ast_fn.name;
+
             let target_fn = self.ast_meta.fn_ids[&idx];
 
-            ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, &hlr).unwrap();
+            let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, &hlr).unwrap();
+            let _ = typeck::typeck(&mut self.ctxt, &hlr_fn).expect(&format!("failed to typeck {}", fn_name));
         }
     }
 

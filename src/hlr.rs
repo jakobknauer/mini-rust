@@ -23,7 +23,7 @@ pub struct Hlr<'hlr> {
     next_expr_id: RefCell<ExprId>,
 }
 
-pub struct FnHlr<'hlr> {
+pub struct Fn<'hlr> {
     pub fn_: fns::Fn,
     pub body: Expr<'hlr>,
     pub param_var_ids: Vec<VarId>,
