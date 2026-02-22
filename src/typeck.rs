@@ -1,12 +1,13 @@
 #![allow(unused)]
 
+mod closures;
 mod err;
 mod mthd;
 mod normalize;
 mod ty_annots;
 mod unify;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     ctxt::{self, fns, traits, ty},
@@ -27,7 +28,14 @@ pub enum ExprExtra {
     ValMthd(MthdResolution),
     BinaryOp(fns::FnInst),
     UnaryOp(fns::FnInst),
-    FieldAccess { derefs: usize, index: usize },
+    FieldAccess {
+        derefs: usize,
+        index: usize,
+    },
+    Closure {
+        fn_inst: fns::FnInst,
+        captured_vars: Vec<hlr::VarId>,
+    },
 }
 
 pub fn typeck<'hlr>(
@@ -41,6 +49,9 @@ pub fn typeck<'hlr>(
         fn_,
         type_vars: HashMap::new(),
         typing: Default::default(),
+        closure_counter: 0,
+        return_ty_stack: vec![],
+        var_uses: vec![],
     };
 
     typeck.check()
@@ -53,6 +64,9 @@ struct Typeck<'ctxt, 'hlr> {
 
     type_vars: HashMap<ty::InfVar, ty::Ty>,
     typing: HlrTyping,
+    closure_counter: usize,
+    return_ty_stack: Vec<ty::Ty>,
+    var_uses: Vec<hlr::VarId>,
 }
 
 impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
@@ -64,6 +78,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
 
         let return_ty = sig.return_ty;
+        self.return_ty_stack.push(return_ty);
         let body_ty = self.infer_expr_ty(self.fn_.body, Some(return_ty))?;
 
         if !self.unify(body_ty, return_ty) {
@@ -102,7 +117,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 params,
                 return_ty,
                 body,
-            } => todo!(),
+            } => self.infer_closure_ty(expr.1, params, *return_ty, *body),
             hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
             hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
             hlr::ExprDef::Match { scrutinee, arms } => self.infer_match_ty(*scrutinee, arms),
@@ -151,7 +166,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         hint: Option<ty::Ty>,
     ) -> TypeckResult<ty::Ty> {
         match val {
-            hlr::Val::Var(var_id) => Ok(self.typing.var_types.get(var_id).copied().unwrap()),
+            hlr::Val::Var(var_id) => {
+                self.var_uses.push(*var_id);
+                Ok(self.typing.var_types.get(var_id).copied().unwrap())
+            }
             &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(fn_, args),
             hlr::Val::Struct(..) => unreachable!("raw struct values are not supported"),
             hlr::Val::Variant(..) => unreachable!("raw variant values are not supported"),
@@ -744,8 +762,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     }
 
     fn check_return_stmt(&mut self, expr: Option<hlr::Expr<'hlr>>) -> TypeckResult<()> {
-        let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
-        let expected = sig.return_ty;
+        let expected = *self.return_ty_stack.last().unwrap();
 
         let actual = expr
             .map(|expr| self.infer_expr_ty(expr, Some(expected)))
