@@ -1,3 +1,37 @@
+// # Type checking design notes
+//
+// ## Inference variables
+// Unification binds inference variables (InfVar) lazily in `type_vars`. Types
+// stored during checking (in `HlrTyping`, `FnReg`, `TyReg`) may therefore
+// contain unresolved InfVars and must be normalized before use.
+//
+// ## Writeback (TODO)
+// After inference is complete, a writeback pass should normalize all stored
+// types. This mirrors rustc's writeback phase. Required for:
+//
+// - `HlrTyping::var_types` and `expr_types`: iterate and normalize in place.
+// - `ExprExtra` entries: loop and normalize the FnInst fields (gen_args,
+//   env_gen_args) in BinaryOp, UnaryOp, ValMthd, and Closure variants.
+// - Closure fn signatures in FnReg: normalize param and return types in place.
+//   Consistency with ExprExtra and expr_types is automatic because both hold a
+//   FnId (a reference into FnReg), so updating FnReg propagates everywhere.
+// - Closure capture struct fields in TyReg: normalize field types in place.
+//   Both registries require tracking the IDs of items created during closure
+//   checking (via `created_closure_fns` and `created_closure_structs` fields
+//   on Typeck, populated in build_closure_fn_inst / build_closure_captures_ty).
+//
+// The `normalize()` method should also handle `TyDef::Closure` (currently a
+// no-op), normalizing its captures_ty and fn_inst gen_args fields.
+//
+// ## Ambiguity check (TODO)
+// After writeback, assert that no InfVar survives in var_types or expr_types.
+// A surviving InfVar means the type was never constrained and should become a
+// TypeckError::AmbiguousType.
+//
+// ## Path compression (TODO)
+// normalize() currently re-traverses InfVar chains on every call. Writing back
+// the resolved type to type_vars after resolution would make repeated calls O(1).
+
 mod closures;
 mod err;
 mod mthd;
