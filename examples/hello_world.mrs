@@ -1,0 +1,6 @@
+fn printf(format: *c_char, ...) -> i32;
+
+fn main() -> i32 {
+    printf("Hello, World!\n");
+    0
+}
