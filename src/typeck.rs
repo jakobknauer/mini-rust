@@ -154,9 +154,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
     fn infer_val_ty(&mut self, expr_id: hlr::ExprId, val: &hlr::Val<'hlr>) -> TypeckResult<ty::Ty> {
         match val {
-            hlr::Val::Var(var_id) => {
-                self.var_uses.push(*var_id);
-                Ok(self.typing.var_types.get(var_id).copied().unwrap())
+            &hlr::Val::Var(var_id) => {
+                self.var_uses.push(var_id);
+                self.typing
+                    .var_types
+                    .get(&var_id)
+                    .copied()
+                    .ok_or(TypeckError::VarTypeNotSet { var_id, expr_id })
             }
             &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(fn_, args),
             hlr::Val::Struct(..) => unreachable!("raw struct values are not supported"),

@@ -125,4 +125,8 @@ pub enum TypeckError {
         expected: ty::Ty,
         actual: ty::Ty,
     },
+    VarTypeNotSet {
+        var_id: hlr::VarId,
+        expr_id: hlr::ExprId,
+    },
 }

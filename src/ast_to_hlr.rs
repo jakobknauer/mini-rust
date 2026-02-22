@@ -207,7 +207,11 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             &MthdCall { obj, ref mthd, args } => self.lower_mthd_call_expr(obj, mthd, args),
             Struct { ty_path, fields } => self.lower_struct_expr(ty_path, fields),
             &FieldAccess { obj, ref field } => self.lower_field_access_expr(obj, field),
-            &Block(block) => self.build_block(block),
+            &Block(block) => {
+                self.start_new_block();
+                let trailing = self.build_block(block)?;
+                Ok(self.release_current_block(trailing))
+            }
             &If { cond, then, else_ } => self.lower_if_expr(cond, then, else_),
             &Loop { body } => self.lower_loop_expr(body),
             &While { cond, body } => self.lower_while_expr(cond, body),
@@ -590,9 +594,12 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         let then = self.release_current_block(then);
 
         let else_ = else_
-            .map(|else_| self.build_block(else_))
-            .transpose()?
-            .map(|else_| self.release_current_block(else_));
+            .map(|else_| {
+                self.start_new_block();
+                let trailing = self.build_block(else_)?;
+                Ok(self.release_current_block(trailing))
+            })
+            .transpose()?;
 
         let expr = hlr::ExprDef::If { cond, then, else_ };
         Ok(self.hlr.expr(expr))
@@ -608,8 +615,6 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
     }
 
     fn lower_while_expr(&mut self, cond: ast::Expr<'ast>, body: ast::Block<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
-        self.start_new_block();
-
         let cond = self.lower_expr(cond)?;
 
         self.start_new_block();
@@ -760,7 +765,9 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             .collect::<AstToHlrResult<Vec<_>>>()?;
         let params = self.hlr.closure_params(&params);
 
-        let body = self.build_block(body)?;
+        self.start_new_block();
+        let trailing = self.build_block(body)?;
+        let body = self.release_current_block(trailing);
 
         let return_ty = return_ty.map(|ty| self.lower_ty_annot(ty)).transpose()?;
         self.scopes.pop_back();
