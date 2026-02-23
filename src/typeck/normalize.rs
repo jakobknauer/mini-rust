@@ -10,7 +10,11 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
         match ty_def {
             InfVar(iv) => match self.type_vars.get(&iv).copied() {
-                Some(resolved) => self.normalize(resolved),
+                Some(resolved) => {
+                    let normalized = self.normalize(resolved);
+                    self.type_vars.insert(iv, normalized); // Path compression
+                    normalized
+                }
                 None => ty,
             },
 

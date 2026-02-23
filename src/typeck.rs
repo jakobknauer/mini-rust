@@ -27,10 +27,6 @@
 // After writeback, assert that no InfVar survives in var_types or expr_types.
 // A surviving InfVar means the type was never constrained and should become a
 // TypeckError::AmbiguousType.
-//
-// ## Path compression (TODO)
-// normalize() currently re-traverses InfVar chains on every call. Writing back
-// the resolved type to type_vars after resolution would make repeated calls O(1).
 
 mod closures;
 mod err;
