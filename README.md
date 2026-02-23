@@ -35,7 +35,7 @@ The main entry point is [main.rs](src/main.rs). The compilation process in orche
 The compiler currently consists of two parallel pipelines, the second of which is incomplete and bound to replace the first.
 
 Common:
-- Parse the [Abstract Syntax Tree (AST)](src/ast.rs) from source code in [parser](src/parser.rs).
+- Parse the [Abstract Syntax Tree (AST)](src/ast.rs) from source code in [parser](src/parse.rs).
 - Build the `Ctxt` object defined in [ctxt](src/ctxt.rs) from the AST. This serves as a central registry for types, functions, traits etc..
 
 "Old" pipeline:
@@ -45,7 +45,7 @@ Common:
 - Write the LLVM IR in (textual representation) to disk.
 
 "New" pipeline (in progress):
-- Lower the AST to [High-Level Representation (HLR)](src/ctxt/hlr.rs) in [ast_to_hlr](src/ast_to_hlr.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
+- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_to_hlr](src/ast_to_hlr.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
 - Typecheck the HLR in [typeck](src/typeck.rs). (mostly complete)
 - Lower the HLR to MLR. (to be done)
 - Proceed as in the old pipeline
