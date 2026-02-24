@@ -175,6 +175,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             });
         }
 
+        self.created_closure_structs.push(captures_struct);
+
         self.ctxt
             .tys
             .inst_struct(captures_struct, &generics.env_gen_args)
@@ -215,6 +217,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 false,
             )
             .unwrap();
+
+        self.created_closure_fns.push(closure_fn);
 
         let gen_args = self.ctxt.tys.ty_slice(&[]);
         let env_gen_args = self.ctxt.tys.ty_slice(&generics.env_gen_args);

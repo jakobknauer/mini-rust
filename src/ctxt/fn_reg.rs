@@ -34,6 +34,10 @@ impl FnReg {
         self.sigs.get(fn_.0)
     }
 
+    pub fn get_mut_sig(&mut self, fn_: Fn) -> Option<&mut FnSig> {
+        self.sigs.get_mut(fn_.0)
+    }
+
     pub fn get_fn_by_name(&self, name: &str) -> Option<Fn> {
         self.fn_names.get(name).cloned()
     }

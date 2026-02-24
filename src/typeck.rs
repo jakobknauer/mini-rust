@@ -1,33 +1,3 @@
-// # Type checking design notes
-//
-// ## Inference variables
-// Unification binds inference variables (InfVar) lazily in `type_vars`. Types
-// stored during checking (in `HlrTyping`, `FnReg`, `TyReg`) may therefore
-// contain unresolved InfVars and must be normalized before use.
-//
-// ## Writeback (TODO)
-// After inference is complete, a writeback pass should normalize all stored
-// types. This mirrors rustc's writeback phase. Required for:
-//
-// - `HlrTyping::var_types` and `expr_types`: iterate and normalize in place.
-// - `ExprExtra` entries: loop and normalize the FnInst fields (gen_args,
-//   env_gen_args) in BinaryOp, UnaryOp, ValMthd, and Closure variants.
-// - Closure fn signatures in FnReg: normalize param and return types in place.
-//   Consistency with ExprExtra and expr_types is automatic because both hold a
-//   FnId (a reference into FnReg), so updating FnReg propagates everywhere.
-// - Closure capture struct fields in TyReg: normalize field types in place.
-//   Both registries require tracking the IDs of items created during closure
-//   checking (via `created_closure_fns` and `created_closure_structs` fields
-//   on Typeck, populated in build_closure_fn_inst / build_closure_captures_ty).
-//
-// The `normalize()` method should also handle `TyDef::Closure` (currently a
-// no-op), normalizing its captures_ty and fn_inst gen_args fields.
-//
-// ## Ambiguity check (TODO)
-// After writeback, assert that no InfVar survives in var_types or expr_types.
-// A surviving InfVar means the type was never constrained and should become a
-// TypeckError::AmbiguousType.
-
 mod closures;
 mod err;
 mod mthd;
@@ -76,6 +46,8 @@ pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckRe
         closure_counter: 0,
         return_ty_stack: vec![],
         var_uses: vec![],
+        created_closure_fns: vec![],
+        created_closure_structs: vec![],
     };
 
     typeck.check()
@@ -90,10 +62,20 @@ struct Typeck<'ctxt, 'hlr> {
     closure_counter: usize,
     return_ty_stack: Vec<ty::Ty>,
     var_uses: Vec<hlr::VarId>,
+
+    created_closure_fns: Vec<fns::Fn>,
+    created_closure_structs: Vec<ty::Struct>,
 }
 
 impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn check(mut self) -> TypeckResult<HlrTyping> {
+        self.check_body()?;
+        self.normalize_all();
+
+        Ok(self.typing)
+    }
+
+    fn check_body(&mut self) -> TypeckResult<()> {
         let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
 
         for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
@@ -104,14 +86,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         self.return_ty_stack.push(return_ty);
         let body_ty = self.infer_expr_ty(self.fn_.body, Some(return_ty))?;
 
-        if !self.unify(body_ty, return_ty) {
-            return Err(TypeckError::ReturnTypeMismatch {
+        if self.unify(body_ty, return_ty) {
+            Ok(())
+        } else {
+            Err(TypeckError::ReturnTypeMismatch {
                 expected: return_ty,
                 actual: body_ty,
-            });
+            })
         }
-
-        Ok(self.typing)
     }
 
     fn infer_expr_ty(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {

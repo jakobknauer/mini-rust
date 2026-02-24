@@ -1,6 +1,14 @@
-use crate::ctxt::{traits, ty};
+use crate::ctxt::{fns, traits, ty};
+
+use super::{ExprExtra, MthdResolution};
 
 impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
+    pub(super) fn normalize_all(&mut self) {
+        self.normalize_hlr_typing();
+        self.normalize_closure_fns();
+        self.normalize_closure_structs();
+    }
+
     pub(super) fn normalize(&mut self, ty: ty::Ty) -> ty::Ty {
         use ty::TyDef::*;
 
@@ -18,7 +26,23 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 None => ty,
             },
 
-            Primitive(_) | GenVar(_) | Closure { .. } => ty,
+            Primitive(_) | GenVar(_) => ty,
+
+            Closure {
+                fn_inst,
+                name,
+                captures_ty,
+            } => {
+                let captures_ty = self.normalize(captures_ty);
+                let gen_args = self.normalize_slice(fn_inst.gen_args);
+                let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
+                let fn_inst = fns::FnInst {
+                    fn_: fn_inst.fn_,
+                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
+                    env_gen_args: self.ctxt.tys.ty_slice(&env_gen_args),
+                };
+                self.ctxt.tys.closure(fn_inst, name, captures_ty)
+            }
 
             TraitSelf(_) => {
                 let self_ty = self
@@ -98,11 +122,114 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn normalize_slice(&mut self, slice: ty::TySlice) -> Vec<ty::Ty> {
+    pub(super) fn normalize_slice(&mut self, slice: ty::TySlice) -> Vec<ty::Ty> {
         let mut tys = self.ctxt.tys.get_ty_slice(slice).to_vec();
         for t in &mut tys {
             *t = self.normalize(*t);
         }
         tys
+    }
+
+    fn normalize_hlr_typing(&mut self) {
+        let var_ids: Vec<_> = self.typing.var_types.keys().copied().collect();
+        for var_id in var_ids {
+            let ty = self.typing.var_types[&var_id];
+            let normalized = self.normalize(ty);
+            self.typing.var_types.insert(var_id, normalized);
+        }
+
+        let expr_ids: Vec<_> = self.typing.expr_types.keys().copied().collect();
+        for expr_id in expr_ids {
+            let ty = self.typing.expr_types[&expr_id];
+            let normalized = self.normalize(ty);
+            self.typing.expr_types.insert(expr_id, normalized);
+        }
+
+        let expr_ids: Vec<_> = self.typing.expr_extra.keys().copied().collect();
+        for expr_id in expr_ids {
+            let extra = self.typing.expr_extra.remove(&expr_id).unwrap();
+            let extra = self.normalize_expr_extra(extra);
+            self.typing.expr_extra.insert(expr_id, extra);
+        }
+    }
+
+    fn normalize_expr_extra(&mut self, extra: ExprExtra) -> ExprExtra {
+        match extra {
+            ExprExtra::BinaryOp(fn_inst) => ExprExtra::BinaryOp(self.normalize_fn_inst(fn_inst)),
+            ExprExtra::UnaryOp(fn_inst) => ExprExtra::UnaryOp(self.normalize_fn_inst(fn_inst)),
+            ExprExtra::Closure { fn_inst, captured_vars } => ExprExtra::Closure {
+                fn_inst: self.normalize_fn_inst(fn_inst),
+                captured_vars,
+            },
+            ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
+            ExprExtra::FieldAccess { .. } => extra,
+        }
+    }
+
+    fn normalize_fn_inst(&mut self, fn_inst: fns::FnInst) -> fns::FnInst {
+        let gen_args = self.normalize_slice(fn_inst.gen_args);
+        let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
+        fns::FnInst {
+            fn_: fn_inst.fn_,
+            gen_args: self.ctxt.tys.ty_slice(&gen_args),
+            env_gen_args: self.ctxt.tys.ty_slice(&env_gen_args),
+        }
+    }
+
+    fn normalize_mthd_resolution(&mut self, resolution: MthdResolution) -> MthdResolution {
+        match resolution {
+            MthdResolution::Inherent(fn_inst) => MthdResolution::Inherent(self.normalize_fn_inst(fn_inst)),
+            MthdResolution::Trait(trait_mthd_inst) => {
+                let impl_ty = self.normalize(trait_mthd_inst.impl_ty);
+                let gen_args = self.normalize_slice(trait_mthd_inst.gen_args);
+                MthdResolution::Trait(fns::TraitMthdInst {
+                    impl_ty,
+                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
+                    ..trait_mthd_inst
+                })
+            }
+        }
+    }
+
+    fn normalize_closure_fns(&mut self) {
+        let fns = self.created_closure_fns.clone();
+        for fn_ in fns {
+            let sig = self.ctxt.fns.get_sig(fn_).unwrap();
+
+            let return_ty = sig.return_ty;
+            let param_tys: Vec<ty::Ty> = sig.params.iter().map(|p| p.ty).collect();
+
+            let return_ty = self.normalize(return_ty);
+            let param_tys: Vec<ty::Ty> = param_tys.into_iter().map(|ty| self.normalize(ty)).collect();
+
+            let sig = self.ctxt.fns.get_mut_sig(fn_).unwrap();
+
+            sig.return_ty = return_ty;
+            for (param, ty) in sig.params.iter_mut().zip(param_tys) {
+                param.ty = ty;
+            }
+        }
+    }
+
+    fn normalize_closure_structs(&mut self) {
+        let structs = self.created_closure_structs.clone();
+        for struct_ in structs {
+            let field_tys: Vec<ty::Ty> = self
+                .ctxt
+                .tys
+                .get_struct_def(struct_)
+                .unwrap()
+                .fields
+                .iter()
+                .map(|f| f.ty)
+                .collect();
+
+            let field_tys: Vec<ty::Ty> = field_tys.into_iter().map(|ty| self.normalize(ty)).collect();
+
+            let struct_def = self.ctxt.tys.get_mut_struct_def(struct_).unwrap();
+            for (field, ty) in struct_def.fields.iter_mut().zip(field_tys) {
+                field.ty = ty;
+            }
+        }
     }
 }
