@@ -2,6 +2,7 @@ mod closures;
 mod err;
 mod mthd;
 mod normalize;
+mod post_check;
 mod ty_annots;
 mod unify;
 
@@ -71,6 +72,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn check(mut self) -> TypeckResult<HlrTyping> {
         self.check_body()?;
         self.normalize_all();
+        self.post_check();
 
         Ok(self.typing)
     }
