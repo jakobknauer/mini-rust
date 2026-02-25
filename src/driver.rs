@@ -18,7 +18,7 @@ use crate::{
         err::{print_impl_check_error, print_obligation_check_error},
         impl_check::check_trait_impls,
     },
-    hlr, mlr_lowering,
+    hlr, hlr_lowering, mlr_lowering,
     obligation_check::check_obligations,
     parse, typeck,
     util::print,
@@ -494,7 +494,8 @@ impl<'a> Driver<'a> {
             let target_fn = self.ast_meta.fn_ids[&idx];
 
             let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, &hlr).unwrap();
-            let _ = typeck::typeck(&mut self.ctxt, &hlr_fn).expect(&format!("failed to typeck {}", fn_name));
+            let typing = typeck::typeck(&mut self.ctxt, &hlr_fn).expect(&format!("failed to typeck {}", fn_name));
+            hlr_lowering::hlr_to_mlr(&mut self.ctxt, &hlr_fn, &typing);
         }
     }
 

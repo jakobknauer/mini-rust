@@ -2,6 +2,7 @@ use crate::ctxt::{fns, traits, ty};
 use crate::hlr;
 use crate::typeck::{TypeckError, TypeckResult};
 
+#[derive(Clone)]
 pub enum MthdResolution {
     Inherent(fns::FnInst),
     Trait(fns::TraitMthdInst),
