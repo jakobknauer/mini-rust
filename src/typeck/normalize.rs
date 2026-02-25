@@ -161,6 +161,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 fn_inst: self.normalize_fn_inst(fn_inst),
                 captured_vars,
             },
+            ExprExtra::ValFn(fn_inst) => ExprExtra::ValFn(self.normalize_fn_inst(fn_inst)),
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::FieldAccess { .. } => extra,
         }

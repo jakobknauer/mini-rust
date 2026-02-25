@@ -25,6 +25,7 @@ pub struct HlrTyping {
 
 #[allow(unused)]
 pub enum ExprExtra {
+    ValFn(fns::FnInst),
     ValMthd(MthdResolution),
     BinaryOp(fns::FnInst),
     UnaryOp(fns::FnInst),
@@ -176,17 +177,22 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     .copied()
                     .ok_or(TypeckError::VarTypeNotSet { var_id, expr_id })
             }
-            &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(fn_, args),
+            &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(expr_id, fn_, args),
             hlr::Val::Struct(..) => unreachable!("raw struct values are not supported"),
             hlr::Val::Variant(..) => unreachable!("raw variant values are not supported"),
             hlr::Val::Mthd(base_ty, mthd_name, gen_args) => self.infer_mthd_ty(expr_id, base_ty, mthd_name, *gen_args),
         }
     }
 
-    fn infer_fn_ty(&mut self, fn_: fns::Fn, args: Option<hlr::TyAnnotSlice<'hlr>>) -> TypeckResult<ty::Ty> {
+    fn infer_fn_ty(
+        &mut self,
+        expr_id: hlr::ExprId,
+        fn_: fns::Fn,
+        args: Option<hlr::TyAnnotSlice<'hlr>>,
+    ) -> TypeckResult<ty::Ty> {
         let gen_arg_count = self.ctxt.fns.get_sig(fn_).unwrap().gen_params.len();
 
-        let args =
+        let gen_args =
             self.resolve_optional_gen_args(args, gen_arg_count, |actual| TypeckError::FnGenArgCountMismatch {
                 fn_,
                 expected: gen_arg_count,
@@ -194,12 +200,24 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             })?;
 
         let signature = self.ctxt.fns.get_sig(fn_).unwrap();
-        let subst = ty::GenVarSubst::new(&signature.gen_params, args).unwrap();
+        let subst = ty::GenVarSubst::new(&signature.gen_params, gen_args.clone()).unwrap();
 
         // TODO check generic constraints
 
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let fn_ty = self.ctxt.tys.fn_(&param_tys, signature.return_ty, signature.var_args);
+
+        let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+        let empty = self.ctxt.tys.ty_slice(&[]);
+        self.typing.expr_extra.insert(
+            expr_id,
+            ExprExtra::ValFn(fns::FnInst {
+                fn_,
+                gen_args,
+                env_gen_args: empty,
+            }),
+        );
+
         Ok(self.ctxt.tys.substitute_gen_vars(fn_ty, &subst))
     }
 
