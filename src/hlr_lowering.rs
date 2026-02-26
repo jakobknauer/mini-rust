@@ -9,17 +9,39 @@ use crate::{
 pub fn hlr_to_mlr<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>, typing: &HlrTyping) {
     let fn_mlr = {
         let mut lowerer = HlrLowerer::new(ctxt, fn_, typing);
-        lowerer.lower()
+        lowerer.lower_fn(fn_)
     };
     ctxt.fns.add_fn_def(fn_.fn_, fn_mlr);
 }
 
+fn lower_closure_body<'hlr>(
+    ctxt: &mut ctxt::Ctxt,
+    fn_: fns::Fn,
+    param_var_ids: &[hlr::VarId],
+    captured_vars: &[hlr::VarId],
+    body: hlr::Expr<'hlr>,
+    typing: &HlrTyping,
+) {
+    let mut lowerer = HlrLowerer {
+        ctxt,
+        fn_,
+        typing,
+        var_locs: HashMap::new(),
+        blocks: Vec::new(),
+        _hlr: std::marker::PhantomData,
+    };
+
+    let fn_mlr = lowerer.lower_closure(param_var_ids, captured_vars, body);
+    ctxt.fns.add_fn_def(fn_, fn_mlr);
+}
+
 struct HlrLowerer<'a, 'hlr> {
     ctxt: &'a mut ctxt::Ctxt,
-    fn_: &'hlr hlr::Fn<'hlr>,
+    fn_: fns::Fn,
     typing: &'a HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
     blocks: Vec<Vec<mlr::Stmt>>,
+    _hlr: std::marker::PhantomData<hlr::Fn<'hlr>>,
 }
 
 enum Lowered {
@@ -32,26 +54,69 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
     fn new(ctxt: &'a mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>, typing: &'a HlrTyping) -> Self {
         Self {
             ctxt,
-            fn_,
+            fn_: fn_.fn_,
             typing,
             var_locs: HashMap::new(),
             blocks: Vec::new(),
+            _hlr: std::marker::PhantomData,
         }
     }
 
-    fn lower(&mut self) -> fns::FnMlr {
-        let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap().clone();
+    fn lower_fn(&mut self, fn_: &'hlr hlr::Fn<'hlr>) -> fns::FnMlr {
+        let sig = self.ctxt.fns.get_sig(fn_.fn_).unwrap().clone();
 
         let mut param_locs = Vec::new();
-        for (param, &var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
+        for (param, &var_id) in sig.params.iter().zip(&fn_.param_var_ids) {
             let loc = self.ctxt.mlr.insert_typed_loc(param.ty);
             param_locs.push(loc);
             self.var_locs.insert(var_id, loc);
         }
 
         self.start_block();
-        let body_expr = self.fn_.body;
-        let body_val = self.lower_to_val(body_expr);
+        let body_val = self.lower_to_val(fn_.body);
+        self.insert_return_stmt(body_val);
+        let body = self.end_block();
+
+        fns::FnMlr { body, param_locs }
+    }
+
+    fn lower_closure(
+        &mut self,
+        param_var_ids: &[hlr::VarId],
+        captured_vars: &[hlr::VarId],
+        body: hlr::Expr<'hlr>,
+    ) -> fns::FnMlr {
+        let sig = self.ctxt.fns.get_sig(self.fn_).unwrap().clone();
+        let captures_ty = sig.params[0].ty;
+
+        let mut param_locs = Vec::new();
+
+        let captures_loc = self.ctxt.mlr.insert_typed_loc(captures_ty);
+        param_locs.push(captures_loc);
+
+        for (param, &var_id) in sig.params[1..].iter().zip(param_var_ids) {
+            let loc = self.ctxt.mlr.insert_typed_loc(param.ty);
+            param_locs.push(loc);
+            self.var_locs.insert(var_id, loc);
+        }
+        self.start_block();
+
+        let captures_place = self.insert_loc_place(captures_loc);
+        for (i, &var_id) in captured_vars.iter().enumerate() {
+            let field_ty = self.ctxt.tys.get_struct_field_ty(captures_ty, i).unwrap();
+
+            let field_place = self.insert_field_access_place(captures_place, i, field_ty);
+            let copy_op = self.insert_copy_op(field_place);
+            let use_val = self.insert_use_val(copy_op);
+
+            let loc = self.ctxt.mlr.insert_typed_loc(field_ty);
+
+            self.insert_alloc_stmt(loc);
+            self.insert_assign_to_loc_stmt(loc, use_val);
+            self.var_locs.insert(var_id, loc);
+        }
+
+        let body_val = self.lower_to_val(body);
         self.insert_return_stmt(body_val);
         let body = self.end_block();
 
@@ -83,7 +148,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
             hlr::ExprDef::Deref(inner) => Lowered::Place(self.lower_deref(*inner)),
             hlr::ExprDef::AddrOf(inner) => Lowered::Val(self.lower_addr_of(*inner)),
             hlr::ExprDef::As { expr: inner, .. } => Lowered::Val(self.lower_as(expr_id, *inner)),
-            hlr::ExprDef::Closure { .. } => todo!("closure lowering not yet implemented"),
+            hlr::ExprDef::Closure { params, body, .. } => Lowered::Val(self.lower_closure_expr(expr_id, params, *body)),
             hlr::ExprDef::If { cond, then, else_ } => Lowered::Val(self.lower_if(expr_id, *cond, *then, *else_)),
             hlr::ExprDef::Loop { body } => Lowered::Val(self.lower_loop(*body)),
             hlr::ExprDef::Match { scrutinee, arms } => Lowered::Val(self.lower_match(expr_id, *scrutinee, arms)),
@@ -193,7 +258,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
                     _ => panic!("expected ValFn extra"),
                 };
                 let ty = self.typing.expr_types[&expr_id];
-                self.ctxt.fns.register_fn_call(self.fn_.fn_, fn_inst);
+                self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
                 let op = self.ctxt.mlr.insert_op(mlr::OpDef::Fn(fn_inst));
                 self.ctxt.mlr.set_op_ty(op, ty);
                 Lowered::Op(op)
@@ -691,6 +756,59 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         self.lower_to_val(arm.body)
     }
 
+    fn lower_closure_expr(
+        &mut self,
+        expr_id: hlr::ExprId,
+        params: hlr::ClosureParams<'hlr>,
+        body: hlr::Expr<'hlr>,
+    ) -> mlr::Val {
+        let (fn_inst, captured_vars) = match &self.typing.expr_extra[&expr_id] {
+            ExprExtra::Closure { fn_inst, captured_vars } => (*fn_inst, captured_vars.clone()),
+            _ => panic!("expected Closure extra"),
+        };
+
+        let closure_ty = self.typing.expr_types[&expr_id];
+        let captures_ty = match self.ctxt.tys.get_ty_def(closure_ty).cloned() {
+            Some(ty::TyDef::Closure { captures_ty, .. }) => captures_ty,
+            _ => panic!("closure expr should have Closure type"),
+        };
+
+        self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
+
+        let closure_loc = self.ctxt.mlr.insert_typed_loc(closure_ty);
+        self.insert_alloc_stmt(closure_loc);
+        let closure_place = self.insert_loc_place(closure_loc);
+
+        let captures_place = self.insert_closure_captures_place(closure_place, captures_ty);
+        self.start_block();
+        for (i, &var_id) in captured_vars.iter().enumerate() {
+            let field_ty = self.ctxt.tys.get_struct_field_ty(captures_ty, i).unwrap();
+
+            let field_place = self.insert_field_access_place(captures_place, i, field_ty);
+
+            let var_loc = self.var_locs[&var_id];
+            let var_place = self.insert_loc_place(var_loc);
+            let copy_op = self.insert_copy_op(var_place);
+            let use_val = self.insert_use_val(copy_op);
+
+            self.insert_assign_stmt(field_place, use_val);
+        }
+        self.end_and_push_block();
+
+        let param_var_ids: Vec<_> = params.iter().map(|hlr::ClosureParam(v, _)| *v).collect();
+        lower_closure_body(
+            self.ctxt,
+            fn_inst.fn_,
+            &param_var_ids,
+            &captured_vars,
+            body,
+            self.typing,
+        );
+
+        let copy_op = self.insert_copy_op(closure_place);
+        self.insert_use_val(copy_op)
+    }
+
     fn lower_block(&mut self, stmts: hlr::StmtSlice<'hlr>, trailing: hlr::Expr<'hlr>) -> mlr::Val {
         for stmt in stmts {
             self.lower_stmt(stmt);
@@ -778,13 +896,13 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
     fn lower_mthd_resolution_to_op(&mut self, resolution: &MthdResolution, op_ty: ty::Ty) -> mlr::Op {
         match resolution {
             MthdResolution::Inherent(fn_inst) => {
-                self.ctxt.fns.register_fn_call(self.fn_.fn_, *fn_inst);
+                self.ctxt.fns.register_fn_call(self.fn_, *fn_inst);
                 let op = self.ctxt.mlr.insert_op(mlr::OpDef::Fn(*fn_inst));
                 self.ctxt.mlr.set_op_ty(op, op_ty);
                 op
             }
             MthdResolution::Trait(inst) => {
-                self.ctxt.fns.register_trait_mthd_call(self.fn_.fn_, *inst);
+                self.ctxt.fns.register_trait_mthd_call(self.fn_, *inst);
                 let op = self.ctxt.mlr.insert_op(mlr::OpDef::TraitMthd(*inst));
                 self.ctxt.mlr.set_op_ty(op, op_ty);
                 op
@@ -858,6 +976,12 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         place
     }
 
+    fn insert_closure_captures_place(&mut self, base: mlr::Place, captures_ty: ty::Ty) -> mlr::Place {
+        let place = self.ctxt.mlr.insert_place(mlr::PlaceDef::ClosureCaptures(base));
+        self.ctxt.mlr.set_place_ty(place, captures_ty);
+        place
+    }
+
     fn insert_enum_discriminant_place(&mut self, base: mlr::Place) -> mlr::Place {
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let place = self.ctxt.mlr.insert_place(mlr::PlaceDef::EnumDiscriminant { base });
@@ -898,7 +1022,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
     }
 
     fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> mlr::Op {
-        self.ctxt.fns.register_fn_call(self.fn_.fn_, fn_inst);
+        self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
         let ty = self.fn_ty_of_fn_inst(fn_inst);
         let op = self.ctxt.mlr.insert_op(mlr::OpDef::Fn(fn_inst));
         self.ctxt.mlr.set_op_ty(op, ty);
@@ -906,7 +1030,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
     }
 
     fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst) -> mlr::Op {
-        self.ctxt.fns.register_trait_mthd_call(self.fn_.fn_, inst);
+        self.ctxt.fns.register_trait_mthd_call(self.fn_, inst);
         let ty = self.trait_mthd_fn_ty(inst);
         let op = self.ctxt.mlr.insert_op(mlr::OpDef::TraitMthd(inst));
         self.ctxt.mlr.set_op_ty(op, ty);
