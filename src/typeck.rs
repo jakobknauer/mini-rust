@@ -301,6 +301,20 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let unit_ty = self.ctxt.tys.unit();
 
         use hlr::BinaryOperator::*;
+
+        // LogicalAnd/Or are lowered as short-circuit branches, not function calls — no ExprExtra needed
+        if matches!(operator, LogicalAnd | LogicalOr) {
+            if left_ty == bool_ty && right_ty == bool_ty {
+                return Ok(bool_ty);
+            } else {
+                return Err(TypeckError::BinaryOpTypeMismatch {
+                    operator,
+                    left_ty,
+                    right_ty,
+                });
+            }
+        }
+
         let (fn_name, result_ty) = match operator {
             Add if left_ty == i32_ty && right_ty == i32_ty => ("add::<i32>", i32_ty),
             Subtract if left_ty == i32_ty && right_ty == i32_ty => ("sub::<i32>", i32_ty),

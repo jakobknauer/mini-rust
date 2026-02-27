@@ -183,9 +183,15 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             MthdResolution::Trait(trait_mthd_inst) => {
                 let impl_ty = self.normalize(trait_mthd_inst.impl_ty);
                 let gen_args = self.normalize_slice(trait_mthd_inst.gen_args);
+                let trait_gen_args = self.normalize_slice(trait_mthd_inst.trait_inst.gen_args);
+                let trait_inst = traits::TraitInst {
+                    trait_: trait_mthd_inst.trait_inst.trait_,
+                    gen_args: self.ctxt.tys.ty_slice(&trait_gen_args),
+                };
                 MthdResolution::Trait(fns::TraitMthdInst {
                     impl_ty,
                     gen_args: self.ctxt.tys.ty_slice(&gen_args),
+                    trait_inst,
                     ..trait_mthd_inst
                 })
             }

@@ -537,7 +537,8 @@ impl<'a> Driver<'a> {
         let mut typings = Vec::new();
         for hlr_fn in hlr_fns {
             let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
-            let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|_| format!("failed to typeck {fn_name}"))?;
+            let typing =
+                typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|e| format!("failed to typeck {fn_name}: {e:?}"))?;
             typings.push(typing);
         }
         Ok(typings)
