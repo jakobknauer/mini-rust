@@ -46,8 +46,8 @@ Common:
 
 "New" pipeline (in progress):
 - Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_to_hlr](src/ast_to_hlr.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
-- Typecheck the HLR in [typeck](src/typeck.rs). (mostly complete)
-- Lower the HLR to MLR. (to be done)
+- Typecheck the HLR in [typeck](src/typeck.rs). (complete)
+- Lower the HLR to MLR. (complete) 
 - Proceed as in the old pipeline
 
 The compiler uses the following representations of the program:
