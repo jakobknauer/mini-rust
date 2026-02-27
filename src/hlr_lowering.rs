@@ -8,31 +8,10 @@ use crate::{
 
 pub fn hlr_to_mlr<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>, typing: &HlrTyping) {
     let fn_mlr = {
-        let mut lowerer = HlrLowerer::new(ctxt, fn_, typing);
+        let mut lowerer = HlrLowerer::new(ctxt, fn_.fn_, typing);
         lowerer.lower_fn(fn_)
     };
     ctxt.fns.add_fn_def(fn_.fn_, fn_mlr);
-}
-
-fn lower_closure_body<'hlr>(
-    ctxt: &mut ctxt::Ctxt,
-    fn_: fns::Fn,
-    param_var_ids: &[hlr::VarId],
-    captured_vars: &[hlr::VarId],
-    body: hlr::Expr<'hlr>,
-    typing: &HlrTyping,
-) {
-    let mut lowerer = HlrLowerer {
-        ctxt,
-        fn_,
-        typing,
-        var_locs: HashMap::new(),
-        blocks: Vec::new(),
-        _hlr: std::marker::PhantomData,
-    };
-
-    let fn_mlr = lowerer.lower_closure(param_var_ids, captured_vars, body);
-    ctxt.fns.add_fn_def(fn_, fn_mlr);
 }
 
 struct HlrLowerer<'a, 'hlr> {
@@ -41,7 +20,7 @@ struct HlrLowerer<'a, 'hlr> {
     typing: &'a HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
     blocks: Vec<Vec<mlr::Stmt>>,
-    _hlr: std::marker::PhantomData<hlr::Fn<'hlr>>,
+    _hlr: std::marker::PhantomData<&'hlr hlr::Hlr<'hlr>>,
 }
 
 enum Lowered {
@@ -51,10 +30,10 @@ enum Lowered {
 }
 
 impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
-    fn new(ctxt: &'a mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>, typing: &'a HlrTyping) -> Self {
+    fn new(ctxt: &'a mut ctxt::Ctxt, fn_: fns::Fn, typing: &'a HlrTyping) -> Self {
         Self {
             ctxt,
-            fn_: fn_.fn_,
+            fn_,
             typing,
             var_locs: HashMap::new(),
             blocks: Vec::new(),
@@ -63,57 +42,48 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
     }
 
     fn lower_fn(&mut self, fn_: &'hlr hlr::Fn<'hlr>) -> fns::FnMlr {
-        let sig = self.ctxt.fns.get_sig(fn_.fn_).unwrap().clone();
-
-        let mut param_locs = Vec::new();
-        for (param, &var_id) in sig.params.iter().zip(&fn_.param_var_ids) {
-            let loc = self.ctxt.mlr.insert_typed_loc(param.ty);
-            param_locs.push(loc);
-            self.var_locs.insert(var_id, loc);
-        }
-
-        self.start_block();
-        let body_val = self.lower_to_val(fn_.body);
-        self.insert_return_stmt(body_val);
-        let body = self.end_block();
-
-        fns::FnMlr { body, param_locs }
+        self.lower_body(&fn_.param_var_ids, None, fn_.body)
     }
 
-    fn lower_closure(
+    fn lower_body(
         &mut self,
         param_var_ids: &[hlr::VarId],
-        captured_vars: &[hlr::VarId],
+        captured_vars: Option<&[hlr::VarId]>,
         body: hlr::Expr<'hlr>,
     ) -> fns::FnMlr {
         let sig = self.ctxt.fns.get_sig(self.fn_).unwrap().clone();
-        let captures_ty = sig.params[0].ty;
-
         let mut param_locs = Vec::new();
 
-        let captures_loc = self.ctxt.mlr.insert_typed_loc(captures_ty);
-        param_locs.push(captures_loc);
-
-        for (param, &var_id) in sig.params[1..].iter().zip(param_var_ids) {
+        // For closures, the first sig param is the captures struct (no VarId binding)
+        let regular_params = if captured_vars.is_some() {
+            let captures_loc = self.ctxt.mlr.insert_typed_loc(sig.params[0].ty);
+            param_locs.push(captures_loc);
+            &sig.params[1..]
+        } else {
+            &sig.params[..]
+        };
+        for (param, &var_id) in regular_params.iter().zip(param_var_ids) {
             let loc = self.ctxt.mlr.insert_typed_loc(param.ty);
             param_locs.push(loc);
             self.var_locs.insert(var_id, loc);
         }
+
         self.start_block();
 
-        let captures_place = self.insert_loc_place(captures_loc);
-        for (i, &var_id) in captured_vars.iter().enumerate() {
-            let field_ty = self.ctxt.tys.get_struct_field_ty(captures_ty, i).unwrap();
-
-            let field_place = self.insert_field_access_place(captures_place, i, field_ty);
-            let copy_op = self.insert_copy_op(field_place);
-            let use_val = self.insert_use_val(copy_op);
-
-            let loc = self.ctxt.mlr.insert_typed_loc(field_ty);
-
-            self.insert_alloc_stmt(loc);
-            self.insert_assign_to_loc_stmt(loc, use_val);
-            self.var_locs.insert(var_id, loc);
+        // Extract captured vars from the captures struct into individual locals
+        if let Some(captured_vars) = captured_vars {
+            let captures_ty = sig.params[0].ty;
+            let captures_place = self.insert_loc_place(param_locs[0]);
+            for (i, &var_id) in captured_vars.iter().enumerate() {
+                let field_ty = self.ctxt.tys.get_struct_field_ty(captures_ty, i).unwrap();
+                let field_place = self.insert_field_access_place(captures_place, i, field_ty);
+                let copy_op = self.insert_copy_op(field_place);
+                let use_val = self.insert_use_val(copy_op);
+                let loc = self.ctxt.mlr.insert_typed_loc(field_ty);
+                self.insert_alloc_stmt(loc);
+                self.insert_assign_to_loc_stmt(loc, use_val);
+                self.var_locs.insert(var_id, loc);
+            }
         }
 
         let body_val = self.lower_to_val(body);
@@ -148,7 +118,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
             hlr::ExprDef::Deref(inner) => Lowered::Place(self.lower_deref(*inner)),
             hlr::ExprDef::AddrOf(inner) => Lowered::Val(self.lower_addr_of(*inner)),
             hlr::ExprDef::As { expr: inner, .. } => Lowered::Val(self.lower_as(expr_id, *inner)),
-            hlr::ExprDef::Closure { params, body, .. } => Lowered::Val(self.lower_closure_expr(expr_id, params, *body)),
+            hlr::ExprDef::Closure { params, body, .. } => Lowered::Val(self.lower_closure(expr_id, params, *body)),
             hlr::ExprDef::If { cond, then, else_ } => Lowered::Val(self.lower_if(expr_id, *cond, *then, *else_)),
             hlr::ExprDef::Loop { body } => Lowered::Val(self.lower_loop(*body)),
             hlr::ExprDef::Match { scrutinee, arms } => Lowered::Val(self.lower_match(expr_id, *scrutinee, arms)),
@@ -756,7 +726,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         self.lower_to_val(arm.body)
     }
 
-    fn lower_closure_expr(
+    fn lower_closure(
         &mut self,
         expr_id: hlr::ExprId,
         params: hlr::ClosureParams<'hlr>,
@@ -796,14 +766,9 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         self.end_and_push_block();
 
         let param_var_ids: Vec<_> = params.iter().map(|hlr::ClosureParam(v, _)| *v).collect();
-        lower_closure_body(
-            self.ctxt,
-            fn_inst.fn_,
-            &param_var_ids,
-            &captured_vars,
-            body,
-            self.typing,
-        );
+        let mut closure_lowerer = HlrLowerer::new(self.ctxt, fn_inst.fn_, self.typing);
+        let fn_mlr = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
+        self.ctxt.fns.add_fn_def(fn_inst.fn_, fn_mlr);
 
         let copy_op = self.insert_copy_op(closure_place);
         self.insert_use_val(copy_op)
