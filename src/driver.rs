@@ -89,14 +89,23 @@ impl<'a> Driver<'a> {
 
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
 
-        self.print_pretty("Building HLR from AST (not used for anything yet)");
-        self.lower_ast_to_hlr(&ast);
+        self.define_stdlib_mlrs()?;
 
-        self.print_pretty("Building MLR from AST");
-        self.build_function_mlrs(&ast)
-            .map_err(|err| format!("Error building MLR: {err}"))?;
-        self.build_impl_fn_mlrs(&ast)
-            .map_err(|err| format!("Error building MLR for impls: {err}"))?;
+        let hlr = hlr::Hlr::new();
+
+        self.print_pretty("Lowering free functions: AST to HLR");
+        let free_hlr_fns = self.free_fns_ast_to_hlr(&ast, &hlr)?;
+        self.print_pretty("Lowering free functions: type checking");
+        let free_typings = self.typeck_hlr_fns(&free_hlr_fns)?;
+        self.print_pretty("Lowering free functions: HLR to MLR");
+        self.hlr_fns_to_mlr(&free_hlr_fns, &free_typings);
+
+        self.print_pretty("Lowering impl methods: AST to HLR");
+        let impl_hlr_fns = self.impl_fns_ast_to_hlr(&ast, &hlr)?;
+        self.print_pretty("Lowering impl methods: type checking");
+        let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
+        self.print_pretty("Lowering impl methods: HLR to MLR");
+        self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
         check_obligations(&mut self.ctxt).map_err(|err| print_obligation_check_error(err, &self.ctxt))?;
 
         ast_lowering::opt::canonicalize_types(&mut self.ctxt).map_err(|_| "Could not infer types")?;
@@ -482,58 +491,62 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn lower_ast_to_hlr<'ast>(&mut self, ast: &'ast ast::Ast<'ast>) {
-        let hlr = hlr::Hlr::new();
-        for (idx, &ast_fn) in ast.free_fns().iter().enumerate() {
-            let Some(body) = ast_fn.body else {
-                continue;
-            };
-
-            let fn_name = &ast_fn.name;
-
-            let target_fn = self.ast_meta.fn_ids[&idx];
-
-            let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, &hlr).unwrap();
-            let typing = typeck::typeck(&mut self.ctxt, &hlr_fn).expect(&format!("failed to typeck {}", fn_name));
-            hlr_lowering::hlr_to_mlr(&mut self.ctxt, &hlr_fn, &typing);
-        }
-    }
-
-    fn build_function_mlrs<'ast>(&mut self, ast: &'ast ast::Ast<'ast>) -> Result<(), String> {
+    fn define_stdlib_mlrs(&mut self) -> Result<(), String> {
         stdlib::define_size_of(&mut self.ctxt)?;
         stdlib::define_impl_for_ptr(&mut self.ctxt)
             .map_err(|err| err::print_mlr_builder_error("offset", err, &self.ctxt))?;
-
-        for (idx, &ast_fn) in ast.free_fns().iter().enumerate() {
-            let Some(body) = &ast_fn.body else {
-                continue;
-            };
-
-            let target_fn = self.ast_meta.fn_ids[&idx];
-
-            ast_lowering::ast_to_mlr(&mut self.ctxt, ast, body, target_fn)
-                .map_err(|err| err::print_mlr_builder_error(&ast_fn.name, err, &self.ctxt))?;
-        }
-
         Ok(())
     }
 
-    fn build_impl_fn_mlrs<'ast>(&mut self, ast: &'ast ast::Ast<'ast>) -> Result<(), String> {
+    fn free_fns_ast_to_hlr<'ast, 'hlr>(
+        &self,
+        ast: &'ast ast::Ast<'ast>,
+        hlr: &'hlr hlr::Hlr<'hlr>,
+    ) -> Result<Vec<hlr::Fn<'hlr>>, String> {
+        let mut hlr_fns = Vec::new();
+        for (idx, &ast_fn) in ast.free_fns().iter().enumerate() {
+            let Some(body) = ast_fn.body else { continue };
+            let target_fn = self.ast_meta.fn_ids[&idx];
+            let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, hlr)
+                .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
+            hlr_fns.push(hlr_fn);
+        }
+        Ok(hlr_fns)
+    }
+
+    fn impl_fns_ast_to_hlr<'ast, 'hlr>(
+        &self,
+        ast: &'ast ast::Ast<'ast>,
+        hlr: &'hlr hlr::Hlr<'hlr>,
+    ) -> Result<Vec<hlr::Fn<'hlr>>, String> {
+        let mut hlr_fns = Vec::new();
         for (idx, ast_impl) in ast.impls().iter().enumerate() {
             let impl_ = self.ast_meta.impl_ids[&idx];
-            let impl_def = self.ctxt.impls.get_impl_def(impl_);
-            let impl_mthds = impl_def.mthds.clone();
-
+            let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
             for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
-                let Some(body) = &ast_mthd.body else {
-                    continue;
-                };
-                ast_lowering::ast_to_mlr(&mut self.ctxt, ast, body, target_fn)
-                    .map_err(|err| err::print_mlr_builder_error(&ast_mthd.name, err, &self.ctxt))?;
+                let Some(body) = ast_mthd.body else { continue };
+                let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, hlr)
+                    .map_err(|_| format!("failed to lower {} to HLR", ast_mthd.name))?;
+                hlr_fns.push(hlr_fn);
             }
         }
+        Ok(hlr_fns)
+    }
 
-        Ok(())
+    fn typeck_hlr_fns<'hlr>(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<Vec<typeck::HlrTyping>, String> {
+        let mut typings = Vec::new();
+        for hlr_fn in hlr_fns {
+            let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
+            let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|_| format!("failed to typeck {fn_name}"))?;
+            typings.push(typing);
+        }
+        Ok(typings)
+    }
+
+    fn hlr_fns_to_mlr<'hlr>(&mut self, hlr_fns: &[hlr::Fn<'hlr>], typings: &[typeck::HlrTyping]) {
+        for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
+            hlr_lowering::hlr_to_mlr(&mut self.ctxt, hlr_fn, typing);
+        }
     }
 
     fn print_functions(&mut self, path: &Path) -> Result<(), ()> {
