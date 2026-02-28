@@ -32,23 +32,16 @@ The compiler as of now outputs LLVM IR, which can be compiled to machine code us
 ## Architecture
 
 The main entry point is [main.rs](src/main.rs). The compilation process in orchestrated by the [driver](src/driver.rs) module.
-The compiler currently consists of two parallel pipelines, the second of which is incomplete and bound to replace the first.
 
-Common:
+The compilation process takes the following steps:
 - Parse the [Abstract Syntax Tree (AST)](src/ast.rs) from source code in [parser](src/parse.rs).
 - Build the `Ctxt` object defined in [ctxt](src/ctxt.rs) from the AST. This serves as a central registry for types, functions, traits etc..
-
-"Old" pipeline:
-- Lower the AST to [Mid-Level Representation (MLR)](src/ctxt/mlr.rs) in [ast_lowering](src/ast_lowering.rs). This pass includes type inference and checking, name resolution, desugaring, as well as the actual lowering.
+- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_to_hlr](src/ast_to_hlr.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
+- Typecheck the HLR in [typeck](src/typeck.rs).
+- Lower the HLR to MLR. 
 - Monomorphization: Using information recorded during the previous pass, recursively determine all instantiations of functions with respective generic arguments.
 - Lower the MLR to LLVM Immediate Representation (IR) in [mlr_lowering](src/mlr_lowering.rs). This is done for all function instantiations, i.e. this is where the actual monomorphization happens.
 - Write the LLVM IR in (textual representation) to disk.
-
-"New" pipeline (in progress):
-- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_to_hlr](src/ast_to_hlr.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
-- Typecheck the HLR in [typeck](src/typeck.rs). (complete)
-- Lower the HLR to MLR. (complete) 
-- Proceed as in the old pipeline
 
 The compiler uses the following representations of the program:
 - [AST](src/ast.rs): Mostly verbatim representation of the source code, except for comments, whitespaces and some details. Purely syntactical. The only representation that contains all parts of the program, not only function bodies.
