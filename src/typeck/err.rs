@@ -129,4 +129,13 @@ pub enum TypeckError {
         var_id: hlr::VarId,
         expr_id: hlr::ExprId,
     },
+    ConstraintNotSatisfied {
+        ty: ty::Ty,
+        trait_inst: traits::TraitInst,
+    },
+    CallableConstraintNotSatisfied {
+        ty: ty::Ty,
+        expected_param_tys: Vec<ty::Ty>,
+        expected_return_ty: ty::Ty,
+    },
 }

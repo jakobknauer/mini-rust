@@ -50,6 +50,7 @@ pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckRe
         var_uses: vec![],
         created_closure_fns: vec![],
         created_closure_structs: vec![],
+        pending_obligations: vec![],
     };
 
     typeck.check()
@@ -67,12 +68,15 @@ struct Typeck<'ctxt, 'hlr> {
 
     created_closure_fns: Vec<fns::Fn>,
     created_closure_structs: Vec<ty::Struct>,
+
+    pending_obligations: Vec<(ty::Ty, ty::ConstraintRequirement)>,
 }
 
 impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn check(mut self) -> TypeckResult<HlrTyping> {
         self.check_body()?;
         self.normalize_all();
+        self.check_pending_obligations()?;
         self.post_check();
 
         Ok(self.typing)
@@ -200,12 +204,16 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             })?;
 
         let signature = self.ctxt.fns.get_sig(fn_).unwrap();
-        let subst = ty::GenVarSubst::new(&signature.gen_params, gen_args.clone()).unwrap();
-
-        // TODO check generic constraints
-
+        let gen_params = signature.gen_params.clone();
+        let subst = ty::GenVarSubst::new(&gen_params, gen_args.clone()).unwrap();
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, signature.return_ty, signature.var_args);
+        let return_ty = signature.return_ty;
+        let var_args = signature.var_args;
+        let _ = signature;
+
+        self.add_constraint_obligations(&gen_params, &gen_args, &subst);
+
+        let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
 
         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
         let empty = self.ctxt.tys.ty_slice(&[]);
@@ -812,5 +820,86 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         } else {
             Err(TypeckError::ReturnExprTypeMismatch { expected, actual })
         }
+    }
+
+    pub(super) fn add_constraint_obligations(
+        &mut self,
+        gen_params: &[ty::GenVar],
+        gen_args: &[ty::Ty],
+        subst: &ty::GenVarSubst,
+    ) {
+        for (&gen_param, &gen_arg) in gen_params.iter().zip(gen_args) {
+            let reqs: Vec<_> = self.ctxt.tys.get_requirements_for(gen_param).cloned().collect();
+            for req in reqs {
+                match &req {
+                    ty::ConstraintRequirement::Trait(trait_inst) => {
+                        let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
+                        let new_inst = traits::TraitInst {
+                            trait_: trait_inst.trait_,
+                            gen_args: new_gen_args,
+                        };
+                        self.pending_obligations
+                            .push((gen_arg, ty::ConstraintRequirement::Trait(new_inst)));
+                    }
+                    ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+                        let param_tys = param_tys
+                            .iter()
+                            .map(|&t| self.ctxt.tys.substitute_gen_vars(t, subst))
+                            .collect();
+                        let return_ty = self.ctxt.tys.substitute_gen_vars(*return_ty, subst);
+                        self.pending_obligations
+                            .push((gen_arg, ty::ConstraintRequirement::Callable { param_tys, return_ty }));
+                    }
+                }
+            }
+        }
+    }
+
+    fn check_pending_obligations(&mut self) -> TypeckResult<()> {
+        let obligations = std::mem::take(&mut self.pending_obligations);
+        for (ty, req) in obligations {
+            let ty = self.normalize(ty);
+            if matches!(self.ctxt.tys.get_ty_def(ty), Some(ty::TyDef::InfVar(_))) {
+                continue;
+            }
+            match req {
+                ty::ConstraintRequirement::Trait(trait_inst) => {
+                    let gen_args: Vec<_> = self.ctxt.tys.get_ty_slice(trait_inst.gen_args).to_vec();
+                    let gen_args: Vec<_> = gen_args.iter().map(|&t| self.normalize(t)).collect();
+                    let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                    let trait_inst = traits::TraitInst {
+                        trait_: trait_inst.trait_,
+                        gen_args,
+                    };
+                    if !self.ctxt.ty_implements_trait_inst(ty, trait_inst) {
+                        return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
+                    }
+                }
+                ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+                    let param_tys: Vec<_> = param_tys.iter().map(|&t| self.normalize(t)).collect();
+                    let return_ty = self.normalize(return_ty);
+                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(ty) else {
+                        return Err(TypeckError::CallableConstraintNotSatisfied {
+                            ty,
+                            expected_param_tys: param_tys,
+                            expected_return_ty: return_ty,
+                        });
+                    };
+                    let actual_params: Vec<_> = actual_params.iter().map(|&t| self.normalize(t)).collect();
+                    let actual_return = self.normalize(actual_return);
+                    let types_match = param_tys.len() == actual_params.len()
+                        && param_tys.iter().zip(&actual_params).all(|(&a, &b)| a == b)
+                        && return_ty == actual_return;
+                    if !types_match {
+                        return Err(TypeckError::CallableConstraintNotSatisfied {
+                            ty,
+                            expected_param_tys: param_tys,
+                            expected_return_ty: return_ty,
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
