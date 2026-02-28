@@ -10,6 +10,5 @@ mod hlr_lowering;
 mod mlr_lowering;
 mod obligation_check;
 mod parse;
-mod typechecker;
 mod typeck;
 mod util;
