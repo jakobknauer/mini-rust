@@ -16,7 +16,7 @@ use crate::{
     },
     driver::{err::print_impl_check_error, impl_check::check_trait_impls},
     hlr, hlr_lowering, mlr_lowering, parse, typeck,
-    util::print,
+    util::print::mlr as print,
 };
 
 #[derive(Default)]
