@@ -125,15 +125,11 @@ impl<'a> Lexer<'a> {
             self.position += 1;
         }
 
-        let identifier = &self
-            .input
-            .iter()
-            .skip(start)
-            .take(self.position - start)
-            .collect::<String>();
-        let token = try_into_keyword_token(identifier).unwrap_or_else(|| Token::Identifier(identifier.to_string()));
+        let ident_or_keyword: String = self.input[start..self.position].iter().collect();
 
-        Some(token)
+        try_into_keyword_token(&ident_or_keyword)
+            .unwrap_or(Token::Identifier(ident_or_keyword))
+            .into()
     }
 
     fn try_parse_number(&mut self) -> Option<Token> {
@@ -149,14 +145,8 @@ impl<'a> Lexer<'a> {
             self.position += 1;
         }
 
-        let number_str = &self
-            .input
-            .iter()
-            .skip(start)
-            .take(self.position - start)
-            .collect::<String>();
-
-        Some(Token::NumLiteral(number_str.to_string()))
+        let number_str: String = self.input[start..self.position].iter().collect();
+        Some(Token::NumLiteral(number_str))
     }
 
     fn try_parse_three_char_token(&mut self) -> Option<Token> {
