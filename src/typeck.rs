@@ -301,9 +301,6 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let left_ty = self.infer_expr_ty(left, None)?;
         let right_ty = self.infer_expr_ty(right, None)?;
 
-        let left_ty = self.ctxt.tys.canonicalize(left_ty);
-        let right_ty = self.ctxt.tys.canonicalize(right_ty);
-
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         let unit_ty = self.ctxt.tys.unit();
@@ -374,15 +371,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         operator: hlr::UnaryOperator,
     ) -> TypeckResult<ty::Ty> {
         let operand_ty = self.infer_expr_ty(operand, None)?;
-        let operand_c = self.ctxt.tys.canonicalize(operand_ty);
 
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
 
         use hlr::UnaryOperator::*;
         let (fn_name, result_ty) = match operator {
-            Negative if operand_c == i32_ty => ("neg::<i32>", i32_ty),
-            Not if operand_c == bool_ty => ("not::<bool>", bool_ty),
+            Negative if operand_ty == i32_ty => ("neg::<i32>", i32_ty),
+            Not if operand_ty == bool_ty => ("not::<bool>", bool_ty),
             _ => return Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty }),
         };
 

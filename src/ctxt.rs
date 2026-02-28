@@ -414,10 +414,11 @@ impl Ctxt {
         }
     }
 
+    // TODO check the relevance of this function. Is it only use to resolve associated types?
+    // If so, perhaps rename, but compare to normalize() in typeck.rs
     pub fn normalize_ty(&mut self, ty: ty::Ty) -> ty::Ty {
         use ty::TyDef::*;
 
-        let ty = self.tys.canonicalize(ty);
         let ty_def = self.tys.get_ty_def(ty);
 
         match ty_def {

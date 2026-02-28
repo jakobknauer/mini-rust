@@ -280,7 +280,6 @@ impl TyReg {
     }
 
     pub fn get_ty_def(&self, id: Ty) -> &TyDef {
-        let id = self.canonicalize(id);
         self.tys.get(id.0).unwrap()
     }
 
@@ -435,15 +434,10 @@ impl TyReg {
         &self.gen_var_names[gen_param.0]
     }
 
-    pub fn canonicalize(&self, ty: Ty) -> Ty {
-        ty
-    }
-
     #[must_use]
     pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
         use TyDef::*;
 
-        let ty = self.canonicalize(ty);
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
@@ -531,7 +525,6 @@ impl TyReg {
     pub fn substitute_self_ty(&mut self, ty: Ty, subst: Ty) -> Ty {
         use TyDef::*;
 
-        let ty = self.canonicalize(ty);
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
@@ -700,9 +693,6 @@ impl TyReg {
 
     pub fn tys_eq(&self, ty1: Ty, ty2: Ty) -> bool {
         use TyDef::*;
-
-        let ty1 = self.canonicalize(ty1);
-        let ty2 = self.canonicalize(ty2);
 
         if ty1 == ty2 {
             return true;
