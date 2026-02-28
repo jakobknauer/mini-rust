@@ -195,7 +195,7 @@ impl<'a> Driver<'a> {
                     name: field.name.clone(),
                     ty: self
                         .ctxt
-                        .try_resolve_ast_ty_annot(ast, field.ty, &gen_params, None, false)
+                        .try_resolve_ast_ty_annot(ast, field.ty, &gen_params, None)
                         .ok_or(())?,
                 })
             })
@@ -247,7 +247,7 @@ impl<'a> Driver<'a> {
                         .iter()
                         .map(|&arg| {
                             self.ctxt
-                                .try_resolve_ast_ty_annot(ast, arg, &all_gen_params, associated_ty, false)
+                                .try_resolve_ast_ty_annot(ast, arg, &all_gen_params, associated_ty)
                                 .ok_or(())
                         })
                         .collect::<Result<_, _>>()?;
@@ -262,14 +262,14 @@ impl<'a> Driver<'a> {
                         .iter()
                         .map(|&ty| {
                             self.ctxt
-                                .try_resolve_ast_ty_annot(ast, ty, &all_gen_params, associated_ty, false)
+                                .try_resolve_ast_ty_annot(ast, ty, &all_gen_params, associated_ty)
                                 .ok_or(())
                         })
                         .collect::<Result<_, _>>()?;
                     let return_ty = match return_ty {
                         Some(return_ty) => self
                             .ctxt
-                            .try_resolve_ast_ty_annot(ast, return_ty, &all_gen_params, associated_ty, false)
+                            .try_resolve_ast_ty_annot(ast, return_ty, &all_gen_params, associated_ty)
                             .ok_or(())?,
                         None => self.ctxt.tys.unit(),
                     };
@@ -288,7 +288,7 @@ impl<'a> Driver<'a> {
         let return_ty = match ast_fn.return_ty {
             Some(ty) => self
                 .ctxt
-                .try_resolve_ast_ty_annot(ast, ty, &all_gen_params, associated_ty, false)
+                .try_resolve_ast_ty_annot(ast, ty, &all_gen_params, associated_ty)
                 .ok_or(())?,
             None => self.ctxt.tys.unit(),
         };
@@ -320,7 +320,7 @@ impl<'a> Driver<'a> {
                 kind: fns::FnParamKind::Regular(name.clone()),
                 ty: self
                     .ctxt
-                    .try_resolve_ast_ty_annot(ast, ty, gen_params, self_ty, false)
+                    .try_resolve_ast_ty_annot(ast, ty, gen_params, self_ty)
                     .ok_or(())?,
             }),
             ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
@@ -381,7 +381,7 @@ impl<'a> Driver<'a> {
                 let return_ty = match mthd.return_ty {
                     Some(ty) => self
                         .ctxt
-                        .try_resolve_ast_ty_annot(ast, ty, &all_gen_params, Some(self_type), false)
+                        .try_resolve_ast_ty_annot(ast, ty, &all_gen_params, Some(self_type))
                         .ok_or(())?,
                     None => self.ctxt.tys.unit(),
                 };
@@ -422,7 +422,7 @@ impl<'a> Driver<'a> {
 
             let ty = self
                 .ctxt
-                .try_resolve_ast_ty_annot(ast, ast_impl.ty, &gen_params, None, false)
+                .try_resolve_ast_ty_annot(ast, ast_impl.ty, &gen_params, None)
                 .ok_or(())?;
 
             let trait_inst = ast_impl
@@ -436,7 +436,7 @@ impl<'a> Driver<'a> {
                             .iter()
                             .map(|&arg| {
                                 self.ctxt
-                                    .try_resolve_ast_ty_annot(ast, arg, &gen_params, None, false)
+                                    .try_resolve_ast_ty_annot(ast, arg, &gen_params, None)
                                     .ok_or(())
                             })
                             .collect::<Result<_, _>>()?,
@@ -457,7 +457,7 @@ impl<'a> Driver<'a> {
             for assoc_ty in &ast_impl.assoc_tys {
                 let ty = self
                     .ctxt
-                    .try_resolve_ast_ty_annot(ast, assoc_ty.ty, &gen_params, None, false)
+                    .try_resolve_ast_ty_annot(ast, assoc_ty.ty, &gen_params, None)
                     .ok_or(())?;
                 let assoc_ty_idx = self
                     .ctxt

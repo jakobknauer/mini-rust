@@ -285,16 +285,14 @@ impl Ctxt {
         annot: ast::TyAnnot,
         gen_vars: &[ty::GenVar],
         self_ty: Option<ty::Ty>,
-        allow_wildcards: bool,
     ) -> Option<ty::Ty> {
         use ast::TyAnnotKind::*;
 
         match annot {
             Path(path) => match path.segments.as_slice() {
-                [segment] => self.try_resolve_ast_path_segment_to_ty(ast, segment, gen_vars, self_ty, allow_wildcards),
+                [segment] => self.try_resolve_ast_path_segment_to_ty(ast, segment, gen_vars, self_ty),
                 [base_ty, assoc_ty] if !assoc_ty.is_self && assoc_ty.args.is_none() => {
-                    let base_ty =
-                        self.try_resolve_ast_path_segment_to_ty(ast, base_ty, gen_vars, self_ty, allow_wildcards)?;
+                    let base_ty = self.try_resolve_ast_path_segment_to_ty(ast, base_ty, gen_vars, self_ty)?;
 
                     let ty = self
                         .resolve_associated_ty_completely(base_ty, &assoc_ty.ident)
@@ -304,32 +302,32 @@ impl Ctxt {
                 _ => None,
             },
             &Ref(ty_annot) => self
-                .try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty, allow_wildcards)
+                .try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty)
                 .map(|inner| self.tys.ref_(inner)),
             &Ptr(ty_annot) => self
-                .try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty, allow_wildcards)
+                .try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty)
                 .map(|inner| self.tys.ptr(inner)),
             &Fn { param_tys, return_ty } => {
                 let param_tys: Vec<ty::Ty> = param_tys
                     .iter()
-                    .map(|&pt| self.try_resolve_ast_ty_annot(ast, pt, gen_vars, self_ty, allow_wildcards))
+                    .map(|&pt| self.try_resolve_ast_ty_annot(ast, pt, gen_vars, self_ty))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_ast_ty_annot(ast, rt, gen_vars, self_ty, allow_wildcards),
+                    Some(rt) => self.try_resolve_ast_ty_annot(ast, rt, gen_vars, self_ty),
                     None => Some(self.tys.unit()),
                 }?;
 
                 Some(self.tys.fn_(&param_tys, return_ty, false))
             }
-            Wildcard => allow_wildcards.then(|| self.tys.undef_ty()),
             &Tuple(ty_annots) => {
                 let tys: Vec<ty::Ty> = ty_annots
                     .iter()
-                    .map(|ty_annot| self.try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty, allow_wildcards))
+                    .map(|ty_annot| self.try_resolve_ast_ty_annot(ast, ty_annot, gen_vars, self_ty))
                     .collect::<Option<Vec<_>>>()?;
                 Some(self.tys.tuple(&tys))
             }
+            Wildcard => panic!("wildcard type annotation not supported at this position"),
         }
     }
 
@@ -339,7 +337,6 @@ impl Ctxt {
         path_segment: &ast::PathSegment,
         gen_vars: &[ty::GenVar],
         self_ty: Option<ty::Ty>,
-        allow_wildcards: bool,
     ) -> Option<ty::Ty> {
         match path_segment {
             ast::PathSegment { is_self: true, .. } => Some(self_ty.expect("self type not available")),
@@ -362,7 +359,7 @@ impl Ctxt {
             } => {
                 let gen_args: Vec<ty::Ty> = args
                     .iter()
-                    .map(|arg_annot| self.try_resolve_ast_ty_annot(ast, arg_annot, gen_vars, self_ty, allow_wildcards))
+                    .map(|arg_annot| self.try_resolve_ast_ty_annot(ast, arg_annot, gen_vars, self_ty))
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.tys.get_ty_by_name(ident).ok()? {

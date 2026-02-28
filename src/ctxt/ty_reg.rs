@@ -74,12 +74,6 @@ impl TyReg {
         ty
     }
 
-    pub fn undef_ty(&mut self) -> Ty {
-        let ty = Ty(self.tys.len());
-        self.tys.push(None);
-        ty
-    }
-
     pub fn ty_slice(&mut self, tys: &[Ty]) -> TySlice {
         if let Some(ty_slice) = self.ty_slices_inv.get(tys) {
             return *ty_slice;
