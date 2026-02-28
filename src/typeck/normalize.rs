@@ -12,9 +12,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     pub(super) fn normalize(&mut self, ty: ty::Ty) -> ty::Ty {
         use ty::TyDef::*;
 
-        let Some(ty_def) = self.ctxt.tys.get_ty_def(ty).cloned() else {
-            return ty;
-        };
+        let ty_def = self.ctxt.tys.get_ty_def(ty).clone();
 
         match ty_def {
             InfVar(iv) => match self.type_vars.get(&iv).copied() {

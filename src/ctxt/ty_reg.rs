@@ -8,7 +8,7 @@ use crate::ctxt::{
 
 #[derive(Default)]
 pub struct TyReg {
-    tys: Vec<Option<TyDef>>,
+    tys: Vec<TyDef>,
     ty_slices: Vec<Ty>,
 
     structs: Vec<StructDef>,
@@ -69,7 +69,7 @@ impl TyReg {
         }
 
         let ty = Ty(self.tys.len());
-        self.tys.push(Some(ty_def.clone()));
+        self.tys.push(ty_def.clone());
         self.tys_inv.insert(ty_def, ty);
         ty
     }
@@ -279,9 +279,9 @@ impl TyReg {
         Ok(self.register_ty(enum_ty))
     }
 
-    pub fn get_ty_def(&self, id: Ty) -> Option<&TyDef> {
+    pub fn get_ty_def(&self, id: Ty) -> &TyDef {
         let id = self.canonicalize(id);
-        self.tys.get(id.0).and_then(|inner| inner.as_ref())
+        self.tys.get(id.0).unwrap()
     }
 
     pub fn get_struct_by_name(&self, name: &str) -> Option<Struct> {
@@ -316,7 +316,7 @@ impl TyReg {
 
     pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
         let ty_def = self.get_ty_def(base_ty);
-        matches!(ty_def, Some(TyDef::Primitive(Primitive::CVoid)))
+        matches!(ty_def, TyDef::Primitive(Primitive::CVoid))
     }
 
     pub fn get_string_rep(&self, ty: Ty) -> String {
@@ -331,9 +331,7 @@ impl TyReg {
             return format!("<unknown type id {}>", ty.0).to_string();
         }
 
-        let Some(ty_def) = self.get_ty_def(ty) else {
-            return format!("<undefined type id {}>", ty.0).to_string();
-        };
+        let ty_def = self.get_ty_def(ty);
 
         match *ty_def {
             Primitive(primitive) => match primitive {
@@ -446,9 +444,7 @@ impl TyReg {
         use TyDef::*;
 
         let ty = self.canonicalize(ty);
-        let Some(ty_def) = self.tys.get(ty.0).expect("ty should be registered") else {
-            return ty;
-        };
+        let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
             GenVar(gen_var) => {
@@ -536,9 +532,7 @@ impl TyReg {
         use TyDef::*;
 
         let ty = self.canonicalize(ty);
-        let Some(ty_def) = self.tys.get(ty.0).expect("ty should be registered") else {
-            return ty;
-        };
+        let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
             GenVar(..) => ty,
@@ -615,7 +609,7 @@ impl TyReg {
     }
 
     pub fn get_struct_field_ty(&mut self, ty: Ty, index: usize) -> Result<Ty, NotAStruct> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        let ty_def = self.get_ty_def(ty);
         let &TyDef::Struct { struct_, gen_args } = ty_def else {
             return Err(NotAStruct(ty));
         };
@@ -632,7 +626,7 @@ impl TyReg {
     }
 
     pub fn get_struct_field_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAStruct> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        let ty_def = self.get_ty_def(ty);
         let &TyDef::Struct { struct_, gen_args } = ty_def else {
             return Err(NotAStruct(ty));
         };
@@ -652,7 +646,7 @@ impl TyReg {
     }
 
     pub fn get_enum_variant_ty(&mut self, ty: Ty, variant_index: usize) -> Result<Ty, NotAnEnum> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        let ty_def = self.get_ty_def(ty);
         let &TyDef::Enum { enum_, gen_args } = ty_def else {
             return Err(NotAnEnum(ty));
         };
@@ -666,7 +660,7 @@ impl TyReg {
     }
 
     pub fn get_enum_variant_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAnEnum> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
+        let ty_def = self.get_ty_def(ty);
         let &TyDef::Enum { enum_, gen_args } = ty_def else {
             return Err(NotAnEnum(ty));
         };
@@ -681,8 +675,7 @@ impl TyReg {
     }
 
     pub fn get_tuple_field_tys(&self, ty: Ty) -> Result<&[Ty], ()> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
-
+        let ty_def = self.get_ty_def(ty);
         match ty_def {
             &TyDef::Tuple(tys) => Ok(self.get_ty_slice(tys)),
             _ => Err(()),
@@ -690,7 +683,7 @@ impl TyReg {
     }
 
     pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
-        let ty_def = self.get_ty_def(struct_ty).expect("type should be registered");
+        let ty_def = self.get_ty_def(struct_ty);
         let &TyDef::Struct { struct_, .. } = ty_def else {
             return Err(NotAStructField::NotAStruct(struct_ty));
         };
@@ -719,103 +712,100 @@ impl TyReg {
         let def2 = self.tys.get(ty2.0).expect("ty2 should be registered");
 
         match (def1, def2) {
-            (None, _) | (_, None) => false,
-            (Some(def1), Some(def2)) => match (def1, def2) {
-                (
-                    &Fn {
-                        param_tys: params1,
-                        return_ty: ret1,
-                        var_args: var_args1,
-                    },
-                    &Fn {
-                        param_tys: params2,
-                        return_ty: ret2,
-                        var_args: var_args2,
-                    },
-                ) => {
-                    params1.len == params2.len
-                        && zip_ty_slices!(self, (params1, params2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-                        && self.tys_eq(ret1, ret2)
-                        && var_args1 == var_args2
-                }
+            (
+                &Fn {
+                    param_tys: params1,
+                    return_ty: ret1,
+                    var_args: var_args1,
+                },
+                &Fn {
+                    param_tys: params2,
+                    return_ty: ret2,
+                    var_args: var_args2,
+                },
+            ) => {
+                params1.len == params2.len
+                    && zip_ty_slices!(self, (params1, params2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
+                    && self.tys_eq(ret1, ret2)
+                    && var_args1 == var_args2
+            }
 
-                (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.tys_eq(inner1, inner2),
+            (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.tys_eq(inner1, inner2),
 
-                (
-                    &Struct {
-                        struct_: struct1,
-                        gen_args: gen_args1,
-                    },
-                    &Struct {
-                        struct_: struct2,
-                        gen_args: gen_args2,
-                    },
-                ) => {
-                    struct1 == struct2
-                        && gen_args1.len == gen_args2.len
-                        && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-                }
+            (
+                &Struct {
+                    struct_: struct1,
+                    gen_args: gen_args1,
+                },
+                &Struct {
+                    struct_: struct2,
+                    gen_args: gen_args2,
+                },
+            ) => {
+                struct1 == struct2
+                    && gen_args1.len == gen_args2.len
+                    && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
+            }
 
-                (
-                    &Enum {
-                        enum_: enum1,
-                        gen_args: gen_args1,
-                    },
-                    &Enum {
-                        enum_: enum2,
-                        gen_args: gen_args2,
-                    },
-                ) => {
-                    enum1 == enum2
-                        && gen_args1.len == gen_args2.len
-                        && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-                }
+            (
+                &Enum {
+                    enum_: enum1,
+                    gen_args: gen_args1,
+                },
+                &Enum {
+                    enum_: enum2,
+                    gen_args: gen_args2,
+                },
+            ) => {
+                enum1 == enum2
+                    && gen_args1.len == gen_args2.len
+                    && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
+            }
 
-                (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
-                    fn_inst1.fn_ == fn_inst2.fn_
-                        && fn_inst1.gen_args.len == fn_inst2.gen_args.len
-                        && zip_ty_slices!(
-                            self,
-                            (fn_inst1.gen_args, fn_inst2.gen_args),
-                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                        )
-                        && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
-                        && zip_ty_slices!(
-                            self,
-                            (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
-                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                        )
-                }
+            (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
+                fn_inst1.fn_ == fn_inst2.fn_
+                    && fn_inst1.gen_args.len == fn_inst2.gen_args.len
+                    && zip_ty_slices!(
+                        self,
+                        (fn_inst1.gen_args, fn_inst2.gen_args),
+                        all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                    )
+                    && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
+                    && zip_ty_slices!(
+                        self,
+                        (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
+                        all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                    )
+            }
 
-                (&Tuple(items1), &Tuple(items2)) => {
-                    items1.len == items2.len
-                        && zip_ty_slices!(self, (items1, items2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-                }
+            (&Tuple(items1), &Tuple(items2)) => {
+                items1.len == items2.len
+                    && zip_ty_slices!(self, (items1, items2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
+            }
 
-                (
-                    AssocTy {
-                        base_ty: base_ty1,
-                        trait_inst: trait_inst1,
-                        assoc_ty_idx: assoc_ty_idx1,
-                    },
-                    AssocTy {
-                        base_ty: base_ty2,
-                        trait_inst: trait_inst2,
-                        assoc_ty_idx: assoc_ty_idx2,
-                    },
-                ) => {
-                    base_ty1 == base_ty2
-                        && trait_inst1.trait_ == trait_inst2.trait_
-                        && zip_ty_slices!(
-                            self,
-                            (trait_inst1.gen_args, trait_inst2.gen_args),
-                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                        )
-                        && assoc_ty_idx1 == assoc_ty_idx2
-                }
+            (
+                AssocTy {
+                    base_ty: base_ty1,
+                    trait_inst: trait_inst1,
+                    assoc_ty_idx: assoc_ty_idx1,
+                },
+                AssocTy {
+                    base_ty: base_ty2,
+                    trait_inst: trait_inst2,
+                    assoc_ty_idx: assoc_ty_idx2,
+                },
+            ) => {
+                base_ty1 == base_ty2
+                    && trait_inst1.trait_ == trait_inst2.trait_
+                    && zip_ty_slices!(
+                        self,
+                        (trait_inst1.gen_args, trait_inst2.gen_args),
+                        all(|ty1, ty2| self.tys_eq(ty1, ty2))
+                    )
+                    && assoc_ty_idx1 == assoc_ty_idx2
+            }
 
-                _ => false,
-            },
+            _ => false,
         }
     }
 
@@ -845,11 +835,7 @@ impl TyReg {
     ) -> bool {
         use TyDef::*;
 
-        let Some(generic_def) = self.get_ty_def(generic) else {
-            // TODO should this case panic instead?
-            return false;
-        };
-
+        let generic_def = self.get_ty_def(generic);
         if let &GenVar(gen_var) = generic_def
             && instantiation.contains_key(&gen_var)
         {
@@ -862,10 +848,7 @@ impl TyReg {
             }
         }
 
-        let Some(target_def) = self.get_ty_def(target) else {
-            return false;
-        };
-
+        let target_def = self.get_ty_def(target);
         match (target_def, generic_def) {
             (GenVar(var1), GenVar(var2)) => var1 == var2,
 

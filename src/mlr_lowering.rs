@@ -100,7 +100,7 @@ impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
             return self.types.get(&ty).cloned();
         }
 
-        let type_ = self.mr_ctxt.tys.get_ty_def(ty)?;
+        let type_ = self.mr_ctxt.tys.get_ty_def(ty);
 
         let inkwell_type = match *type_ {
             Primitive(ref primitive_type) => match primitive_type {

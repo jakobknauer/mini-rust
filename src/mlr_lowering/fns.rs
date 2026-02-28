@@ -386,7 +386,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
 
         let callable_ty = self.mlr().get_op_ty(callable);
         let callable_ty = self.substitute(callable_ty);
-        let callable_ty_def = self.tys().get_ty_def(callable_ty).unwrap().clone();
+        let callable_ty_def = self.tys().get_ty_def(callable_ty).clone();
 
         if let mr_ty::TyDef::Closure {
             fn_inst, captures_ty, ..

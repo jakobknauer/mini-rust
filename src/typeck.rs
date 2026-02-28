@@ -413,14 +413,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let mut base_ty = self.normalize(base_ty);
 
         let mut num_derefs = 0;
-        while let Some(ty::TyDef::Ref(inner) | ty::TyDef::Ptr(inner)) = self.ctxt.tys.get_ty_def(base_ty).cloned() {
+        while let &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) = self.ctxt.tys.get_ty_def(base_ty) {
             base_ty = self.normalize(inner);
             num_derefs += 1;
         }
 
         match field {
             hlr::FieldSpec::Name(name) => {
-                let Some(ty::TyDef::Struct { .. }) = self.ctxt.tys.get_ty_def(base_ty) else {
+                let ty::TyDef::Struct { .. } = self.ctxt.tys.get_ty_def(base_ty) else {
                     return Err(TypeckError::NamedFieldAccessOnNonStruct { ty: base_ty });
                 };
                 let index = self
@@ -441,7 +441,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 Ok(self.ctxt.tys.get_struct_field_ty(base_ty, index).unwrap())
             }
             hlr::FieldSpec::Index(index) => match self.ctxt.tys.get_ty_def(base_ty) {
-                Some(ty::TyDef::Tuple(_)) => {
+                ty::TyDef::Tuple(_) => {
                     self.typing.expr_extra.insert(
                         expr_id,
                         ExprExtra::FieldAccess {
@@ -627,8 +627,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let expr_ty = self.infer_expr_ty(expr, None)?;
         let expr_ty = self.normalize(expr_ty);
 
-        match self.ctxt.tys.get_ty_def(expr_ty).cloned() {
-            Some(ty::TyDef::Ref(base_ty) | ty::TyDef::Ptr(base_ty)) => {
+        match self.ctxt.tys.get_ty_def(expr_ty) {
+            &ty::TyDef::Ref(base_ty) | &ty::TyDef::Ptr(base_ty) => {
                 if self.ctxt.tys.is_c_void_ty(base_ty) {
                     Err(TypeckError::DereferenceOfCVoid { ty: expr_ty })
                 } else {
@@ -651,8 +651,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let target_ty = self.resolve_ty_annot(target_ty)?;
         let target_ty = self.normalize(target_ty);
 
-        let expr_ty_def = self.ctxt.tys.get_ty_def(expr_ty).unwrap();
-        let target_ty_def = self.ctxt.tys.get_ty_def(target_ty).unwrap();
+        let expr_ty_def = self.ctxt.tys.get_ty_def(expr_ty);
+        let target_ty_def = self.ctxt.tys.get_ty_def(target_ty);
 
         match (expr_ty_def, target_ty_def) {
             (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => Ok(target_ty),
@@ -708,12 +708,12 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let scrutinee_ty = self.infer_expr_ty(scrutinee, None)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
 
-        let (enum_ty, by_ref) = match self.ctxt.tys.get_ty_def(scrutinee_ty).cloned() {
-            Some(ty::TyDef::Enum { .. }) => (scrutinee_ty, false),
-            Some(ty::TyDef::Ref(inner)) => {
+        let (enum_ty, by_ref) = match self.ctxt.tys.get_ty_def(scrutinee_ty) {
+            ty::TyDef::Enum { .. } => (scrutinee_ty, false),
+            &ty::TyDef::Ref(inner) => {
                 let inner = self.normalize(inner);
                 match self.ctxt.tys.get_ty_def(inner) {
-                    Some(ty::TyDef::Enum { .. }) => (inner, true),
+                    ty::TyDef::Enum { .. } => (inner, true),
                     _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
                 }
             }
@@ -859,7 +859,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let obligations = std::mem::take(&mut self.pending_obligations);
         for (ty, req) in obligations {
             let ty = self.normalize(ty);
-            if matches!(self.ctxt.tys.get_ty_def(ty), Some(ty::TyDef::InfVar(_))) {
+            if matches!(self.ctxt.tys.get_ty_def(ty), ty::TyDef::InfVar(_)) {
                 continue;
             }
             match req {

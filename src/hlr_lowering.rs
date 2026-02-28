@@ -574,9 +574,9 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
 
         let scrutinee_place = self.lower_to_place(scrutinee);
 
-        let (enum_ty, by_ref, scrutinee_place) = match self.ctxt.tys.get_ty_def(scrutinee_ty).cloned() {
-            Some(ty::TyDef::Enum { .. }) => (scrutinee_ty, false, scrutinee_place),
-            Some(ty::TyDef::Ref(inner)) => {
+        let (enum_ty, by_ref, scrutinee_place) = match self.ctxt.tys.get_ty_def(scrutinee_ty) {
+            ty::TyDef::Enum { .. } => (scrutinee_ty, false, scrutinee_place),
+            &ty::TyDef::Ref(inner) => {
                 let copy_op = self.insert_copy_op(scrutinee_place);
                 let deref_place = self.insert_deref_place(copy_op);
                 (inner, true, deref_place)
@@ -738,8 +738,8 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         };
 
         let closure_ty = self.typing.expr_types[&expr_id];
-        let captures_ty = match self.ctxt.tys.get_ty_def(closure_ty).cloned() {
-            Some(ty::TyDef::Closure { captures_ty, .. }) => captures_ty,
+        let captures_ty = match self.ctxt.tys.get_ty_def(closure_ty).clone() {
+            ty::TyDef::Closure { captures_ty, .. } => captures_ty,
             _ => panic!("closure expr should have Closure type"),
         };
 
@@ -970,8 +970,8 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
 
     fn insert_deref_place(&mut self, op: mlr::Op) -> mlr::Place {
         let op_ty = self.ctxt.mlr.get_op_ty(op);
-        let inner_ty = match self.ctxt.tys.get_ty_def(op_ty).cloned() {
-            Some(ty::TyDef::Ref(inner) | ty::TyDef::Ptr(inner)) => inner,
+        let inner_ty = match self.ctxt.tys.get_ty_def(op_ty) {
+            &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => inner,
             _ => panic!("deref of non-ref/ptr type"),
         };
         let place = self.ctxt.mlr.insert_place(mlr::PlaceDef::Deref(op));

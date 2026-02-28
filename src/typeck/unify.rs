@@ -47,7 +47,7 @@ impl<'a> Unify<'a> {
     }
 
     fn resolve(&self, mut ty: ty::Ty) -> ty::Ty {
-        while let Some(&ty::TyDef::InfVar(iv)) = self.tys.get_ty_def(ty) {
+        while let &ty::TyDef::InfVar(iv) = self.tys.get_ty_def(ty) {
             let resolved = self.pending.get(&iv).or_else(|| self.committed.get(&iv));
 
             match resolved {
@@ -66,8 +66,8 @@ impl<'a> Unify<'a> {
             return true;
         }
 
-        let def1 = self.tys.get_ty_def(ty1).unwrap();
-        let def2 = self.tys.get_ty_def(ty2).unwrap();
+        let def1 = self.tys.get_ty_def(ty1);
+        let def2 = self.tys.get_ty_def(ty2);
 
         match (def1, def2) {
             (&ty::TyDef::InfVar(iv), _) => {

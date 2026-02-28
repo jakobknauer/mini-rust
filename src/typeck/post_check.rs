@@ -28,9 +28,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     fn contains_inf_var(&self, ty: ty::Ty) -> bool {
         use ty::TyDef::*;
 
-        let Some(ty_def) = self.ctxt.tys.get_ty_def(ty) else {
-            return false;
-        };
+        let ty_def = self.ctxt.tys.get_ty_def(ty);
 
         match ty_def {
             InfVar(_) => true,

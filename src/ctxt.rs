@@ -224,7 +224,7 @@ impl Ctxt {
 
     pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
-        if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
+        if let &ty::TyDef::GenVar(gen_var) = ty_def
             && self.tys.implements_trait_inst_constraint_exists(gen_var, trait_inst)
         {
             return true;
@@ -237,13 +237,13 @@ impl Ctxt {
 
     pub fn ty_implements_trait(&mut self, ty: ty::Ty, trait_: traits::Trait) -> bool {
         let ty_def = self.tys.get_ty_def(ty);
-        if let Some(&ty::TyDef::GenVar(gen_var)) = ty_def
+        if let &ty::TyDef::GenVar(gen_var) = ty_def
             && self.tys.implements_trait_constraint_exists(gen_var, trait_)
         {
             return true;
         }
 
-        if let Some(&ty::TyDef::TraitSelf(trait_2)) = ty_def
+        if let &ty::TyDef::TraitSelf(trait_2) = ty_def
             && trait_2 == trait_
         {
             return true;
@@ -256,18 +256,18 @@ impl Ctxt {
     pub fn ty_is_callable(&mut self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
         if let Some((param_tys, return_ty)) = self.tys.try_get_callable_obligation(ty) {
             Some((param_tys, return_ty, false))
-        } else if let Some(&ty::TyDef::Fn {
+        } else if let &ty::TyDef::Fn {
             param_tys,
             return_ty,
             var_args,
-        }) = self.tys.get_ty_def(ty)
+        } = self.tys.get_ty_def(ty)
         {
             Some((self.tys.get_ty_slice(param_tys).to_vec(), return_ty, var_args))
-        } else if let Some(ty::TyDef::GenVar(gen_var)) = self.tys.get_ty_def(ty)
+        } else if let ty::TyDef::GenVar(gen_var) = self.tys.get_ty_def(ty)
             && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
         {
             Some((param_tys, return_ty, false))
-        } else if let Some(&ty::TyDef::Closure { fn_inst, .. }) = self.tys.get_ty_def(ty) {
+        } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(fn_inst);
             Some((
                 signature.params.iter().skip(1).map(|p| p.ty).collect(),
@@ -374,7 +374,7 @@ impl Ctxt {
     fn resolve_associated_ty_completely(&mut self, base_ty: ty::Ty, ident: &str) -> Option<ty::Ty> {
         let base_ty_def = self.tys.get_ty_def(base_ty);
 
-        if let Some(&ty::TyDef::TraitSelf(trait_)) = base_ty_def {
+        if let &ty::TyDef::TraitSelf(trait_) = base_ty_def {
             let trait_def = self.traits.get_trait_def(trait_);
             let assoc_ty_index = trait_def.assoc_tys.iter().position(|name| name == ident)?;
             let gen_args: Vec<_> = trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
@@ -418,25 +418,23 @@ impl Ctxt {
         use ty::TyDef::*;
 
         let ty = self.tys.canonicalize(ty);
-        let Some(ty_def) = self.tys.get_ty_def(ty).cloned() else {
-            return ty;
-        };
+        let ty_def = self.tys.get_ty_def(ty);
 
         match ty_def {
             Primitive(_) => ty,
-            Tuple(items) => {
+            &Tuple(items) => {
                 let items: Vec<_> = iter_ty_slice!(self.tys, items, map(|ty| self.normalize_ty(ty))).collect();
                 self.tys.tuple(&items)
             }
-            Struct { struct_, gen_args } => {
+            &Struct { struct_, gen_args } => {
                 let gen_args: Vec<_> = iter_ty_slice!(self.tys, gen_args, map(|ty| self.normalize_ty(ty))).collect();
                 self.tys.inst_struct(struct_, &gen_args).unwrap()
             }
-            Enum { enum_, gen_args } => {
+            &Enum { enum_, gen_args } => {
                 let gen_args: Vec<_> = iter_ty_slice!(self.tys, gen_args, map(|ty| self.normalize_ty(ty))).collect();
                 self.tys.inst_enum(enum_, &gen_args).unwrap()
             }
-            Fn {
+            &Fn {
                 param_tys,
                 return_ty,
                 var_args,
@@ -445,18 +443,18 @@ impl Ctxt {
                 let return_ty = self.normalize_ty(return_ty);
                 self.tys.fn_(&param_tys, return_ty, var_args)
             }
-            Ref(ty) => {
+            &Ref(ty) => {
                 let ty = self.normalize_ty(ty);
                 self.tys.ref_(ty)
             }
-            Ptr(ty) => {
+            &Ptr(ty) => {
                 let ty = self.normalize_ty(ty);
                 self.tys.ptr(ty)
             }
             GenVar(_) => ty,
             TraitSelf(_) => ty,
             Closure { .. } => ty,
-            AssocTy {
+            &AssocTy {
                 base_ty,
                 trait_inst,
                 assoc_ty_idx,
