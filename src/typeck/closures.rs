@@ -38,9 +38,10 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         params: hlr::ClosureParams<'hlr>,
         return_ty: Option<hlr::TyAnnot<'hlr>>,
         body: hlr::Expr<'hlr>,
+        hint: Option<ty::Ty>,
     ) -> TypeckResult<ty::Ty> {
         let scope_snapshot = self.snapshot_scope();
-        let body_signature = self.check_closure_body(params, return_ty, body)?;
+        let body_signature = self.check_closure_body(params, return_ty, body, hint)?;
         let capture_data = self.create_capture_data(scope_snapshot);
 
         let names = self.generate_closure_names();
@@ -94,40 +95,62 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         }
     }
 
+    fn try_get_callable_hint_info(&mut self, hint: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty)> {
+        let normalized = self.normalize(hint);
+        if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(normalized) {
+            return Some((param_tys, return_ty));
+        }
+        let obligations = self.pending_obligations.clone();
+        obligations.iter().find_map(|(ty, req)| {
+            if self.normalize(*ty) == normalized {
+                if let ty::ConstraintRequirement::Callable { param_tys, return_ty } = req {
+                    Some((param_tys.clone(), *return_ty))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+    }
+
     fn check_closure_body(
         &mut self,
         params: hlr::ClosureParams<'hlr>,
         return_ty_annot: Option<hlr::TyAnnot<'hlr>>,
         body: hlr::Expr<'hlr>,
+        hint: Option<ty::Ty>,
     ) -> TypeckResult<ClosureBodySignature> {
         let mut param_tys = Vec::new();
         for hlr::ClosureParam(var_id, annot) in params {
-            let ty = match annot {
-                Some(a) => self.resolve_ty_annot(a)?,
-                None => self.new_inf_var(),
-            };
+            let ty = self.resolve_optional_ty_annot(*annot)?;
             self.typing.var_types.insert(*var_id, ty);
             param_tys.push(ty);
         }
 
-        let return_ty_hint = return_ty_annot.map(|a| self.resolve_ty_annot(a)).transpose()?;
-        let stack_entry = return_ty_hint.unwrap_or_else(|| self.new_inf_var());
+        let return_ty = self.resolve_optional_ty_annot(return_ty_annot)?;
+
+        if let Some(hint) = hint
+            && let Some((hint_param_tys, hint_return_ty)) = self.try_get_callable_hint_info(hint)
+        {
+            for (ty, hint_ty) in param_tys.iter().zip(hint_param_tys) {
+                self.unify(*ty, hint_ty);
+            }
+            self.unify(return_ty, hint_return_ty);
+        }
+
+        let stack_entry = return_ty;
         self.return_ty_stack.push(stack_entry);
-        let body_ty = self.infer_expr_ty(body, return_ty_hint);
+        let body_ty = self.infer_expr_ty(body, Some(return_ty));
         self.return_ty_stack.pop();
         let body_ty = body_ty?;
 
-        let return_ty = if let Some(hint) = return_ty_hint {
-            if !self.unify(body_ty, hint) {
-                return Err(TypeckError::ReturnTypeMismatch {
-                    expected: hint,
-                    actual: body_ty,
-                });
-            }
-            hint
-        } else {
-            body_ty
-        };
+        if !self.unify(body_ty, return_ty) {
+            return Err(TypeckError::ReturnTypeMismatch {
+                expected: return_ty,
+                actual: body_ty,
+            });
+        }
 
         Ok(ClosureBodySignature { param_tys, return_ty })
     }

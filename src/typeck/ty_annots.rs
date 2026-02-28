@@ -22,6 +22,13 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         }
     }
 
+    pub(super) fn resolve_optional_ty_annot(&mut self, ty_annot: Option<hlr::TyAnnot<'hlr>>) -> TypeckResult<ty::Ty> {
+        match ty_annot {
+            Some(a) => self.resolve_ty_annot(a),
+            None => Ok(self.new_inf_var()),
+        }
+    }
+
     pub(super) fn resolve_ty_annots(&mut self, ty_annots: hlr::TyAnnotSlice<'hlr>) -> TypeckResult<Vec<ty::Ty>> {
         ty_annots
             .iter()

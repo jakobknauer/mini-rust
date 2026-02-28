@@ -129,7 +129,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 params,
                 return_ty,
                 body,
-            } => self.infer_closure_ty(expr.1, params, *return_ty, *body),
+            } => self.infer_closure_ty(expr.1, params, *return_ty, *body, hint),
             hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
             hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
             hlr::ExprDef::Match { scrutinee, arms } => self.infer_match_ty(*scrutinee, arms),
@@ -299,7 +299,9 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         operator: hlr::BinaryOperator,
     ) -> TypeckResult<ty::Ty> {
         let left_ty = self.infer_expr_ty(left, None)?;
+        let left_ty = self.normalize(left_ty);
         let right_ty = self.infer_expr_ty(right, None)?;
+        let right_ty = self.normalize(right_ty);
 
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
