@@ -235,30 +235,6 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
                 // we can just build the op and return it
                 self.build_op(op)
             }
-            SizeOf(ty) => {
-                let ty = self.get_ty_as_basic_type_enum(ty).unwrap();
-                let size = TargetData::create("").get_store_size(&ty) as u32;
-                let int_ty = self.parent.iw_ctxt.i32_type();
-                Ok(int_ty.const_int(size as u64, false).as_basic_value_enum())
-            }
-            PtrOffset(op, offset) => {
-                let op_ty = self.mlr().get_op_ty(op);
-                let op_ty = self.substitute(op_ty);
-                let &mr_ty::TyDef::Ptr(mr_pointee_ty) = self.tys().get_ty_def(op_ty).unwrap() else {
-                    return Err(MlrLoweringError);
-                };
-                let iw_pointee_ty = self
-                    .parent
-                    .get_ty_as_basic_type_enum(mr_pointee_ty)
-                    .ok_or(MlrLoweringError)?;
-
-                let op = self.build_op(op)?.into_pointer_value();
-
-                let offset = self.build_op(offset)?.into_int_value();
-
-                let result = unsafe { self.iw_builder.build_gep(iw_pointee_ty, op, &[offset], "ptr_offset")? };
-                Ok(result.as_basic_value_enum())
-            }
         }
     }
 

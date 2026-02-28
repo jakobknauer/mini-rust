@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{FnInst, TraitMthdInst},
-    ty::{Ty, TySlice},
+    ty::Ty,
 };
 
 #[derive(Default)]
@@ -52,8 +52,6 @@ pub enum ValDef {
     Use(Op),
     AddrOf(Place),
     As { op: Op, target_ty: Ty },
-    SizeOf(Ty),
-    PtrOffset(Op, Op),
 }
 
 #[derive(Debug, Clone)]
@@ -190,20 +188,5 @@ impl Mlr {
 
     pub fn get_loc_ty(&self, loc: Loc) -> Ty {
         *self.loc_tys.get(&loc).expect("type of loc should be known")
-    }
-
-    pub fn get_all_types_mut(&mut self) -> impl Iterator<Item = &mut Ty> {
-        self.loc_tys
-            .values_mut()
-            .chain(self.val_tys.values_mut())
-            .chain(self.place_tys.values_mut())
-            .chain(self.op_tys.values_mut())
-    }
-
-    pub fn get_all_type_slices_mut(&mut self) -> impl Iterator<Item = &mut TySlice> {
-        self.ops.iter_mut().filter_map(|op_def| match op_def {
-            OpDef::Fn(FnInst { gen_args, .. }) => Some(gen_args),
-            _ => None,
-        })
     }
 }

@@ -291,10 +291,6 @@ impl TyReg {
         self.tys.get(id.0).and_then(|inner| inner.as_ref())
     }
 
-    pub fn is_ty_defined(&self, ty: Ty) -> bool {
-        self.get_ty_def(ty).is_some()
-    }
-
     pub fn get_struct_by_name(&self, name: &str) -> Option<Struct> {
         match self.named_tys.get(name) {
             Some(&Named::Struct(struct_)) => Some(struct_),
@@ -323,11 +319,6 @@ impl TyReg {
 
     pub fn get_mut_enum_def(&mut self, enum_: Enum) -> Option<&mut EnumDef> {
         self.enums.get_mut(enum_.0)
-    }
-
-    pub fn is_enum_ty(&self, base_ty: Ty) -> bool {
-        let ty_def = self.get_ty_def(base_ty);
-        matches!(ty_def, Some(TyDef::Enum { .. }))
     }
 
     pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
@@ -454,179 +445,11 @@ impl TyReg {
         &self.gen_var_names[gen_param.0]
     }
 
-    /// Unify two types
-    ///
-    /// TODO: Instead of unifying immediately, this function should only gather types to be unified
-    /// and then do the unification at the end. Otherwise, the `TyReg` is possibly poisoned once a
-    /// unification fails.
-    pub fn unify(&mut self, ty1: Ty, ty2: Ty) -> Result<(), UnificationError> {
-        use TyDef::*;
-
-        let ty1 = self.canonicalize(ty1);
-        let ty2 = self.canonicalize(ty2);
-
-        if ty1 == ty2 {
-            return Ok(());
-        }
-
-        let def1 = self.tys.get(ty1.0).expect("ty1 should be registered");
-        let def2 = self.tys.get(ty2.0).expect("ty2 should be registered");
-
-        match (def1, def2) {
-            (None, _) => {
-                *self.tys.get_mut(ty1.0).unwrap() = Some(Alias(ty2));
-                Ok(())
-            }
-            (_, None) => {
-                *self.tys.get_mut(ty2.0).unwrap() = Some(Alias(ty1));
-                Ok(())
-            }
-
-            (Some(def1), Some(def2)) => match (def1, def2) {
-                (Alias(_), _) | (_, Alias(_)) => {
-                    unreachable!("Types should have been canonicalized");
-                }
-
-                (
-                    &Fn {
-                        param_tys: params1,
-                        return_ty: ret1,
-                        var_args: var_args1,
-                    },
-                    &Fn {
-                        param_tys: params2,
-                        return_ty: ret2,
-                        var_args: var_args2,
-                    },
-                ) => {
-                    if params1.len != params2.len {
-                        return Err(UnificationError::FunctionParamCountMismatch);
-                    }
-
-                    if var_args1 != var_args2 {
-                        return Err(UnificationError::TypeMismatch);
-                    }
-
-                    zip_ty_slices!(self, (params1, params2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))?;
-                    self.unify(ret1, ret2)
-                }
-
-                (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.unify(inner1, inner2),
-
-                (
-                    &Struct {
-                        struct_: struct1,
-                        gen_args: gen_args1,
-                    },
-                    &Struct {
-                        struct_: struct2,
-                        gen_args: gen_args2,
-                    },
-                ) => {
-                    if struct1 != struct2 || gen_args1.len != gen_args2.len {
-                        Err(UnificationError::TypeMismatch)
-                    } else {
-                        zip_ty_slices!(
-                            self,
-                            (gen_args1, gen_args2),
-                            try_for_each(|ty1, ty2| self.unify(ty1, ty2))
-                        )
-                    }
-                }
-
-                (
-                    &Enum {
-                        enum_: enum1,
-                        gen_args: gen_args1,
-                    },
-                    &Enum {
-                        enum_: enum2,
-                        gen_args: gen_args2,
-                    },
-                ) => {
-                    if enum1 != enum2 || gen_args1.len != gen_args2.len {
-                        Err(UnificationError::TypeMismatch)
-                    } else {
-                        zip_ty_slices!(
-                            self,
-                            (gen_args1, gen_args2),
-                            try_for_each(|ty1, ty2| self.unify(ty1, ty2))
-                        )
-                    }
-                }
-
-                (&Closure { fn_inst: fn_inst1, .. }, &Closure { fn_inst: fn_inst2, .. }) => {
-                    if fn_inst1.fn_ != fn_inst2.fn_ {
-                        return Err(UnificationError::TypeMismatch);
-                    }
-
-                    zip_ty_slices!(
-                        self,
-                        (fn_inst1.gen_args, fn_inst2.gen_args),
-                        try_for_each(|ty1, ty2| self.unify(ty1, ty2))
-                    )?;
-                    zip_ty_slices!(
-                        self,
-                        (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
-                        try_for_each(|ty1, ty2| self.unify(ty1, ty2))
-                    )?;
-
-                    Ok(())
-                }
-
-                (&Tuple(items1), &Tuple(items2)) => {
-                    if items1.len != items2.len {
-                        Err(UnificationError::TupleLengthMismatch)
-                    } else {
-                        zip_ty_slices!(self, (items1, items2), try_for_each(|ty1, ty2| self.unify(ty1, ty2)))
-                    }
-                }
-
-                (
-                    &AssocTy {
-                        base_ty: base_ty1,
-                        trait_inst: trait_inst1,
-                        assoc_ty_idx: assoc_ty_idx1,
-                    },
-                    &AssocTy {
-                        base_ty: base_ty2,
-                        trait_inst: trait_inst2,
-                        assoc_ty_idx: assoc_ty_idx2,
-                    },
-                ) => {
-                    // TODO Try to fully resolve the associated types first?
-                    // This could also be done in canonicalize or directly when creating the type
-                    // during lowering/type inference
-
-                    if trait_inst1.trait_ != trait_inst2.trait_ || assoc_ty_idx1 != assoc_ty_idx2 {
-                        return Err(UnificationError::TypeMismatch);
-                    }
-
-                    self.unify(base_ty1, base_ty2)?;
-                    zip_ty_slices!(
-                        self,
-                        (trait_inst1.gen_args, trait_inst2.gen_args),
-                        try_for_each(|ty1, ty2| self.unify(ty1, ty2))
-                    )?;
-
-                    Ok(())
-                }
-
-                _ => Err(UnificationError::TypeMismatch),
-            },
-        }
-    }
-
     pub fn canonicalize(&self, mut ty: Ty) -> Ty {
         while let Some(TyDef::Alias(next_ty)) = self.tys.get(ty.0).expect("current_ty should be registered") {
             ty = *next_ty;
         }
         ty
-    }
-
-    pub fn canonicalize_ty_slice(&mut self, ty_slice: TySlice) -> TySlice {
-        let tys: Vec<_> = iter_ty_slice!(self, ty_slice, map(|ty| self.canonicalize(ty))).collect();
-        self.ty_slice(&tys)
     }
 
     #[must_use]
@@ -877,18 +700,6 @@ impl TyReg {
             &TyDef::Tuple(tys) => Ok(self.get_ty_slice(tys)),
             _ => Err(()),
         }
-    }
-
-    pub fn get_struct_field_names(&mut self, ty: Ty) -> Result<impl Iterator<Item = &str>, NotAStruct> {
-        let ty_def = self.get_ty_def(ty).expect("type should be registered");
-        let &TyDef::Struct { struct_, .. } = ty_def else {
-            return Err(NotAStruct(ty));
-        };
-
-        let struct_def = self
-            .get_struct_def(struct_)
-            .expect("struct definition should be registered");
-        Ok(struct_def.fields.iter().map(|field| field.name.as_str()))
     }
 
     pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
@@ -1286,19 +1097,6 @@ impl TyReg {
                 None
             }
         })
-    }
-
-    pub fn add_implements_trait_inst_obligation(&mut self, ty: Ty, trait_inst: TraitInst) {
-        self.obligations
-            .push(Obligation::ImplementsTraitInst { ty, trait_inst });
-    }
-
-    pub fn add_callable_obligation(&mut self, ty: Ty, param_tys: Vec<Ty>, return_ty: Ty) {
-        self.obligations.push(Obligation::Callable {
-            ty,
-            param_tys,
-            return_ty,
-        });
     }
 
     pub fn get_all_obligations(&self) -> &[Obligation] {

@@ -241,16 +241,6 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let ty_name = self.ctxt.tys.get_string_rep(target_ty);
                     write!(self.writer, " as {})", ty_name)
                 }
-                SizeOf(ty) => {
-                    write!(self.writer, "SizeOf({})", self.ctxt.tys.get_string_rep(ty))
-                }
-                PtrOffset(op, offset) => {
-                    write!(self.writer, "Offset(")?;
-                    self.print_op(op)?;
-                    write!(self.writer, ", ")?;
-                    self.print_op(offset)?;
-                    write!(self.writer, ")")
-                }
             },
             None => write!(self.writer, "<val id {}>", val.0),
         }
