@@ -6,23 +6,23 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ast,
-    ast_to_hlr::resolve_util::TyResolution,
+    ast_lowering::resolve_util::TyResolution,
     ctxt::{self, fns},
     hlr,
 };
 
-pub fn ast_to_hlr<'ast, 'hlr>(
+pub fn ast_lowering<'ast, 'hlr>(
     ctxt: &ctxt::Ctxt,
     fn_: fns::Fn,
     ast: &'ast ast::Ast<'ast>,
     ast_body: ast::Block<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
-) -> AstToHlrResult<hlr::Fn<'hlr>> {
-    let converter = AstToHlr::new(ctxt, fn_, ast, hlr);
+) -> AstLoweringResult<hlr::Fn<'hlr>> {
+    let converter = AstLowering::new(ctxt, fn_, ast, hlr);
     converter.lower_function_body(ast_body)
 }
 
-struct AstToHlr<'ast, 'ctxt, 'hlr> {
+struct AstLowering<'ast, 'ctxt, 'hlr> {
     fn_: fns::Fn,
 
     ctxt: &'ctxt ctxt::Ctxt,
@@ -35,13 +35,13 @@ struct AstToHlr<'ast, 'ctxt, 'hlr> {
     self_var_id: Option<hlr::VarId>,
 }
 
-pub type AstToHlrResult<T> = Result<T, AstToHlrError>;
+pub type AstLoweringResult<T> = Result<T, AstLoweringError>;
 #[derive(Debug)]
-pub struct AstToHlrError {
+pub struct AstLoweringError {
     msg: String,
 }
 
-impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
+impl<'ast, 'ctxt, 'hlr> AstLowering<'ast, 'ctxt, 'hlr> {
     fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ast ast::Ast<'ast>, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             fn_,
@@ -57,10 +57,10 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         }
     }
 
-    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstToHlrResult<hlr::Fn<'hlr>> {
+    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstLoweringResult<hlr::Fn<'hlr>> {
         let signature = self.get_signature();
         if signature.var_args {
-            return Err(AstToHlrError {
+            return Err(AstLoweringError {
                 msg: "Varargs functions are not supported in HLR".to_string(),
             });
         }
@@ -118,7 +118,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         self.hlr.expr(block)
     }
 
-    fn build_block(&mut self, body: ast::Block<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn build_block(&mut self, body: ast::Block<'ast>) -> AstLoweringResult<hlr::Expr<'hlr>> {
         self.scopes.push_back(Scope::default());
 
         for &stmt in body.stmts {
@@ -137,7 +137,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(output)
     }
 
-    fn lower_stmt(&mut self, stmt: ast::Stmt<'ast>) -> AstToHlrResult<()> {
+    fn lower_stmt(&mut self, stmt: ast::Stmt<'ast>) -> AstLoweringResult<()> {
         use ast::StmtKind::*;
 
         match *stmt {
@@ -157,7 +157,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         name: &str,
         ty_annot: Option<ast::TyAnnot>,
         value: ast::Expr<'ast>,
-    ) -> AstToHlrResult<()> {
+    ) -> AstLoweringResult<()> {
         let init = self.lower_expr(value)?;
 
         let var = self.hlr.var_id();
@@ -169,30 +169,30 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         self.push_stmt(stmt)
     }
 
-    fn lower_expr_stmt(&mut self, expr: ast::Expr<'ast>) -> AstToHlrResult<()> {
+    fn lower_expr_stmt(&mut self, expr: ast::Expr<'ast>) -> AstLoweringResult<()> {
         let expr = self.lower_expr(expr)?;
         let stmt = hlr::StmtDef::Expr(expr);
         self.push_stmt(stmt)
     }
 
-    fn lower_return_stmt(&mut self, expr: Option<ast::Expr<'ast>>) -> AstToHlrResult<()> {
+    fn lower_return_stmt(&mut self, expr: Option<ast::Expr<'ast>>) -> AstLoweringResult<()> {
         let return_expr = expr.map(|e| self.lower_expr(e)).transpose()?;
         let stmt = hlr::StmtDef::Return(return_expr);
         self.push_stmt(stmt)
     }
 
-    fn lower_break_stmt(&mut self) -> AstToHlrResult<()> {
+    fn lower_break_stmt(&mut self) -> AstLoweringResult<()> {
         let stmt = hlr::StmtDef::Break;
         self.push_stmt(stmt)
     }
 
-    fn push_stmt(&mut self, stmt: hlr::StmtDef<'hlr>) -> AstToHlrResult<()> {
+    fn push_stmt(&mut self, stmt: hlr::StmtDef<'hlr>) -> AstLoweringResult<()> {
         let stmt = self.hlr.stmt(stmt);
         self.blocks.back_mut().unwrap().push(stmt);
         Ok(())
     }
 
-    fn lower_expr(&mut self, expr: ast::Expr<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_expr(&mut self, expr: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'hlr>> {
         use ast::ExprKind::*;
 
         match expr {
@@ -228,7 +228,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         }
     }
 
-    fn lower_ty_annot(&mut self, ty_annot: ast::TyAnnot) -> AstToHlrResult<hlr::TyAnnot<'hlr>> {
+    fn lower_ty_annot(&mut self, ty_annot: ast::TyAnnot) -> AstLoweringResult<hlr::TyAnnot<'hlr>> {
         let ty_annot = match ty_annot {
             ast::TyAnnotKind::Path(path) => self.lower_path_ty_annot(path)?,
             &ast::TyAnnotKind::Tuple(fields) => {
@@ -252,7 +252,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(ty_annot)
     }
 
-    fn lower_path_ty_annot(&mut self, path: &ast::Path) -> AstToHlrResult<hlr::TyAnnotDef<'hlr>> {
+    fn lower_path_ty_annot(&mut self, path: &ast::Path) -> AstLoweringResult<hlr::TyAnnotDef<'hlr>> {
         match path.segments.as_slice() {
             [simple] => {
                 let ty_annot = self.lower_path_segment_to_ty_annot(simple)?;
@@ -262,13 +262,13 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 let parent_ty_annot = self.lower_path_segment_to_ty_annot(parent)?;
 
                 if sub.is_self {
-                    return Err(AstToHlrError {
+                    return Err(AstLoweringError {
                         msg: "Invalid use of 'Self' in type annotation".to_string(),
                     });
                 }
 
                 if sub.args.is_some() {
-                    return Err(AstToHlrError {
+                    return Err(AstLoweringError {
                         msg: "Generic associated types are not supported".to_string(),
                     });
                 }
@@ -280,13 +280,16 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                     name: sub.ident.clone(),
                 })
             }
-            _ => Err(AstToHlrError {
+            _ => Err(AstLoweringError {
                 msg: format!("Complex path type annotations are not supported yet: {:#?}", path),
             }),
         }
     }
 
-    fn lower_path_segment_to_ty_annot(&mut self, segment: &ast::PathSegment) -> AstToHlrResult<hlr::TyAnnotDef<'hlr>> {
+    fn lower_path_segment_to_ty_annot(
+        &mut self,
+        segment: &ast::PathSegment,
+    ) -> AstLoweringResult<hlr::TyAnnotDef<'hlr>> {
         if segment.is_self {
             return Ok(hlr::TyAnnotDef::Self_);
         }
@@ -301,24 +304,26 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             (TyResolution::NamedTy(ctxt::Named::Struct(struct_)), args) => Ok(hlr::TyAnnotDef::Struct(struct_, args)),
             (TyResolution::NamedTy(ctxt::Named::Enum(enum_)), args) => Ok(hlr::TyAnnotDef::Enum(enum_, args)),
 
-            ((TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_))) => Err(AstToHlrError {
-                msg: format!(
-                    "Type '{}' cannot have generic arguments in type annotation",
-                    segment.ident
-                ),
-            }),
+            ((TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_))) => {
+                Err(AstLoweringError {
+                    msg: format!(
+                        "Type '{}' cannot have generic arguments in type annotation",
+                        segment.ident
+                    ),
+                })
+            }
         }
     }
 
-    fn lower_ty_annots(&mut self, ty_annots: ast::TyAnnotSlice) -> AstToHlrResult<hlr::TyAnnotSlice<'hlr>> {
+    fn lower_ty_annots(&mut self, ty_annots: ast::TyAnnotSlice) -> AstLoweringResult<hlr::TyAnnotSlice<'hlr>> {
         ty_annots
             .iter()
             .map(|&annot| self.lower_ty_annot(annot))
-            .collect::<AstToHlrResult<Vec<_>>>()
+            .collect::<AstLoweringResult<Vec<_>>>()
             .map(|annot_vec| self.hlr.ty_annot_slice(&annot_vec))
     }
 
-    fn lower_lit(&mut self, lit: &ast::Lit) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_lit(&mut self, lit: &ast::Lit) -> AstLoweringResult<hlr::Expr<'hlr>> {
         use ast::Lit::*;
 
         let lit = match lit {
@@ -332,17 +337,17 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_path(&mut self, path: &ast::Path) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_path(&mut self, path: &ast::Path) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let expr: hlr::ExprDef = match path.segments.as_slice() {
             [segment] if segment.is_self => {
-                return Err(AstToHlrError {
+                return Err(AstLoweringError {
                     msg: "Invalid use of 'Self' as value".to_string(),
                 });
             }
             [segment] => {
                 let val = self
                     .resolve_ident_to_val_def(&segment.ident)
-                    .ok_or_else(|| AstToHlrError {
+                    .ok_or_else(|| AstLoweringError {
                         msg: format!("Unresolvable path: {}", segment.ident),
                     })?;
                 let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
@@ -352,7 +357,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                     (hlr::Val::Fn(fn_, _), args) => hlr::ExprDef::Val(hlr::Val::Fn(fn_, args)),
 
                     (other_val, Some(_)) => {
-                        return Err(AstToHlrError {
+                        return Err(AstLoweringError {
                             msg: format!("Only functions can be used in generic paths, found {:?}", other_val),
                         });
                     }
@@ -363,7 +368,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 let ty = self.hlr.ty_annot(ty);
 
                 if mthd.is_self {
-                    return Err(AstToHlrError {
+                    return Err(AstLoweringError {
                         msg: "Invalid use of 'Self' as method name".to_string(),
                     });
                 }
@@ -373,7 +378,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 hlr::ExprDef::Val(hlr::Val::Mthd(ty, mthd.ident.clone(), args))
             }
             _ => {
-                return Err(AstToHlrError {
+                return Err(AstLoweringError {
                     msg: format!("Complex paths are not supported yet: {:#?}", path),
                 });
             }
@@ -383,7 +388,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(expr)
     }
 
-    fn lower_qualified_path(&mut self, qualified_path: &ast::QualifiedPath) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_qualified_path(&mut self, qualified_path: &ast::QualifiedPath) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let ty = self.lower_ty_annot(qualified_path.ty)?;
 
         let trait_ = qualified_path
@@ -393,7 +398,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 self.ctxt
                     .traits
                     .resolve_trait_name(&trait_annot.name)
-                    .ok_or_else(|| AstToHlrError {
+                    .ok_or_else(|| AstLoweringError {
                         msg: format!("Unknown trait '{}'", trait_annot.name),
                     })
             })
@@ -407,7 +412,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
             .transpose()?;
 
         let [segment] = qualified_path.path.segments.as_slice() else {
-            return Err(AstToHlrError {
+            return Err(AstLoweringError {
                 msg: format!(
                     "Only simple qualified paths are supported, found: {:#?}",
                     qualified_path.path
@@ -428,11 +433,11 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_tuple_expr(&mut self, fields: ast::ExprSlice<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_tuple_expr(&mut self, fields: ast::ExprSlice<'ast>) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let field_exprs: Vec<_> = fields
             .iter()
             .map(|&field| self.lower_expr(field))
-            .collect::<AstToHlrResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
         let field_exprs = self.hlr.expr_slice(&field_exprs);
 
         let expr = hlr::ExprDef::Tuple(field_exprs);
@@ -444,7 +449,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         left: ast::Expr<'ast>,
         operator: ast::BinaryOperator,
         right: ast::Expr<'ast>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let left = self.lower_expr(left)?;
         let right = self.lower_expr(right)?;
 
@@ -460,7 +465,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         &mut self,
         operator: ast::UnaryOperator,
         operand: ast::Expr<'ast>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let operand = self.lower_expr(operand)?;
 
         let expr = hlr::ExprDef::UnaryOp {
@@ -474,7 +479,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         &mut self,
         target: ast::Expr<'ast>,
         value: ast::Expr<'ast>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let target = self.lower_expr(target)?;
         let value = self.lower_expr(value)?;
 
@@ -486,12 +491,12 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         &mut self,
         callee: ast::Expr<'ast>,
         args: ast::ExprSlice<'ast>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let callee = self.lower_expr(callee)?;
         let args: Vec<_> = args
             .iter()
             .map(|&arg| self.lower_expr(arg))
-            .collect::<AstToHlrResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
         let args = self.hlr.expr_slice(&args);
 
         let expr = hlr::ExprDef::Call { callee, args };
@@ -503,16 +508,16 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         obj: ast::Expr<'ast>,
         mthd: &ast::PathSegment,
         args: ast::ExprSlice<'ast>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let obj = self.lower_expr(obj)?;
         let args: Vec<_> = args
             .iter()
             .map(|&arg| self.lower_expr(arg))
-            .collect::<AstToHlrResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
         let args = self.hlr.expr_slice(&args);
 
         if mthd.is_self {
-            return Err(AstToHlrError {
+            return Err(AstLoweringError {
                 msg: "Invalid use of 'Self' as method name".to_string(),
             });
         }
@@ -533,7 +538,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         &mut self,
         ty_path: &ast::Path,
         fields: &[(String, ast::Expr<'ast>)],
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let constructor = self.resolve_path_to_constructor(ty_path)?;
 
         let fields: Vec<_> = fields
@@ -543,7 +548,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 let field = hlr::FieldSpec::Name(field_name.clone());
                 Ok((field, expr))
             })
-            .collect::<AstToHlrResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
         let fields = self.hlr.struct_expr_field_slice(&fields);
 
         let expr = hlr::ExprDef::Struct { constructor, fields };
@@ -554,18 +559,18 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         &mut self,
         obj: ast::Expr<'ast>,
         field: &ast::FieldDescriptor,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let obj = self.lower_expr(obj)?;
 
         let field_spec = match field {
             ast::FieldDescriptor::Named(name) => {
                 if name.is_self {
-                    return Err(AstToHlrError {
+                    return Err(AstLoweringError {
                         msg: "Invalid use of 'Self' as field name".to_string(),
                     });
                 }
                 if name.args.is_some() {
-                    return Err(AstToHlrError {
+                    return Err(AstLoweringError {
                         msg: "Generic field names are not valid".to_string(),
                     });
                 }
@@ -586,7 +591,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         cond: ast::Expr<'ast>,
         then: ast::Block<'ast>,
         else_: Option<ast::Block<'ast>>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let cond = self.lower_expr(cond)?;
 
         self.start_new_block();
@@ -605,7 +610,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_loop_expr(&mut self, body: ast::Block<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_loop_expr(&mut self, body: ast::Block<'ast>) -> AstLoweringResult<hlr::Expr<'hlr>> {
         self.start_new_block();
         let body = self.build_block(body)?;
         let body = self.release_current_block(body);
@@ -614,7 +619,11 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_while_expr(&mut self, cond: ast::Expr<'ast>, body: ast::Block<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_while_expr(
+        &mut self,
+        cond: ast::Expr<'ast>,
+        body: ast::Block<'ast>,
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let cond = self.lower_expr(cond)?;
 
         self.start_new_block();
@@ -641,7 +650,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         &mut self,
         scrutinee: ast::Expr<'ast>,
         arms: &[ast::MatchArm<'ast>],
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let scrutinee = self.lower_expr(scrutinee)?;
 
         let hlr_arms: Vec<_> = arms
@@ -653,7 +662,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                 self.scopes.pop_back();
                 Ok(hlr::MatchArm { pattern, body })
             })
-            .collect::<AstToHlrResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
         let hlr_arms = self.hlr.match_arms(&hlr_arms);
 
         let expr = hlr::ExprDef::Match {
@@ -663,11 +672,11 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_pattern(&mut self, pattern: &ast::VariantPattern) -> AstToHlrResult<hlr::Pattern<'hlr>> {
+    fn lower_pattern(&mut self, pattern: &ast::VariantPattern) -> AstLoweringResult<hlr::Pattern<'hlr>> {
         let variant = self.resolve_path_to_constructor(&pattern.variant)?;
 
         let hlr::Val::Variant(enum_, variant_index, ref args) = variant else {
-            return Err(AstToHlrError {
+            return Err(AstLoweringError {
                 msg: format!("Only enum variants are supported in patterns, found {:?}", variant),
             });
         };
@@ -676,7 +685,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         let variant_struct = self.ctxt.tys.get_struct_def(variant_struct).unwrap();
 
         if pattern.fields.len() != variant_struct.fields.len() {
-            return Err(AstToHlrError {
+            return Err(AstLoweringError {
                 msg: format!(
                     "Pattern for variant has wrong number of fields: expected {}, found {}",
                     variant_struct.fields.len(),
@@ -693,7 +702,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                     .fields
                     .iter()
                     .position(|f| f.name == field.field_name)
-                    .ok_or_else(|| AstToHlrError {
+                    .ok_or_else(|| AstLoweringError {
                         msg: format!(
                             "Unknown field '{}' in pattern for variant '{}'",
                             field.field_name, enum_.0
@@ -709,33 +718,33 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
 
                 Ok(hlr::VariantPatternField { field_index, binding })
             })
-            .collect::<AstToHlrResult<_>>()?;
+            .collect::<AstLoweringResult<_>>()?;
         let fields = self.hlr.variant_pattern_fields(&fields);
 
         Ok(hlr::VariantPattern { variant, fields })
     }
 
-    fn lower_deref_expr(&mut self, base: ast::Expr<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_deref_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let base = self.lower_expr(base)?;
         let expr = hlr::ExprDef::Deref(base);
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_addr_of_expr(&mut self, base: ast::Expr<'ast>) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_addr_of_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let base = self.lower_expr(base)?;
         let expr = hlr::ExprDef::AddrOf(base);
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_as_expr(&mut self, expr: ast::Expr<'ast>, target_ty: ast::TyAnnot) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    fn lower_as_expr(&mut self, expr: ast::Expr<'ast>, target_ty: ast::TyAnnot) -> AstLoweringResult<hlr::Expr<'hlr>> {
         let expr = self.lower_expr(expr)?;
         let ty = self.lower_ty_annot(target_ty)?;
         let expr = hlr::ExprDef::As { expr, ty };
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_self_expr(&mut self) -> AstToHlrResult<hlr::Expr<'hlr>> {
-        let self_var_id = self.self_var_id.ok_or_else(|| AstToHlrError {
+    fn lower_self_expr(&mut self) -> AstLoweringResult<hlr::Expr<'hlr>> {
+        let self_var_id = self.self_var_id.ok_or_else(|| AstLoweringError {
             msg: "Cannot use 'self' outside of a method".to_string(),
         })?;
         let expr = hlr::ExprDef::Val(hlr::Val::Var(self_var_id));
@@ -747,12 +756,12 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
         params: &[ast::ClosureParam<'ast>],
         return_ty: Option<ast::TyAnnot<'ast>>,
         body: ast::Block<'ast>,
-    ) -> AstToHlrResult<hlr::Expr<'hlr>> {
+    ) -> AstLoweringResult<hlr::Expr<'hlr>> {
         self.scopes.push_back(Scope::default());
 
         let params = params
             .iter()
-            .map(|param| -> AstToHlrResult<hlr::ClosureParam<'hlr>> {
+            .map(|param| -> AstLoweringResult<hlr::ClosureParam<'hlr>> {
                 let ty = param.ty.map(|ty| self.lower_ty_annot(ty)).transpose()?;
                 let var_id = self.hlr.var_id();
                 self.scopes
@@ -762,7 +771,7 @@ impl<'ast, 'ctxt, 'hlr> AstToHlr<'ast, 'ctxt, 'hlr> {
                     .insert(param.name.clone(), var_id);
                 Ok(hlr::ClosureParam(var_id, ty))
             })
-            .collect::<AstToHlrResult<Vec<_>>>()?;
+            .collect::<AstLoweringResult<Vec<_>>>()?;
         let params = self.hlr.closure_params(&params);
 
         self.start_new_block();

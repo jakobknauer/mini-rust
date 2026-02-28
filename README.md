@@ -36,7 +36,7 @@ The main entry point is [main.rs](src/main.rs). The compilation process in orche
 The compilation process takes the following steps:
 - Parse the [Abstract Syntax Tree (AST)](src/ast.rs) from source code in [parser](src/parse.rs).
 - Build the `Ctxt` object defined in [ctxt](src/ctxt.rs) from the AST. This serves as a central registry for types, functions, traits etc..
-- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_to_hlr](src/ast_to_hlr.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
+- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
 - Typecheck the HLR in [typeck](src/typeck.rs).
 - Lower the HLR to MLR. 
 - Monomorphization: Using information recorded during the previous pass, recursively determine all instantiations of functions with respective generic arguments.

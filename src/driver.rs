@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast, ast_to_hlr,
+    ast, ast_lowering,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -87,14 +87,14 @@ impl<'a> Driver<'a> {
         let hlr = hlr::Hlr::new();
 
         self.print_pretty("Lowering free functions: AST to HLR");
-        let free_hlr_fns = self.free_fns_ast_to_hlr(&ast, &hlr)?;
+        let free_hlr_fns = self.free_fns_ast_lowering(&ast, &hlr)?;
         self.print_pretty("Lowering free functions: type checking");
         let free_typings = self.typeck_hlr_fns(&free_hlr_fns)?;
         self.print_pretty("Lowering free functions: HLR to MLR");
         self.hlr_fns_to_mlr(&free_hlr_fns, &free_typings);
 
         self.print_pretty("Lowering impl methods: AST to HLR");
-        let impl_hlr_fns = self.impl_fns_ast_to_hlr(&ast, &hlr)?;
+        let impl_hlr_fns = self.impl_fns_ast_lowering(&ast, &hlr)?;
         self.print_pretty("Lowering impl methods: type checking");
         let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
         self.print_pretty("Lowering impl methods: HLR to MLR");
@@ -480,7 +480,7 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn free_fns_ast_to_hlr<'ast, 'hlr>(
+    fn free_fns_ast_lowering<'ast, 'hlr>(
         &self,
         ast: &'ast ast::Ast<'ast>,
         hlr: &'hlr hlr::Hlr<'hlr>,
@@ -489,14 +489,14 @@ impl<'a> Driver<'a> {
         for (idx, &ast_fn) in ast.free_fns().iter().enumerate() {
             let Some(body) = ast_fn.body else { continue };
             let target_fn = self.ast_meta.fn_ids[&idx];
-            let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, hlr)
+            let hlr_fn = ast_lowering::ast_lowering(&self.ctxt, target_fn, ast, body, hlr)
                 .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
             hlr_fns.push(hlr_fn);
         }
         Ok(hlr_fns)
     }
 
-    fn impl_fns_ast_to_hlr<'ast, 'hlr>(
+    fn impl_fns_ast_lowering<'ast, 'hlr>(
         &self,
         ast: &'ast ast::Ast<'ast>,
         hlr: &'hlr hlr::Hlr<'hlr>,
@@ -507,7 +507,7 @@ impl<'a> Driver<'a> {
             let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
             for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
                 let Some(body) = ast_mthd.body else { continue };
-                let hlr_fn = ast_to_hlr::ast_to_hlr(&self.ctxt, target_fn, ast, body, hlr)
+                let hlr_fn = ast_lowering::ast_lowering(&self.ctxt, target_fn, ast, body, hlr)
                     .map_err(|_| format!("failed to lower {} to HLR", ast_mthd.name))?;
                 hlr_fns.push(hlr_fn);
             }
