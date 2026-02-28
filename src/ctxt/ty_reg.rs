@@ -20,7 +20,6 @@ pub struct TyReg {
     ty_slices_inv: HashMap<Vec<Ty>, TySlice>, // This is probably very inefficient
 
     constraints: Vec<Constraint>,
-    obligations: Vec<Obligation>,
 
     next_inf_var: InfVar,
 }
@@ -1005,25 +1004,6 @@ impl TyReg {
         })
     }
 
-    pub fn try_get_callable_obligation(&self, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
-        self.obligations
-            .iter()
-            .filter_map(|obligation| {
-                if let Obligation::Callable {
-                    ty,
-                    param_tys,
-                    return_ty,
-                } = obligation
-                    && self.tys_eq(*ty, subject)
-                {
-                    Some((param_tys.clone(), *return_ty))
-                } else {
-                    None
-                }
-            })
-            .next()
-    }
-
     pub fn try_get_callable_constraint(&self, subject: GenVar) -> Option<(Vec<Ty>, Ty)> {
         self.constraints
             .iter()
@@ -1049,10 +1029,6 @@ impl TyReg {
                 None
             }
         })
-    }
-
-    pub fn get_all_obligations(&self) -> &[Obligation] {
-        &self.obligations
     }
 
     pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named, NotATypeName> {

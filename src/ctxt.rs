@@ -254,9 +254,7 @@ impl Ctxt {
 
     // TODO return TySlice instead of Vec
     pub fn ty_is_callable(&mut self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
-        if let Some((param_tys, return_ty)) = self.tys.try_get_callable_obligation(ty) {
-            Some((param_tys, return_ty, false))
-        } else if let &ty::TyDef::Fn {
+        if let &ty::TyDef::Fn {
             param_tys,
             return_ty,
             var_args,

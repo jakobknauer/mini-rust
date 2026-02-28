@@ -1,10 +1,6 @@
 use crate::{
-    ctxt::{
-        self,
-        ty::{Obligation, iter_ty_slice},
-    },
+    ctxt,
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
-    obligation_check::ObligationCheckError,
     parse,
 };
 
@@ -72,31 +68,4 @@ pub fn print_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String 
         ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).ty),
         desc
     )
-}
-
-pub fn print_obligation_check_error(err: ObligationCheckError, ctxt: &ctxt::Ctxt) -> String {
-    match err.obligation {
-        Obligation::ImplementsTraitInst { ty, trait_inst } => format!(
-            "Obligation check error:  type '{}' does not implement trait '{}<{}>'",
-            ctxt.tys.get_string_rep(ty),
-            ctxt.traits.get_trait_name(trait_inst.trait_),
-            iter_ty_slice!(ctxt.tys, trait_inst.gen_args, map(|ty| ctxt.tys.get_string_rep(ty)))
-                .collect::<Vec<_>>()
-                .join(", "),
-        ),
-        Obligation::Callable {
-            ty,
-            param_tys,
-            return_ty,
-        } => format!(
-            "Obligation check error:  type '{}' is not callable with arguments '{}' and return type '{}'",
-            ctxt.tys.get_string_rep(ty),
-            param_tys
-                .iter()
-                .map(|ty| ctxt.tys.get_string_rep(*ty))
-                .collect::<Vec<_>>()
-                .join(", "),
-            ctxt.tys.get_string_rep(return_ty),
-        ),
-    }
 }

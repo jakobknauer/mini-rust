@@ -14,13 +14,8 @@ use crate::{
         traits::{self, TraitInst},
         ty,
     },
-    driver::{
-        err::{print_impl_check_error, print_obligation_check_error},
-        impl_check::check_trait_impls,
-    },
-    hlr, hlr_lowering, mlr_lowering,
-    obligation_check::check_obligations,
-    parse, typeck,
+    driver::{err::print_impl_check_error, impl_check::check_trait_impls},
+    hlr, hlr_lowering, mlr_lowering, parse, typeck,
     util::print,
 };
 
@@ -104,8 +99,6 @@ impl<'a> Driver<'a> {
         let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
         self.print_pretty("Lowering impl methods: HLR to MLR");
         self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
-        check_obligations(&mut self.ctxt).map_err(|err| print_obligation_check_error(err, &self.ctxt))?;
-
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
             self.print_functions(mlr_path).map_err(|_| "Error printing MLR")?;

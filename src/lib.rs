@@ -8,7 +8,6 @@ mod hlr;
 #[cfg(feature = "hlr")]
 mod hlr_lowering;
 mod mlr_lowering;
-mod obligation_check;
 mod parse;
 mod typeck;
 mod util;
