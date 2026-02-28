@@ -32,6 +32,12 @@ pub struct Fn<'hlr> {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct VarId(usize);
 
+impl std::fmt::Display for VarId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "v{}", self.0)
+    }
+}
+
 impl<'hlr> Hlr<'hlr> {
     pub fn new() -> Self {
         Self {

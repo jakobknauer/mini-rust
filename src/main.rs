@@ -37,6 +37,7 @@ fn main() {
         .collect();
 
     let output_paths = mini_rust::driver::OutputPaths {
+        hlr: Some(&cli.build_dir.join(&cli.crate_).with_extension("hlr")),
         mlr: Some(&cli.build_dir.join(&cli.crate_).with_extension("mlr")),
         llvm_ir: Some(&cli.build_dir.join(&cli.crate_).with_extension("ll")),
     };

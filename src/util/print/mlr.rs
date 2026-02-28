@@ -30,15 +30,6 @@ struct MlrPrinter<'a, W: Write> {
 
 const INDENT: &str = "    ";
 
-fn reinsert_escape_sequences(s: &str) -> String {
-    s.replace("\\", "\\\\")
-        .replace("\\", "\\\"")
-        .replace("\\", "\\\'")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-}
-
 impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_mlr(&mut self) -> Result<(), std::io::Error> {
         self.print_signature()?;
@@ -333,12 +324,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                         write!(
                             self.writer,
                             "const '{}'",
-                            reinsert_escape_sequences(&(c as char).to_string())
+                            super::reinsert_escape_sequences(&(c as char).to_string())
                         )
                     }
                     CString(ref s) => {
                         let s = std::str::from_utf8(s).unwrap();
-                        let s = reinsert_escape_sequences(s);
+                        let s = super::reinsert_escape_sequences(s);
                         write!(self.writer, "const \"{}\"", s)
                     }
                 },

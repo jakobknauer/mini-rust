@@ -16,11 +16,12 @@ use crate::{
     },
     driver::{err::print_impl_check_error, impl_check::check_trait_impls},
     hlr, hlr_lowering, mlr_lowering, parse, typeck,
-    util::print::mlr as print,
+    util::print,
 };
 
 #[derive(Default)]
 pub struct OutputPaths<'a> {
+    pub hlr: Option<&'a Path>,
     pub mlr: Option<&'a Path>,
     pub llvm_ir: Option<&'a Path>,
 }
@@ -99,6 +100,18 @@ impl<'a> Driver<'a> {
         let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
         self.print_pretty("Lowering impl methods: HLR to MLR");
         self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
+
+        if let Some(hlr_path) = self.output_paths.hlr {
+            self.print_detail(&format!("Saving HLR to {}", hlr_path.display()));
+            self.print_hlr_functions(
+                hlr_path,
+                free_hlr_fns
+                    .iter()
+                    .zip(&free_typings)
+                    .chain(impl_hlr_fns.iter().zip(&impl_typings)),
+            )
+            .map_err(|_| "Error printing HLR")?;
+        }
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
             self.print_functions(mlr_path).map_err(|_| "Error printing MLR")?;
@@ -530,6 +543,20 @@ impl<'a> Driver<'a> {
         for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
             hlr_lowering::hlr_to_mlr(&mut self.ctxt, hlr_fn, typing);
         }
+    }
+
+    fn print_hlr_functions<'hlr>(
+        &self,
+        path: &Path,
+        fns: impl Iterator<Item = (&'hlr hlr::Fn<'hlr>, &'hlr typeck::HlrTyping)>,
+    ) -> Result<(), ()> {
+        let mut file = std::fs::File::create(path).map_err(|_| ())?;
+        for (hlr_fn, typing) in fns {
+            print::print_hlr(hlr_fn, &self.ctxt, Some(typing), &mut file).map_err(|_| ())?;
+            use std::io::Write;
+            writeln!(file).map_err(|_| ())?;
+        }
+        Ok(())
     }
 
     fn print_functions(&mut self, path: &Path) -> Result<(), ()> {

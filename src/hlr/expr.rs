@@ -205,3 +205,36 @@ impl From<ast::UnaryOperator> for UnaryOperator {
         }
     }
 }
+
+impl std::fmt::Display for BinaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Add => "+",
+            Self::Subtract => "-",
+            Self::Multiply => "*",
+            Self::Divide => "/",
+            Self::Remainder => "%",
+            Self::Equal => "==",
+            Self::NotEqual => "!=",
+            Self::LessThan => "<",
+            Self::GreaterThan => ">",
+            Self::LessThanOrEqual => "<=",
+            Self::GreaterThanOrEqual => ">=",
+            Self::BitOr => "|",
+            Self::BitAnd => "&",
+            Self::LogicalAnd => "&&",
+            Self::LogicalOr => "||",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl std::fmt::Display for UnaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Not => "!",
+            Self::Negative => "-",
+        };
+        write!(f, "{}", s)
+    }
+}
