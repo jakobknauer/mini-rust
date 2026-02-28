@@ -7,7 +7,6 @@ use crate::{
     obligation_check::ObligationCheckError,
     parse,
     typechecker::TyError,
-    util::mlr_builder::MlrBuilderError,
 };
 
 pub fn print_parser_err(err: &parse::ParserErr, _: &str) -> String {
@@ -22,12 +21,6 @@ pub fn print_parser_err(err: &parse::ParserErr, _: &str) -> String {
         TraitMthdWithBody => "Parser error: Trait method with body".to_string(),
         ExpectedTraitName => "Parser error: Expected trait name".to_string(),
         UnexpectedReceiverArg => "Parser error: Unexpected receiver argument".to_string(),
-    }
-}
-
-pub fn print_mlr_builder_error(fn_name: &str, err: MlrBuilderError, ctxt: &ctxt::Ctxt) -> String {
-    match err {
-        MlrBuilderError::TyErr(err) => print_ty_error(fn_name, err, ctxt),
     }
 }
 

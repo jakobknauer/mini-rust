@@ -89,8 +89,6 @@ impl<'a> Driver<'a> {
 
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
 
-        self.define_stdlib_mlrs()?;
-
         let hlr = hlr::Hlr::new();
 
         self.print_pretty("Lowering free functions: AST to HLR");
@@ -486,13 +484,6 @@ impl<'a> Driver<'a> {
             }
         }
 
-        Ok(())
-    }
-
-    fn define_stdlib_mlrs(&mut self) -> Result<(), String> {
-        stdlib::define_size_of(&mut self.ctxt)?;
-        stdlib::define_impl_for_ptr(&mut self.ctxt)
-            .map_err(|err| err::print_mlr_builder_error("offset", err, &self.ctxt))?;
         Ok(())
     }
 

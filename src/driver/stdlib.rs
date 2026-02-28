@@ -1,11 +1,4 @@
-use crate::{
-    ctxt::{
-        self,
-        fns::{self},
-        ty,
-    },
-    util::mlr_builder::{MlrBuilder, MlrBuilderError},
-};
+use crate::ctxt::{self, fns, ty};
 
 macro_rules! register_fn {
     ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_ty:ident ),* ) -> $return_ty:expr ) => {
@@ -86,31 +79,6 @@ fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     Ok(())
 }
 
-pub fn define_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), String> {
-    let size_of_fn = ctxt.language_items.size_of.ok_or("function size_of not registered")?;
-
-    let mut builder = MlrBuilder::new(size_of_fn, ctxt);
-
-    let body = {
-        builder.start_new_block();
-
-        let gen_var = builder.get_signature().gen_params[0];
-        let gen_var_ty = builder.tys().gen_var(gen_var);
-        let size_of_val = builder.insert_size_of_val(gen_var_ty).unwrap();
-        builder.insert_return_stmt(size_of_val).unwrap();
-
-        builder.release_current_block()
-    };
-
-    let mlr = fns::FnMlr {
-        body,
-        param_locs: vec![],
-    };
-
-    ctxt.fns.add_fn_def(size_of_fn, mlr);
-    Ok(())
-}
-
 pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let var = ctxt.tys.register_gen_var("T");
     let var_ty = ctxt.tys.gen_var(var);
@@ -144,43 +112,5 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
 
     ctxt.language_items.ptr_offset = Some(fn_);
 
-    Ok(())
-}
-
-pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), MlrBuilderError> {
-    let fn_ = ctxt.language_items.ptr_offset.unwrap();
-    let mut builder = MlrBuilder::new(fn_, ctxt);
-    let mut param_locs = Vec::new();
-
-    let signature = builder.get_signature();
-    let params = signature.params.clone();
-    for fns::FnParam { ty, .. } in params {
-        let loc = builder.insert_typed_loc(ty).unwrap();
-        param_locs.push(loc);
-    }
-
-    let body = {
-        builder.start_new_block();
-
-        let self_loc = param_locs[0];
-        let self_place = builder.insert_loc_place(self_loc).unwrap();
-        let self_op = builder.insert_copy_op(self_place).unwrap();
-        let deref_self = builder.insert_deref_place(self_op).unwrap();
-        let deref_self_op = builder.insert_copy_op(deref_self).unwrap();
-
-        let offset_loc = param_locs[1];
-        let offset_place = builder.insert_loc_place(offset_loc).unwrap();
-        let offset_op = builder.insert_copy_op(offset_place).unwrap();
-
-        let offset_val = builder.insert_ptr_offset_val(deref_self_op, offset_op)?;
-
-        builder.insert_return_stmt(offset_val).unwrap();
-
-        builder.release_current_block()
-    };
-
-    let mlr = fns::FnMlr { body, param_locs };
-
-    ctxt.fns.add_fn_def(fn_, mlr);
     Ok(())
 }

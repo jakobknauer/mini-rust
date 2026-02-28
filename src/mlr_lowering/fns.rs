@@ -1,3 +1,5 @@
+mod intrinsics;
+
 use std::collections::{HashMap, VecDeque};
 
 use inkwell::{
@@ -396,6 +398,16 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
     }
 
     fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+        let maybe_fn_inst = match *self.mlr().get_op_def(callable) {
+            mlr::OpDef::Fn(fn_inst) => Some(fn_inst),
+            _ => None,
+        };
+        if let Some(fn_inst) = maybe_fn_inst {
+            if let Some(result) = self.try_build_intrinsic_call(fn_inst, args)? {
+                return Ok(result);
+            }
+        }
+
         let callable_ty = self.mlr().get_op_ty(callable);
         let callable_ty = self.substitute(callable_ty);
         let callable_ty_def = self.tys().get_ty_def(callable_ty).unwrap().clone();
