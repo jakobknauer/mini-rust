@@ -1,11 +1,10 @@
 use crate::{
-    ast_lowering::AstLoweringError,
     ctxt::{
         self,
         fns::{self},
         ty,
     },
-    util::mlr_builder::MlrBuilder,
+    util::mlr_builder::{MlrBuilder, MlrBuilderError},
 };
 
 macro_rules! register_fn {
@@ -148,7 +147,7 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     Ok(())
 }
 
-pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), AstLoweringError> {
+pub fn define_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), MlrBuilderError> {
     let fn_ = ctxt.language_items.ptr_offset.unwrap();
     let mut builder = MlrBuilder::new(fn_, ctxt);
     let mut param_locs = Vec::new();

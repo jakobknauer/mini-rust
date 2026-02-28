@@ -1,5 +1,4 @@
 use crate::{
-    ast_lowering,
     ctxt::{
         self,
         ty::{Obligation, iter_ty_slice},
@@ -8,6 +7,7 @@ use crate::{
     obligation_check::ObligationCheckError,
     parse,
     typechecker::TyError,
+    util::mlr_builder::MlrBuilderError,
 };
 
 pub fn print_parser_err(err: &parse::ParserErr, _: &str) -> String {
@@ -25,45 +25,9 @@ pub fn print_parser_err(err: &parse::ParserErr, _: &str) -> String {
     }
 }
 
-pub fn print_mlr_builder_error(fn_name: &str, err: ast_lowering::AstLoweringError, ctxt: &ctxt::Ctxt) -> String {
-    use ast_lowering::AstLoweringError::*;
-
+pub fn print_mlr_builder_error(fn_name: &str, err: MlrBuilderError, ctxt: &ctxt::Ctxt) -> String {
     match err {
-        TyErr(err) => print_ty_error(fn_name, err, ctxt),
-        MissingOperatorImpl { name } => format!("Missing operator implementation for {}", name),
-        UnresolvableSymbol { name } => format!("Unresolvable symbol {}", name),
-        NotAPlace => {
-            "Only variables, field access expressions, and derefs of references are supported as places.".to_string()
-        }
-        OperatorResolutionFailed {
-            operator,
-            operand_tys: (left, right),
-        } => format!(
-            "Cannot resolve operator '{}' for operand types '{}' and '{}'",
-            operator,
-            ctxt.tys.get_string_rep(left),
-            ctxt.tys.get_string_rep(right)
-        ),
-        UnresolvableStructOrEnum { path } => {
-            format!("Cannot resolve path '{:#?}' to struct or enum variant", path)
-        }
-        UnresolvablePath { path } => format!("Cannot resolve path '{:#?}' to value", path),
-        UnresolvableTyAnnot => "Cannot resolve type annotation".to_string(),
-        VarArgsNotSupported => "Cannot build MLR for variadic function".to_string(),
-        NonMatchableScrutinee { ty } => format!(
-            "Match scrutinee has type '{}', which is not matchable",
-            ctxt.tys.get_string_rep(ty)
-        ),
-        NoSelfOutsideOfMethod => "No 'self' outside of method".to_string(),
-        UnresolvableTraitAnnot { trait_name } => format!("Cannot resolve trait name '{}'", trait_name),
-        NotATypeName(ty_name) => format!("'{}' is not a type name", ty_name),
-        NotAGenericType(ty) => format!("'{}' is not a generic type", ctxt.tys.get_string_rep(ty)),
-        MatchArmPatternNotEnumVariant => "Match arm pattern is not an enum variant".to_string(),
-        MatchArmPatternWrongEnum { expected, found } => format!(
-            "Match arm pattern has enum type '{}', but expected '{}'",
-            ctxt.tys.get_string_rep(found),
-            ctxt.tys.get_string_rep(expected)
-        ),
+        MlrBuilderError::TyErr(err) => print_ty_error(fn_name, err, ctxt),
     }
 }
 

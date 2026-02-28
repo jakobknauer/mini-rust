@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast, ast_lowering, ast_to_hlr,
+    ast, ast_to_hlr,
     ctxt::{
         self, fns, impls,
         traits::{self, TraitInst},
@@ -107,8 +107,6 @@ impl<'a> Driver<'a> {
         self.print_pretty("Lowering impl methods: HLR to MLR");
         self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
         check_obligations(&mut self.ctxt).map_err(|err| print_obligation_check_error(err, &self.ctxt))?;
-
-        ast_lowering::opt::canonicalize_types(&mut self.ctxt).map_err(|_| "Could not infer types")?;
 
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));

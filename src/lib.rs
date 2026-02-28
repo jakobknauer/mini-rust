@@ -1,5 +1,4 @@
 mod ast;
-mod ast_lowering;
 #[cfg(feature = "hlr")]
 mod ast_to_hlr;
 mod ctxt;
