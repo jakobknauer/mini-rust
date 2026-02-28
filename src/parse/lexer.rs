@@ -1,7 +1,8 @@
 use crate::parse::token::{Keyword, Token};
 
 pub fn get_tokens(input: &str) -> Result<Vec<Token>, LexerErr> {
-    Lexer::new(input).collect()
+    let input = input.chars().collect::<Vec<char>>();
+    Lexer::new(&input).collect()
 }
 
 #[derive(Debug, Clone)]
@@ -10,7 +11,7 @@ pub struct LexerErr {
 }
 
 struct Lexer<'a> {
-    input: &'a str,
+    input: &'a [char],
     position: usize,
 }
 
@@ -77,16 +78,16 @@ const KEYWORDS: &[(&str, Token)] = &[
 ];
 
 impl<'a> Lexer<'a> {
-    fn new(input: &'a str) -> Self {
+    fn new(input: &'a [char]) -> Self {
         Lexer { input, position: 0 }
     }
 
     fn get_current_char(&self) -> Option<char> {
-        self.input.chars().nth(self.position)
+        self.input.get(self.position).cloned()
     }
 
     fn get_next_char(&self) -> Option<char> {
-        self.input.chars().nth(self.position + 1)
+        self.input.get(self.position + 1).cloned()
     }
 
     fn skip_whitespace(&mut self) {
@@ -126,7 +127,7 @@ impl<'a> Lexer<'a> {
 
         let identifier = &self
             .input
-            .chars()
+            .iter()
             .skip(start)
             .take(self.position - start)
             .collect::<String>();
@@ -150,7 +151,7 @@ impl<'a> Lexer<'a> {
 
         let number_str = &self
             .input
-            .chars()
+            .iter()
             .skip(start)
             .take(self.position - start)
             .collect::<String>();
@@ -161,8 +162,8 @@ impl<'a> Lexer<'a> {
     fn try_parse_three_char_token(&mut self) -> Option<Token> {
         THREE_CHAR_TOKENS.iter().find_map(|&(s1, s2, s3, ref token)| {
             if self.get_current_char() == Some(s1)
-                && self.input.chars().nth(self.position + 1) == Some(s2)
-                && self.input.chars().nth(self.position + 2) == Some(s3)
+                && self.input.get(self.position + 1) == Some(&s2)
+                && self.input.get(self.position + 2) == Some(&s3)
             {
                 self.position += 3;
                 Some(token.clone())
@@ -174,7 +175,7 @@ impl<'a> Lexer<'a> {
 
     fn try_parse_two_char_token(&mut self) -> Option<Token> {
         TWO_CHAR_TOKENS.iter().find_map(|&(s1, s2, ref token)| {
-            if self.get_current_char() == Some(s1) && self.input.chars().nth(self.position + 1) == Some(s2) {
+            if self.get_current_char() == Some(s1) && self.input.get(self.position + 1) == Some(&s2) {
                 self.position += 2;
                 Some(token.clone())
             } else {
