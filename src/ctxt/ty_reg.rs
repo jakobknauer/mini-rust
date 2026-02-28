@@ -33,35 +33,34 @@ pub enum Named {
 }
 
 #[derive(Debug)]
-#[expect(clippy::enum_variant_names)]
-pub enum UnificationError {
-    FunctionParamCountMismatch,
-    TypeMismatch,
-    TupleLengthMismatch,
-}
+pub struct NotAStruct(#[allow(unused)] pub Ty);
 #[derive(Debug)]
-pub struct NotAStruct(pub Ty);
-#[derive(Debug)]
-pub struct NotAnEnum(pub Ty);
+pub struct NotAnEnum(#[allow(unused)] pub Ty);
 pub enum NotAStructField {
-    NotAStruct(Ty),
-    NotAFieldName(Ty, String),
+    NotAStruct(#[allow(unused)] Ty),
+    NotAFieldName(#[allow(unused)] Ty, #[allow(unused)] String),
 }
 #[derive(Debug)]
 pub enum TyInstError {
     StructGenericArgCountMismatch {
+        #[allow(unused)]
         struct_: Struct,
+        #[allow(unused)]
         expected: usize,
+        #[allow(unused)]
         actual: usize,
     },
     EnumGenericArgCountMismatch {
+        #[allow(unused)]
         enum_: Enum,
+        #[allow(unused)]
         expected: usize,
+        #[allow(unused)]
         actual: usize,
     },
 }
 #[derive(Debug)]
-pub struct NotATypeName(pub String);
+pub struct NotATypeName(#[allow(unused)] pub String);
 
 impl TyReg {
     fn register_ty(&mut self, ty_def: TyDef) -> Ty {

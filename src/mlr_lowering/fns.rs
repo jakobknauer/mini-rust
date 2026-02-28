@@ -5,7 +5,6 @@ use std::collections::{HashMap, VecDeque};
 use inkwell::{
     basic_block::BasicBlock,
     builder::{Builder, BuilderError},
-    targets::TargetData,
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
@@ -378,10 +377,11 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
             mlr::OpDef::Fn(fn_inst) => Some(fn_inst),
             _ => None,
         };
-        if let Some(fn_inst) = maybe_fn_inst {
-            if let Some(result) = self.try_build_intrinsic_call(fn_inst, args)? {
-                return Ok(result);
-            }
+
+        if let Some(fn_inst) = maybe_fn_inst
+            && let Some(result) = self.try_build_intrinsic_call(fn_inst, args)?
+        {
+            return Ok(result);
         }
 
         let callable_ty = self.mlr().get_op_ty(callable);

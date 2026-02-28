@@ -48,6 +48,7 @@ pub enum TyDef {
     },
     Ref(Ty),
     Ptr(Ty),
+    #[allow(unused)]
     Alias(Ty),
     GenVar(GenVar),
     TraitSelf(traits::Trait),
@@ -112,7 +113,9 @@ pub enum ConstraintRequirement {
 
 #[derive(Clone)]
 pub enum Obligation {
+    #[allow(unused)]
     ImplementsTraitInst { ty: Ty, trait_inst: traits::TraitInst },
+    #[allow(unused)]
     Callable { ty: Ty, param_tys: Vec<Ty>, return_ty: Ty },
 }
 
