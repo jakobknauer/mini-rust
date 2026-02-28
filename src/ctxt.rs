@@ -456,7 +456,6 @@ impl Ctxt {
                 let ty = self.normalize_ty(ty);
                 self.tys.ptr(ty)
             }
-            Alias(ty) => self.normalize_ty(ty),
             GenVar(_) => ty,
             TraitSelf(_) => ty,
             Closure { .. } => ty,

@@ -374,7 +374,6 @@ impl TyReg {
             }
             Ref(ty) => format!("&{}", self.get_string_rep_with_subst(ty, subst)),
             Ptr(ty) => format!("*{}", self.get_string_rep_with_subst(ty, subst)),
-            Alias(ty) => self.get_string_rep_with_subst(ty, subst),
             GenVar(gen_var) => subst
                 .get(&gen_var)
                 .map(|&ty| self.get_string_rep_with_subst(ty, subst))
@@ -444,10 +443,7 @@ impl TyReg {
         &self.gen_var_names[gen_param.0]
     }
 
-    pub fn canonicalize(&self, mut ty: Ty) -> Ty {
-        while let Some(TyDef::Alias(next_ty)) = self.tys.get(ty.0).expect("current_ty should be registered") {
-            ty = *next_ty;
-        }
+    pub fn canonicalize(&self, ty: Ty) -> Ty {
         ty
     }
 
@@ -497,7 +493,6 @@ impl TyReg {
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
             Primitive(..) => ty,
-            Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => ty,
             Closure {
                 fn_inst,
@@ -582,7 +577,6 @@ impl TyReg {
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
             Primitive(..) => ty,
-            Alias(..) => unreachable!("ty should have been canonicalized"),
             TraitSelf(_) => subst,
             Closure {
                 fn_inst,
@@ -733,10 +727,6 @@ impl TyReg {
         match (def1, def2) {
             (None, _) | (_, None) => false,
             (Some(def1), Some(def2)) => match (def1, def2) {
-                (Alias(_), _) | (_, Alias(_)) => {
-                    unreachable!("Types should have been canonicalized");
-                }
-
                 (
                     &Fn {
                         param_tys: params1,
@@ -883,10 +873,6 @@ impl TyReg {
         };
 
         match (target_def, generic_def) {
-            (Alias(_), _) | (_, Alias(_)) => {
-                unreachable!("Types should have been canonicalized");
-            }
-
             (GenVar(var1), GenVar(var2)) => var1 == var2,
 
             (&Primitive(a), &Primitive(b)) => a == b,

@@ -55,8 +55,6 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 self.normalize(self_ty)
             }
 
-            Alias(_) => unreachable!(),
-
             Tuple(items) => {
                 let items = self.normalize_slice(items);
                 self.ctxt.tys.tuple(&items)

@@ -48,8 +48,6 @@ pub enum TyDef {
     },
     Ref(Ty),
     Ptr(Ty),
-    #[allow(unused)]
-    Alias(Ty),
     GenVar(GenVar),
     TraitSelf(traits::Trait),
     Closure {
