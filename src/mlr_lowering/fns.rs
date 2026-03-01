@@ -235,6 +235,7 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
                 self.build_op(op)
             }
             BinaryPrim { op, lhs, rhs } => self.build_binary_prim(op, lhs, rhs),
+            UnaryPrim { op, operand } => self.build_unary_prim(op, operand),
         }
     }
 

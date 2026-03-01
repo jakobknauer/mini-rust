@@ -7,6 +7,12 @@ pub struct LanguageItems {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum UnaryPrimOp {
+    NegI32,
+    NotBool,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum BinaryPrimOp {
     AddI32,
     SubI32,

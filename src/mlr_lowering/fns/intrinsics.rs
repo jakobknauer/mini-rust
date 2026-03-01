@@ -83,6 +83,20 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         Ok(op.as_basic_value_enum())
     }
 
+    pub(super) fn build_unary_prim(
+        &mut self,
+        op: language_items::UnaryPrimOp,
+        operand: mlr::Op,
+    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+        use language_items::UnaryPrimOp::*;
+        let operand = self.build_op(operand)?.into_int_value();
+        let result = match op {
+            NegI32 => self.iw_builder.build_int_neg(operand, "")?,
+            NotBool => self.iw_builder.build_not(operand, "")?,
+        };
+        Ok(result.as_basic_value_enum())
+    }
+
     fn build_int_pair(&mut self, lhs: mlr::Op, rhs: mlr::Op) -> MlrLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
         let lhs = self.build_op(lhs)?.into_int_value();
         let rhs = self.build_op(rhs)?.into_int_value();

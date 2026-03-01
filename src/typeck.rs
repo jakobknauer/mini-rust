@@ -29,6 +29,7 @@ pub enum ExprExtra {
     ValMthd(MthdResolution),
     BinaryOp(fns::FnInst),
     BinaryPrim(language_items::BinaryPrimOp),
+    UnaryPrim(language_items::UnaryPrimOp),
     UnaryOp(fns::FnInst),
     FieldAccess {
         derefs: usize,
@@ -372,26 +373,15 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
 
         use hlr::UnaryOperator::*;
-        let (fn_name, result_ty) = match operator {
-            Negative if operand_ty == i32_ty => ("neg::<i32>", i32_ty),
-            Not if operand_ty == bool_ty => ("not::<bool>", bool_ty),
+        use language_items::UnaryPrimOp::*;
+
+        let (prim, result_ty) = match operator {
+            Negative if operand_ty == i32_ty => (NegI32, i32_ty),
+            Not if operand_ty == bool_ty => (NotBool, bool_ty),
             _ => return Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty }),
         };
 
-        let fn_ = self
-            .ctxt
-            .fns
-            .get_fn_by_name(fn_name)
-            .expect("operator impl should be registered");
-        let empty = self.ctxt.tys.ty_slice(&[]);
-        self.typing.expr_extra.insert(
-            expr_id,
-            ExprExtra::UnaryOp(fns::FnInst {
-                fn_,
-                gen_args: empty,
-                env_gen_args: empty,
-            }),
-        );
+        self.typing.expr_extra.insert(expr_id, ExprExtra::UnaryPrim(prim));
         Ok(result_ty)
     }
 

@@ -1,42 +1,7 @@
 use crate::ctxt::{self, fns, ty};
 
-macro_rules! register_fn {
-    ($fn_reg:expr, $name:expr, ( $( $param_name:ident : $param_ty:ident ),* ) -> $return_ty:expr ) => {
-        $fn_reg.register_fn(
-            fns::FnSig {
-                name: $name.to_string(),
-                associated_ty: None,
-                associated_trait_inst: None,
-                gen_params: vec![],
-                env_gen_params: vec![],
-                params: vec![
-                    $(
-                        fns::FnParam {
-                            kind: fns::FnParamKind::Regular(stringify!($param_name).to_string()),
-                            ty: $param_ty,
-                        },
-                    )*
-                ],
-                var_args: false,
-                return_ty: $return_ty,
-            },
-            true)?;
-    };
-}
-
 pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
-    let tys = &mut ctxt.tys;
-    let i32 = tys.primitive(ty::Primitive::Integer32);
-    let bool = tys.primitive(ty::Primitive::Boolean);
-
-    let fns = &mut ctxt.fns;
-
-    register_fn!(fns, "not::<bool>", (a: bool) -> bool);
-    register_fn!(fns, "neg::<i32>", (a: i32) -> i32);
-
-    register_size_of(ctxt)?;
-
-    Ok(())
+    register_size_of(ctxt)
 }
 
 fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {

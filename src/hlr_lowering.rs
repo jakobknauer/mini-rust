@@ -256,13 +256,13 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         operand: hlr::Expr<'hlr>,
         _operator: hlr::UnaryOperator,
     ) -> LoweredExpr {
-        let fn_inst = match self.typing.expr_extra[&expr_id] {
-            ExprExtra::UnaryOp(fi) => fi,
-            _ => panic!("expected UnaryOp extra"),
+        let prim = match self.typing.expr_extra[&expr_id] {
+            ExprExtra::UnaryPrim(p) => p,
+            _ => panic!("expected UnaryPrim extra"),
         };
-        let fn_op = self.builder.insert_fn_inst_op(fn_inst);
+        let result_ty = self.typing.expr_types[&expr_id];
         let operand_op = self.lower_to_op(operand);
-        self.builder.insert_call_val(fn_op, vec![operand_op]).into()
+        self.builder.insert_unary_prim_val(prim, operand_op, result_ty).into()
     }
 
     fn lower_call(&mut self, callee: hlr::Expr<'hlr>, args: hlr::ExprSlice<'hlr>) -> LoweredExpr {

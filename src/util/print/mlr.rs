@@ -232,6 +232,15 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     let ty_name = self.ctxt.tys.get_string_rep(target_ty);
                     write!(self.writer, " as {})", ty_name)
                 }
+                UnaryPrim { op, operand } => {
+                    use language_items::UnaryPrimOp::*;
+                    let op_str = match op {
+                        NegI32 => "-",
+                        NotBool => "!",
+                    };
+                    write!(self.writer, "{op_str}")?;
+                    self.print_op(operand)
+                }
                 BinaryPrim { op, lhs, rhs } => {
                     use language_items::BinaryPrimOp::*;
                     let op_str = match op {

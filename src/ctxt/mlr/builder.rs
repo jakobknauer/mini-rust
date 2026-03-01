@@ -206,6 +206,17 @@ impl<'a> MlrBuilder<'a> {
         val
     }
 
+    pub fn insert_unary_prim_val(
+        &mut self,
+        op: language_items::UnaryPrimOp,
+        operand: mlr::Op,
+        result_ty: ty::Ty,
+    ) -> mlr::Val {
+        let val = self.ctxt.mlr.insert_val(mlr::ValDef::UnaryPrim { op, operand });
+        self.ctxt.mlr.set_val_ty(val, result_ty);
+        val
+    }
+
     pub fn insert_unit_val(&mut self) -> mlr::Val {
         let unit_ty = self.ctxt.tys.unit();
         let place = self.alloc_place(unit_ty);
