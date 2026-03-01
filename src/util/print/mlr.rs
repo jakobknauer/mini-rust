@@ -3,17 +3,23 @@ use std::io::Write;
 use crate::{
     ctxt::{
         self,
-        fns::{Fn, FnMlr, FnSig},
+        fns::{Fn, FnSig},
         language_items,
         ty::iter_ty_slice,
     },
     mlr,
 };
 
-pub fn print_mlr<W: Write>(fn_: Fn, ctxt: &ctxt::Ctxt, mlr: &mlr::Mlr, writer: &mut W) -> Result<(), std::io::Error> {
+pub fn print_mlr<'mlr, W: Write>(
+    fn_: Fn,
+    fn_mlr: Option<&'mlr mlr::Fn<'mlr>>,
+    ctxt: &ctxt::Ctxt,
+    mlr: &'mlr mlr::Mlr<'mlr>,
+    writer: &mut W,
+) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         fn_,
-        fn_mlr: ctxt.fns.get_fn_def(fn_),
+        fn_mlr,
         signature: ctxt.fns.get_sig(fn_),
         ctxt,
         mlr,
@@ -25,10 +31,10 @@ pub fn print_mlr<W: Write>(fn_: Fn, ctxt: &ctxt::Ctxt, mlr: &mlr::Mlr, writer: &
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
-    fn_mlr: Option<&'a FnMlr>,
+    fn_mlr: Option<&'mlr mlr::Fn<'mlr>>,
     signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
-    mlr: &'mlr mlr::Mlr,
+    mlr: &'mlr mlr::Mlr<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
 }
@@ -51,8 +57,6 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         let Some(signature) = self.signature else {
             return write!(self.writer, "<signature for fn id {}>", self.fn_.0);
         };
-
-        let mlr = self.fn_mlr.expect("self.mlr should not be empty");
 
         // Print signature similar to printing of fn_inst in src/ctxt.rs
 
@@ -121,12 +125,22 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         )?;
 
         write!(self.writer, "(")?;
-        for (i, (param, param_loc)) in signature.params.iter().zip(&mlr.param_locs).enumerate() {
-            if i > 0 {
-                write!(self.writer, ", ")?;
+        if let Some(fn_mlr) = self.fn_mlr {
+            for (i, (param, param_loc)) in signature.params.iter().zip(&fn_mlr.param_locs).enumerate() {
+                if i > 0 {
+                    write!(self.writer, ", ")?;
+                }
+                let param_ty = self.ctxt.tys.get_string_rep(param.ty);
+                write!(self.writer, "{}: {}", param_loc, param_ty)?;
             }
-            let param_ty = self.ctxt.tys.get_string_rep(param.ty);
-            write!(self.writer, "{}: {}", param_loc, param_ty)?;
+        } else {
+            for (i, param) in signature.params.iter().enumerate() {
+                if i > 0 {
+                    write!(self.writer, ", ")?;
+                }
+                let param_ty = self.ctxt.tys.get_string_rep(param.ty);
+                write!(self.writer, "_{}: {}", i, param_ty)?;
+            }
         }
         write!(self.writer, ") -> ")?;
 
@@ -150,164 +164,149 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
     fn print_stmt(&mut self, stmt: mlr::Stmt) -> Result<(), std::io::Error> {
         use mlr::StmtDef::*;
 
-        let stmt_def = &self.mlr.try_get_stmt_def(stmt);
-
-        match *stmt_def {
-            Some(stmt) => match *stmt {
-                Alloc { loc } => {
-                    let loc_ty = self.mlr.get_loc_ty(loc);
-                    let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
-                    self.indent()?;
-                    writeln!(self.writer, "alloc {}: {};", loc, ty_name)
-                }
-                Assign { place, value } => {
-                    self.indent()?;
-                    write!(self.writer, "assign ")?;
-                    self.print_place(place)?;
-                    write!(self.writer, " = ")?;
-                    self.print_val(value)?;
-                    writeln!(self.writer, ";")
-                }
-                Return { value } => {
-                    self.indent()?;
-                    write!(self.writer, "return ")?;
-                    self.print_val(value)?;
-                    writeln!(self.writer, ";")
-                }
-                Break => {
-                    self.indent()?;
-                    writeln!(self.writer, "break;")
-                }
-                Block(ref stmts) => {
-                    self.indent()?;
-                    self.print_block(stmts)?;
-                    writeln!(self.writer)
-                }
-                If(if_) => {
-                    self.indent()?;
-                    write!(self.writer, "if ")?;
-                    self.print_op(if_.cond)?;
-                    writeln!(self.writer)?;
-                    self.print_stmt(if_.then)?;
-                    self.indent()?;
-                    writeln!(self.writer, "else")?;
-                    self.print_stmt(if_.else_)
-                }
-                Loop { body } => {
-                    self.indent()?;
-                    writeln!(self.writer, "loop")?;
-                    self.print_stmt(body)
-                }
-            },
-            None => writeln!(self.writer, "<stmt id {}>", stmt.0),
+        match *stmt {
+            Alloc { loc } => {
+                let loc_ty = self.mlr.get_loc_ty(loc);
+                let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
+                self.indent()?;
+                writeln!(self.writer, "alloc {}: {};", loc, ty_name)
+            }
+            Assign { place, value } => {
+                self.indent()?;
+                write!(self.writer, "assign ")?;
+                self.print_place(place)?;
+                write!(self.writer, " = ")?;
+                self.print_val(value)?;
+                writeln!(self.writer, ";")
+            }
+            Return { value } => {
+                self.indent()?;
+                write!(self.writer, "return ")?;
+                self.print_val(value)?;
+                writeln!(self.writer, ";")
+            }
+            Break => {
+                self.indent()?;
+                writeln!(self.writer, "break;")
+            }
+            Block(stmts) => {
+                self.indent()?;
+                self.print_block(stmts)?;
+                writeln!(self.writer)
+            }
+            If(if_) => {
+                self.indent()?;
+                write!(self.writer, "if ")?;
+                self.print_op(if_.cond)?;
+                writeln!(self.writer)?;
+                self.print_stmt(if_.then)?;
+                self.indent()?;
+                writeln!(self.writer, "else")?;
+                self.print_stmt(if_.else_)
+            }
+            Loop { body } => {
+                self.indent()?;
+                writeln!(self.writer, "loop")?;
+                self.print_stmt(body)
+            }
         }
     }
 
     fn print_val(&mut self, val: mlr::Val) -> Result<(), std::io::Error> {
         use mlr::ValDef::*;
 
-        let val_def = &self.mlr.try_get_val_def(val);
-
-        match *val_def {
-            Some(val) => match *val {
-                Use(op) => {
-                    // write!(self.writer, "use ")?;
-                    self.print_op(op)
-                }
-                Call { callable, ref args } => {
-                    write!(self.writer, "call ")?;
-                    self.print_op(callable)?;
-                    write!(self.writer, "(")?;
-                    for (i, &arg) in args.iter().enumerate() {
-                        if i > 0 {
-                            write!(self.writer, ", ")?;
-                        }
-                        self.print_op(arg)?;
+        match *val {
+            Use(op) => {
+                // write!(self.writer, "use ")?;
+                self.print_op(op)
+            }
+            Call { callable, ref args } => {
+                write!(self.writer, "call ")?;
+                self.print_op(callable)?;
+                write!(self.writer, "(")?;
+                for (i, &arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.writer, ", ")?;
                     }
-                    write!(self.writer, ")")
+                    self.print_op(arg)?;
                 }
-                AddrOf(place) => {
-                    write!(self.writer, "AddrOf(")?;
-                    self.print_place(place)?;
-                    write!(self.writer, ")")
-                }
-                As { op, target_ty } => {
-                    write!(self.writer, "(")?;
-                    self.print_op(op)?;
-                    let ty_name = self.ctxt.tys.get_string_rep(target_ty);
-                    write!(self.writer, " as {})", ty_name)
-                }
-                UnaryPrim { op, operand } => {
-                    use language_items::UnaryPrimOp::*;
-                    let op_str = match op {
-                        NegI32 => "-",
-                        NotBool => "!",
-                    };
-                    write!(self.writer, "{op_str}")?;
-                    self.print_op(operand)
-                }
-                BinaryPrim { op, lhs, rhs } => {
-                    use language_items::BinaryPrimOp::*;
-                    let op_str = match op {
-                        AddI32 => "+",
-                        SubI32 => "-",
-                        MulI32 => "*",
-                        DivI32 => "/",
-                        RemI32 => "%",
-                        EqI32 | EqBool | EqUnit => "==",
-                        NeI32 | NeBool | NeUnit => "!=",
-                        BitOrBool => "|",
-                        BitAndBool => "&",
-                        LtI32 => "<",
-                        GtI32 => ">",
-                        LeI32 => "<=",
-                        GeI32 => ">=",
-                    };
-                    self.print_op(lhs)?;
-                    write!(self.writer, " {op_str} ")?;
-                    self.print_op(rhs)
-                }
-            },
-            None => write!(self.writer, "<val id {}>", val.0),
+                write!(self.writer, ")")
+            }
+            AddrOf(place) => {
+                write!(self.writer, "AddrOf(")?;
+                self.print_place(place)?;
+                write!(self.writer, ")")
+            }
+            As { op, target_ty } => {
+                write!(self.writer, "(")?;
+                self.print_op(op)?;
+                let ty_name = self.ctxt.tys.get_string_rep(target_ty);
+                write!(self.writer, " as {})", ty_name)
+            }
+            UnaryPrim { op, operand } => {
+                use language_items::UnaryPrimOp::*;
+                let op_str = match op {
+                    NegI32 => "-",
+                    NotBool => "!",
+                };
+                write!(self.writer, "{op_str}")?;
+                self.print_op(operand)
+            }
+            BinaryPrim { op, lhs, rhs } => {
+                use language_items::BinaryPrimOp::*;
+                let op_str = match op {
+                    AddI32 => "+",
+                    SubI32 => "-",
+                    MulI32 => "*",
+                    DivI32 => "/",
+                    RemI32 => "%",
+                    EqI32 | EqBool | EqUnit => "==",
+                    NeI32 | NeBool | NeUnit => "!=",
+                    BitOrBool => "|",
+                    BitAndBool => "&",
+                    LtI32 => "<",
+                    GtI32 => ">",
+                    LeI32 => "<=",
+                    GeI32 => ">=",
+                };
+                self.print_op(lhs)?;
+                write!(self.writer, " {op_str} ")?;
+                self.print_op(rhs)
+            }
         }
     }
 
     fn print_place(&mut self, place: mlr::Place) -> Result<(), std::io::Error> {
         use mlr::PlaceDef::*;
 
-        let place_def = &self.mlr.try_get_place_def(place);
-
-        match *place_def {
-            Some(place) => match *place {
-                Loc(loc) => write!(self.writer, "{}", loc),
-                FieldAccess { base, field_index, .. } => {
-                    self.print_place(base)?;
-                    write!(self.writer, ".{}", field_index)
-                }
-                EnumDiscriminant { base, .. } => {
-                    write!(self.writer, "Disc(")?;
-                    self.print_place(base)?;
-                    write!(self.writer, ")")
-                }
-                ProjectToVariant { base, variant_index } => {
-                    let ty = self.mlr.get_place_ty(base);
-                    let enum_name = self.ctxt.tys.get_string_rep(ty);
-                    write!(self.writer, "(")?;
-                    self.print_place(base)?;
-                    write!(self.writer, " as {}::{})", enum_name, variant_index)
-                }
-                Deref(op) => {
-                    write!(self.writer, "Deref(")?;
-                    self.print_op(op)?;
-                    write!(self.writer, ")")
-                }
-                ClosureCaptures(place) => {
-                    write!(self.writer, "ClosureCaptures(")?;
-                    self.print_place(place)?;
-                    write!(self.writer, ")")
-                }
-            },
-            None => write!(self.writer, "<place id {}>", place.0),
+        match *place {
+            Loc(loc) => write!(self.writer, "{}", loc),
+            FieldAccess { base, field_index, .. } => {
+                self.print_place(base)?;
+                write!(self.writer, ".{}", field_index)
+            }
+            EnumDiscriminant { base, .. } => {
+                write!(self.writer, "Disc(")?;
+                self.print_place(base)?;
+                write!(self.writer, ")")
+            }
+            ProjectToVariant { base, variant_index } => {
+                let ty = self.mlr.get_place_ty(base);
+                let enum_name = self.ctxt.tys.get_string_rep(ty);
+                write!(self.writer, "(")?;
+                self.print_place(base)?;
+                write!(self.writer, " as {}::{})", enum_name, variant_index)
+            }
+            Deref(op) => {
+                write!(self.writer, "Deref(")?;
+                self.print_op(op)?;
+                write!(self.writer, ")")
+            }
+            ClosureCaptures(place) => {
+                write!(self.writer, "ClosureCaptures(")?;
+                self.print_place(place)?;
+                write!(self.writer, ")")
+            }
         }
     }
 
@@ -315,65 +314,60 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         use mlr::Const::*;
         use mlr::OpDef::*;
 
-        let op_def = &self.mlr.try_get_op_def(op);
+        match *op {
+            Fn(fn_inst) => {
+                let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
+                write!(self.writer, "fn {}", fn_name)
+            }
+            TraitMthd(trait_mthd) => {
+                let base_ty_name = self.ctxt.tys.get_string_rep(trait_mthd.impl_ty);
+                let trait_name = self.ctxt.traits.get_trait_name(trait_mthd.trait_inst.trait_);
 
-        match *op_def {
-            Some(operand) => match *operand {
-                Fn(fn_inst) => {
-                    let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
-                    write!(self.writer, "fn {}", fn_name)
-                }
-                TraitMthd(trait_mthd) => {
-                    let base_ty_name = self.ctxt.tys.get_string_rep(trait_mthd.impl_ty);
-                    let trait_name = self.ctxt.traits.get_trait_name(trait_mthd.trait_inst.trait_);
-
-                    let trait_gen_args = if trait_mthd.trait_inst.gen_args.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!(
-                            "<{}>",
-                            iter_ty_slice!(
-                                self.ctxt.tys,
-                                trait_mthd.trait_inst.gen_args,
-                                map(|ty| self.ctxt.tys.get_string_rep(ty))
-                            )
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                let trait_gen_args = if trait_mthd.trait_inst.gen_args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "<{}>",
+                        iter_ty_slice!(
+                            self.ctxt.tys,
+                            trait_mthd.trait_inst.gen_args,
+                            map(|ty| self.ctxt.tys.get_string_rep(ty))
                         )
-                    };
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                    )
+                };
 
-                    let mthd_name = self
-                        .ctxt
-                        .traits
-                        .get_trait_mthd_name(trait_mthd.trait_inst.trait_, trait_mthd.mthd_idx);
+                let mthd_name = self
+                    .ctxt
+                    .traits
+                    .get_trait_mthd_name(trait_mthd.trait_inst.trait_, trait_mthd.mthd_idx);
+                write!(
+                    self.writer,
+                    "<{} as {}{}>::{}",
+                    base_ty_name, trait_name, trait_gen_args, mthd_name
+                )
+            }
+            Const(ref constant) => match *constant {
+                Int(i) => write!(self.writer, "const {}", i),
+                Bool(b) => write!(self.writer, "const {}", b),
+                CChar(c) => {
                     write!(
                         self.writer,
-                        "<{} as {}{}>::{}",
-                        base_ty_name, trait_name, trait_gen_args, mthd_name
+                        "const '{}'",
+                        super::reinsert_escape_sequences(&(c as char).to_string())
                     )
                 }
-                Const(ref constant) => match *constant {
-                    Int(i) => write!(self.writer, "const {}", i),
-                    Bool(b) => write!(self.writer, "const {}", b),
-                    CChar(c) => {
-                        write!(
-                            self.writer,
-                            "const '{}'",
-                            super::reinsert_escape_sequences(&(c as char).to_string())
-                        )
-                    }
-                    CString(ref s) => {
-                        let s = std::str::from_utf8(s).unwrap();
-                        let s = super::reinsert_escape_sequences(s);
-                        write!(self.writer, "const \"{}\"", s)
-                    }
-                },
-                Copy(place) => {
-                    write!(self.writer, "copy ")?;
-                    self.print_place(place)
+                CString(ref s) => {
+                    let s = std::str::from_utf8(s).unwrap();
+                    let s = super::reinsert_escape_sequences(s);
+                    write!(self.writer, "const \"{}\"", s)
                 }
             },
-            None => write!(self.writer, "<op id {}>", op.0),
+            Copy(place) => {
+                write!(self.writer, "copy ")?;
+                self.print_place(place)
+            }
         }
     }
 

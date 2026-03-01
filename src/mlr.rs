@@ -1,6 +1,6 @@
 pub mod builder;
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use crate::ctxt::{
     fns::{FnInst, TraitMthdInst},
@@ -9,75 +9,79 @@ use crate::ctxt::{
 };
 
 #[derive(Default)]
-pub struct Mlr {
-    stmts: Vec<StmtDef>,
-    vals: Vec<ValDef>,
-    places: Vec<PlaceDef>,
-    ops: Vec<OpDef>,
+pub struct Mlr<'mlr> {
+    val_tys: RefCell<HashMap<Val<'mlr>, Ty>>,
+    place_tys: RefCell<HashMap<Place<'mlr>, Ty>>,
+    op_tys: RefCell<HashMap<Op<'mlr>, Ty>>,
+    loc_tys: RefCell<HashMap<Loc, Ty>>,
 
-    val_tys: HashMap<Val, Ty>,
-    place_tys: HashMap<Place, Ty>,
-    op_tys: HashMap<Op, Ty>,
-    loc_tys: HashMap<Loc, Ty>,
+    next_loc_id: RefCell<Loc>,
 
-    next_loc: Loc,
+    _marker: std::marker::PhantomData<&'mlr ()>,
+    arena: bumpalo::Bump,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Stmt(pub usize);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Val(pub usize);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Place(pub usize);
+pub type Stmt<'mlr> = &'mlr StmtDef<'mlr>;
+pub type Val<'mlr> = &'mlr ValDef<'mlr>;
+pub type Place<'mlr> = &'mlr PlaceDef<'mlr>;
+pub type Op<'mlr> = &'mlr OpDef<'mlr>;
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Loc(pub usize);
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Op(pub usize);
-
 #[derive(Debug, Clone)]
-pub enum StmtDef {
+pub enum StmtDef<'mlr> {
     Alloc { loc: Loc },
-    Assign { place: Place, value: Val },
-    Return { value: Val },
-    Block(Vec<Stmt>),
-    If(If),
-    Loop { body: Stmt },
+    Assign { place: Place<'mlr>, value: Val<'mlr> },
+    Return { value: Val<'mlr> },
+    Block(&'mlr [Stmt<'mlr>]),
+    If(If<'mlr>),
+    Loop { body: Stmt<'mlr> },
     Break,
 }
 
-#[derive(Debug, Clone)]
-pub enum ValDef {
-    Call { callable: Op, args: Vec<Op> },
-    Use(Op),
-    AddrOf(Place),
-    As { op: Op, target_ty: Ty },
-    BinaryPrim { op: BinaryPrimOp, lhs: Op, rhs: Op },
-    UnaryPrim { op: UnaryPrimOp, operand: Op },
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum ValDef<'mlr> {
+    Call {
+        callable: Op<'mlr>,
+        args: Vec<Op<'mlr>>,
+    },
+    Use(Op<'mlr>),
+    AddrOf(Place<'mlr>),
+    As {
+        op: Op<'mlr>,
+        target_ty: Ty,
+    },
+    BinaryPrim {
+        op: BinaryPrimOp,
+        lhs: Op<'mlr>,
+        rhs: Op<'mlr>,
+    },
+    UnaryPrim {
+        op: UnaryPrimOp,
+        operand: Op<'mlr>,
+    },
 }
 
-#[derive(Debug, Clone)]
-pub enum OpDef {
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum OpDef<'mlr> {
     Fn(FnInst),
     TraitMthd(TraitMthdInst),
     Const(Const),
-    Copy(Place),
+    Copy(Place<'mlr>),
 }
 
-#[derive(Debug, Clone)]
-pub enum PlaceDef {
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum PlaceDef<'mlr> {
     Loc(Loc),
-    FieldAccess { base: Place, field_index: usize },
-    EnumDiscriminant { base: Place },
-    ProjectToVariant { base: Place, variant_index: usize },
-    ClosureCaptures(Place),
-    Deref(Op),
+    FieldAccess { base: Place<'mlr>, field_index: usize },
+    EnumDiscriminant { base: Place<'mlr> },
+    ProjectToVariant { base: Place<'mlr>, variant_index: usize },
+    ClosureCaptures(Place<'mlr>),
+    Deref(Op<'mlr>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Const {
     Int(i64),
     Bool(bool),
@@ -86,10 +90,16 @@ pub enum Const {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct If {
-    pub cond: Op,
-    pub then: Stmt,
-    pub else_: Stmt,
+pub struct If<'mlr> {
+    pub cond: Op<'mlr>,
+    pub then: Stmt<'mlr>,
+    pub else_: Stmt<'mlr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Fn<'mlr> {
+    pub body: Stmt<'mlr>,
+    pub param_locs: Vec<Loc>,
 }
 
 impl std::fmt::Display for Loc {
@@ -98,100 +108,66 @@ impl std::fmt::Display for Loc {
     }
 }
 
-impl Mlr {
-    pub fn insert_stmt(&mut self, stmt_def: StmtDef) -> Stmt {
-        let stmt = Stmt(self.stmts.len());
-        self.stmts.push(stmt_def);
-        stmt
+impl<'mlr> Mlr<'mlr> {
+    pub fn insert_stmt(&'mlr self, stmt_def: StmtDef<'mlr>) -> Stmt<'mlr> {
+        self.arena.alloc(stmt_def)
     }
 
-    pub fn insert_val(&mut self, val_def: ValDef) -> Val {
-        let val = Val(self.vals.len());
-        self.vals.push(val_def);
-        val
+    pub fn insert_stmt_slice(&'mlr self, stmts: &[Stmt<'mlr>]) -> &'mlr [Stmt<'mlr>] {
+        self.arena.alloc_slice_copy(stmts)
     }
 
-    pub fn insert_place(&mut self, place_def: PlaceDef) -> Place {
-        let place = Place(self.places.len());
-        self.places.push(place_def);
-        place
+    pub fn insert_val(&'mlr self, val_def: ValDef<'mlr>) -> Val<'mlr> {
+        self.arena.alloc(val_def)
     }
 
-    pub fn insert_op(&mut self, op_def: OpDef) -> Op {
-        let op = Op(self.ops.len());
-        self.ops.push(op_def);
-        op
+    pub fn insert_place(&'mlr self, place_def: PlaceDef<'mlr>) -> Place<'mlr> {
+        self.arena.alloc(place_def)
     }
 
-    pub fn insert_typed_loc(&mut self, ty: Ty) -> Loc {
+    pub fn insert_op(&'mlr self, op_def: OpDef<'mlr>) -> Op<'mlr> {
+        self.arena.alloc(op_def)
+    }
+
+    pub fn insert_typed_loc(&self, ty: Ty) -> Loc {
         let loc = self.get_next_loc();
-        self.loc_tys.insert(loc, ty);
+        self.loc_tys.borrow_mut().insert(loc, ty);
         loc
     }
 
-    fn get_next_loc(&mut self) -> Loc {
-        let loc = self.next_loc;
-        self.next_loc.0 += 1;
-        loc
+    fn get_next_loc(&self) -> Loc {
+        self.next_loc_id.replace_with(|Loc(id)| Loc(*id + 1))
     }
 
-    pub fn set_val_ty(&mut self, val: Val, ty: Ty) {
-        self.val_tys.insert(val, ty);
+    pub fn set_val_ty(&self, val: Val<'mlr>, ty: Ty) {
+        self.val_tys.borrow_mut().insert(val, ty);
     }
 
-    pub fn set_place_ty(&mut self, place: Place, ty: Ty) {
-        self.place_tys.insert(place, ty);
+    pub fn set_place_ty(&self, place: Place<'mlr>, ty: Ty) {
+        self.place_tys.borrow_mut().insert(place, ty);
     }
 
-    pub fn set_op_ty(&mut self, op: Op, ty: Ty) {
-        self.op_tys.insert(op, ty);
-    }
-
-    pub fn get_stmt_def(&self, stmt: Stmt) -> &StmtDef {
-        self.stmts.get(stmt.0).expect("stmt should be known")
-    }
-
-    pub fn try_get_stmt_def(&self, stmt: Stmt) -> Option<&StmtDef> {
-        self.stmts.get(stmt.0)
-    }
-
-    pub fn get_val_def(&self, val: Val) -> &ValDef {
-        self.vals.get(val.0).expect("val should be known")
-    }
-
-    pub fn try_get_val_def(&self, val: Val) -> Option<&ValDef> {
-        self.vals.get(val.0)
-    }
-
-    pub fn get_place_def(&self, place: Place) -> &PlaceDef {
-        self.places.get(place.0).expect("place should be known")
-    }
-
-    pub fn try_get_place_def(&self, place: Place) -> Option<&PlaceDef> {
-        self.places.get(place.0)
-    }
-
-    pub fn get_op_def(&self, op: Op) -> &OpDef {
-        self.ops.get(op.0).expect("op should be known")
-    }
-
-    pub fn try_get_op_def(&self, op: Op) -> Option<&OpDef> {
-        self.ops.get(op.0)
+    pub fn set_op_ty(&self, op: Op<'mlr>, ty: Ty) {
+        self.op_tys.borrow_mut().insert(op, ty);
     }
 
     pub fn get_val_ty(&self, val: Val) -> Ty {
-        *self.val_tys.get(&val).expect("type of val should be known")
+        *self.val_tys.borrow().get(&val).expect("type of val should be known")
     }
 
     pub fn get_place_ty(&self, place: Place) -> Ty {
-        *self.place_tys.get(&place).expect("type of place should be known")
+        *self
+            .place_tys
+            .borrow()
+            .get(&place)
+            .expect("type of place should be known")
     }
 
     pub fn get_op_ty(&self, op: Op) -> Ty {
-        *self.op_tys.get(&op).expect("type of op should be known")
+        *self.op_tys.borrow().get(&op).expect("type of op should be known")
     }
 
     pub fn get_loc_ty(&self, loc: Loc) -> Ty {
-        *self.loc_tys.get(&loc).expect("type of loc should be known")
+        *self.loc_tys.borrow().get(&loc).expect("type of loc should be known")
     }
 }

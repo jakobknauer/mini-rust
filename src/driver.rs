@@ -34,7 +34,6 @@ pub fn compile(
 ) -> Result<(), String> {
     let mut driver = Driver {
         ctxt: ctxt::Ctxt::default(),
-        mlr: mlr::Mlr::default(),
         ast_meta: AstMeta::default(),
         sources: sources.to_vec(),
         print_pretty: &print_pretty,
@@ -47,7 +46,6 @@ pub fn compile(
 
 struct Driver<'a> {
     ctxt: ctxt::Ctxt,
-    mlr: mlr::Mlr,
     sources: Vec<String>,
     print_pretty: &'a dyn Fn(&str),
     print_detail: &'a dyn Fn(&str),
@@ -88,20 +86,24 @@ impl<'a> Driver<'a> {
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
 
         let hlr = hlr::Hlr::new();
+        let mlr = mlr::Mlr::default();
 
         self.print_pretty("Lowering free functions: AST to HLR");
         let free_hlr_fns = self.free_fns_ast_lowering(&ast, &hlr)?;
         self.print_pretty("Lowering free functions: type checking");
         let free_typings = self.typeck_hlr_fns(&free_hlr_fns)?;
         self.print_pretty("Lowering free functions: HLR to MLR");
-        self.hlr_fns_to_mlr(&free_hlr_fns, &free_typings);
+        let free_fn_mlrs = self.hlr_fns_to_mlr(&mlr, &free_hlr_fns, &free_typings);
 
         self.print_pretty("Lowering impl methods: AST to HLR");
         let impl_hlr_fns = self.impl_fns_ast_lowering(&ast, &hlr)?;
         self.print_pretty("Lowering impl methods: type checking");
         let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
         self.print_pretty("Lowering impl methods: HLR to MLR");
-        self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
+        let impl_fn_mlrs = self.hlr_fns_to_mlr(&mlr, &impl_hlr_fns, &impl_typings);
+
+        let mut all_fn_mlrs = free_fn_mlrs;
+        all_fn_mlrs.extend(impl_fn_mlrs);
 
         if let Some(hlr_path) = self.output_paths.hlr {
             self.print_detail(&format!("Saving HLR to {}", hlr_path.display()));
@@ -116,7 +118,8 @@ impl<'a> Driver<'a> {
         }
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
-            self.print_functions(mlr_path).map_err(|_| "Error printing MLR")?;
+            self.print_functions(mlr_path, &mlr, &all_fn_mlrs)
+                .map_err(|_| "Error printing MLR")?;
         }
 
         self.print_pretty("Monomorphizing functions");
@@ -125,7 +128,7 @@ impl<'a> Driver<'a> {
             .map_err(|_| "Error monomorphizing functions")?;
 
         self.print_pretty("Building LLVM IR from MLR");
-        let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, &self.mlr, fn_insts.into_iter().collect());
+        let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, &mlr, &all_fn_mlrs, fn_insts.into_iter().collect());
 
         if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
             self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -541,10 +544,20 @@ impl<'a> Driver<'a> {
         Ok(typings)
     }
 
-    fn hlr_fns_to_mlr<'hlr>(&mut self, hlr_fns: &[hlr::Fn<'hlr>], typings: &[typeck::HlrTyping]) {
+    fn hlr_fns_to_mlr<'hlr, 'mlr>(
+        &mut self,
+        mlr: &'mlr mlr::Mlr<'mlr>,
+        hlr_fns: &'hlr [hlr::Fn<'hlr>],
+        typings: &'hlr [typeck::HlrTyping],
+    ) -> HashMap<fns::Fn, mlr::Fn<'mlr>>
+    where
+        'hlr: 'mlr,
+    {
+        let mut fn_mlrs = HashMap::new();
         for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
-            hlr_lowering::hlr_to_mlr(&mut self.ctxt, &mut self.mlr, hlr_fn, typing);
+            fn_mlrs.extend(hlr_lowering::hlr_to_mlr(&mut self.ctxt, mlr, hlr_fn, typing));
         }
+        fn_mlrs
     }
 
     fn print_hlr_functions<'hlr>(
@@ -561,13 +574,17 @@ impl<'a> Driver<'a> {
         Ok(())
     }
 
-    fn print_functions(&mut self, path: &Path) -> Result<(), ()> {
+    fn print_functions<'mlr>(
+        &self,
+        path: &Path,
+        mlr: &'mlr mlr::Mlr<'mlr>,
+        fn_mlrs: &'mlr HashMap<fns::Fn, mlr::Fn<'mlr>>,
+    ) -> Result<(), ()> {
         let mut file = std::fs::File::create(path).map_err(|_| ())?;
 
         for fn_ in self.ctxt.fns.get_all_fns() {
-            if self.ctxt.fns.is_fn_defined(fn_) {
-                print::print_mlr(fn_, &self.ctxt, &self.mlr, &mut file).map_err(|_| ())?;
-            }
+            let fn_mlr = fn_mlrs.get(&fn_);
+            print::print_mlr(fn_, fn_mlr, &self.ctxt, mlr, &mut file).map_err(|_| ())?;
         }
 
         Ok(())

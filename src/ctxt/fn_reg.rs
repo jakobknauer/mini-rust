@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use crate::ctxt::fns::{Fn, FnInst, FnMlr, FnSig, TraitMthdInst};
+use crate::ctxt::fns::{Fn, FnInst, FnSig, TraitMthdInst};
 
 #[derive(Default)]
 pub struct FnReg {
     sigs: Vec<FnSig>,
     fn_names: HashMap<String, Fn>,
-    defs: HashMap<Fn, FnMlr>,
 
     called_fn_insts: HashMap<Fn, Vec<FnInst>>,
     called_trait_mthd_insts: HashMap<Fn, Vec<TraitMthdInst>>,
@@ -40,18 +39,6 @@ impl FnReg {
 
     pub fn get_fn_by_name(&self, name: &str) -> Option<Fn> {
         self.fn_names.get(name).cloned()
-    }
-
-    pub fn add_fn_def(&mut self, fn_: Fn, mlr: FnMlr) {
-        self.defs.insert(fn_, mlr);
-    }
-
-    pub fn is_fn_defined(&self, fn_: Fn) -> bool {
-        self.defs.contains_key(&fn_)
-    }
-
-    pub fn get_fn_def(&self, fn_: Fn) -> Option<&FnMlr> {
-        self.defs.get(&fn_)
     }
 
     pub fn get_all_fns(&self) -> impl Iterator<Item = Fn> {

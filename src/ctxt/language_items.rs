@@ -6,13 +6,13 @@ pub struct LanguageItems {
     pub ptr_offset: Option<Fn>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum UnaryPrimOp {
     NegI32,
     NotBool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum BinaryPrimOp {
     AddI32,
     SubI32,

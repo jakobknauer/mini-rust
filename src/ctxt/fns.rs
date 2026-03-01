@@ -1,9 +1,6 @@
-use crate::{
-    ctxt::{
-        traits::TraitInst,
-        ty::{GenVar, Ty, TySlice},
-    },
-    mlr,
+use crate::ctxt::{
+    traits::TraitInst,
+    ty::{GenVar, Ty, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -64,10 +61,4 @@ pub struct TraitMthdInst {
     pub mthd_idx: usize,
     pub impl_ty: Ty,
     pub gen_args: TySlice,
-}
-
-#[derive(Debug, Clone)]
-pub struct FnMlr {
-    pub body: mlr::Stmt,
-    pub param_locs: Vec<mlr::Loc>,
 }

@@ -1,33 +1,33 @@
 use crate::mlr::{self, builder::MlrBuilder};
 
-pub(super) struct LoweredExpr(LoweredExprKind);
+pub(super) struct LoweredExpr<'mlr>(LoweredExprKind<'mlr>);
 
-enum LoweredExprKind {
-    Val(mlr::Val),
-    Place(mlr::Place),
-    Op(mlr::Op),
+enum LoweredExprKind<'mlr> {
+    Val(mlr::Val<'mlr>),
+    Place(mlr::Place<'mlr>),
+    Op(mlr::Op<'mlr>),
 }
 
-impl From<mlr::Val> for LoweredExpr {
-    fn from(val: mlr::Val) -> Self {
+impl<'mlr> From<mlr::Val<'mlr>> for LoweredExpr<'mlr> {
+    fn from(val: mlr::Val<'mlr>) -> Self {
         LoweredExpr(LoweredExprKind::Val(val))
     }
 }
 
-impl From<mlr::Place> for LoweredExpr {
-    fn from(place: mlr::Place) -> Self {
+impl<'mlr> From<mlr::Place<'mlr>> for LoweredExpr<'mlr> {
+    fn from(place: mlr::Place<'mlr>) -> Self {
         LoweredExpr(LoweredExprKind::Place(place))
     }
 }
 
-impl From<mlr::Op> for LoweredExpr {
-    fn from(op: mlr::Op) -> Self {
+impl<'mlr> From<mlr::Op<'mlr>> for LoweredExpr<'mlr> {
+    fn from(op: mlr::Op<'mlr>) -> Self {
         LoweredExpr(LoweredExprKind::Op(op))
     }
 }
 
-impl LoweredExpr {
-    pub(super) fn into_val(self, builder: &mut MlrBuilder<'_, '_>) -> mlr::Val {
+impl<'mlr> LoweredExpr<'mlr> {
+    pub(super) fn into_val(self, builder: &mut MlrBuilder<'_, 'mlr>) -> mlr::Val<'mlr> {
         match self.0 {
             LoweredExprKind::Val(val) => val,
             LoweredExprKind::Place(place) => builder.copy_val(place),
@@ -35,7 +35,7 @@ impl LoweredExpr {
         }
     }
 
-    pub(super) fn into_place(self, builder: &mut MlrBuilder<'_, '_>) -> mlr::Place {
+    pub(super) fn into_place(self, builder: &mut MlrBuilder<'_, 'mlr>) -> mlr::Place<'mlr> {
         match self.0 {
             LoweredExprKind::Place(place) => place,
             LoweredExprKind::Val(val) => builder.store_val(val),
@@ -46,7 +46,7 @@ impl LoweredExpr {
         }
     }
 
-    pub(super) fn into_op(self, builder: &mut MlrBuilder<'_, '_>) -> mlr::Op {
+    pub(super) fn into_op(self, builder: &mut MlrBuilder<'_, 'mlr>) -> mlr::Op<'mlr> {
         match self.0 {
             LoweredExprKind::Op(op) => op,
             LoweredExprKind::Place(place) => builder.insert_copy_op(place),

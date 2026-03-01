@@ -16,7 +16,7 @@ use crate::{
 
 pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
-    fn_inst: mr_fns::FnInst,
+    fn_mlr: &'mlr mlr::Fn<'mlr>,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
@@ -38,10 +38,7 @@ pub type MlrLoweringResult<T> = Result<T, MlrLoweringError>;
 
 impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     pub fn new(parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>, fn_inst: mr_fns::FnInst) -> Option<Self> {
-        if !parent.mr_ctxt.fns.is_fn_defined(fn_inst.fn_) {
-            return None;
-        }
-
+        let fn_mlr = parent.fn_mlrs.get(&fn_inst.fn_)?;
         let builder = parent.iw_ctxt.create_builder();
         let locs = HashMap::new();
         let iw_fn = parent.get_fn(fn_inst).unwrap();
@@ -50,7 +47,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
 
         Some(Self {
             parent,
-            fn_inst,
+            fn_mlr,
             iw_fn,
             iw_builder: builder,
             locs,
@@ -74,16 +71,12 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         self.parent.mr_ctxt
     }
 
-    fn mlr(&self) -> &mlr::Mlr {
+    fn mlr(&self) -> &mlr::Mlr<'mlr> {
         self.parent.mlr
     }
 
     fn tys(&self) -> &mr_ctxt::TyReg {
         &self.mr_ctxt().tys
-    }
-
-    fn fns(&self) -> &mr_ctxt::FnReg {
-        &self.mr_ctxt().fns
     }
 
     fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<BasicTypeEnum<'iw>> {
@@ -138,10 +131,8 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(return_ty.fn_type(&param_tys, var_args))
     }
 
-    fn mlr_def(&self) -> &mr_fns::FnMlr {
-        self.fns()
-            .get_fn_def(self.fn_inst.fn_)
-            .expect("MLR for function should be defined")
+    fn mlr_def(&self) -> &mlr::Fn<'mlr> {
+        self.fn_mlr
     }
 
     fn build_alloca_for_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<PointerValue<'iw>> {
@@ -193,8 +184,6 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     fn build_stmt(&mut self, stmt: mlr::Stmt) -> MlrLoweringResult<()> {
         use mlr::StmtDef::*;
 
-        let stmt = self.mlr().get_stmt_def(stmt);
-
         match *stmt {
             Alloc { loc } => {
                 self.build_alloca_for_loc(loc)?;
@@ -212,7 +201,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
                 let after_loop_block = self.after_loop_blocks.back().ok_or(MlrLoweringError)?;
                 self.iw_builder.build_unconditional_branch(*after_loop_block)?;
             }
-            Block(ref stmts) => self.build_block(&stmts.clone())?,
+            Block(stmts) => self.build_block(stmts)?,
             If(if_) => self.build_if(if_)?,
             Loop { body } => self.build_loop(body)?,
         }
@@ -222,8 +211,6 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
 
     fn build_val(&mut self, val: mlr::Val) -> MlrLoweringResult<BasicValueEnum<'iw>> {
         use mlr::ValDef::*;
-
-        let val = self.mlr().get_val_def(val);
 
         match *val {
             Use(place) => self.build_op(place),
@@ -244,8 +231,6 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
 
     fn build_place(&mut self, place: mlr::Place) -> MlrLoweringResult<PointerValue<'iw>> {
         use mlr::PlaceDef::*;
-
-        let place = self.mlr().get_place_def(place);
 
         match *place {
             Loc(loc) => self.locs.get(&loc).ok_or(MlrLoweringError).cloned(),
@@ -334,8 +319,6 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     fn build_op(&mut self, op: mlr::Op) -> MlrLoweringResult<BasicValueEnum<'iw>> {
         use mlr::OpDef::*;
 
-        let op = self.mlr().get_op_def(op);
-
         match *op {
             Fn(fn_inst) => self.build_global_function(fn_inst),
             TraitMthd(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
@@ -378,7 +361,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     }
 
     fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> MlrLoweringResult<BasicValueEnum<'iw>> {
-        let maybe_fn_inst = match *self.mlr().get_op_def(callable) {
+        let maybe_fn_inst = match *callable {
             mlr::OpDef::Fn(fn_inst) => Some(fn_inst),
             _ => None,
         };

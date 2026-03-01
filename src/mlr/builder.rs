@@ -5,13 +5,13 @@ use crate::{
 
 pub struct MlrBuilder<'ctxt, 'mlr> {
     pub ctxt: &'ctxt mut ctxt::Ctxt,
-    pub mlr: &'mlr mut mlr::Mlr,
+    pub mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: fns::Fn,
-    blocks: Vec<Vec<mlr::Stmt>>,
+    blocks: Vec<Vec<mlr::Stmt<'mlr>>>,
 }
 
 impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
-    pub fn new(ctxt: &'ctxt mut ctxt::Ctxt, mlr: &'mlr mut mlr::Mlr, fn_: fns::Fn) -> Self {
+    pub fn new(ctxt: &'ctxt mut ctxt::Ctxt, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn) -> Self {
         Self {
             ctxt,
             mlr,
@@ -28,8 +28,9 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         self.blocks.push(Vec::new());
     }
 
-    pub fn end_block(&mut self) -> mlr::Stmt {
+    pub fn end_block(&mut self) -> mlr::Stmt<'mlr> {
         let stmts = self.blocks.pop().expect("block stack should not be empty");
+        let stmts = self.mlr.insert_stmt_slice(&stmts);
         self.mlr.insert_stmt(mlr::StmtDef::Block(stmts))
     }
 
@@ -38,14 +39,14 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         self.push_stmt(block_stmt);
     }
 
-    pub fn push_stmt(&mut self, stmt: mlr::Stmt) {
+    pub fn push_stmt(&mut self, stmt: mlr::Stmt<'mlr>) {
         self.blocks
             .last_mut()
             .expect("block stack should not be empty")
             .push(stmt);
     }
 
-    pub fn insert_typed_loc(&mut self, ty: ty::Ty) -> mlr::Loc {
+    pub fn insert_typed_loc(&self, ty: ty::Ty) -> mlr::Loc {
         self.mlr.insert_typed_loc(ty)
     }
 
@@ -55,38 +56,43 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         loc
     }
 
-    pub fn alloc_place(&mut self, ty: ty::Ty) -> mlr::Place {
+    pub fn alloc_place(&mut self, ty: ty::Ty) -> mlr::Place<'mlr> {
         let loc = self.alloc_loc(ty);
         self.insert_loc_place(loc)
     }
 
-    pub fn store_val(&mut self, val: mlr::Val) -> mlr::Place {
+    pub fn store_val(&mut self, val: mlr::Val<'mlr>) -> mlr::Place<'mlr> {
         let ty = self.get_val_ty(val);
         let place = self.alloc_place(ty);
         self.insert_assign_stmt(place, val);
         place
     }
 
-    pub fn insert_loc_place(&mut self, loc: mlr::Loc) -> mlr::Place {
+    pub fn insert_loc_place(&self, loc: mlr::Loc) -> mlr::Place<'mlr> {
         let ty = self.mlr.get_loc_ty(loc);
         let place = self.mlr.insert_place(mlr::PlaceDef::Loc(loc));
         self.mlr.set_place_ty(place, ty);
         place
     }
 
-    pub fn insert_field_access_place(&mut self, base: mlr::Place, field_index: usize, ty: ty::Ty) -> mlr::Place {
+    pub fn insert_field_access_place(
+        &self,
+        base: mlr::Place<'mlr>,
+        field_index: usize,
+        ty: ty::Ty,
+    ) -> mlr::Place<'mlr> {
         let place = self.mlr.insert_place(mlr::PlaceDef::FieldAccess { base, field_index });
         self.mlr.set_place_ty(place, ty);
         place
     }
 
-    pub fn insert_closure_captures_place(&mut self, base: mlr::Place, captures_ty: ty::Ty) -> mlr::Place {
+    pub fn insert_closure_captures_place(&self, base: mlr::Place<'mlr>, captures_ty: ty::Ty) -> mlr::Place<'mlr> {
         let place = self.mlr.insert_place(mlr::PlaceDef::ClosureCaptures(base));
         self.mlr.set_place_ty(place, captures_ty);
         place
     }
 
-    pub fn insert_enum_discriminant_place(&mut self, base: mlr::Place) -> mlr::Place {
+    pub fn insert_enum_discriminant_place(&mut self, base: mlr::Place<'mlr>) -> mlr::Place<'mlr> {
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let place = self.mlr.insert_place(mlr::PlaceDef::EnumDiscriminant { base });
         self.mlr.set_place_ty(place, i32_ty);
@@ -94,11 +100,11 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
     }
 
     pub fn insert_project_to_variant_place(
-        &mut self,
-        base: mlr::Place,
+        &self,
+        base: mlr::Place<'mlr>,
         variant_index: usize,
         variant_ty: ty::Ty,
-    ) -> mlr::Place {
+    ) -> mlr::Place<'mlr> {
         let place = self
             .mlr
             .insert_place(mlr::PlaceDef::ProjectToVariant { base, variant_index });
@@ -106,7 +112,7 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         place
     }
 
-    pub fn insert_deref_place(&mut self, op: mlr::Op) -> mlr::Place {
+    pub fn insert_deref_place(&self, op: mlr::Op<'mlr>) -> mlr::Place<'mlr> {
         let op_ty = self.mlr.get_op_ty(op);
         let inner_ty = match self.ctxt.tys.get_ty_def(op_ty) {
             &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => inner,
@@ -117,14 +123,14 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         place
     }
 
-    pub fn insert_copy_op(&mut self, place: mlr::Place) -> mlr::Op {
+    pub fn insert_copy_op(&self, place: mlr::Place<'mlr>) -> mlr::Op<'mlr> {
         let ty = self.mlr.get_place_ty(place);
         let op = self.mlr.insert_op(mlr::OpDef::Copy(place));
         self.mlr.set_op_ty(op, ty);
         op
     }
 
-    pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> mlr::Op {
+    pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> mlr::Op<'mlr> {
         self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
         let ty = self.fn_ty_of_fn_inst(fn_inst);
         let op = self.mlr.insert_op(mlr::OpDef::Fn(fn_inst));
@@ -132,7 +138,7 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         op
     }
 
-    pub fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst) -> mlr::Op {
+    pub fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst) -> mlr::Op<'mlr> {
         self.ctxt.fns.register_trait_mthd_call(self.fn_, inst);
         let ty = self.trait_mthd_fn_ty(inst);
         let op = self.mlr.insert_op(mlr::OpDef::TraitMthd(inst));
@@ -140,13 +146,13 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         op
     }
 
-    pub fn insert_const_op(&mut self, const_: mlr::Const, ty: ty::Ty) -> mlr::Op {
+    pub fn insert_const_op(&self, const_: mlr::Const, ty: ty::Ty) -> mlr::Op<'mlr> {
         let op = self.mlr.insert_op(mlr::OpDef::Const(const_));
         self.mlr.set_op_ty(op, ty);
         op
     }
 
-    pub fn insert_bool_const(&mut self, b: bool) -> mlr::Op {
+    pub fn insert_bool_const(&mut self, b: bool) -> mlr::Op<'mlr> {
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         let op = self.mlr.insert_op(mlr::OpDef::Const(mlr::Const::Bool(b)));
         self.mlr.set_op_ty(op, bool_ty);
@@ -157,19 +163,19 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         self.mlr.get_val_ty(val)
     }
 
-    pub fn insert_use_val(&mut self, op: mlr::Op) -> mlr::Val {
+    pub fn insert_use_val(&self, op: mlr::Op<'mlr>) -> mlr::Val<'mlr> {
         let ty = self.mlr.get_op_ty(op);
         let val = self.mlr.insert_val(mlr::ValDef::Use(op));
         self.mlr.set_val_ty(val, ty);
         val
     }
 
-    pub fn copy_val(&mut self, place: mlr::Place) -> mlr::Val {
+    pub fn copy_val(&self, place: mlr::Place<'mlr>) -> mlr::Val<'mlr> {
         let op = self.insert_copy_op(place);
         self.insert_use_val(op)
     }
 
-    pub fn insert_call_val(&mut self, callable: mlr::Op, args: Vec<mlr::Op>) -> mlr::Val {
+    pub fn insert_call_val(&mut self, callable: mlr::Op<'mlr>, args: Vec<mlr::Op<'mlr>>) -> mlr::Val<'mlr> {
         let callable_ty = self.mlr.get_op_ty(callable);
         let return_ty = self
             .ctxt
@@ -181,7 +187,7 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         val
     }
 
-    pub fn insert_addr_of_val(&mut self, place: mlr::Place) -> mlr::Val {
+    pub fn insert_addr_of_val(&mut self, place: mlr::Place<'mlr>) -> mlr::Val<'mlr> {
         let place_ty = self.mlr.get_place_ty(place);
         let ref_ty = self.ctxt.tys.ref_(place_ty);
         let val = self.mlr.insert_val(mlr::ValDef::AddrOf(place));
@@ -189,36 +195,36 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         val
     }
 
-    pub fn insert_as_val(&mut self, op: mlr::Op, target_ty: ty::Ty) -> mlr::Val {
+    pub fn insert_as_val(&self, op: mlr::Op<'mlr>, target_ty: ty::Ty) -> mlr::Val<'mlr> {
         let val = self.mlr.insert_val(mlr::ValDef::As { op, target_ty });
         self.mlr.set_val_ty(val, target_ty);
         val
     }
 
     pub fn insert_binary_prim_val(
-        &mut self,
+        &self,
         op: language_items::BinaryPrimOp,
-        lhs: mlr::Op,
-        rhs: mlr::Op,
+        lhs: mlr::Op<'mlr>,
+        rhs: mlr::Op<'mlr>,
         result_ty: ty::Ty,
-    ) -> mlr::Val {
+    ) -> mlr::Val<'mlr> {
         let val = self.mlr.insert_val(mlr::ValDef::BinaryPrim { op, lhs, rhs });
         self.mlr.set_val_ty(val, result_ty);
         val
     }
 
     pub fn insert_unary_prim_val(
-        &mut self,
+        &self,
         op: language_items::UnaryPrimOp,
-        operand: mlr::Op,
+        operand: mlr::Op<'mlr>,
         result_ty: ty::Ty,
-    ) -> mlr::Val {
+    ) -> mlr::Val<'mlr> {
         let val = self.mlr.insert_val(mlr::ValDef::UnaryPrim { op, operand });
         self.mlr.set_val_ty(val, result_ty);
         val
     }
 
-    pub fn insert_unit_val(&mut self) -> mlr::Val {
+    pub fn insert_unit_val(&mut self) -> mlr::Val<'mlr> {
         let unit_ty = self.ctxt.tys.unit();
         let place = self.alloc_place(unit_ty);
         self.copy_val(place)
@@ -229,27 +235,27 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         self.push_stmt(stmt);
     }
 
-    pub fn insert_assign_stmt(&mut self, place: mlr::Place, value: mlr::Val) {
+    pub fn insert_assign_stmt(&mut self, place: mlr::Place<'mlr>, value: mlr::Val<'mlr>) {
         let stmt = self.mlr.insert_stmt(mlr::StmtDef::Assign { place, value });
         self.push_stmt(stmt);
     }
 
-    pub fn insert_assign_to_loc_stmt(&mut self, loc: mlr::Loc, value: mlr::Val) {
+    pub fn insert_assign_to_loc_stmt(&mut self, loc: mlr::Loc, value: mlr::Val<'mlr>) {
         let place = self.insert_loc_place(loc);
         self.insert_assign_stmt(place, value);
     }
 
-    pub fn insert_return_stmt(&mut self, value: mlr::Val) {
+    pub fn insert_return_stmt(&mut self, value: mlr::Val<'mlr>) {
         let stmt = self.mlr.insert_stmt(mlr::StmtDef::Return { value });
         self.push_stmt(stmt);
     }
 
-    pub fn insert_if_stmt(&mut self, cond: mlr::Op, then: mlr::Stmt, else_: mlr::Stmt) {
+    pub fn insert_if_stmt(&mut self, cond: mlr::Op<'mlr>, then: mlr::Stmt<'mlr>, else_: mlr::Stmt<'mlr>) {
         let stmt = self.mlr.insert_stmt(mlr::StmtDef::If(mlr::If { cond, then, else_ }));
         self.push_stmt(stmt);
     }
 
-    pub fn insert_loop_stmt(&mut self, body: mlr::Stmt) {
+    pub fn insert_loop_stmt(&mut self, body: mlr::Stmt<'mlr>) {
         let stmt = self.mlr.insert_stmt(mlr::StmtDef::Loop { body });
         self.push_stmt(stmt);
     }
