@@ -284,10 +284,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         let receiver_place = self.lower_to_place(receiver);
         let receiver_op = if by_ref {
             let addr_val = self.builder.insert_addr_of_val(receiver_place);
-            let addr_ty = self.builder.get_val_ty(addr_val);
-            let addr_loc = self.builder.alloc_loc(addr_ty);
-            self.builder.insert_assign_to_loc_stmt(addr_loc, addr_val);
-            let addr_place = self.builder.insert_loc_place(addr_loc);
+            let addr_place = self.builder.store_val(addr_val);
             self.builder.insert_copy_op(addr_place)
         } else {
             self.builder.insert_copy_op(receiver_place)
@@ -704,9 +701,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
             hlr::StmtDef::Expr(expr) => {
                 self.builder.start_block();
                 let val = self.lower_to_val(*expr);
-                let ty = self.builder.get_val_ty(val);
-                let loc = self.builder.alloc_loc(ty);
-                self.builder.insert_assign_to_loc_stmt(loc, val);
+                self.builder.store_val(val);
                 self.builder.end_and_push_block();
             }
             hlr::StmtDef::Let { var, init, .. } => {

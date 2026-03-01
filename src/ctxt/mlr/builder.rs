@@ -55,6 +55,13 @@ impl<'a> MlrBuilder<'a> {
         self.insert_loc_place(loc)
     }
 
+    pub fn store_val(&mut self, val: mlr::Val) -> mlr::Place {
+        let ty = self.get_val_ty(val);
+        let place = self.alloc_place(ty);
+        self.insert_assign_stmt(place, val);
+        place
+    }
+
     pub fn insert_loc_place(&mut self, loc: mlr::Loc) -> mlr::Place {
         let ty = self.ctxt.mlr.get_loc_ty(loc);
         let place = self.ctxt.mlr.insert_place(mlr::PlaceDef::Loc(loc));
@@ -109,11 +116,6 @@ impl<'a> MlrBuilder<'a> {
         place
     }
 
-    pub fn copy_val(&mut self, place: mlr::Place) -> mlr::Val {
-        let op = self.insert_copy_op(place);
-        self.insert_use_val(op)
-    }
-
     pub fn insert_copy_op(&mut self, place: mlr::Place) -> mlr::Op {
         let ty = self.ctxt.mlr.get_place_ty(place);
         let op = self.ctxt.mlr.insert_op(mlr::OpDef::Copy(place));
@@ -161,6 +163,11 @@ impl<'a> MlrBuilder<'a> {
         val
     }
 
+    pub fn copy_val(&mut self, place: mlr::Place) -> mlr::Val {
+        let op = self.insert_copy_op(place);
+        self.insert_use_val(op)
+    }
+
     pub fn insert_call_val(&mut self, callable: mlr::Op, args: Vec<mlr::Op>) -> mlr::Val {
         let callable_ty = self.ctxt.mlr.get_op_ty(callable);
         let return_ty = self
@@ -189,11 +196,8 @@ impl<'a> MlrBuilder<'a> {
 
     pub fn insert_unit_val(&mut self) -> mlr::Val {
         let unit_ty = self.ctxt.tys.unit();
-        let loc = self.ctxt.mlr.insert_typed_loc(unit_ty);
-        self.insert_alloc_stmt(loc);
-        let place = self.insert_loc_place(loc);
-        let op = self.insert_copy_op(place);
-        self.insert_use_val(op)
+        let place = self.alloc_place(unit_ty);
+        self.copy_val(place)
     }
 
     pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc) {
