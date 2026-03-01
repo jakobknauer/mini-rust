@@ -502,7 +502,7 @@ impl<'a> Driver<'a> {
         for (idx, &ast_fn) in ast.free_fns().iter().enumerate() {
             let Some(body) = ast_fn.body else { continue };
             let target_fn = self.ast_meta.fn_ids[&idx];
-            let hlr_fn = ast_lowering::ast_lowering(&self.ctxt, target_fn, ast, body, hlr)
+            let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, ast, body, hlr)
                 .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
             hlr_fns.push(hlr_fn);
         }
@@ -520,7 +520,7 @@ impl<'a> Driver<'a> {
             let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
             for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
                 let Some(body) = ast_mthd.body else { continue };
-                let hlr_fn = ast_lowering::ast_lowering(&self.ctxt, target_fn, ast, body, hlr)
+                let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, ast, body, hlr)
                     .map_err(|_| format!("failed to lower {} to HLR", ast_mthd.name))?;
                 hlr_fns.push(hlr_fn);
             }

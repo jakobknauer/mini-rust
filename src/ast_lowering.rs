@@ -11,18 +11,18 @@ use crate::{
     hlr,
 };
 
-pub fn ast_lowering<'ast, 'hlr>(
+pub fn ast_to_hlr<'ast, 'hlr>(
     ctxt: &ctxt::Ctxt,
     fn_: fns::Fn,
     ast: &'ast ast::Ast<'ast>,
     ast_body: ast::Block<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 ) -> AstLoweringResult<hlr::Fn<'hlr>> {
-    let converter = AstLowering::new(ctxt, fn_, ast, hlr);
+    let converter = AstLowerer::new(ctxt, fn_, ast, hlr);
     converter.lower_function_body(ast_body)
 }
 
-struct AstLowering<'ast, 'ctxt, 'hlr> {
+struct AstLowerer<'ast, 'ctxt, 'hlr> {
     fn_: fns::Fn,
 
     ctxt: &'ctxt ctxt::Ctxt,
@@ -41,7 +41,7 @@ pub struct AstLoweringError {
     msg: String,
 }
 
-impl<'ast, 'ctxt, 'hlr> AstLowering<'ast, 'ctxt, 'hlr> {
+impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
     fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ast ast::Ast<'ast>, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             fn_,

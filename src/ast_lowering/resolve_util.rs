@@ -5,7 +5,7 @@ use crate::{
     hlr,
 };
 
-impl<'ast, 'ctxt, 'hlr> super::AstLowering<'ast, 'ctxt, 'hlr> {
+impl<'ast, 'ctxt, 'hlr> super::AstLowerer<'ast, 'ctxt, 'hlr> {
     pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstLoweringResult<hlr::Val<'hlr>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),
