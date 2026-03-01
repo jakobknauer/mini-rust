@@ -323,30 +323,30 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             }
         }
 
-        if let (Add, true) = (operator, left_ty == i32_ty && right_ty == i32_ty) {
-            self.typing
-                .expr_extra
-                .insert(expr_id, ExprExtra::BinaryPrim(language_items::BinaryPrimOp::AddI32));
-            return Ok(i32_ty);
-        }
+        use language_items::BinaryPrimOp::*;
 
-        let (fn_name, result_ty) = match operator {
-            Subtract if left_ty == i32_ty && right_ty == i32_ty => ("sub::<i32>", i32_ty),
-            Multiply if left_ty == i32_ty && right_ty == i32_ty => ("mul::<i32>", i32_ty),
-            Divide if left_ty == i32_ty && right_ty == i32_ty => ("div::<i32>", i32_ty),
-            Remainder if left_ty == i32_ty && right_ty == i32_ty => ("rem::<i32>", i32_ty),
-            Equal if left_ty == i32_ty && right_ty == i32_ty => ("eq::<i32>", bool_ty),
-            Equal if left_ty == bool_ty && right_ty == bool_ty => ("eq::<bool>", bool_ty),
-            Equal if left_ty == unit_ty && right_ty == unit_ty => ("eq::<()>", bool_ty),
-            NotEqual if left_ty == i32_ty && right_ty == i32_ty => ("ne::<i32>", bool_ty),
-            NotEqual if left_ty == bool_ty && right_ty == bool_ty => ("ne::<bool>", bool_ty),
-            NotEqual if left_ty == unit_ty && right_ty == unit_ty => ("ne::<()>", bool_ty),
-            BitOr if left_ty == bool_ty && right_ty == bool_ty => ("bitor::<bool>", bool_ty),
-            BitAnd if left_ty == bool_ty && right_ty == bool_ty => ("bitand::<bool>", bool_ty),
-            LessThan if left_ty == i32_ty && right_ty == i32_ty => ("lt::<i32>", bool_ty),
-            GreaterThan if left_ty == i32_ty && right_ty == i32_ty => ("gt::<i32>", bool_ty),
-            LessThanOrEqual if left_ty == i32_ty && right_ty == i32_ty => ("le::<i32>", bool_ty),
-            GreaterThanOrEqual if left_ty == i32_ty && right_ty == i32_ty => ("ge::<i32>", bool_ty),
+        let i32 = left_ty == i32_ty && right_ty == i32_ty;
+        let bool = left_ty == bool_ty && right_ty == bool_ty;
+        let unit = left_ty == unit_ty && right_ty == unit_ty;
+
+        let (prim, result_ty) = match operator {
+            Add if i32 => (AddI32, i32_ty),
+            Subtract if i32 => (SubI32, i32_ty),
+            Multiply if i32 => (MulI32, i32_ty),
+            Divide if i32 => (DivI32, i32_ty),
+            Remainder if i32 => (RemI32, i32_ty),
+            Equal if i32 => (EqI32, bool_ty),
+            Equal if bool => (EqBool, bool_ty),
+            Equal if unit => (EqUnit, bool_ty),
+            NotEqual if i32 => (NeI32, bool_ty),
+            NotEqual if bool => (NeBool, bool_ty),
+            NotEqual if unit => (NeUnit, bool_ty),
+            BitOr if bool => (BitOrBool, bool_ty),
+            BitAnd if bool => (BitAndBool, bool_ty),
+            LessThan if i32 => (LtI32, bool_ty),
+            GreaterThan if i32 => (GtI32, bool_ty),
+            LessThanOrEqual if i32 => (LeI32, bool_ty),
+            GreaterThanOrEqual if i32 => (GeI32, bool_ty),
             _ => {
                 return Err(TypeckError::BinaryOpTypeMismatch {
                     operator,
@@ -356,20 +356,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             }
         };
 
-        let fn_ = self
-            .ctxt
-            .fns
-            .get_fn_by_name(fn_name)
-            .expect("operator impl should be registered");
-        let empty = self.ctxt.tys.ty_slice(&[]);
-        self.typing.expr_extra.insert(
-            expr_id,
-            ExprExtra::BinaryOp(fns::FnInst {
-                fn_,
-                gen_args: empty,
-                env_gen_args: empty,
-            }),
-        );
+        self.typing.expr_extra.insert(expr_id, ExprExtra::BinaryPrim(prim));
         Ok(result_ty)
     }
 

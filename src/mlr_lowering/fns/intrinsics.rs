@@ -1,10 +1,10 @@
 use inkwell::{
-    AddressSpace,
+    AddressSpace, IntPredicate,
     targets::TargetData,
-    values::{BasicValue, BasicValueEnum},
+    values::{BasicValue, BasicValueEnum, IntValue},
 };
 
-use crate::ctxt::{fns as mr_fns, mlr};
+use crate::ctxt::{fns as mr_fns, language_items, mlr};
 
 use super::{MlrFnLowerer, MlrLoweringError, MlrLoweringResult};
 
@@ -31,6 +31,62 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         let size = TargetData::create("").get_store_size(&iw_ty) as u32;
         let int_ty = self.parent.iw_ctxt.i32_type();
         Ok(int_ty.const_int(size as u64, false).as_basic_value_enum())
+    }
+
+    pub(super) fn build_binary_prim(
+        &mut self,
+        op: language_items::BinaryPrimOp,
+        lhs: mlr::Op,
+        rhs: mlr::Op,
+    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+        use language_items::BinaryPrimOp::*;
+
+        match op {
+            EqUnit => {
+                return Ok(self
+                    .parent
+                    .iw_ctxt
+                    .bool_type()
+                    .const_int(1, false)
+                    .as_basic_value_enum());
+            }
+            NeUnit => {
+                return Ok(self
+                    .parent
+                    .iw_ctxt
+                    .bool_type()
+                    .const_int(0, false)
+                    .as_basic_value_enum());
+            }
+            _ => {}
+        }
+
+        let (lhs, rhs) = self.build_int_pair(lhs, rhs)?;
+
+        let op = match op {
+            AddI32 => self.iw_builder.build_int_add(lhs, rhs, "")?,
+            SubI32 => self.iw_builder.build_int_sub(lhs, rhs, "")?,
+            MulI32 => self.iw_builder.build_int_mul(lhs, rhs, "")?,
+            DivI32 => self.iw_builder.build_int_signed_div(lhs, rhs, "")?,
+            RemI32 => self.iw_builder.build_int_signed_rem(lhs, rhs, "")?,
+            EqI32 | EqBool => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "")?,
+            NeI32 | NeBool => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "")?,
+            BitOrBool => self.iw_builder.build_or(lhs, rhs, "")?,
+            BitAndBool => self.iw_builder.build_and(lhs, rhs, "")?,
+            LtI32 => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "")?,
+            GtI32 => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "")?,
+            LeI32 => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "")?,
+            GeI32 => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "")?,
+            EqUnit | NeUnit => unreachable!(),
+        };
+
+        Ok(op.as_basic_value_enum())
+    }
+
+    fn build_int_pair(&mut self, lhs: mlr::Op, rhs: mlr::Op) -> MlrLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
+        let lhs = self.build_op(lhs)?.into_int_value();
+        let rhs = self.build_op(rhs)?.into_int_value();
+        Ok((lhs, rhs))
     }
 
     fn build_ptr_offset_intrinsic(

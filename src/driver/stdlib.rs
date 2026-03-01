@@ -28,29 +28,8 @@ pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let tys = &mut ctxt.tys;
     let i32 = tys.primitive(ty::Primitive::Integer32);
     let bool = tys.primitive(ty::Primitive::Boolean);
-    let unit = tys.unit();
 
     let fns = &mut ctxt.fns;
-
-    register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);
-    register_fn!(fns, "mul::<i32>", (a: i32, b: i32) -> i32);
-    register_fn!(fns, "div::<i32>", (a: i32, b: i32) -> i32);
-    register_fn!(fns, "rem::<i32>", (a: i32, b: i32) -> i32);
-
-    register_fn!(fns, "eq::<i32>", (a: i32, b: i32) -> bool);
-    register_fn!(fns, "ne::<i32>", (a: i32, b: i32) -> bool);
-    register_fn!(fns, "eq::<bool>", (a: bool, b: bool) -> bool);
-    register_fn!(fns, "ne::<bool>", (a: bool, b: bool) -> bool);
-    register_fn!(fns, "eq::<()>", (a: unit, b: unit) -> bool);
-    register_fn!(fns, "ne::<()>", (a: unit, b: unit) -> bool);
-
-    register_fn!(fns, "bitor::<bool>", (a: bool, b: bool) -> bool);
-    register_fn!(fns, "bitand::<bool>", (a: bool, b: bool) -> bool);
-
-    register_fn!(fns, "lt::<i32>", (a: i32, b: i32) -> bool);
-    register_fn!(fns, "gt::<i32>", (a: i32, b: i32) -> bool);
-    register_fn!(fns, "le::<i32>", (a: i32, b: i32) -> bool);
-    register_fn!(fns, "ge::<i32>", (a: i32, b: i32) -> bool);
 
     register_fn!(fns, "not::<bool>", (a: bool) -> bool);
     register_fn!(fns, "neg::<i32>", (a: i32) -> i32);

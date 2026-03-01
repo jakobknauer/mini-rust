@@ -6,7 +6,7 @@ use lowered_expr::LoweredExpr;
 
 use crate::{
     ctxt::mlr::builder::MlrBuilder,
-    ctxt::{self, fns, mlr, ty},
+    ctxt::{self, fns, language_items, mlr, ty},
     hlr,
     typeck::{ExprExtra, HlrTyping, MthdResolution},
 };
@@ -519,27 +519,12 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         let discriminant_op = self.builder.insert_copy_op(disc_place);
 
         let i32_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
-        let empty = self.builder.ctxt.tys.ty_slice(&[]);
-        let eq_fn = self
-            .builder
-            .ctxt
-            .fns
-            .get_fn_by_name("eq::<i32>")
-            .expect("eq::<i32> should be registered");
-        let eq_fn_inst = fns::FnInst {
-            fn_: eq_fn,
-            gen_args: empty,
-            env_gen_args: empty,
-        };
-        let eq_op = self.builder.insert_fn_inst_op(eq_fn_inst);
-
         let result_place = self.builder.alloc_place(result_ty);
 
         self.lower_match_arms(
             enum_ty,
             by_ref,
             arms,
-            eq_op,
             discriminant_op,
             i32_ty,
             scrutinee_place,
@@ -555,7 +540,6 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         enum_ty: ty::Ty,
         by_ref: bool,
         arms: &'hlr [hlr::MatchArm<'hlr>],
-        eq_op: mlr::Op,
         discriminant_op: mlr::Op,
         i32_ty: ty::Ty,
         scrutinee_place: mlr::Place,
@@ -578,9 +562,12 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
                     .insert_const_op(mlr::Const::Int(variant_idx as i64), i32_ty);
 
                 let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
-                let cond_val = self
-                    .builder
-                    .insert_call_val(eq_op, vec![discriminant_op, variant_idx_op]);
+                let cond_val = self.builder.insert_binary_prim_val(
+                    language_items::BinaryPrimOp::EqI32,
+                    discriminant_op,
+                    variant_idx_op,
+                    bool_ty,
+                );
                 let cond_place = self.builder.alloc_place(bool_ty);
                 self.builder.insert_assign_stmt(cond_place, cond_val);
                 let cond_op = self.builder.insert_copy_op(cond_place);
@@ -595,7 +582,6 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
                     enum_ty,
                     by_ref,
                     rest_arms,
-                    eq_op,
                     discriminant_op,
                     i32_ty,
                     scrutinee_place,

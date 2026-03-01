@@ -233,8 +233,21 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, " as {})", ty_name)
                 }
                 BinaryPrim { op, lhs, rhs } => {
+                    use language_items::BinaryPrimOp::*;
                     let op_str = match op {
-                        language_items::BinaryPrimOp::AddI32 => "+",
+                        AddI32 => "+",
+                        SubI32 => "-",
+                        MulI32 => "*",
+                        DivI32 => "/",
+                        RemI32 => "%",
+                        EqI32 | EqBool | EqUnit => "==",
+                        NeI32 | NeBool | NeUnit => "!=",
+                        BitOrBool => "|",
+                        BitAndBool => "&",
+                        LtI32 => "<",
+                        GtI32 => ">",
+                        LeI32 => "<=",
+                        GeI32 => ">=",
                     };
                     self.print_op(lhs)?;
                     write!(self.writer, " {op_str} ")?;
