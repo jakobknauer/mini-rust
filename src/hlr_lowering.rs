@@ -187,16 +187,21 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         let val = match operator {
             hlr::BinaryOperator::LogicalAnd => self.lower_logical_and(left, right),
             hlr::BinaryOperator::LogicalOr => self.lower_logical_or(left, right),
-            _ => {
-                let fn_inst = match self.typing.expr_extra[&expr_id] {
-                    ExprExtra::BinaryOp(fi) => fi,
-                    _ => panic!("expected BinaryOp extra"),
-                };
-                let fn_op = self.builder.insert_fn_inst_op(fn_inst);
-                let left_op = self.lower_to_op(left);
-                let right_op = self.lower_to_op(right);
-                self.builder.insert_call_val(fn_op, vec![left_op, right_op])
-            }
+            _ => match self.typing.expr_extra[&expr_id] {
+                ExprExtra::BinaryPrim(prim) => {
+                    let result_ty = self.typing.expr_types[&expr_id];
+                    let lhs = self.lower_to_op(left);
+                    let rhs = self.lower_to_op(right);
+                    self.builder.insert_binary_prim_val(prim, lhs, rhs, result_ty)
+                }
+                ExprExtra::BinaryOp(fn_inst) => {
+                    let fn_op = self.builder.insert_fn_inst_op(fn_inst);
+                    let left_op = self.lower_to_op(left);
+                    let right_op = self.lower_to_op(right);
+                    self.builder.insert_call_val(fn_op, vec![left_op, right_op])
+                }
+                _ => panic!("expected BinaryOp or BinaryPrim extra"),
+            },
         };
         val.into()
     }

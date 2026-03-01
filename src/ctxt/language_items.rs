@@ -5,3 +5,8 @@ pub struct LanguageItems {
     pub size_of: Option<Fn>,
     pub ptr_offset: Option<Fn>,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum BinaryPrimOp {
+    AddI32,
+}

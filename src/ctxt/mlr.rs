@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{FnInst, TraitMthdInst},
+    language_items::BinaryPrimOp,
     ty::Ty,
 };
 
@@ -54,6 +55,7 @@ pub enum ValDef {
     Use(Op),
     AddrOf(Place),
     As { op: Op, target_ty: Ty },
+    BinaryPrim { op: BinaryPrimOp, lhs: Op, rhs: Op },
 }
 
 #[derive(Debug, Clone)]

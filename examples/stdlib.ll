@@ -2,12 +2,6 @@
 source_filename = "stdlib"
 target triple = "x86_64-pc-linux-gnu"
 
-define i32 @"add::<i32>"(i32 %0, i32 %1) {
-entry:
-  %2 = add i32 %0, %1
-  ret i32 %2
-}
-
 define i32 @"sub::<i32>"(i32 %0, i32 %1) {
 entry:
   %2 = sub i32 %0, %1

@@ -9,7 +9,7 @@ mod unify;
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{self, fns, traits, ty},
+    ctxt::{self, fns, language_items, traits, ty},
     hlr,
 };
 
@@ -28,6 +28,7 @@ pub enum ExprExtra {
     ValFn(fns::FnInst),
     ValMthd(MthdResolution),
     BinaryOp(fns::FnInst),
+    BinaryPrim(language_items::BinaryPrimOp),
     UnaryOp(fns::FnInst),
     FieldAccess {
         derefs: usize,
@@ -322,8 +323,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             }
         }
 
+        if let (Add, true) = (operator, left_ty == i32_ty && right_ty == i32_ty) {
+            self.typing
+                .expr_extra
+                .insert(expr_id, ExprExtra::BinaryPrim(language_items::BinaryPrimOp::AddI32));
+            return Ok(i32_ty);
+        }
+
         let (fn_name, result_ty) = match operator {
-            Add if left_ty == i32_ty && right_ty == i32_ty => ("add::<i32>", i32_ty),
             Subtract if left_ty == i32_ty && right_ty == i32_ty => ("sub::<i32>", i32_ty),
             Multiply if left_ty == i32_ty && right_ty == i32_ty => ("mul::<i32>", i32_ty),
             Divide if left_ty == i32_ty && right_ty == i32_ty => ("div::<i32>", i32_ty),

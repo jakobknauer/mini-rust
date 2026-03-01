@@ -9,7 +9,7 @@ use inkwell::{
     values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::ctxt::{self as mr_ctxt, fns as mr_fns, mlr, ty as mr_ty};
+use crate::ctxt::{self as mr_ctxt, fns as mr_fns, language_items, mlr, ty as mr_ty};
 
 pub struct MlrFnLowerer<'a, 'iw, 'mr> {
     parent: &'a mut super::MlrLowerer<'iw, 'mr>,
@@ -233,6 +233,25 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
                 // since the only valid conversion atm is from ref to ptr of the same base type,
                 // we can just build the op and return it
                 self.build_op(op)
+            }
+            BinaryPrim { op, lhs, rhs } => self.build_binary_prim(op, lhs, rhs),
+        }
+    }
+
+    fn build_binary_prim(
+        &mut self,
+        op: language_items::BinaryPrimOp,
+        lhs: mlr::Op,
+        rhs: mlr::Op,
+    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+        match op {
+            language_items::BinaryPrimOp::AddI32 => {
+                let lhs = self.build_op(lhs)?.into_int_value();
+                let rhs = self.build_op(rhs)?.into_int_value();
+                Ok(self
+                    .iw_builder
+                    .build_int_add(lhs, rhs, "add_i32")?
+                    .as_basic_value_enum())
             }
         }
     }

@@ -1,4 +1,4 @@
-use crate::ctxt::{self, fns, mlr, ty};
+use crate::ctxt::{self, fns, language_items, mlr, ty};
 
 pub struct MlrBuilder<'a> {
     pub ctxt: &'a mut ctxt::Ctxt,
@@ -191,6 +191,18 @@ impl<'a> MlrBuilder<'a> {
     pub fn insert_as_val(&mut self, op: mlr::Op, target_ty: ty::Ty) -> mlr::Val {
         let val = self.ctxt.mlr.insert_val(mlr::ValDef::As { op, target_ty });
         self.ctxt.mlr.set_val_ty(val, target_ty);
+        val
+    }
+
+    pub fn insert_binary_prim_val(
+        &mut self,
+        op: language_items::BinaryPrimOp,
+        lhs: mlr::Op,
+        rhs: mlr::Op,
+        result_ty: ty::Ty,
+    ) -> mlr::Val {
+        let val = self.ctxt.mlr.insert_val(mlr::ValDef::BinaryPrim { op, lhs, rhs });
+        self.ctxt.mlr.set_val_ty(val, result_ty);
         val
     }
 

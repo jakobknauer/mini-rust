@@ -32,7 +32,6 @@ pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
 
     let fns = &mut ctxt.fns;
 
-    register_fn!(fns, "add::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "sub::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "mul::<i32>", (a: i32, b: i32) -> i32);
     register_fn!(fns, "div::<i32>", (a: i32, b: i32) -> i32);

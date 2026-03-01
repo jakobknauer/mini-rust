@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::ctxt::{
     self,
     fns::{Fn, FnMlr, FnSig},
-    mlr,
+    language_items, mlr,
     ty::iter_ty_slice,
 };
 
@@ -231,6 +231,14 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     self.print_op(op)?;
                     let ty_name = self.ctxt.tys.get_string_rep(target_ty);
                     write!(self.writer, " as {})", ty_name)
+                }
+                BinaryPrim { op, lhs, rhs } => {
+                    let op_str = match op {
+                        language_items::BinaryPrimOp::AddI32 => "+",
+                    };
+                    self.print_op(lhs)?;
+                    write!(self.writer, " {op_str} ")?;
+                    self.print_op(rhs)
                 }
             },
             None => write!(self.writer, "<val id {}>", val.0),
