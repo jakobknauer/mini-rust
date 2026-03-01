@@ -1,7 +1,6 @@
 pub mod fns;
 pub mod impls;
 pub mod language_items;
-pub mod mlr;
 pub mod traits;
 #[macro_use]
 pub mod ty;
@@ -16,15 +15,12 @@ pub use impl_reg::ImplReg;
 pub use trait_reg::TraitReg;
 pub use ty_reg::*;
 
-use mlr::Mlr;
-
 use crate::{ast, ctxt::ty::GenVarSubst};
 
 #[derive(Default)]
 pub struct Ctxt {
     pub tys: TyReg,
     pub fns: FnReg,
-    pub mlr: Mlr,
     pub impls: ImplReg,
     pub traits: TraitReg,
     pub language_items: language_items::LanguageItems,

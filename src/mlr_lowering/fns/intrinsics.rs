@@ -4,11 +4,14 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, IntValue},
 };
 
-use crate::ctxt::{fns as mr_fns, language_items, mlr};
+use crate::{
+    ctxt::{fns as mr_fns, language_items},
+    mlr,
+};
 
 use super::{MlrFnLowerer, MlrLoweringError, MlrLoweringResult};
 
-impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
+impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     pub(super) fn try_build_intrinsic_call(
         &mut self,
         fn_inst: mr_fns::FnInst,

@@ -1,40 +1,45 @@
 use std::io::Write;
 
-use crate::ctxt::{
-    self,
-    fns::{Fn, FnMlr, FnSig},
-    language_items, mlr,
-    ty::iter_ty_slice,
+use crate::{
+    ctxt::{
+        self,
+        fns::{Fn, FnMlr, FnSig},
+        language_items,
+        ty::iter_ty_slice,
+    },
+    mlr,
 };
 
-pub fn print_mlr<W: Write>(fn_: Fn, ctxt: &ctxt::Ctxt, writer: &mut W) -> Result<(), std::io::Error> {
+pub fn print_mlr<W: Write>(fn_: Fn, ctxt: &ctxt::Ctxt, mlr: &mlr::Mlr, writer: &mut W) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         fn_,
-        mlr: ctxt.fns.get_fn_def(fn_),
+        fn_mlr: ctxt.fns.get_fn_def(fn_),
         signature: ctxt.fns.get_sig(fn_),
         ctxt,
+        mlr,
         indent_level: 0,
         writer,
     };
     printer.print_mlr()
 }
 
-struct MlrPrinter<'a, W: Write> {
+struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
-    mlr: Option<&'a FnMlr>,
+    fn_mlr: Option<&'a FnMlr>,
     signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
+    mlr: &'mlr mlr::Mlr,
     indent_level: usize,
     writer: &'a mut W,
 }
 
 const INDENT: &str = "    ";
 
-impl<'a, W: Write> MlrPrinter<'a, W> {
+impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
     fn print_mlr(&mut self) -> Result<(), std::io::Error> {
         self.print_signature()?;
 
-        if let Some(mlr) = self.mlr {
+        if let Some(mlr) = self.fn_mlr {
             writeln!(self.writer)?;
             self.print_stmt(mlr.body)
         } else {
@@ -47,7 +52,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
             return write!(self.writer, "<signature for fn id {}>", self.fn_.0);
         };
 
-        let mlr = self.mlr.expect("self.mlr should not be empty");
+        let mlr = self.fn_mlr.expect("self.mlr should not be empty");
 
         // Print signature similar to printing of fn_inst in src/ctxt.rs
 
@@ -145,12 +150,12 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_stmt(&mut self, stmt: mlr::Stmt) -> Result<(), std::io::Error> {
         use mlr::StmtDef::*;
 
-        let stmt_def = &self.ctxt.mlr.try_get_stmt_def(stmt);
+        let stmt_def = &self.mlr.try_get_stmt_def(stmt);
 
         match *stmt_def {
             Some(stmt) => match *stmt {
                 Alloc { loc } => {
-                    let loc_ty = self.ctxt.mlr.get_loc_ty(loc);
+                    let loc_ty = self.mlr.get_loc_ty(loc);
                     let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
                     self.indent()?;
                     writeln!(self.writer, "alloc {}: {};", loc, ty_name)
@@ -201,7 +206,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_val(&mut self, val: mlr::Val) -> Result<(), std::io::Error> {
         use mlr::ValDef::*;
 
-        let val_def = &self.ctxt.mlr.try_get_val_def(val);
+        let val_def = &self.mlr.try_get_val_def(val);
 
         match *val_def {
             Some(val) => match *val {
@@ -270,7 +275,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
     fn print_place(&mut self, place: mlr::Place) -> Result<(), std::io::Error> {
         use mlr::PlaceDef::*;
 
-        let place_def = &self.ctxt.mlr.try_get_place_def(place);
+        let place_def = &self.mlr.try_get_place_def(place);
 
         match *place_def {
             Some(place) => match *place {
@@ -285,7 +290,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
                     write!(self.writer, ")")
                 }
                 ProjectToVariant { base, variant_index } => {
-                    let ty = self.ctxt.mlr.get_place_ty(base);
+                    let ty = self.mlr.get_place_ty(base);
                     let enum_name = self.ctxt.tys.get_string_rep(ty);
                     write!(self.writer, "(")?;
                     self.print_place(base)?;
@@ -310,7 +315,7 @@ impl<'a, W: Write> MlrPrinter<'a, W> {
         use mlr::Const::*;
         use mlr::OpDef::*;
 
-        let op_def = &self.ctxt.mlr.try_get_op_def(op);
+        let op_def = &self.mlr.try_get_op_def(op);
 
         match *op_def {
             Some(operand) => match *operand {

@@ -5,33 +5,33 @@ use std::collections::HashMap;
 use lowered_expr::LoweredExpr;
 
 use crate::{
-    ctxt::mlr::builder::MlrBuilder,
-    ctxt::{self, fns, language_items, mlr, ty},
+    ctxt::{self, fns, language_items, ty},
     hlr,
+    mlr::{self, builder::MlrBuilder},
     typeck::{ExprExtra, HlrTyping, MthdResolution},
 };
 
-pub fn hlr_to_mlr<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>, typing: &HlrTyping) {
+pub fn hlr_to_mlr<'hlr>(ctxt: &mut ctxt::Ctxt, mlr: &mut mlr::Mlr, fn_: &'hlr hlr::Fn<'hlr>, typing: &HlrTyping) {
     let fn_mlr = {
-        let mut lowerer = HlrLowerer::new(ctxt, fn_.fn_, typing);
+        let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing);
         lowerer.lower_fn(fn_)
     };
     ctxt.fns.add_fn_def(fn_.fn_, fn_mlr);
 }
 
-struct HlrLowerer<'a, 'hlr> {
+struct HlrLowerer<'a, 'hlr, 'mlr> {
     fn_: fns::Fn,
-    builder: MlrBuilder<'a>,
+    builder: MlrBuilder<'a, 'mlr>,
     typing: &'a HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
     _hlr: std::marker::PhantomData<&'hlr hlr::Hlr<'hlr>>,
 }
 
-impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
-    fn new(ctxt: &'a mut ctxt::Ctxt, fn_: fns::Fn, typing: &'a HlrTyping) -> Self {
+impl<'a, 'hlr, 'mlr> HlrLowerer<'a, 'hlr, 'mlr> {
+    fn new(ctxt: &'a mut ctxt::Ctxt, mlr: &'mlr mut mlr::Mlr, fn_: fns::Fn, typing: &'a HlrTyping) -> Self {
         Self {
             fn_,
-            builder: MlrBuilder::new(ctxt, fn_),
+            builder: MlrBuilder::new(ctxt, mlr, fn_),
             typing,
             var_locs: HashMap::new(),
             _hlr: std::marker::PhantomData,
@@ -673,7 +673,7 @@ impl<'a, 'hlr> HlrLowerer<'a, 'hlr> {
         self.builder.end_and_push_block();
 
         let param_var_ids: Vec<_> = params.iter().map(|hlr::ClosureParam(v, _)| *v).collect();
-        let mut closure_lowerer = HlrLowerer::new(self.builder.ctxt, fn_inst.fn_, self.typing);
+        let mut closure_lowerer = HlrLowerer::new(self.builder.ctxt, self.builder.mlr, fn_inst.fn_, self.typing);
         let fn_mlr = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
         self.builder.ctxt.fns.add_fn_def(fn_inst.fn_, fn_mlr);
 

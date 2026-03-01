@@ -1,7 +1,9 @@
-use crate::ctxt::{
+use crate::{
+    ctxt::{
+        traits::TraitInst,
+        ty::{GenVar, Ty, TySlice},
+    },
     mlr,
-    traits::TraitInst,
-    ty::{GenVar, Ty, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

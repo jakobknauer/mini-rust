@@ -4,6 +4,7 @@ mod ctxt;
 pub mod driver;
 mod hlr;
 mod hlr_lowering;
+mod mlr;
 mod mlr_lowering;
 mod parse;
 mod typeck;

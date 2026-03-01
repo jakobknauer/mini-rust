@@ -13,12 +13,13 @@ use inkwell::{
 
 use crate::{
     ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_tys},
+    mlr,
     mlr_lowering::fns::MlrFnLowerer,
 };
 
-pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>) -> String {
+pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, mlr: &mlr::Mlr, fn_insts: Vec<mr_fns::FnInst>) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, fn_insts);
+    let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, mlr, fn_insts);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -27,11 +28,12 @@ pub fn mlr_to_llvm_ir(mr_ctxt: &mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>
     generator.iw_module.print_to_string().to_string()
 }
 
-struct MlrLowerer<'iw, 'mr> {
+struct MlrLowerer<'iw, 'mr, 'mlr> {
     iw_ctxt: &'iw IwContext,
     iw_module: Module<'iw>,
 
     mr_ctxt: &'mr mut mr_ctxt::Ctxt,
+    mlr: &'mlr mlr::Mlr,
 
     fn_insts: Vec<mr_fns::FnInst>,
 
@@ -41,14 +43,20 @@ struct MlrLowerer<'iw, 'mr> {
     enums: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
 }
 
-impl<'iw, 'mr> MlrLowerer<'iw, 'mr> {
-    fn new(iw_ctxt: &'iw IwContext, mr_ctxt: &'mr mut mr_ctxt::Ctxt, fn_insts: Vec<mr_fns::FnInst>) -> Self {
+impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
+    fn new(
+        iw_ctxt: &'iw IwContext,
+        mr_ctxt: &'mr mut mr_ctxt::Ctxt,
+        mlr: &'mlr mlr::Mlr,
+        fn_insts: Vec<mr_fns::FnInst>,
+    ) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         MlrLowerer {
             iw_ctxt,
             iw_module,
             fn_insts,
             mr_ctxt,
+            mlr,
             types: HashMap::new(),
             functions: HashMap::new(),
             structs: Vec::new(),

@@ -1,4 +1,4 @@
-use crate::{ctxt::mlr, ctxt::mlr::builder::MlrBuilder};
+use crate::mlr::{self, builder::MlrBuilder};
 
 pub(super) struct LoweredExpr(LoweredExprKind);
 
@@ -27,7 +27,7 @@ impl From<mlr::Op> for LoweredExpr {
 }
 
 impl LoweredExpr {
-    pub(super) fn into_val(self, builder: &mut MlrBuilder<'_>) -> mlr::Val {
+    pub(super) fn into_val(self, builder: &mut MlrBuilder<'_, '_>) -> mlr::Val {
         match self.0 {
             LoweredExprKind::Val(val) => val,
             LoweredExprKind::Place(place) => builder.copy_val(place),
@@ -35,7 +35,7 @@ impl LoweredExpr {
         }
     }
 
-    pub(super) fn into_place(self, builder: &mut MlrBuilder<'_>) -> mlr::Place {
+    pub(super) fn into_place(self, builder: &mut MlrBuilder<'_, '_>) -> mlr::Place {
         match self.0 {
             LoweredExprKind::Place(place) => place,
             LoweredExprKind::Val(val) => builder.store_val(val),
@@ -46,7 +46,7 @@ impl LoweredExpr {
         }
     }
 
-    pub(super) fn into_op(self, builder: &mut MlrBuilder<'_>) -> mlr::Op {
+    pub(super) fn into_op(self, builder: &mut MlrBuilder<'_, '_>) -> mlr::Op {
         match self.0 {
             LoweredExprKind::Op(op) => op,
             LoweredExprKind::Place(place) => builder.insert_copy_op(place),

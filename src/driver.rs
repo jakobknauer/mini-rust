@@ -15,7 +15,7 @@ use crate::{
         ty,
     },
     driver::{err::print_impl_check_error, impl_check::check_trait_impls},
-    hlr, hlr_lowering, mlr_lowering, parse, typeck,
+    hlr, hlr_lowering, mlr, mlr_lowering, parse, typeck,
     util::print,
 };
 
@@ -34,6 +34,7 @@ pub fn compile(
 ) -> Result<(), String> {
     let mut driver = Driver {
         ctxt: ctxt::Ctxt::default(),
+        mlr: mlr::Mlr::default(),
         ast_meta: AstMeta::default(),
         sources: sources.to_vec(),
         print_pretty: &print_pretty,
@@ -46,6 +47,7 @@ pub fn compile(
 
 struct Driver<'a> {
     ctxt: ctxt::Ctxt,
+    mlr: mlr::Mlr,
     sources: Vec<String>,
     print_pretty: &'a dyn Fn(&str),
     print_detail: &'a dyn Fn(&str),
@@ -123,7 +125,7 @@ impl<'a> Driver<'a> {
             .map_err(|_| "Error monomorphizing functions")?;
 
         self.print_pretty("Building LLVM IR from MLR");
-        let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, fn_insts.into_iter().collect());
+        let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, &self.mlr, fn_insts.into_iter().collect());
 
         if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
             self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -541,7 +543,7 @@ impl<'a> Driver<'a> {
 
     fn hlr_fns_to_mlr<'hlr>(&mut self, hlr_fns: &[hlr::Fn<'hlr>], typings: &[typeck::HlrTyping]) {
         for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
-            hlr_lowering::hlr_to_mlr(&mut self.ctxt, hlr_fn, typing);
+            hlr_lowering::hlr_to_mlr(&mut self.ctxt, &mut self.mlr, hlr_fn, typing);
         }
     }
 
@@ -564,7 +566,7 @@ impl<'a> Driver<'a> {
 
         for fn_ in self.ctxt.fns.get_all_fns() {
             if self.ctxt.fns.is_fn_defined(fn_) {
-                print::print_mlr(fn_, &self.ctxt, &mut file).map_err(|_| ())?;
+                print::print_mlr(fn_, &self.ctxt, &self.mlr, &mut file).map_err(|_| ())?;
             }
         }
 

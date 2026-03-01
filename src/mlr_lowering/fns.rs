@@ -9,10 +9,13 @@ use inkwell::{
     values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::ctxt::{self as mr_ctxt, fns as mr_fns, mlr, ty as mr_ty};
+use crate::{
+    ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_ty},
+    mlr,
+};
 
-pub struct MlrFnLowerer<'a, 'iw, 'mr> {
-    parent: &'a mut super::MlrLowerer<'iw, 'mr>,
+pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
+    parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
     fn_inst: mr_fns::FnInst,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
@@ -33,8 +36,8 @@ impl From<BuilderError> for MlrLoweringError {
 
 pub type MlrLoweringResult<T> = Result<T, MlrLoweringError>;
 
-impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
-    pub fn new(parent: &'a mut super::MlrLowerer<'iw, 'mr>, fn_inst: mr_fns::FnInst) -> Option<Self> {
+impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
+    pub fn new(parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>, fn_inst: mr_fns::FnInst) -> Option<Self> {
         if !parent.mr_ctxt.fns.is_fn_defined(fn_inst.fn_) {
             return None;
         }
@@ -71,8 +74,8 @@ impl<'a, 'iw, 'mr> MlrFnLowerer<'a, 'iw, 'mr> {
         self.parent.mr_ctxt
     }
 
-    fn mlr(&self) -> &mr_ctxt::mlr::Mlr {
-        &self.mr_ctxt().mlr
+    fn mlr(&self) -> &mlr::Mlr {
+        self.parent.mlr
     }
 
     fn tys(&self) -> &mr_ctxt::TyReg {
