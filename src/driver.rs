@@ -59,11 +59,11 @@ struct Driver<'a, 'ast, 'hlr, 'mlr> {
 
 #[derive(Default)]
 struct AstMeta {
-    pub fn_ids: HashMap<usize, fns::Fn>,
-    pub struct_ids: HashMap<usize, ty::Struct>,
-    pub enum_ids: HashMap<usize, ty::Enum>,
-    pub trait_ids: HashMap<usize, traits::Trait>,
-    pub impl_ids: HashMap<usize, impls::Impl>,
+    fn_ids: HashMap<ast::FreeFnId, fns::Fn>,
+    struct_ids: HashMap<ast::StructId, ty::Struct>,
+    enum_ids: HashMap<ast::EnumId, ty::Enum>,
+    trait_ids: HashMap<ast::TraitId, traits::Trait>,
+    impl_ids: HashMap<ast::ImplId, impls::Impl>,
 }
 
 impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
@@ -135,14 +135,14 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     fn register_tys(&mut self) -> Result<(), ()> {
         self.ctxt.tys.register_primitive_tys()?;
 
-        for (idx, struct_) in self.ast.structs().iter().enumerate() {
+        for struct_ in self.ast.structs().iter() {
             let ty = self.ctxt.tys.register_struct(&struct_.name, &struct_.gen_params)?;
-            self.ast_meta.struct_ids.insert(idx, ty);
+            self.ast_meta.struct_ids.insert(struct_.1, ty);
         }
 
-        for (idx, enum_) in self.ast.enums().iter().enumerate() {
+        for enum_ in self.ast.enums().iter() {
             let ty = self.ctxt.tys.register_enum(&enum_.name, &enum_.gen_params)?;
-            self.ast_meta.enum_ids.insert(idx, ty);
+            self.ast_meta.enum_ids.insert(enum_.1, ty);
 
             for variant in &enum_.variants {
                 let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
@@ -161,12 +161,12 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     }
 
     fn define_tys(&mut self) -> Result<(), ()> {
-        for (idx, struct_) in self.ast.structs().iter().enumerate() {
-            self.set_struct_fields(self.ast_meta.struct_ids[&idx], &struct_.fields)?
+        for struct_ in self.ast.structs().iter() {
+            self.set_struct_fields(self.ast_meta.struct_ids[&struct_.1], &struct_.fields)?
         }
 
-        for (idx, ast_enum) in self.ast.enums().iter().enumerate() {
-            let enum_ = self.ast_meta.enum_ids[&idx];
+        for ast_enum in self.ast.enums().iter() {
+            let enum_ = self.ast_meta.enum_ids[&ast_enum.1];
             let variants = self.ctxt.tys.get_enum_def(enum_).ok_or(())?.variants.clone();
 
             for (ast_variant, variant) in ast_enum.variants.iter().zip(variants) {
@@ -204,7 +204,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     }
 
     fn register_traits(&mut self) -> Result<(), ()> {
-        for (idx, ast_trait) in self.ast.traits().iter().enumerate() {
+        for ast_trait in self.ast.traits().iter() {
             let trait_gen_params: Vec<_> = ast_trait
                 .gen_params
                 .iter()
@@ -215,7 +215,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 .ctxt
                 .traits
                 .register_trait(&ast_trait.name, trait_gen_params.clone());
-            self.ast_meta.trait_ids.insert(idx, trait_);
+            self.ast_meta.trait_ids.insert(ast_trait.1, trait_);
 
             for assoc_ty in &ast_trait.assoc_ty_names {
                 self.ctxt.traits.register_assoc_ty(trait_, assoc_ty);
@@ -228,7 +228,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     fn register_impls(&mut self) -> Result<(), ()> {
         stdlib::register_impl_for_ptr(&mut self.ctxt)?;
 
-        for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
+        for ast_impl in self.ast.impls().iter() {
             let gen_params: Vec<_> = ast_impl
                 .gen_params
                 .iter()
@@ -263,7 +263,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 .transpose()?;
 
             let impl_ = self.ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst);
-            self.ast_meta.impl_ids.insert(idx, impl_);
+            self.ast_meta.impl_ids.insert(ast_impl.1, impl_);
 
             for assoc_ty in &ast_impl.assoc_tys {
                 let ty = self
@@ -284,9 +284,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     fn register_free_fns(&mut self) -> Result<(), ()> {
         stdlib::register_fns(&mut self.ctxt)?;
 
-        for (idx, &function) in self.ast.free_fns().iter().enumerate() {
+        for &(fn_id, function) in self.ast.free_fns().iter() {
             let fn_ = self.register_function(function, None, None, Vec::new())?;
-            self.ast_meta.fn_ids.insert(idx, fn_);
+            self.ast_meta.fn_ids.insert(fn_id, fn_);
         }
 
         Ok(())
@@ -405,8 +405,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     }
 
     fn register_trait_methods(&mut self) -> Result<(), ()> {
-        for (idx, ast_trait) in self.ast.traits().iter().enumerate() {
-            let trait_ = self.ast_meta.trait_ids[&idx];
+        for ast_trait in self.ast.traits().iter() {
+            let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
             let self_type = self.ctxt.tys.trait_self(trait_);
             let trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.clone();
 
@@ -458,8 +458,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     }
 
     fn register_impl_methods(&mut self) -> Result<(), ()> {
-        for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
-            let impl_ = self.ast_meta.impl_ids[&idx];
+        for ast_impl in self.ast.impls().iter() {
+            let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
             let impl_def = self.ctxt.impls.get_impl_def(impl_);
             let ty = impl_def.ty;
             let gen_params = impl_def.gen_params.clone();
@@ -476,15 +476,15 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
     fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
         let mut hlr_fns = Vec::new();
-        for (idx, &ast_fn) in self.ast.free_fns().iter().enumerate() {
+        for &(fn_id, ast_fn) in self.ast.free_fns().iter() {
             let Some(body) = ast_fn.body else { continue };
-            let target_fn = self.ast_meta.fn_ids[&idx];
+            let target_fn = self.ast_meta.fn_ids[&fn_id];
             let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, self.hlr)
                 .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
             hlr_fns.push(hlr_fn);
         }
-        for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
-            let impl_ = self.ast_meta.impl_ids[&idx];
+        for ast_impl in self.ast.impls().iter() {
+            let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
             let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
             for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
                 let Some(body) = ast_mthd.body else { continue };

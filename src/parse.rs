@@ -306,7 +306,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(requirement)
     }
 
-    fn parse_struct(&mut self) -> Result<Struct<'ast>, ParserErr> {
+    fn parse_struct(&mut self) -> Result<StructDef<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Struct)?;
         let name = self.expect_identifier()?;
         let gen_params = self.parse_gen_params()?;
@@ -315,7 +315,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let fields = self.parse_struct_fields()?;
         self.expect_token(Token::RBrace)?;
 
-        Ok(Struct {
+        Ok(StructDef {
             name,
             gen_params,
             fields,
@@ -341,7 +341,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(StructField { name, ty })
     }
 
-    fn parse_enum(&mut self) -> Result<Enum<'ast>, ParserErr> {
+    fn parse_enum(&mut self) -> Result<EnumDef<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Enum)?;
         let name = self.expect_identifier()?;
         let gen_params = self.parse_gen_params()?;
@@ -350,7 +350,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let variants = self.parse_enum_variants()?;
         self.expect_token(Token::RBrace)?;
 
-        Ok(Enum {
+        Ok(EnumDef {
             name,
             gen_params,
             variants,
@@ -381,7 +381,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(EnumVariant { name, fields })
     }
 
-    fn parse_impl(&mut self) -> Result<Impl<'ast>, ParserErr> {
+    fn parse_impl(&mut self) -> Result<ImplDef<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Impl)?;
         let gen_params = self.parse_gen_params()?;
         let ty = self.parse_ty_annot()?;
@@ -431,7 +431,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         }
         self.expect_token(Token::RBrace)?;
 
-        Ok(Impl {
+        Ok(ImplDef {
             gen_params,
             trait_annot,
             ty,
@@ -440,7 +440,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         })
     }
 
-    fn parse_trait(&mut self) -> Result<Trait<'ast>, ParserErr> {
+    fn parse_trait(&mut self) -> Result<TraitDef<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Trait)?;
         let name = self.expect_identifier()?;
 
@@ -471,7 +471,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         }
         self.expect_token(Token::RBrace)?;
 
-        Ok(Trait {
+        Ok(TraitDef {
             name,
             gen_params,
             mthds,

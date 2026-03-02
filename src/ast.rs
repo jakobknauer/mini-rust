@@ -1,17 +1,39 @@
 use std::{
     cell::{Ref, RefCell},
     marker::PhantomData,
+    ops::Deref,
 };
 
 pub mod builder;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct StructId(pub usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct EnumId(pub usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct TraitId(pub usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct ImplId(pub usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct FreeFnId(pub usize);
+
 #[derive(Debug, Default)]
 pub struct Ast<'ast> {
-    free_fns: RefCell<Vec<Fn<'ast>>>,
+    free_fns: RefCell<Vec<(FreeFnId, Fn<'ast>)>>,
     structs: RefCell<Vec<&'ast Struct<'ast>>>,
     enums: RefCell<Vec<&'ast Enum<'ast>>>,
     impls: RefCell<Vec<&'ast Impl<'ast>>>,
     traits: RefCell<Vec<&'ast Trait<'ast>>>,
+
+    next_struct_id: RefCell<StructId>,
+    next_enum_id: RefCell<EnumId>,
+    next_trait_id: RefCell<TraitId>,
+    next_impl_id: RefCell<ImplId>,
+    next_free_fn_id: RefCell<FreeFnId>,
 
     arena: bumpalo::Bump,
     _marker: PhantomData<&'ast ()>,
@@ -46,6 +68,31 @@ impl<'ast> Ast<'ast> {
         self.arena.alloc(fn_def)
     }
 
+    pub fn add_struct(&'ast self, def: StructDef<'ast>) {
+        let id = self.next_struct_id.replace_with(|StructId(n)| StructId(*n + 1));
+        self.structs.borrow_mut().push(self.arena.alloc(Struct(def, id)));
+    }
+
+    pub fn add_enum(&'ast self, def: EnumDef<'ast>) {
+        let id = self.next_enum_id.replace_with(|EnumId(n)| EnumId(*n + 1));
+        self.enums.borrow_mut().push(self.arena.alloc(Enum(def, id)));
+    }
+
+    pub fn add_trait(&'ast self, def: TraitDef<'ast>) {
+        let id = self.next_trait_id.replace_with(|TraitId(n)| TraitId(*n + 1));
+        self.traits.borrow_mut().push(self.arena.alloc(Trait(def, id)));
+    }
+
+    pub fn add_impl(&'ast self, def: ImplDef<'ast>) {
+        let id = self.next_impl_id.replace_with(|ImplId(n)| ImplId(*n + 1));
+        self.impls.borrow_mut().push(self.arena.alloc(Impl(def, id)));
+    }
+
+    pub fn add_free_fn(&self, fn_: Fn<'ast>) {
+        let id = self.next_free_fn_id.replace_with(|FreeFnId(n)| FreeFnId(*n + 1));
+        self.free_fns.borrow_mut().push((id, fn_));
+    }
+
     pub fn structs(&self) -> Ref<'_, [&'ast Struct<'ast>]> {
         Ref::map(self.structs.borrow(), |v| v.as_slice())
     }
@@ -62,7 +109,7 @@ impl<'ast> Ast<'ast> {
         Ref::map(self.traits.borrow(), |v| v.as_slice())
     }
 
-    pub fn free_fns(&self) -> Ref<'_, [Fn<'ast>]> {
+    pub fn free_fns(&self) -> Ref<'_, [(FreeFnId, Fn<'ast>)]> {
         Ref::map(self.free_fns.borrow(), |v| v.as_slice())
     }
 }
@@ -106,10 +153,20 @@ pub enum ConstraintRequirement<'ast> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Struct<'ast> {
+pub struct StructDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
     pub fields: Vec<StructField<'ast>>,
+}
+
+#[derive(Debug)]
+pub struct Struct<'ast>(pub StructDef<'ast>, pub StructId);
+
+impl<'ast> Deref for Struct<'ast> {
+    type Target = StructDef<'ast>;
+    fn deref(&self) -> &StructDef<'ast> {
+        &self.0
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -119,10 +176,20 @@ pub struct StructField<'ast> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Enum<'ast> {
+pub struct EnumDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
     pub variants: Vec<EnumVariant<'ast>>,
+}
+
+#[derive(Debug)]
+pub struct Enum<'ast>(pub EnumDef<'ast>, pub EnumId);
+
+impl<'ast> Deref for Enum<'ast> {
+    type Target = EnumDef<'ast>;
+    fn deref(&self) -> &EnumDef<'ast> {
+        &self.0
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -132,12 +199,22 @@ pub struct EnumVariant<'ast> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Impl<'ast> {
+pub struct ImplDef<'ast> {
     pub gen_params: Vec<String>,
     pub trait_annot: Option<TraitAnnot<'ast>>,
     pub ty: TyAnnot<'ast>,
     pub mthds: Vec<Fn<'ast>>,
     pub assoc_tys: Vec<AssocTy<'ast>>,
+}
+
+#[derive(Debug)]
+pub struct Impl<'ast>(pub ImplDef<'ast>, pub ImplId);
+
+impl<'ast> Deref for Impl<'ast> {
+    type Target = ImplDef<'ast>;
+    fn deref(&self) -> &ImplDef<'ast> {
+        &self.0
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -153,11 +230,21 @@ pub struct TraitAnnot<'ast> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Trait<'ast> {
+pub struct TraitDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
     pub mthds: Vec<Fn<'ast>>,
     pub assoc_ty_names: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct Trait<'ast>(pub TraitDef<'ast>, pub TraitId);
+
+impl<'ast> Deref for Trait<'ast> {
+    type Target = TraitDef<'ast>;
+    fn deref(&self) -> &TraitDef<'ast> {
+        &self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

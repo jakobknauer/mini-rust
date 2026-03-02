@@ -15,27 +15,23 @@ impl<'ast> AstBuilder<'ast> {
     }
 
     pub fn add_free_fn(&self, fn_: Fn<'ast>) {
-        self.ast.free_fns.borrow_mut().push(fn_);
+        self.ast.add_free_fn(fn_);
     }
 
-    pub fn add_struct(&self, struct_: Struct<'ast>) {
-        let struct_ = self.ast.arena.alloc(struct_);
-        self.ast.structs.borrow_mut().push(struct_);
+    pub fn add_struct(&self, def: StructDef<'ast>) {
+        self.ast.add_struct(def);
     }
 
-    pub fn add_enum(&self, enum_: Enum<'ast>) {
-        let enum_ = self.ast.arena.alloc(enum_);
-        self.ast.enums.borrow_mut().push(enum_);
+    pub fn add_enum(&self, def: EnumDef<'ast>) {
+        self.ast.add_enum(def);
     }
 
-    pub fn add_impl(&self, impl_: Impl<'ast>) {
-        let impl_ = self.ast.arena.alloc(impl_);
-        self.ast.impls.borrow_mut().push(impl_);
+    pub fn add_impl(&self, def: ImplDef<'ast>) {
+        self.ast.add_impl(def);
     }
 
-    pub fn add_trait(&self, trait_: Trait<'ast>) {
-        let trait_ = self.ast.arena.alloc(trait_);
-        self.ast.traits.borrow_mut().push(trait_);
+    pub fn add_trait(&self, def: TraitDef<'ast>) {
+        self.ast.add_trait(def);
     }
 }
 
