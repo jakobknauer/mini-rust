@@ -9,11 +9,7 @@ use std::{
 
 use crate::{
     ast, ast_lowering,
-    ctxt::{
-        self, fns, impls,
-        traits::{self, TraitInst},
-        ty,
-    },
+    ctxt::{self, fns, impls, traits, ty},
     driver::{err::print_impl_check_error, impl_check::check_trait_impls},
     hlr, hlr_lowering, mlr, mlr_lowering, parse, typeck,
     util::print,
@@ -83,7 +79,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         self.register_traits().map_err(|_| "Error registering traits")?;
         self.register_impls().map_err(|_| "Error registering impls")?;
 
-        self.register_functions().map_err(|_| "Error registering functions")?;
+        self.register_free_fns().map_err(|_| "Error registering functions")?;
         self.register_trait_methods()
             .map_err(|_| "Error registering trait methods")?;
         self.register_impl_methods()
@@ -91,37 +87,24 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
 
-        self.print_pretty("Lowering free functions: AST to HLR");
-        let free_hlr_fns = self.free_fns_ast_lowering()?;
-        self.print_pretty("Lowering free functions: type checking");
-        let free_typings = self.typeck_hlr_fns(&free_hlr_fns)?;
-        self.print_pretty("Lowering free functions: HLR to MLR");
-        let free_fn_mlrs = self.hlr_fns_to_mlr(&free_hlr_fns, &free_typings);
+        self.print_pretty("Lowering AST to HLR");
+        let hlr_fns = self.ast_lowering()?;
 
-        self.print_pretty("Lowering impl methods: AST to HLR");
-        let impl_hlr_fns = self.impl_fns_ast_lowering()?;
-        self.print_pretty("Lowering impl methods: type checking");
-        let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
-        self.print_pretty("Lowering impl methods: HLR to MLR");
-        let impl_fn_mlrs = self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
+        self.print_pretty("Type checking");
+        let hlr_typings = self.typeck(&hlr_fns)?;
 
-        let mut all_fn_mlrs = free_fn_mlrs;
-        all_fn_mlrs.extend(impl_fn_mlrs);
+        self.print_pretty("Lowering HLR to MLR");
+        let mlr_fns = self.hlr_lowering(&hlr_fns, &hlr_typings);
 
         if let Some(hlr_path) = self.output_paths.hlr {
             self.print_detail(&format!("Saving HLR to {}", hlr_path.display()));
-            self.print_hlr_functions(
-                hlr_path,
-                free_hlr_fns
-                    .iter()
-                    .zip(&free_typings)
-                    .chain(impl_hlr_fns.iter().zip(&impl_typings)),
-            )
-            .map_err(|_| "Error printing HLR")?;
+            self.print_hlr_functions(hlr_path, &hlr_fns, &hlr_typings)
+                .map_err(|_| "Error printing HLR")?;
         }
+
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
-            self.print_functions(mlr_path, &all_fn_mlrs)
+            self.print_functions(mlr_path, &mlr_fns)
                 .map_err(|_| "Error printing MLR")?;
         }
 
@@ -130,9 +113,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .monomorphize_functions()
             .map_err(|_| "Error monomorphizing functions")?;
 
-        self.print_pretty("Building LLVM IR from MLR");
-        let llvm_ir =
-            mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, self.mlr, &all_fn_mlrs, fn_insts.into_iter().collect());
+        self.print_pretty("Lowering MLR to LLVM IR");
+        let llvm_ir = self.mlr_lowering(&mlr_fns, fn_insts);
 
         if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
             self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -221,7 +203,85 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_functions(&mut self) -> Result<(), ()> {
+    fn register_traits(&mut self) -> Result<(), ()> {
+        for (idx, ast_trait) in self.ast.traits().iter().enumerate() {
+            let trait_gen_params: Vec<_> = ast_trait
+                .gen_params
+                .iter()
+                .map(|gp| self.ctxt.tys.register_gen_var(gp))
+                .collect();
+
+            let trait_ = self
+                .ctxt
+                .traits
+                .register_trait(&ast_trait.name, trait_gen_params.clone());
+            self.ast_meta.trait_ids.insert(idx, trait_);
+
+            for assoc_ty in &ast_trait.assoc_ty_names {
+                self.ctxt.traits.register_assoc_ty(trait_, assoc_ty);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn register_impls(&mut self) -> Result<(), ()> {
+        stdlib::register_impl_for_ptr(&mut self.ctxt)?;
+
+        for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
+            let gen_params: Vec<_> = ast_impl
+                .gen_params
+                .iter()
+                .map(|gp| self.ctxt.tys.register_gen_var(gp))
+                .collect();
+
+            let ty = self
+                .ctxt
+                .try_resolve_ast_ty_annot(ast_impl.ty, &gen_params, None)
+                .ok_or(())?;
+
+            let trait_inst = ast_impl
+                .trait_annot
+                .as_ref()
+                .map(|trait_annot| {
+                    let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
+
+                    let trait_args: Vec<_> = match &trait_annot.args {
+                        &Some(args) => args
+                            .iter()
+                            .map(|&arg| self.ctxt.try_resolve_ast_ty_annot(arg, &gen_params, None).ok_or(()))
+                            .collect::<Result<_, _>>()?,
+                        None => vec![],
+                    };
+
+                    let trait_inst = traits::TraitInst {
+                        trait_,
+                        gen_args: self.ctxt.tys.ty_slice(&trait_args),
+                    };
+                    Ok(trait_inst)
+                })
+                .transpose()?;
+
+            let impl_ = self.ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst);
+            self.ast_meta.impl_ids.insert(idx, impl_);
+
+            for assoc_ty in &ast_impl.assoc_tys {
+                let ty = self
+                    .ctxt
+                    .try_resolve_ast_ty_annot(assoc_ty.ty, &gen_params, None)
+                    .ok_or(())?;
+                let assoc_ty_idx = self
+                    .ctxt
+                    .traits
+                    .get_trait_assoc_ty_index(trait_inst.unwrap().trait_, &assoc_ty.name);
+                self.ctxt.impls.register_assoc_ty(impl_, assoc_ty_idx, ty);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn register_free_fns(&mut self) -> Result<(), ()> {
         stdlib::register_fns(&mut self.ctxt)?;
 
         for (idx, &function) in self.ast.free_fns().iter().enumerate() {
@@ -264,7 +324,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                                 .ok_or(())
                         })
                         .collect::<Result<_, _>>()?;
-                    let trait_inst = TraitInst {
+                    let trait_inst = traits::TraitInst {
                         trait_,
                         gen_args: self.ctxt.tys.ty_slice(&trait_args),
                     };
@@ -344,28 +404,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         }
     }
 
-    fn register_traits(&mut self) -> Result<(), ()> {
-        for (idx, ast_trait) in self.ast.traits().iter().enumerate() {
-            let trait_gen_params: Vec<_> = ast_trait
-                .gen_params
-                .iter()
-                .map(|gp| self.ctxt.tys.register_gen_var(gp))
-                .collect();
-
-            let trait_ = self
-                .ctxt
-                .traits
-                .register_trait(&ast_trait.name, trait_gen_params.clone());
-            self.ast_meta.trait_ids.insert(idx, trait_);
-
-            for assoc_ty in &ast_trait.assoc_ty_names {
-                self.ctxt.traits.register_assoc_ty(trait_, assoc_ty);
-            }
-        }
-
-        Ok(())
-    }
-
     fn register_trait_methods(&mut self) -> Result<(), ()> {
         for (idx, ast_trait) in self.ast.traits().iter().enumerate() {
             let trait_ = self.ast_meta.trait_ids[&idx];
@@ -419,62 +457,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_impls(&mut self) -> Result<(), ()> {
-        stdlib::register_impl_for_ptr(&mut self.ctxt)?;
-
-        for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
-            let gen_params: Vec<_> = ast_impl
-                .gen_params
-                .iter()
-                .map(|gp| self.ctxt.tys.register_gen_var(gp))
-                .collect();
-
-            let ty = self
-                .ctxt
-                .try_resolve_ast_ty_annot(ast_impl.ty, &gen_params, None)
-                .ok_or(())?;
-
-            let trait_inst = ast_impl
-                .trait_annot
-                .as_ref()
-                .map(|trait_annot| {
-                    let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
-
-                    let trait_args: Vec<_> = match &trait_annot.args {
-                        &Some(args) => args
-                            .iter()
-                            .map(|&arg| self.ctxt.try_resolve_ast_ty_annot(arg, &gen_params, None).ok_or(()))
-                            .collect::<Result<_, _>>()?,
-                        None => vec![],
-                    };
-
-                    let trait_inst = TraitInst {
-                        trait_,
-                        gen_args: self.ctxt.tys.ty_slice(&trait_args),
-                    };
-                    Ok(trait_inst)
-                })
-                .transpose()?;
-
-            let impl_ = self.ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst);
-            self.ast_meta.impl_ids.insert(idx, impl_);
-
-            for assoc_ty in &ast_impl.assoc_tys {
-                let ty = self
-                    .ctxt
-                    .try_resolve_ast_ty_annot(assoc_ty.ty, &gen_params, None)
-                    .ok_or(())?;
-                let assoc_ty_idx = self
-                    .ctxt
-                    .traits
-                    .get_trait_assoc_ty_index(trait_inst.unwrap().trait_, &assoc_ty.name);
-                self.ctxt.impls.register_assoc_ty(impl_, assoc_ty_idx, ty);
-            }
-        }
-
-        Ok(())
-    }
-
     fn register_impl_methods(&mut self) -> Result<(), ()> {
         for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
             let impl_ = self.ast_meta.impl_ids[&idx];
@@ -492,7 +474,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn free_fns_ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
+    fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
         let mut hlr_fns = Vec::new();
         for (idx, &ast_fn) in self.ast.free_fns().iter().enumerate() {
             let Some(body) = ast_fn.body else { continue };
@@ -501,11 +483,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
             hlr_fns.push(hlr_fn);
         }
-        Ok(hlr_fns)
-    }
-
-    fn impl_fns_ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
-        let mut hlr_fns = Vec::new();
         for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
             let impl_ = self.ast_meta.impl_ids[&idx];
             let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
@@ -519,37 +496,40 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(hlr_fns)
     }
 
-    fn typeck_hlr_fns(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<Vec<typeck::HlrTyping>, String> {
-        let mut typings = Vec::new();
-        for hlr_fn in hlr_fns {
-            let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
-            let typing =
-                typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|e| format!("failed to typeck {fn_name}: {e:?}"))?;
-            typings.push(typing);
-        }
-        Ok(typings)
+    fn typeck(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<HashMap<fns::Fn, typeck::HlrTyping>, String> {
+        hlr_fns
+            .iter()
+            .map(|hlr_fn| {
+                let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
+                let typing =
+                    typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|e| format!("failed to typeck {fn_name}: {e:?}"))?;
+                Ok((hlr_fn.fn_, typing))
+            })
+            .collect()
     }
 
-    fn hlr_fns_to_mlr(
+    fn hlr_lowering(
         &mut self,
         hlr_fns: &[hlr::Fn<'hlr>],
-        typings: &[typeck::HlrTyping],
+        typings: &HashMap<fns::Fn, typeck::HlrTyping>,
     ) -> HashMap<fns::Fn, mlr::Fn<'mlr>> {
-        let mut fn_mlrs = HashMap::new();
-        for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
-            fn_mlrs.extend(hlr_lowering::hlr_to_mlr(&mut self.ctxt, self.mlr, hlr_fn, typing));
-        }
-        fn_mlrs
+        hlr_fns
+            .iter()
+            .filter_map(|hlr_fn| typings.get(&hlr_fn.fn_).map(|typing| (hlr_fn, typing)))
+            .flat_map(|(hlr_fn, typing)| hlr_lowering::hlr_to_mlr(&mut self.ctxt, self.mlr, hlr_fn, typing))
+            .collect()
     }
 
     fn print_hlr_functions(
         &self,
         path: &Path,
-        fns: impl Iterator<Item = (&'hlr hlr::Fn<'hlr>, &'hlr typeck::HlrTyping)>,
+        hlr_fns: &[hlr::Fn<'hlr>],
+        typings: &HashMap<fns::Fn, typeck::HlrTyping>,
     ) -> Result<(), ()> {
         let mut file = std::fs::File::create(path).map_err(|_| ())?;
-        for (hlr_fn, typing) in fns {
-            print::print_hlr(hlr_fn, &self.ctxt, Some(typing), &mut file).map_err(|_| ())?;
+        for hlr_fn in hlr_fns {
+            let typing = typings.get(&hlr_fn.fn_);
+            print::print_hlr(hlr_fn, &self.ctxt, typing, &mut file).map_err(|_| ())?;
             use std::io::Write;
             writeln!(file).map_err(|_| ())?;
         }
@@ -605,5 +585,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         }
 
         Ok(closed)
+    }
+
+    fn mlr_lowering(&mut self, fn_mlrs: &HashMap<fns::Fn, mlr::Fn<'mlr>>, fn_insts: HashSet<fns::FnInst>) -> String {
+        mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, self.mlr, fn_mlrs, fn_insts.into_iter().collect())
     }
 }
