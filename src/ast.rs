@@ -116,7 +116,7 @@ impl<'ast> Ast<'ast> {
 
 pub type Fn<'ast> = &'ast FnDef<'ast>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FnDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
@@ -127,20 +127,20 @@ pub struct FnDef<'ast> {
     pub body: Option<Block<'ast>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Param<'ast> {
     Regular { name: String, ty: TyAnnot<'ast> },
     Receiver,
     ReceiverByRef,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Constraint<'ast> {
     pub subject: String,
     pub requirement: ConstraintRequirement<'ast>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum ConstraintRequirement<'ast> {
     Trait {
         trait_name: String,
@@ -152,7 +152,7 @@ pub enum ConstraintRequirement<'ast> {
     },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct StructDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
@@ -169,13 +169,13 @@ impl<'ast> Deref for Struct<'ast> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct StructField<'ast> {
     pub name: String,
     pub ty: TyAnnot<'ast>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct EnumDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
@@ -192,13 +192,13 @@ impl<'ast> Deref for Enum<'ast> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct EnumVariant<'ast> {
     pub name: String,
     pub fields: Vec<StructField<'ast>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ImplDef<'ast> {
     pub gen_params: Vec<String>,
     pub trait_annot: Option<TraitAnnot<'ast>>,
@@ -217,19 +217,19 @@ impl<'ast> Deref for Impl<'ast> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct AssocTy<'ast> {
     pub name: String,
     pub ty: TyAnnot<'ast>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TraitAnnot<'ast> {
     pub name: String,
     pub args: Option<TyAnnotSlice<'ast>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TraitDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
@@ -247,25 +247,25 @@ impl<'ast> Deref for Trait<'ast> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct Block<'ast> {
     pub stmts: StmtSlice<'ast>,
     pub return_expr: Option<Expr<'ast>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Path<'ast> {
     pub segments: Vec<PathSegment<'ast>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct QualifiedPath<'ast> {
     pub ty: TyAnnot<'ast>,
     pub trait_: Option<TraitAnnot<'ast>>,
     pub path: Path<'ast>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct PathSegment<'ast> {
     pub ident: String,
     pub args: Option<TyAnnotSlice<'ast>>,
@@ -275,7 +275,7 @@ pub struct PathSegment<'ast> {
 pub type Stmt<'ast> = &'ast StmtKind<'ast>;
 pub type StmtSlice<'ast> = &'ast [Stmt<'ast>];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum StmtKind<'ast> {
     Let {
         name: String,
@@ -290,7 +290,7 @@ pub enum StmtKind<'ast> {
 pub type Expr<'ast> = &'ast ExprKind<'ast>;
 pub type ExprSlice<'ast> = &'ast [Expr<'ast>];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum ExprKind<'ast> {
     Lit(Lit),
     Path(Path<'ast>),
@@ -361,19 +361,19 @@ pub enum ExprKind<'ast> {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum FieldDescriptor<'ast> {
     Named(PathSegment<'ast>),
     Indexed(usize),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ClosureParam<'ast> {
     pub name: String,
     pub ty: Option<TyAnnot<'ast>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Lit {
     Int(i64),
     Bool(bool),
@@ -381,7 +381,7 @@ pub enum Lit {
     CString(Vec<u8>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -400,13 +400,13 @@ pub enum BinaryOperator {
     LogicalOr,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum UnaryOperator {
     Not,
     Negative,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct MatchArm<'ast> {
     pub pattern: Pattern<'ast>,
     pub value: Expr<'ast>,
@@ -414,13 +414,13 @@ pub struct MatchArm<'ast> {
 
 type Pattern<'ast> = VariantPattern<'ast>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct VariantPattern<'ast> {
     pub variant: Path<'ast>,
     pub fields: Vec<VariantPatternField>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct VariantPatternField {
     pub field_name: String,
     pub binding_name: String,
@@ -429,7 +429,7 @@ pub struct VariantPatternField {
 pub type TyAnnot<'ast> = &'ast TyAnnotKind<'ast>;
 pub type TyAnnotSlice<'ast> = &'ast [TyAnnot<'ast>];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum TyAnnotKind<'ast> {
     Path(Path<'ast>),
     Tuple(TyAnnotSlice<'ast>),
