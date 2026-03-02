@@ -16,7 +16,7 @@ use crate::{
 
 pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
-    fn_mlr: &'mlr mlr::Fn<'mlr>,
+    fn_mlr: &'mr mlr::Fn<'mlr>,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,

@@ -20,7 +20,7 @@ use crate::{
 pub fn mlr_to_llvm_ir<'mlr>(
     mr_ctxt: &mut mr_ctxt::Ctxt,
     mlr: &'mlr mlr::Mlr<'mlr>,
-    fn_mlrs: &'mlr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+    fn_mlrs: &HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
     fn_insts: Vec<mr_fns::FnInst>,
 ) -> String {
     let iw_ctxt = IwContext::create();
@@ -39,7 +39,7 @@ struct MlrLowerer<'iw, 'mr, 'mlr> {
 
     mr_ctxt: &'mr mut mr_ctxt::Ctxt,
     mlr: &'mlr mlr::Mlr<'mlr>,
-    fn_mlrs: &'mlr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+    fn_mlrs: &'mr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
 
     fn_insts: Vec<mr_fns::FnInst>,
 
@@ -54,7 +54,7 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
         iw_ctxt: &'iw IwContext,
         mr_ctxt: &'mr mut mr_ctxt::Ctxt,
         mlr: &'mlr mlr::Mlr<'mlr>,
-        fn_mlrs: &'mlr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+        fn_mlrs: &'mr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
         fn_insts: Vec<mr_fns::FnInst>,
     ) -> Self {
         let iw_module = iw_ctxt.create_module("test");

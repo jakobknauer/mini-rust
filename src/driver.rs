@@ -41,12 +41,14 @@ pub fn compile(
         ctxt: ctxt::Ctxt::default(),
         ast: &ast::Ast::default(),
         ast_meta: AstMeta::default(),
+        hlr: &hlr::Hlr::default(),
+        mlr: &mlr::Mlr::default(),
     };
 
     driver.compile()
 }
 
-struct Driver<'a, 'ast> {
+struct Driver<'a, 'ast, 'hlr, 'mlr> {
     sources: Vec<String>,
     print_pretty: &'a dyn Fn(&str),
     print_detail: &'a dyn Fn(&str),
@@ -55,6 +57,8 @@ struct Driver<'a, 'ast> {
     ctxt: ctxt::Ctxt,
     ast: &'ast ast::Ast<'ast>,
     ast_meta: AstMeta,
+    hlr: &'hlr hlr::Hlr<'hlr>,
+    mlr: &'mlr mlr::Mlr<'mlr>,
 }
 
 #[derive(Default)]
@@ -66,7 +70,7 @@ struct AstMeta {
     pub impl_ids: HashMap<usize, impls::Impl>,
 }
 
-impl<'a, 'ast> Driver<'a, 'ast> {
+impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     pub fn compile(&mut self) -> Result<(), String> {
         self.print_pretty("Building AST from source");
         for source in &self.sources {
@@ -87,22 +91,19 @@ impl<'a, 'ast> Driver<'a, 'ast> {
 
         check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
 
-        let hlr = hlr::Hlr::new();
-        let mlr = mlr::Mlr::default();
-
         self.print_pretty("Lowering free functions: AST to HLR");
-        let free_hlr_fns = self.free_fns_ast_lowering(&hlr)?;
+        let free_hlr_fns = self.free_fns_ast_lowering()?;
         self.print_pretty("Lowering free functions: type checking");
         let free_typings = self.typeck_hlr_fns(&free_hlr_fns)?;
         self.print_pretty("Lowering free functions: HLR to MLR");
-        let free_fn_mlrs = self.hlr_fns_to_mlr(&mlr, &free_hlr_fns, &free_typings);
+        let free_fn_mlrs = self.hlr_fns_to_mlr(&free_hlr_fns, &free_typings);
 
         self.print_pretty("Lowering impl methods: AST to HLR");
-        let impl_hlr_fns = self.impl_fns_ast_lowering(&hlr)?;
+        let impl_hlr_fns = self.impl_fns_ast_lowering()?;
         self.print_pretty("Lowering impl methods: type checking");
         let impl_typings = self.typeck_hlr_fns(&impl_hlr_fns)?;
         self.print_pretty("Lowering impl methods: HLR to MLR");
-        let impl_fn_mlrs = self.hlr_fns_to_mlr(&mlr, &impl_hlr_fns, &impl_typings);
+        let impl_fn_mlrs = self.hlr_fns_to_mlr(&impl_hlr_fns, &impl_typings);
 
         let mut all_fn_mlrs = free_fn_mlrs;
         all_fn_mlrs.extend(impl_fn_mlrs);
@@ -120,7 +121,7 @@ impl<'a, 'ast> Driver<'a, 'ast> {
         }
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
-            self.print_functions(mlr_path, &mlr, &all_fn_mlrs)
+            self.print_functions(mlr_path, &all_fn_mlrs)
                 .map_err(|_| "Error printing MLR")?;
         }
 
@@ -130,7 +131,8 @@ impl<'a, 'ast> Driver<'a, 'ast> {
             .map_err(|_| "Error monomorphizing functions")?;
 
         self.print_pretty("Building LLVM IR from MLR");
-        let llvm_ir = mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, &mlr, &all_fn_mlrs, fn_insts.into_iter().collect());
+        let llvm_ir =
+            mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, self.mlr, &all_fn_mlrs, fn_insts.into_iter().collect());
 
         if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
             self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -490,26 +492,26 @@ impl<'a, 'ast> Driver<'a, 'ast> {
         Ok(())
     }
 
-    fn free_fns_ast_lowering<'hlr>(&self, hlr: &'hlr hlr::Hlr<'hlr>) -> Result<Vec<hlr::Fn<'hlr>>, String> {
+    fn free_fns_ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
         let mut hlr_fns = Vec::new();
         for (idx, &ast_fn) in self.ast.free_fns().iter().enumerate() {
             let Some(body) = ast_fn.body else { continue };
             let target_fn = self.ast_meta.fn_ids[&idx];
-            let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, hlr)
+            let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, self.hlr)
                 .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
             hlr_fns.push(hlr_fn);
         }
         Ok(hlr_fns)
     }
 
-    fn impl_fns_ast_lowering<'hlr>(&self, hlr: &'hlr hlr::Hlr<'hlr>) -> Result<Vec<hlr::Fn<'hlr>>, String> {
+    fn impl_fns_ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
         let mut hlr_fns = Vec::new();
         for (idx, ast_impl) in self.ast.impls().iter().enumerate() {
             let impl_ = self.ast_meta.impl_ids[&idx];
             let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
             for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
                 let Some(body) = ast_mthd.body else { continue };
-                let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, hlr)
+                let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, self.hlr)
                     .map_err(|_| format!("failed to lower {} to HLR", ast_mthd.name))?;
                 hlr_fns.push(hlr_fn);
             }
@@ -517,7 +519,7 @@ impl<'a, 'ast> Driver<'a, 'ast> {
         Ok(hlr_fns)
     }
 
-    fn typeck_hlr_fns<'hlr>(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<Vec<typeck::HlrTyping>, String> {
+    fn typeck_hlr_fns(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<Vec<typeck::HlrTyping>, String> {
         let mut typings = Vec::new();
         for hlr_fn in hlr_fns {
             let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
@@ -528,20 +530,19 @@ impl<'a, 'ast> Driver<'a, 'ast> {
         Ok(typings)
     }
 
-    fn hlr_fns_to_mlr<'hlr, 'mlr>(
+    fn hlr_fns_to_mlr(
         &mut self,
-        mlr: &'mlr mlr::Mlr<'mlr>,
-        hlr_fns: &'hlr [hlr::Fn<'hlr>],
-        typings: &'hlr [typeck::HlrTyping],
+        hlr_fns: &[hlr::Fn<'hlr>],
+        typings: &[typeck::HlrTyping],
     ) -> HashMap<fns::Fn, mlr::Fn<'mlr>> {
         let mut fn_mlrs = HashMap::new();
         for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
-            fn_mlrs.extend(hlr_lowering::hlr_to_mlr(&mut self.ctxt, mlr, hlr_fn, typing));
+            fn_mlrs.extend(hlr_lowering::hlr_to_mlr(&mut self.ctxt, self.mlr, hlr_fn, typing));
         }
         fn_mlrs
     }
 
-    fn print_hlr_functions<'hlr>(
+    fn print_hlr_functions(
         &self,
         path: &Path,
         fns: impl Iterator<Item = (&'hlr hlr::Fn<'hlr>, &'hlr typeck::HlrTyping)>,
@@ -555,17 +556,12 @@ impl<'a, 'ast> Driver<'a, 'ast> {
         Ok(())
     }
 
-    fn print_functions<'mlr>(
-        &self,
-        path: &Path,
-        mlr: &'mlr mlr::Mlr<'mlr>,
-        fn_mlrs: &'mlr HashMap<fns::Fn, mlr::Fn<'mlr>>,
-    ) -> Result<(), ()> {
+    fn print_functions(&self, path: &Path, fn_mlrs: &HashMap<fns::Fn, mlr::Fn<'mlr>>) -> Result<(), ()> {
         let mut file = std::fs::File::create(path).map_err(|_| ())?;
 
         for fn_ in self.ctxt.fns.get_all_fns() {
             let fn_mlr = fn_mlrs.get(&fn_);
-            print::print_mlr(fn_, fn_mlr, &self.ctxt, mlr, &mut file).map_err(|_| ())?;
+            print::print_mlr(fn_, fn_mlr, &self.ctxt, self.mlr, &mut file).map_err(|_| ())?;
         }
 
         Ok(())

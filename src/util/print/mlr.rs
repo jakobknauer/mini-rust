@@ -12,7 +12,7 @@ use crate::{
 
 pub fn print_mlr<'mlr, W: Write>(
     fn_: Fn,
-    fn_mlr: Option<&'mlr mlr::Fn<'mlr>>,
+    fn_mlr: Option<&mlr::Fn<'mlr>>,
     ctxt: &ctxt::Ctxt,
     mlr: &'mlr mlr::Mlr<'mlr>,
     writer: &mut W,
@@ -31,7 +31,7 @@ pub fn print_mlr<'mlr, W: Write>(
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
-    fn_mlr: Option<&'mlr mlr::Fn<'mlr>>,
+    fn_mlr: Option<&'a mlr::Fn<'mlr>>,
     signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
     mlr: &'mlr mlr::Mlr<'mlr>,
