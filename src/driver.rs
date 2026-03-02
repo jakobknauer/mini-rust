@@ -533,10 +533,7 @@ impl<'a, 'ast> Driver<'a, 'ast> {
         mlr: &'mlr mlr::Mlr<'mlr>,
         hlr_fns: &'hlr [hlr::Fn<'hlr>],
         typings: &'hlr [typeck::HlrTyping],
-    ) -> HashMap<fns::Fn, mlr::Fn<'mlr>>
-    where
-        'hlr: 'mlr,
-    {
+    ) -> HashMap<fns::Fn, mlr::Fn<'mlr>> {
         let mut fn_mlrs = HashMap::new();
         for (hlr_fn, typing) in hlr_fns.iter().zip(typings) {
             fn_mlrs.extend(hlr_lowering::hlr_to_mlr(&mut self.ctxt, mlr, hlr_fn, typing));

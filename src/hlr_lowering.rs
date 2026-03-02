@@ -11,33 +11,26 @@ use crate::{
     typeck::{ExprExtra, HlrTyping, MthdResolution},
 };
 
-pub fn hlr_to_mlr<'ctxt, 'hlr, 'mlr>(
-    ctxt: &'ctxt mut ctxt::Ctxt,
+pub fn hlr_to_mlr<'hlr, 'mlr>(
+    ctxt: &mut ctxt::Ctxt,
     mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: &'hlr hlr::Fn<'hlr>,
     typing: &'hlr HlrTyping,
-) -> Vec<(fns::Fn, mlr::Fn<'mlr>)>
-where
-    'hlr: 'mlr,
-{
+) -> Vec<(fns::Fn, mlr::Fn<'mlr>)> {
     let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing);
     lowerer.lower_fn(fn_)
 }
 
-struct HlrLowerer<'a, 'hlr, 'mlr> {
+struct HlrLowerer<'ctxt, 'hlr, 'mlr> {
     fn_: fns::Fn,
-    builder: MlrBuilder<'a, 'mlr>,
-    typing: &'a HlrTyping,
+    builder: MlrBuilder<'ctxt, 'mlr>,
+    typing: &'ctxt HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
     fn_mlrs: Vec<(fns::Fn, mlr::Fn<'mlr>)>,
     _hlr: std::marker::PhantomData<&'hlr hlr::Hlr<'hlr>>,
 }
 
-impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr>
-where
-    // 'ctxt: 'hlr,
-    'hlr: 'mlr,
-{
+impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
     fn new(ctxt: &'ctxt mut ctxt::Ctxt, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn, typing: &'ctxt HlrTyping) -> Self {
         Self {
             fn_,
