@@ -4,7 +4,7 @@ pub type Stmt<'hlr> = &'hlr StmtDef<'hlr>;
 
 pub type StmtSlice<'hlr> = &'hlr [Stmt<'hlr>];
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum StmtDef<'hlr> {
     Expr(Expr<'hlr>),
 

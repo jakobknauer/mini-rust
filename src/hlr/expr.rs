@@ -100,7 +100,7 @@ pub enum ExprDef<'hlr> {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Val<'hlr> {
     Var(VarId),
     Fn(fns::Fn, Option<TyAnnotSlice<'hlr>>),
@@ -117,7 +117,7 @@ pub enum Lit {
     CString(Vec<u8>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum FieldSpec {
     Name(String),
     Index(usize),
@@ -125,12 +125,12 @@ pub enum FieldSpec {
 
 pub type StructFields<'hlr> = &'hlr [(FieldSpec, Expr<'hlr>)];
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ClosureParam<'hlr>(pub VarId, pub Option<TyAnnot<'hlr>>);
 
 pub type ClosureParams<'hlr> = &'hlr [ClosureParam<'hlr>];
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MatchArm<'hlr> {
     pub pattern: Pattern<'hlr>,
     pub body: Expr<'hlr>,
@@ -138,19 +138,19 @@ pub struct MatchArm<'hlr> {
 
 pub type Pattern<'hlr> = VariantPattern<'hlr>;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct VariantPattern<'hlr> {
     pub variant: Val<'hlr>,
     pub fields: &'hlr [VariantPatternField],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct VariantPatternField {
     pub field_index: usize,
     pub binding: VarId,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -191,7 +191,7 @@ impl From<ast::BinaryOperator> for BinaryOperator {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum UnaryOperator {
     Not,
     Negative,

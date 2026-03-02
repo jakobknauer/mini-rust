@@ -1,12 +1,8 @@
-#![allow(unused)]
-
 mod expr;
 mod stmt;
 mod ty_annot;
 
 use std::{cell::RefCell, marker::PhantomData};
-
-use bumpalo::Bump;
 
 use crate::ctxt::fns;
 
@@ -39,16 +35,6 @@ impl std::fmt::Display for VarId {
 }
 
 impl<'hlr> Hlr<'hlr> {
-    pub fn new() -> Self {
-        Self {
-            arena: Bump::new(),
-            _marker: PhantomData,
-
-            next_var_id: RefCell::new(VarId(0)),
-            next_expr_id: RefCell::new(ExprId(0)),
-        }
-    }
-
     pub fn var_id(&self) -> VarId {
         self.next_var_id.replace_with(|VarId(id)| VarId(*id + 1))
     }
@@ -80,19 +66,31 @@ impl<'hlr> Hlr<'hlr> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 
-    pub fn struct_expr_field_slice(&'hlr self, fields: &[(FieldSpec, Expr<'hlr>)]) -> StructFields<'hlr> {
-        self.arena.alloc_slice_clone(fields)
+    pub fn struct_expr_field_slice(
+        &'hlr self,
+        fields: impl IntoIterator<Item = (FieldSpec, Expr<'hlr>), IntoIter: ExactSizeIterator>,
+    ) -> StructFields<'hlr> {
+        self.arena.alloc_slice_fill_iter(fields)
     }
 
-    pub fn closure_params(&'hlr self, params: &[ClosureParam<'hlr>]) -> ClosureParams<'hlr> {
-        self.arena.alloc_slice_clone(params)
+    pub fn closure_params(
+        &'hlr self,
+        params: impl IntoIterator<Item = ClosureParam<'hlr>, IntoIter: ExactSizeIterator>,
+    ) -> ClosureParams<'hlr> {
+        self.arena.alloc_slice_fill_iter(params)
     }
 
-    pub fn match_arms(&'hlr self, arms: &[MatchArm<'hlr>]) -> &'hlr [MatchArm<'hlr>] {
-        self.arena.alloc_slice_clone(arms)
+    pub fn match_arms(
+        &'hlr self,
+        arms: impl IntoIterator<Item = MatchArm<'hlr>, IntoIter: ExactSizeIterator>,
+    ) -> &'hlr [MatchArm<'hlr>] {
+        self.arena.alloc_slice_fill_iter(arms)
     }
 
-    pub fn variant_pattern_fields(&'hlr self, fields: &[VariantPatternField]) -> &'hlr [VariantPatternField] {
-        self.arena.alloc_slice_clone(fields)
+    pub fn variant_pattern_fields(
+        &'hlr self,
+        fields: impl IntoIterator<Item = VariantPatternField, IntoIter: ExactSizeIterator>,
+    ) -> &'hlr [VariantPatternField] {
+        self.arena.alloc_slice_fill_iter(fields)
     }
 }

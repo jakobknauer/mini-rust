@@ -549,7 +549,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
                 Ok((field, expr))
             })
             .collect::<AstLoweringResult<_>>()?;
-        let fields = self.hlr.struct_expr_field_slice(&fields);
+        let fields = self.hlr.struct_expr_field_slice(fields);
 
         let expr = hlr::ExprDef::Struct { constructor, fields };
         Ok(self.hlr.expr(expr))
@@ -663,7 +663,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
                 Ok(hlr::MatchArm { pattern, body })
             })
             .collect::<AstLoweringResult<_>>()?;
-        let hlr_arms = self.hlr.match_arms(&hlr_arms);
+        let hlr_arms = self.hlr.match_arms(hlr_arms);
 
         let expr = hlr::ExprDef::Match {
             scrutinee,
@@ -719,7 +719,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
                 Ok(hlr::VariantPatternField { field_index, binding })
             })
             .collect::<AstLoweringResult<_>>()?;
-        let fields = self.hlr.variant_pattern_fields(&fields);
+        let fields = self.hlr.variant_pattern_fields(fields);
 
         Ok(hlr::VariantPattern { variant, fields })
     }
@@ -772,7 +772,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
                 Ok(hlr::ClosureParam(var_id, ty))
             })
             .collect::<AstLoweringResult<Vec<_>>>()?;
-        let params = self.hlr.closure_params(&params);
+        let params = self.hlr.closure_params(params);
 
         self.start_new_block();
         let trailing = self.build_block(body)?;
