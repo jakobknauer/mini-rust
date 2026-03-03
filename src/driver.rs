@@ -59,7 +59,7 @@ struct Driver<'a, 'ast, 'hlr, 'mlr> {
 
 #[derive(Default)]
 struct AstMeta {
-    fn_ids: HashMap<ast::FreeFnId, fns::Fn>,
+    fn_ids: HashMap<ast::FnId, fns::Fn>,
     struct_ids: HashMap<ast::StructId, ty::Struct>,
     enum_ids: HashMap<ast::EnumId, ty::Enum>,
     trait_ids: HashMap<ast::TraitId, traits::Trait>,
@@ -284,9 +284,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     fn register_free_fns(&mut self) -> Result<(), ()> {
         stdlib::register_fns(&mut self.ctxt)?;
 
-        for &(fn_id, function) in self.ast.free_fns().iter() {
+        for &function in self.ast.free_fns().iter() {
             let fn_ = self.register_function(function, None, None, Vec::new())?;
-            self.ast_meta.fn_ids.insert(fn_id, fn_);
+            self.ast_meta.fn_ids.insert(function.1, fn_);
         }
 
         Ok(())
@@ -294,7 +294,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
     fn register_function(
         &mut self,
-        ast_fn: ast::Fn,
+        ast_fn: &'ast ast::Fn<'ast>,
         associated_ty: Option<ty::Ty>,
         associated_trait_inst: Option<traits::TraitInst>,
         env_gen_params: Vec<ty::GenVar>,
@@ -410,7 +410,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             let self_type = self.ctxt.tys.trait_self(trait_);
             let trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.clone();
 
-            for &mthd in &ast_trait.mthds {
+            for &mthd in ast_trait.mthds.iter() {
                 let mthd_gen_params: Vec<_> = mthd
                     .gen_params
                     .iter()
@@ -465,9 +465,10 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             let gen_params = impl_def.gen_params.clone();
             let trait_inst = impl_def.trait_inst;
 
-            for &mthd in &ast_impl.mthds {
+            for &mthd in ast_impl.mthds.iter() {
                 let fn_ = self.register_function(mthd, Some(ty), trait_inst, gen_params.clone())?;
                 self.ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
+                self.ast_meta.fn_ids.insert(mthd.1, fn_);
             }
         }
 
@@ -476,23 +477,25 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
     fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
         let mut hlr_fns = Vec::new();
-        for &(fn_id, ast_fn) in self.ast.free_fns().iter() {
+
+        for &ast_fn in self.ast.free_fns().iter() {
             let Some(body) = ast_fn.body else { continue };
-            let target_fn = self.ast_meta.fn_ids[&fn_id];
+            let target_fn = self.ast_meta.fn_ids[&ast_fn.1];
             let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
                 .map_err(|err| format!("failed to lower {} to HLR: {}", ast_fn.name, err.msg))?;
             hlr_fns.push(hlr_fn);
         }
+
         for ast_impl in self.ast.impls().iter() {
-            let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
-            let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
-            for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
+            for &ast_mthd in ast_impl.mthds.iter() {
                 let Some(body) = ast_mthd.body else { continue };
+                let target_fn = self.ast_meta.fn_ids[&ast_mthd.1];
                 let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
                     .map_err(|err| format!("failed to lower {} to HLR: {}", ast_mthd.name, err.msg))?;
                 hlr_fns.push(hlr_fn);
             }
         }
+
         Ok(hlr_fns)
     }
 

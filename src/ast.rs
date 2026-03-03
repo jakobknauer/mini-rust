@@ -19,11 +19,11 @@ pub struct TraitId(usize);
 pub struct ImplId(usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct FreeFnId(usize);
+pub struct FnId(usize);
 
 #[derive(Debug, Default)]
 pub struct Ast<'ast> {
-    free_fns: RefCell<Vec<(FreeFnId, Fn<'ast>)>>,
+    free_fns: RefCell<Vec<&'ast Fn<'ast>>>,
     structs: RefCell<Vec<&'ast Struct<'ast>>>,
     enums: RefCell<Vec<&'ast Enum<'ast>>>,
     impls: RefCell<Vec<&'ast Impl<'ast>>>,
@@ -33,7 +33,7 @@ pub struct Ast<'ast> {
     next_enum_id: RefCell<EnumId>,
     next_trait_id: RefCell<TraitId>,
     next_impl_id: RefCell<ImplId>,
-    next_free_fn_id: RefCell<FreeFnId>,
+    next_fn_id: RefCell<FnId>,
 
     arena: bumpalo::Bump,
     _marker: PhantomData<&'ast ()>,
@@ -64,8 +64,13 @@ impl<'ast> Ast<'ast> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 
-    pub fn fn_(&'ast self, fn_def: FnDef<'ast>) -> Fn<'ast> {
-        self.arena.alloc(fn_def)
+    pub fn fn_(&'ast self, fn_def: FnDef<'ast>) -> &'ast Fn<'ast> {
+        let id = self.next_fn_id.replace_with(|FnId(n)| FnId(*n + 1));
+        self.arena.alloc(Fn(fn_def, id))
+    }
+
+    pub fn fn_slice(&'ast self, fns: &[&'ast Fn<'ast>]) -> FnSlice<'ast> {
+        self.arena.alloc_slice_copy(fns)
     }
 
     pub fn add_struct(&'ast self, def: StructDef<'ast>) {
@@ -88,9 +93,8 @@ impl<'ast> Ast<'ast> {
         self.impls.borrow_mut().push(self.arena.alloc(Impl(def, id)));
     }
 
-    pub fn add_free_fn(&self, fn_: Fn<'ast>) {
-        let id = self.next_free_fn_id.replace_with(|FreeFnId(n)| FreeFnId(*n + 1));
-        self.free_fns.borrow_mut().push((id, fn_));
+    pub fn add_free_fn(&self, fn_: &'ast Fn<'ast>) {
+        self.free_fns.borrow_mut().push(fn_);
     }
 
     pub fn structs(&self) -> Ref<'_, [&'ast Struct<'ast>]> {
@@ -109,12 +113,21 @@ impl<'ast> Ast<'ast> {
         Ref::map(self.traits.borrow(), |v| v.as_slice())
     }
 
-    pub fn free_fns(&self) -> Ref<'_, [(FreeFnId, Fn<'ast>)]> {
+    pub fn free_fns(&self) -> Ref<'_, [&'ast Fn<'ast>]> {
         Ref::map(self.free_fns.borrow(), |v| v.as_slice())
     }
 }
 
-pub type Fn<'ast> = &'ast FnDef<'ast>;
+#[derive(Debug)]
+pub struct Fn<'ast>(pub FnDef<'ast>, pub FnId);
+pub type FnSlice<'ast> = &'ast [&'ast Fn<'ast>];
+
+impl<'ast> std::ops::Deref for Fn<'ast> {
+    type Target = FnDef<'ast>;
+    fn deref(&self) -> &FnDef<'ast> {
+        &self.0
+    }
+}
 
 #[derive(Debug)]
 pub struct FnDef<'ast> {
@@ -203,7 +216,7 @@ pub struct ImplDef<'ast> {
     pub gen_params: Vec<String>,
     pub trait_annot: Option<TraitAnnot<'ast>>,
     pub ty: TyAnnot<'ast>,
-    pub mthds: Vec<Fn<'ast>>,
+    pub mthds: FnSlice<'ast>,
     pub assoc_tys: Vec<AssocTy<'ast>>,
 }
 
@@ -233,7 +246,7 @@ pub struct TraitAnnot<'ast> {
 pub struct TraitDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
-    pub mthds: Vec<Fn<'ast>>,
+    pub mthds: FnSlice<'ast>,
     pub assoc_ty_names: Vec<String>,
 }
 
