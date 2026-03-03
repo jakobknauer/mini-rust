@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 mod resolve_util;
 
 use std::collections::{HashMap, VecDeque};

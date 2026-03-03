@@ -23,7 +23,6 @@ pub struct HlrTyping {
     pub expr_extra: HashMap<hlr::ExprId, ExprExtra>,
 }
 
-#[allow(unused)]
 pub enum ExprExtra {
     ValFn(fns::FnInst),
     ValMthd(MthdResolution),
