@@ -541,7 +541,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
         for fn_ in self.ctxt.fns.get_all_fns() {
             let fn_mlr = fn_mlrs.get(&fn_);
-            print::print_mlr(fn_, fn_mlr, &self.ctxt, self.mlr, &mut file).map_err(|_| ())?;
+            print::print_mlr(fn_, fn_mlr, &self.ctxt, &mut file).map_err(|_| ())?;
         }
 
         Ok(())
@@ -588,6 +588,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     }
 
     fn mlr_lowering(&mut self, fn_mlrs: &HashMap<fns::Fn, mlr::Fn<'mlr>>, fn_insts: HashSet<fns::FnInst>) -> String {
-        mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, self.mlr, fn_mlrs, fn_insts.into_iter().collect())
+        mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, fn_mlrs, fn_insts.into_iter().collect())
     }
 }

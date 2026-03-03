@@ -14,7 +14,6 @@ pub fn print_mlr<'mlr, W: Write>(
     fn_: Fn,
     fn_mlr: Option<&mlr::Fn<'mlr>>,
     ctxt: &ctxt::Ctxt,
-    mlr: &'mlr mlr::Mlr<'mlr>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
@@ -22,7 +21,6 @@ pub fn print_mlr<'mlr, W: Write>(
         fn_mlr,
         signature: ctxt.fns.get_sig(fn_),
         ctxt,
-        mlr,
         indent_level: 0,
         writer,
     };
@@ -34,7 +32,6 @@ struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_mlr: Option<&'a mlr::Fn<'mlr>>,
     signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
-    mlr: &'mlr mlr::Mlr<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
 }
@@ -166,8 +163,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
 
         match *stmt {
             Alloc { loc } => {
-                let loc_ty = self.mlr.get_loc_ty(loc);
-                let ty_name = self.ctxt.tys.get_string_rep(loc_ty);
+                let ty_name = self.ctxt.tys.get_string_rep(loc.1);
                 self.indent()?;
                 writeln!(self.writer, "alloc {}: {};", loc, ty_name)
             }
@@ -291,8 +287,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 write!(self.writer, ")")
             }
             ProjectToVariant { base, variant_index } => {
-                let ty = self.mlr.get_place_ty(base);
-                let enum_name = self.ctxt.tys.get_string_rep(ty);
+                let enum_name = self.ctxt.tys.get_string_rep(base.1);
                 write!(self.writer, "(")?;
                 self.print_place(base)?;
                 write!(self.writer, " as {}::{})", enum_name, variant_index)

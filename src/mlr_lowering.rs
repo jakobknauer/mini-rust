@@ -19,12 +19,11 @@ use crate::{
 
 pub fn mlr_to_llvm_ir<'mlr>(
     mr_ctxt: &mut mr_ctxt::Ctxt,
-    mlr: &'mlr mlr::Mlr<'mlr>,
     fn_mlrs: &HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
     fn_insts: Vec<mr_fns::FnInst>,
 ) -> String {
     let iw_ctxt = IwContext::create();
-    let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, mlr, fn_mlrs, fn_insts);
+    let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, fn_mlrs, fn_insts);
 
     generator.set_target_triple();
     generator.declare_functions();
@@ -38,7 +37,6 @@ struct MlrLowerer<'iw, 'mr, 'mlr> {
     iw_module: Module<'iw>,
 
     mr_ctxt: &'mr mut mr_ctxt::Ctxt,
-    mlr: &'mlr mlr::Mlr<'mlr>,
     fn_mlrs: &'mr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
 
     fn_insts: Vec<mr_fns::FnInst>,
@@ -53,7 +51,6 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
     fn new(
         iw_ctxt: &'iw IwContext,
         mr_ctxt: &'mr mut mr_ctxt::Ctxt,
-        mlr: &'mlr mlr::Mlr<'mlr>,
         fn_mlrs: &'mr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
         fn_insts: Vec<mr_fns::FnInst>,
     ) -> Self {
@@ -63,7 +60,6 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
             iw_module,
             fn_insts,
             mr_ctxt,
-            mlr,
             fn_mlrs,
             types: HashMap::new(),
             functions: HashMap::new(),

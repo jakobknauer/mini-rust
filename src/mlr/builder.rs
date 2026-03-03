@@ -62,17 +62,13 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
     }
 
     pub fn store_val(&mut self, val: mlr::Val<'mlr>) -> mlr::Place<'mlr> {
-        let ty = self.get_val_ty(val);
-        let place = self.alloc_place(ty);
+        let place = self.alloc_place(val.1);
         self.insert_assign_stmt(place, val);
         place
     }
 
     pub fn insert_loc_place(&self, loc: mlr::Loc) -> mlr::Place<'mlr> {
-        let ty = self.mlr.get_loc_ty(loc);
-        let place = self.mlr.insert_place(mlr::PlaceDef::Loc(loc));
-        self.mlr.set_place_ty(place, ty);
-        place
+        self.mlr.insert_place(mlr::PlaceDef::Loc(loc), loc.1)
     }
 
     pub fn insert_field_access_place(
@@ -81,22 +77,17 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         field_index: usize,
         ty: ty::Ty,
     ) -> mlr::Place<'mlr> {
-        let place = self.mlr.insert_place(mlr::PlaceDef::FieldAccess { base, field_index });
-        self.mlr.set_place_ty(place, ty);
-        place
+        self.mlr
+            .insert_place(mlr::PlaceDef::FieldAccess { base, field_index }, ty)
     }
 
     pub fn insert_closure_captures_place(&self, base: mlr::Place<'mlr>, captures_ty: ty::Ty) -> mlr::Place<'mlr> {
-        let place = self.mlr.insert_place(mlr::PlaceDef::ClosureCaptures(base));
-        self.mlr.set_place_ty(place, captures_ty);
-        place
+        self.mlr.insert_place(mlr::PlaceDef::ClosureCaptures(base), captures_ty)
     }
 
     pub fn insert_enum_discriminant_place(&mut self, base: mlr::Place<'mlr>) -> mlr::Place<'mlr> {
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
-        let place = self.mlr.insert_place(mlr::PlaceDef::EnumDiscriminant { base });
-        self.mlr.set_place_ty(place, i32_ty);
-        place
+        self.mlr.insert_place(mlr::PlaceDef::EnumDiscriminant { base }, i32_ty)
     }
 
     pub fn insert_project_to_variant_place(
@@ -105,69 +96,45 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         variant_index: usize,
         variant_ty: ty::Ty,
     ) -> mlr::Place<'mlr> {
-        let place = self
-            .mlr
-            .insert_place(mlr::PlaceDef::ProjectToVariant { base, variant_index });
-        self.mlr.set_place_ty(place, variant_ty);
-        place
+        self.mlr
+            .insert_place(mlr::PlaceDef::ProjectToVariant { base, variant_index }, variant_ty)
     }
 
     pub fn insert_deref_place(&self, op: mlr::Op<'mlr>) -> mlr::Place<'mlr> {
-        let op_ty = self.mlr.get_op_ty(op);
-        let inner_ty = match self.ctxt.tys.get_ty_def(op_ty) {
+        let inner_ty = match self.ctxt.tys.get_ty_def(op.1) {
             &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => inner,
             _ => panic!("deref of non-ref/ptr type"),
         };
-        let place = self.mlr.insert_place(mlr::PlaceDef::Deref(op));
-        self.mlr.set_place_ty(place, inner_ty);
-        place
+        self.mlr.insert_place(mlr::PlaceDef::Deref(op), inner_ty)
     }
 
     pub fn insert_copy_op(&self, place: mlr::Place<'mlr>) -> mlr::Op<'mlr> {
-        let ty = self.mlr.get_place_ty(place);
-        let op = self.mlr.insert_op(mlr::OpDef::Copy(place));
-        self.mlr.set_op_ty(op, ty);
-        op
+        self.mlr.insert_op(mlr::OpDef::Copy(place), place.1)
     }
 
     pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> mlr::Op<'mlr> {
         self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
         let ty = self.fn_ty_of_fn_inst(fn_inst);
-        let op = self.mlr.insert_op(mlr::OpDef::Fn(fn_inst));
-        self.mlr.set_op_ty(op, ty);
-        op
+        self.mlr.insert_op(mlr::OpDef::Fn(fn_inst), ty)
     }
 
     pub fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst) -> mlr::Op<'mlr> {
         self.ctxt.fns.register_trait_mthd_call(self.fn_, inst);
         let ty = self.trait_mthd_fn_ty(inst);
-        let op = self.mlr.insert_op(mlr::OpDef::TraitMthd(inst));
-        self.mlr.set_op_ty(op, ty);
-        op
+        self.mlr.insert_op(mlr::OpDef::TraitMthd(inst), ty)
     }
 
     pub fn insert_const_op(&self, const_: mlr::Const, ty: ty::Ty) -> mlr::Op<'mlr> {
-        let op = self.mlr.insert_op(mlr::OpDef::Const(const_));
-        self.mlr.set_op_ty(op, ty);
-        op
+        self.mlr.insert_op(mlr::OpDef::Const(const_), ty)
     }
 
     pub fn insert_bool_const(&mut self, b: bool) -> mlr::Op<'mlr> {
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
-        let op = self.mlr.insert_op(mlr::OpDef::Const(mlr::Const::Bool(b)));
-        self.mlr.set_op_ty(op, bool_ty);
-        op
-    }
-
-    pub fn get_val_ty(&self, val: mlr::Val) -> ty::Ty {
-        self.mlr.get_val_ty(val)
+        self.mlr.insert_op(mlr::OpDef::Const(mlr::Const::Bool(b)), bool_ty)
     }
 
     pub fn insert_use_val(&self, op: mlr::Op<'mlr>) -> mlr::Val<'mlr> {
-        let ty = self.mlr.get_op_ty(op);
-        let val = self.mlr.insert_val(mlr::ValDef::Use(op));
-        self.mlr.set_val_ty(val, ty);
-        val
+        self.mlr.insert_val(mlr::ValDef::Use(op), op.1)
     }
 
     pub fn copy_val(&self, place: mlr::Place<'mlr>) -> mlr::Val<'mlr> {
@@ -176,29 +143,21 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
     }
 
     pub fn insert_call_val(&mut self, callable: mlr::Op<'mlr>, args: Vec<mlr::Op<'mlr>>) -> mlr::Val<'mlr> {
-        let callable_ty = self.mlr.get_op_ty(callable);
         let return_ty = self
             .ctxt
-            .ty_is_callable(callable_ty)
+            .ty_is_callable(callable.1)
             .map(|(_, return_ty, _)| return_ty)
             .expect("callable op should have a callable type");
-        let val = self.mlr.insert_val(mlr::ValDef::Call { callable, args });
-        self.mlr.set_val_ty(val, return_ty);
-        val
+        self.mlr.insert_val(mlr::ValDef::Call { callable, args }, return_ty)
     }
 
     pub fn insert_addr_of_val(&mut self, place: mlr::Place<'mlr>) -> mlr::Val<'mlr> {
-        let place_ty = self.mlr.get_place_ty(place);
-        let ref_ty = self.ctxt.tys.ref_(place_ty);
-        let val = self.mlr.insert_val(mlr::ValDef::AddrOf(place));
-        self.mlr.set_val_ty(val, ref_ty);
-        val
+        let ref_ty = self.ctxt.tys.ref_(place.1);
+        self.mlr.insert_val(mlr::ValDef::AddrOf(place), ref_ty)
     }
 
     pub fn insert_as_val(&self, op: mlr::Op<'mlr>, target_ty: ty::Ty) -> mlr::Val<'mlr> {
-        let val = self.mlr.insert_val(mlr::ValDef::As { op, target_ty });
-        self.mlr.set_val_ty(val, target_ty);
-        val
+        self.mlr.insert_val(mlr::ValDef::As { op, target_ty }, target_ty)
     }
 
     pub fn insert_binary_prim_val(
@@ -208,9 +167,7 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         rhs: mlr::Op<'mlr>,
         result_ty: ty::Ty,
     ) -> mlr::Val<'mlr> {
-        let val = self.mlr.insert_val(mlr::ValDef::BinaryPrim { op, lhs, rhs });
-        self.mlr.set_val_ty(val, result_ty);
-        val
+        self.mlr.insert_val(mlr::ValDef::BinaryPrim { op, lhs, rhs }, result_ty)
     }
 
     pub fn insert_unary_prim_val(
@@ -219,9 +176,7 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
         operand: mlr::Op<'mlr>,
         result_ty: ty::Ty,
     ) -> mlr::Val<'mlr> {
-        let val = self.mlr.insert_val(mlr::ValDef::UnaryPrim { op, operand });
-        self.mlr.set_val_ty(val, result_ty);
-        val
+        self.mlr.insert_val(mlr::ValDef::UnaryPrim { op, operand }, result_ty)
     }
 
     pub fn insert_unit_val(&mut self) -> mlr::Val<'mlr> {

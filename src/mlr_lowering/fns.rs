@@ -71,28 +71,22 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         self.parent.mr_ctxt
     }
 
-    fn mlr(&self) -> &mlr::Mlr<'mlr> {
-        self.parent.mlr
-    }
-
     fn tys(&self) -> &mr_ctxt::TyReg {
         &self.mr_ctxt().tys
     }
 
     fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.mlr().get_loc_ty(loc);
-        let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(MlrLoweringError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(loc.1).ok_or(MlrLoweringError)?;
         Ok(iw_ty)
     }
 
     fn get_iw_ty_of_place(&mut self, place: mlr::Place) -> MlrLoweringResult<BasicTypeEnum<'iw>> {
-        let mr_ty = self.mlr().get_place_ty(place);
-        let iw_ty = self.get_ty_as_basic_type_enum(mr_ty).ok_or(MlrLoweringError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(place.1).ok_or(MlrLoweringError)?;
         Ok(iw_ty)
     }
 
     fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> MlrLoweringResult<FunctionType<'iw>> {
-        let mr_ty = self.mlr().get_op_ty(op);
+        let mr_ty = op.1;
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(mr_ty) else {
             return Err(MlrLoweringError);
@@ -109,7 +103,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     }
 
     fn get_closure_fn_ty(&mut self, op: mlr::Op, captures_ty: mr_ty::Ty) -> MlrLoweringResult<FunctionType<'iw>> {
-        let mr_ty = self.mlr().get_op_ty(op);
+        let mr_ty = op.1;
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(mr_ty) else {
             return Err(MlrLoweringError);
@@ -294,23 +288,23 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(())
     }
 
-    fn build_constant(&mut self, constant: mlr::Const) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_constant(&mut self, constant: &mlr::Const) -> MlrLoweringResult<BasicValueEnum<'iw>> {
         use mlr::Const::*;
 
         let value = match constant {
-            Int(i) => {
+            &Int(i) => {
                 let int_ty = self.parent.iw_ctxt.i32_type();
                 int_ty.const_int(i as u64, false).as_basic_value_enum()
             }
-            Bool(b) => {
+            &Bool(b) => {
                 let bool_ty = self.parent.iw_ctxt.bool_type();
                 bool_ty.const_int(b as u64, false).as_basic_value_enum()
             }
-            CChar(c) => {
+            &CChar(c) => {
                 let char_ty = self.parent.iw_ctxt.i8_type();
                 char_ty.const_int(c as u64, false).as_basic_value_enum()
             }
-            CString(ref c_string) => self.build_c_string(c_string.clone()),
+            CString(c_string) => self.build_c_string(c_string.clone()),
         };
 
         Ok(value)
@@ -322,7 +316,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         match *op {
             Fn(fn_inst) => self.build_global_function(fn_inst),
             TraitMthd(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
-            Const(ref constant) => self.build_constant(constant.clone()),
+            Const(ref constant) => self.build_constant(constant),
             Copy(place) => {
                 let place_ptr = self.build_place(place)?;
                 let iw_ty = self.get_iw_ty_of_place(place)?;
@@ -372,8 +366,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
             return Ok(result);
         }
 
-        let callable_ty = self.mlr().get_op_ty(callable);
-        let callable_ty = self.substitute(callable_ty);
+        let callable_ty = self.substitute(callable.1);
         let callable_ty_def = self.tys().get_ty_def(callable_ty).clone();
 
         if let mr_ty::TyDef::Closure {
