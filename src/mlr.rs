@@ -49,7 +49,7 @@ impl<'mlr> std::ops::Deref for Op<'mlr> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Loc(pub usize, pub Ty);
+pub struct Loc(usize, pub Ty);
 
 impl PartialEq for Loc {
     fn eq(&self, other: &Self) -> bool {
