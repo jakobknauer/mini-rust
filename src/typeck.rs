@@ -26,10 +26,8 @@ pub struct HlrTyping {
 pub enum ExprExtra {
     ValFn(fns::FnInst),
     ValMthd(MthdResolution),
-    BinaryOp(fns::FnInst),
     BinaryPrim(language_items::BinaryPrimOp),
     UnaryPrim(language_items::UnaryPrimOp),
-    UnaryOp(fns::FnInst),
     FieldAccess {
         derefs: usize,
         index: usize,

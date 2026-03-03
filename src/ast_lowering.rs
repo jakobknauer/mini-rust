@@ -12,19 +12,17 @@ use crate::{
 pub fn ast_to_hlr<'ast, 'hlr>(
     ctxt: &ctxt::Ctxt,
     fn_: fns::Fn,
-    ast: &'ast ast::Ast<'ast>,
     ast_body: ast::Block<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 ) -> AstLoweringResult<hlr::Fn<'hlr>> {
-    let converter = AstLowerer::new(ctxt, fn_, ast, hlr);
+    let converter = AstLowerer::new(ctxt, fn_, hlr);
     converter.lower_function_body(ast_body)
 }
 
-struct AstLowerer<'ast, 'ctxt, 'hlr> {
+struct AstLowerer<'ctxt, 'hlr> {
     fn_: fns::Fn,
 
     ctxt: &'ctxt ctxt::Ctxt,
-    ast: &'ast ast::Ast<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 
     scopes: VecDeque<Scope>,
@@ -36,16 +34,15 @@ struct AstLowerer<'ast, 'ctxt, 'hlr> {
 pub type AstLoweringResult<T> = Result<T, AstLoweringError>;
 #[derive(Debug)]
 pub struct AstLoweringError {
-    msg: String,
+    pub msg: String,
 }
 
-impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
-    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, ast: &'ast ast::Ast<'ast>, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
+impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
+    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             fn_,
 
             ctxt,
-            ast,
             hlr,
 
             scopes: VecDeque::new(),
@@ -55,7 +52,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
         }
     }
 
-    fn lower_function_body(mut self, block: ast::Block<'ast>) -> AstLoweringResult<hlr::Fn<'hlr>> {
+    fn lower_function_body(mut self, block: ast::Block) -> AstLoweringResult<hlr::Fn<'hlr>> {
         let signature = self.get_signature();
         if signature.var_args {
             return Err(AstLoweringError {
@@ -67,7 +64,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
         let mut param_var_ids = Vec::new();
 
         self.scopes.push_back(Scope::default());
-        for fns::FnParam { kind: name, ty } in params {
+        for fns::FnParam { kind: name, .. } in params {
             let var_id = self.hlr.var_id();
             param_var_ids.push(var_id);
 
@@ -95,10 +92,6 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
             body,
             param_var_ids,
         })
-    }
-
-    fn get_next_var_id(&mut self) -> hlr::VarId {
-        self.hlr.var_id()
     }
 
     fn get_signature(&self) -> &fns::FnSig {
@@ -257,8 +250,6 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
                 Ok(ty_annot)
             }
             [parent, sub] => {
-                let parent_ty_annot = self.lower_path_segment_to_ty_annot(parent)?;
-
                 if sub.is_self {
                     return Err(AstLoweringError {
                         msg: "Invalid use of 'Self' in type annotation".to_string(),
@@ -302,14 +293,12 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
             (TyResolution::NamedTy(ctxt::Named::Struct(struct_)), args) => Ok(hlr::TyAnnotDef::Struct(struct_, args)),
             (TyResolution::NamedTy(ctxt::Named::Enum(enum_)), args) => Ok(hlr::TyAnnotDef::Enum(enum_, args)),
 
-            ((TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_))) => {
-                Err(AstLoweringError {
-                    msg: format!(
-                        "Type '{}' cannot have generic arguments in type annotation",
-                        segment.ident
-                    ),
-                })
-            }
+            (TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_)) => Err(AstLoweringError {
+                msg: format!(
+                    "Type '{}' cannot have generic arguments in type annotation",
+                    segment.ident
+                ),
+            }),
         }
     }
 
@@ -673,7 +662,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
     fn lower_pattern(&mut self, pattern: &ast::VariantPattern) -> AstLoweringResult<hlr::Pattern<'hlr>> {
         let variant = self.resolve_path_to_constructor(&pattern.variant)?;
 
-        let hlr::Val::Variant(enum_, variant_index, ref args) = variant else {
+        let hlr::Val::Variant(enum_, variant_index, ..) = variant else {
             return Err(AstLoweringError {
                 msg: format!("Only enum variants are supported in patterns, found {:?}", variant),
             });

@@ -479,8 +479,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         for &(fn_id, ast_fn) in self.ast.free_fns().iter() {
             let Some(body) = ast_fn.body else { continue };
             let target_fn = self.ast_meta.fn_ids[&fn_id];
-            let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, self.hlr)
-                .map_err(|_| format!("failed to lower {} to HLR", ast_fn.name))?;
+            let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
+                .map_err(|err| format!("failed to lower {} to HLR: {}", ast_fn.name, err.msg))?;
             hlr_fns.push(hlr_fn);
         }
         for ast_impl in self.ast.impls().iter() {
@@ -488,8 +488,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             let impl_mthds = self.ctxt.impls.get_impl_def(impl_).mthds.clone();
             for (&ast_mthd, target_fn) in ast_impl.mthds.iter().zip(impl_mthds) {
                 let Some(body) = ast_mthd.body else { continue };
-                let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, self.ast, body, self.hlr)
-                    .map_err(|_| format!("failed to lower {} to HLR", ast_mthd.name))?;
+                let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
+                    .map_err(|err| format!("failed to lower {} to HLR: {}", ast_mthd.name, err.msg))?;
                 hlr_fns.push(hlr_fn);
             }
         }

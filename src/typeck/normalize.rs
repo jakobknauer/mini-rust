@@ -151,8 +151,6 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
     fn normalize_expr_extra(&mut self, extra: ExprExtra) -> ExprExtra {
         match extra {
-            ExprExtra::BinaryOp(fn_inst) => ExprExtra::BinaryOp(self.normalize_fn_inst(fn_inst)),
-            ExprExtra::UnaryOp(fn_inst) => ExprExtra::UnaryOp(self.normalize_fn_inst(fn_inst)),
             ExprExtra::Closure { fn_inst, captured_vars } => ExprExtra::Closure {
                 fn_inst: self.normalize_fn_inst(fn_inst),
                 captured_vars,
