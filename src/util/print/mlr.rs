@@ -12,13 +12,13 @@ use crate::{
 
 pub fn print_mlr<'mlr, W: Write>(
     fn_: Fn,
-    fn_mlr: Option<&mlr::Fn<'mlr>>,
+    mlr_fn: Option<&mlr::Fn<'mlr>>,
     ctxt: &ctxt::Ctxt,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         fn_,
-        fn_mlr,
+        mlr_fn,
         signature: ctxt.fns.get_sig(fn_),
         ctxt,
         indent_level: 0,
@@ -29,7 +29,7 @@ pub fn print_mlr<'mlr, W: Write>(
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
-    fn_mlr: Option<&'a mlr::Fn<'mlr>>,
+    mlr_fn: Option<&'a mlr::Fn<'mlr>>,
     signature: Option<&'a FnSig>,
     ctxt: &'a ctxt::Ctxt,
     indent_level: usize,
@@ -42,7 +42,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
     fn print_mlr(&mut self) -> Result<(), std::io::Error> {
         self.print_signature()?;
 
-        if let Some(mlr) = self.fn_mlr {
+        if let Some(mlr) = self.mlr_fn {
             writeln!(self.writer)?;
             self.print_stmt(mlr.body)
         } else {
@@ -122,8 +122,8 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         )?;
 
         write!(self.writer, "(")?;
-        if let Some(fn_mlr) = self.fn_mlr {
-            for (i, (param, param_loc)) in signature.params.iter().zip(&fn_mlr.param_locs).enumerate() {
+        if let Some(mlr_fn) = self.mlr_fn {
+            for (i, (param, param_loc)) in signature.params.iter().zip(&mlr_fn.param_locs).enumerate() {
                 if i > 0 {
                     write!(self.writer, ", ")?;
                 }

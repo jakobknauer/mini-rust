@@ -536,12 +536,12 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn print_functions(&self, path: &Path, fn_mlrs: &HashMap<fns::Fn, mlr::Fn<'mlr>>) -> Result<(), ()> {
+    fn print_functions(&self, path: &Path, mlr_fns: &HashMap<fns::Fn, mlr::Fn<'mlr>>) -> Result<(), ()> {
         let mut file = std::fs::File::create(path).map_err(|_| ())?;
 
         for fn_ in self.ctxt.fns.get_all_fns() {
-            let fn_mlr = fn_mlrs.get(&fn_);
-            print::print_mlr(fn_, fn_mlr, &self.ctxt, &mut file).map_err(|_| ())?;
+            let mlr_fn = mlr_fns.get(&fn_);
+            print::print_mlr(fn_, mlr_fn, &self.ctxt, &mut file).map_err(|_| ())?;
         }
 
         Ok(())
@@ -587,7 +587,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(closed)
     }
 
-    fn mlr_lowering(&mut self, fn_mlrs: &HashMap<fns::Fn, mlr::Fn<'mlr>>, fn_insts: HashSet<fns::FnInst>) -> String {
-        mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, fn_mlrs, fn_insts.into_iter().collect())
+    fn mlr_lowering(&mut self, mlr_fns: &HashMap<fns::Fn, mlr::Fn<'mlr>>, fn_insts: HashSet<fns::FnInst>) -> String {
+        mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, mlr_fns, fn_insts.into_iter().collect())
     }
 }

@@ -26,7 +26,7 @@ struct HlrLowerer<'ctxt, 'hlr, 'mlr> {
     builder: MlrBuilder<'ctxt, 'mlr>,
     typing: &'ctxt HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
-    fn_mlrs: Vec<(fns::Fn, mlr::Fn<'mlr>)>,
+    mlr_fns: Vec<(fns::Fn, mlr::Fn<'mlr>)>,
     _hlr: std::marker::PhantomData<&'hlr hlr::Hlr<'hlr>>,
 }
 
@@ -37,15 +37,15 @@ impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
             builder: MlrBuilder::new(ctxt, mlr, fn_),
             typing,
             var_locs: HashMap::new(),
-            fn_mlrs: Vec::new(),
+            mlr_fns: Vec::new(),
             _hlr: std::marker::PhantomData,
         }
     }
 
     fn lower_fn(&mut self, fn_: &'hlr hlr::Fn<'hlr>) -> Vec<(fns::Fn, mlr::Fn<'mlr>)> {
-        let fn_mlr = self.lower_body(&fn_.param_var_ids, None, fn_.body);
-        self.fn_mlrs.push((self.fn_, fn_mlr));
-        std::mem::take(&mut self.fn_mlrs)
+        let mlr_fn = self.lower_body(&fn_.param_var_ids, None, fn_.body);
+        self.mlr_fns.push((self.fn_, mlr_fn));
+        std::mem::take(&mut self.mlr_fns)
     }
 
     fn lower_body(
@@ -678,14 +678,14 @@ impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
         self.builder.end_and_push_block();
 
         let param_var_ids: Vec<_> = params.iter().map(|hlr::ClosureParam(v, _)| *v).collect();
-        let (closure_fn_mlr, nested_fn_mlrs) = {
+        let (closure_mlr_fn, nested_mlr_fns) = {
             let mut closure_lowerer = HlrLowerer::new(self.builder.ctxt, self.builder.mlr, fn_inst.fn_, self.typing);
-            let fn_mlr = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
-            let nested_fn_mlrs = std::mem::take(&mut closure_lowerer.fn_mlrs);
-            (fn_mlr, nested_fn_mlrs)
+            let mlr_fn = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
+            let nested_mlr_fns = closure_lowerer.mlr_fns;
+            (mlr_fn, nested_mlr_fns)
         };
-        self.fn_mlrs.extend(nested_fn_mlrs);
-        self.fn_mlrs.push((fn_inst.fn_, closure_fn_mlr));
+        self.mlr_fns.extend(nested_mlr_fns);
+        self.mlr_fns.push((fn_inst.fn_, closure_mlr_fn));
 
         self.builder.copy_val(closure_place).into()
     }

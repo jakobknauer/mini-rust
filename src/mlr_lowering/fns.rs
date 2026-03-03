@@ -16,7 +16,7 @@ use crate::{
 
 pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
-    fn_mlr: &'mr mlr::Fn<'mlr>,
+    mlr_fn: &'mr mlr::Fn<'mlr>,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
@@ -38,7 +38,7 @@ pub type MlrLoweringResult<T> = Result<T, MlrLoweringError>;
 
 impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     pub fn new(parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>, fn_inst: mr_fns::FnInst) -> Option<Self> {
-        let fn_mlr = parent.fn_mlrs.get(&fn_inst.fn_)?;
+        let mlr_fn = parent.mlr_fns.get(&fn_inst.fn_)?;
         let builder = parent.iw_ctxt.create_builder();
         let locs = HashMap::new();
         let iw_fn = parent.get_fn(fn_inst).unwrap();
@@ -47,7 +47,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
 
         Some(Self {
             parent,
-            fn_mlr,
+            mlr_fn,
             iw_fn,
             iw_builder: builder,
             locs,
@@ -126,7 +126,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     }
 
     fn mlr_def(&self) -> &mlr::Fn<'mlr> {
-        self.fn_mlr
+        self.mlr_fn
     }
 
     fn build_alloca_for_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<PointerValue<'iw>> {
