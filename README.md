@@ -36,9 +36,9 @@ The main entry point is [main.rs](src/main.rs). The compilation process in orche
 The compilation process takes the following steps:
 - Parse the [Abstract Syntax Tree (AST)](src/ast.rs) from source code in [parser](src/parse.rs).
 - Build the `Ctxt` object defined in [ctxt](src/ctxt.rs) from the AST. This serves as a central registry for types, functions, traits etc..
-- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here. (complete)
+- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here.
 - Typecheck the HLR in [typeck](src/typeck.rs).
-- Lower the HLR to MLR. 
+- Lower the HLR to [Mid-Level Representation (MLR)](src/mlr.rs) in [hlr_lowering](src/hlr_lowering.rs).
 - Monomorphization: Using information recorded during the previous pass, recursively determine all instantiations of functions with respective generic arguments.
 - Lower the MLR to LLVM Immediate Representation (IR) in [mlr_lowering](src/mlr_lowering.rs). This is done for all function instantiations, i.e. this is where the actual monomorphization happens.
 - Write the LLVM IR in (textual representation) to disk.
@@ -46,7 +46,7 @@ The compilation process takes the following steps:
 The compiler uses the following representations of the program:
 - [AST](src/ast.rs): Mostly verbatim representation of the source code, except for comments, whitespaces and some details. Purely syntactical. The only representation that contains all parts of the program, not only function bodies.
 - [HLR](src/hlr.rs): Slightly more abstract representation of the program, where names are resolved and syntax desugaring has been performed. Serves as basis for typechecking in the new pipeline, but type information is stored externally.
-- [MLR](src/ctxt/mlr.rs): Intermediate representation of the program, where all types are determined, all temporary values are made explicit, and all expressions are separated into Places, Values, and Operands.
+- [MLR](src/mlr.rs): Intermediate representation of the program, where all types are determined, all temporary values are made explicit, and all expressions are separated into Places, Values, and Operands.
 - [LLVM IR](https://llvm.org/docs/LangRef.html)
 
 
