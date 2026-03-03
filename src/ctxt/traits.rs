@@ -4,7 +4,7 @@ use crate::ctxt::{
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Trait(pub usize);
+pub struct Trait(pub(in crate::ctxt) usize);
 
 #[derive(Clone)]
 pub struct TraitDef {

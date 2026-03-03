@@ -71,7 +71,7 @@ impl<'ast, 'ctxt, 'hlr> super::AstLowerer<'ast, 'ctxt, 'hlr> {
             .ok_or_else(|| AstLoweringError {
                 msg: format!(
                     "Unknown variant '{}' for enum '{}' in enum variant path",
-                    variant_seg.ident, enum_.0
+                    variant_seg.ident, enum_
                 ),
             })?;
 

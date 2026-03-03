@@ -7,7 +7,7 @@ use crate::ctxt::{
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Impl(pub usize);
+pub struct Impl(pub(in crate::ctxt) usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ImplInst {

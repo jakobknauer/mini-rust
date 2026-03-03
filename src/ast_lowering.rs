@@ -705,7 +705,7 @@ impl<'ast, 'ctxt, 'hlr> AstLowerer<'ast, 'ctxt, 'hlr> {
                     .ok_or_else(|| AstLoweringError {
                         msg: format!(
                             "Unknown field '{}' in pattern for variant '{}'",
-                            field.field_name, enum_.0
+                            field.field_name, enum_
                         ),
                     })?;
 

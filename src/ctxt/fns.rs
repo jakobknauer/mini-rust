@@ -4,7 +4,13 @@ use crate::ctxt::{
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Fn(pub usize);
+pub struct Fn(pub(in crate::ctxt) usize);
+
+impl std::fmt::Display for Fn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Clone)]
 pub struct FnSig {

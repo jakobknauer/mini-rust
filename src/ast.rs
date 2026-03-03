@@ -7,19 +7,19 @@ use std::{
 pub mod builder;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct StructId(pub usize);
+pub struct StructId(usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct EnumId(pub usize);
+pub struct EnumId(usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct TraitId(pub usize);
+pub struct TraitId(usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct ImplId(pub usize);
+pub struct ImplId(usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct FreeFnId(pub usize);
+pub struct FreeFnId(usize);
 
 #[derive(Debug, Default)]
 pub struct Ast<'ast> {

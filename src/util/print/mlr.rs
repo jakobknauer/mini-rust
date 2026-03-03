@@ -52,7 +52,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
 
     fn print_signature(&mut self) -> Result<(), std::io::Error> {
         let Some(signature) = self.signature else {
-            return write!(self.writer, "<signature for fn id {}>", self.fn_.0);
+            return write!(self.writer, "<signature for fn id {}>", self.fn_);
         };
 
         // Print signature similar to printing of fn_inst in src/ctxt.rs

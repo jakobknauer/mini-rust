@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::ctxt::{fns, traits};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Ty(pub usize);
+pub struct Ty(pub(in crate::ctxt) usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TySlice {
@@ -18,16 +18,22 @@ impl TySlice {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Struct(pub usize);
+pub struct Struct(pub(in crate::ctxt) usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Enum(pub usize);
+pub struct Enum(pub(in crate::ctxt) usize);
+
+impl std::fmt::Display for Enum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct GenVar(pub usize);
+pub struct GenVar(pub(in crate::ctxt) usize);
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
-pub struct InfVar(pub usize);
+pub struct InfVar(pub(in crate::ctxt) usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
