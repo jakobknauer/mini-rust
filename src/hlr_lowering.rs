@@ -16,7 +16,7 @@ pub fn hlr_to_mlr<'hlr, 'mlr>(
     mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: &'hlr hlr::Fn<'hlr>,
     typing: &'hlr HlrTyping,
-) -> Vec<(fns::Fn, mlr::Fn<'mlr>)> {
+) -> Vec<mlr::Fn<'mlr>> {
     let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing);
     lowerer.lower_fn(fn_)
 }
@@ -26,7 +26,7 @@ struct HlrLowerer<'ctxt, 'hlr, 'mlr> {
     builder: MlrBuilder<'ctxt, 'mlr>,
     typing: &'ctxt HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
-    mlr_fns: Vec<(fns::Fn, mlr::Fn<'mlr>)>,
+    mlr_fns: Vec<mlr::Fn<'mlr>>,
     _hlr: std::marker::PhantomData<&'hlr hlr::Hlr<'hlr>>,
 }
 
@@ -42,9 +42,9 @@ impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
         }
     }
 
-    fn lower_fn(&mut self, fn_: &'hlr hlr::Fn<'hlr>) -> Vec<(fns::Fn, mlr::Fn<'mlr>)> {
+    fn lower_fn(&mut self, fn_: &'hlr hlr::Fn<'hlr>) -> Vec<mlr::Fn<'mlr>> {
         let mlr_fn = self.lower_body(&fn_.param_var_ids, None, fn_.body);
-        self.mlr_fns.push((self.fn_, mlr_fn));
+        self.mlr_fns.push(mlr_fn);
         std::mem::take(&mut self.mlr_fns)
     }
 
@@ -91,7 +91,11 @@ impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
         self.builder.insert_return_stmt(body_val);
         let body = self.builder.end_block();
 
-        mlr::Fn { body, param_locs }
+        mlr::Fn {
+            fn_: self.fn_,
+            body,
+            param_locs,
+        }
     }
 
     fn lower_expr(&mut self, expr: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
@@ -685,7 +689,7 @@ impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
             (mlr_fn, nested_mlr_fns)
         };
         self.mlr_fns.extend(nested_mlr_fns);
-        self.mlr_fns.push((fn_inst.fn_, closure_mlr_fn));
+        self.mlr_fns.push(closure_mlr_fn);
 
         self.builder.copy_val(closure_place).into()
     }

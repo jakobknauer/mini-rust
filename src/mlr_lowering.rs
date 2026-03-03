@@ -19,7 +19,7 @@ use crate::{
 
 pub fn mlr_to_llvm_ir<'mlr>(
     mr_ctxt: &mut mr_ctxt::Ctxt,
-    mlr_fns: &HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+    mlr_fns: Vec<mlr::Fn<'mlr>>,
     fn_insts: Vec<mr_fns::FnInst>,
 ) -> String {
     let iw_ctxt = IwContext::create();
@@ -37,7 +37,7 @@ struct MlrLowerer<'iw, 'mr, 'mlr> {
     iw_module: Module<'iw>,
 
     mr_ctxt: &'mr mut mr_ctxt::Ctxt,
-    mlr_fns: &'mr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+    mlr_fns: HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
 
     fn_insts: Vec<mr_fns::FnInst>,
 
@@ -51,10 +51,11 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
     fn new(
         iw_ctxt: &'iw IwContext,
         mr_ctxt: &'mr mut mr_ctxt::Ctxt,
-        mlr_fns: &'mr HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+        mlr_fns: Vec<mlr::Fn<'mlr>>,
         fn_insts: Vec<mr_fns::FnInst>,
     ) -> Self {
         let iw_module = iw_ctxt.create_module("test");
+        let mlr_fns = mlr_fns.into_iter().map(|f| (f.fn_, f)).collect();
         MlrLowerer {
             iw_ctxt,
             iw_module,
@@ -93,9 +94,10 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
 
     fn define_functions(&mut self) {
         for fn_inst in self.fn_insts.clone() {
-            let Some(mut fn_gen) = MlrFnLowerer::new(self, fn_inst) else {
+            let Some(mlr_fn) = self.mlr_fns.get(&fn_inst.fn_).cloned() else {
                 continue;
             };
+            let mut fn_gen = MlrFnLowerer::new(self, fn_inst, mlr_fn);
             if fn_gen.build_fn().is_err() {
                 let fn_name = self.mr_ctxt.get_fn_inst_name(fn_inst);
                 eprintln!("Failed to define function {fn_name}");

@@ -3,7 +3,7 @@ pub mod builder;
 use std::cell::Cell;
 
 use crate::ctxt::{
-    fns::{FnInst, TraitMthdInst},
+    fns::{self, FnInst, TraitMthdInst},
     language_items::{BinaryPrimOp, UnaryPrimOp},
     ty::Ty,
 };
@@ -138,8 +138,9 @@ pub struct If<'mlr> {
     pub else_: Stmt<'mlr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fn<'mlr> {
+    pub fn_: fns::Fn,
     pub body: Stmt<'mlr>,
     pub param_locs: Vec<Loc>,
 }

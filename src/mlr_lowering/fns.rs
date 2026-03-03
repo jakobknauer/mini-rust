@@ -16,7 +16,7 @@ use crate::{
 
 pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
-    mlr_fn: &'mr mlr::Fn<'mlr>,
+    mlr_fn: mlr::Fn<'mlr>,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
     locs: HashMap<mlr::Loc, PointerValue<'iw>>,
@@ -37,15 +37,18 @@ impl From<BuilderError> for MlrLoweringError {
 pub type MlrLoweringResult<T> = Result<T, MlrLoweringError>;
 
 impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
-    pub fn new(parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>, fn_inst: mr_fns::FnInst) -> Option<Self> {
-        let mlr_fn = parent.mlr_fns.get(&fn_inst.fn_)?;
+    pub fn new(
+        parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
+        fn_inst: mr_fns::FnInst,
+        mlr_fn: mlr::Fn<'mlr>,
+    ) -> Self {
         let builder = parent.iw_ctxt.create_builder();
         let locs = HashMap::new();
         let iw_fn = parent.get_fn(fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();
         let subst = parent.mr_ctxt.get_subst_for_fn_inst(fn_inst);
 
-        Some(Self {
+        Self {
             parent,
             mlr_fn,
             iw_fn,
@@ -54,7 +57,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
             entry_block: None,
             after_loop_blocks,
             subst,
-        })
+        }
     }
 
     pub fn build_fn(&mut self) -> MlrLoweringResult<()> {
@@ -125,10 +128,6 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(return_ty.fn_type(&param_tys, var_args))
     }
 
-    fn mlr_def(&self) -> &mlr::Fn<'mlr> {
-        self.mlr_fn
-    }
-
     fn build_alloca_for_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<PointerValue<'iw>> {
         let iw_ty = self.get_iw_ty_of_loc(loc)?;
         let name = loc.to_string();
@@ -156,7 +155,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         self.entry_block = Some(entry_block);
         self.iw_builder.position_at_end(entry_block);
 
-        let param_locs = self.mlr_def().param_locs.clone();
+        let param_locs = self.mlr_fn.param_locs.clone();
 
         for (param_index, &param_loc) in param_locs.iter().enumerate() {
             let param_address = self.build_alloca_for_loc(param_loc)?;
@@ -170,8 +169,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     fn build_function_body(&mut self) -> MlrLoweringResult<BasicBlock<'iw>> {
         let body_block = self.parent.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.iw_builder.position_at_end(body_block);
-        self.build_stmt(self.mlr_def().body)?;
-
+        self.build_stmt(self.mlr_fn.body)?;
         Ok(body_block)
     }
 
