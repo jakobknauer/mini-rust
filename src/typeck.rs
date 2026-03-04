@@ -2,6 +2,7 @@ mod closures;
 mod err;
 mod mthd;
 mod normalize;
+mod ops;
 mod post_check;
 mod ty_annots;
 mod unify;
@@ -287,118 +288,6 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
         Ok(fn_ty)
-    }
-
-    fn check_binary_op(
-        &mut self,
-        expr_id: hlr::ExprId,
-        left: hlr::Expr<'hlr>,
-        right: hlr::Expr<'hlr>,
-        operator: hlr::BinaryOperator,
-    ) -> TypeckResult<ty::Ty> {
-        let left_ty = self.check_expr(left, None)?;
-        let left_ty = self.normalize(left_ty);
-        let right_ty = self.check_expr(right, None)?;
-        let right_ty = self.normalize(right_ty);
-
-        let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
-        let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
-        let unit_ty = self.ctxt.tys.unit();
-
-        use hlr::BinaryOperator::*;
-
-        // LogicalAnd/Or are lowered as short-circuit branches, not function calls — no ExprExtra needed
-        if matches!(operator, LogicalAnd | LogicalOr) {
-            if left_ty == bool_ty && right_ty == bool_ty {
-                return Ok(bool_ty);
-            } else {
-                return Err(TypeckError::BinaryOpTypeMismatch {
-                    operator,
-                    left_ty,
-                    right_ty,
-                });
-            }
-        }
-
-        use language_items::BinaryPrimOp::*;
-
-        let i32 = left_ty == i32_ty && right_ty == i32_ty;
-        let bool = left_ty == bool_ty && right_ty == bool_ty;
-        let unit = left_ty == unit_ty && right_ty == unit_ty;
-
-        let (prim, result_ty) = match operator {
-            Add if i32 => (AddI32, i32_ty),
-            Subtract if i32 => (SubI32, i32_ty),
-            Multiply if i32 => (MulI32, i32_ty),
-            Divide if i32 => (DivI32, i32_ty),
-            Remainder if i32 => (RemI32, i32_ty),
-            Equal if i32 => (EqI32, bool_ty),
-            Equal if bool => (EqBool, bool_ty),
-            Equal if unit => (EqUnit, bool_ty),
-            NotEqual if i32 => (NeI32, bool_ty),
-            NotEqual if bool => (NeBool, bool_ty),
-            NotEqual if unit => (NeUnit, bool_ty),
-            BitOr if bool => (BitOrBool, bool_ty),
-            BitAnd if bool => (BitAndBool, bool_ty),
-            LessThan if i32 => (LtI32, bool_ty),
-            GreaterThan if i32 => (GtI32, bool_ty),
-            LessThanOrEqual if i32 => (LeI32, bool_ty),
-            GreaterThanOrEqual if i32 => (GeI32, bool_ty),
-            Add => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
-            Subtract => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
-            Multiply => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
-            Divide => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
-            _ => {
-                return Err(TypeckError::BinaryOpTypeMismatch {
-                    operator,
-                    left_ty,
-                    right_ty,
-                });
-            }
-        };
-
-        self.typing.expr_extra.insert(expr_id, ExprExtra::BinaryPrim(prim));
-        Ok(result_ty)
-    }
-
-    fn check_binary_op_arith_trait(
-        &mut self,
-        expr_id: hlr::ExprId,
-        left_ty: ty::Ty,
-        right_ty: ty::Ty,
-        operator: hlr::BinaryOperator,
-    ) -> TypeckResult<ty::Ty> {
-        use hlr::BinaryOperator::*;
-        let (trait_, mthd_name) = match operator {
-            Add => (self.ctxt.language_items.add_trait, "add"),
-            Subtract => (self.ctxt.language_items.sub_trait, "sub"),
-            Multiply => (self.ctxt.language_items.mul_trait, "mul"),
-            Divide => (self.ctxt.language_items.div_trait, "div"),
-            _ => unreachable!(),
-        };
-        let trait_ = trait_.ok_or(TypeckError::ArithTraitNotImplemented {
-            operator,
-            left_ty,
-            right_ty,
-        })?;
-
-        let trait_inst = traits::TraitInst {
-            trait_,
-            gen_args: self.ctxt.tys.ty_slice(&[right_ty]),
-        };
-        self.pending_obligations
-            .push((left_ty, ty::ConstraintRequirement::Trait(trait_inst)));
-
-        let found = mthd::FoundMthd::Trait {
-            trait_inst,
-            mthd_idx: 0,
-        };
-        let resolution = self.instantiate_mthd(found, left_ty, mthd_name, None)?;
-        self.typing
-            .expr_extra
-            .insert(expr_id, ExprExtra::BinaryOpMthd(resolution));
-
-        Ok(self.ctxt.tys.assoc_ty(left_ty, trait_inst, 0))
     }
 
     fn check_unary_op(

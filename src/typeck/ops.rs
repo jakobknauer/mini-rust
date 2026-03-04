@@ -1,0 +1,136 @@
+use crate::ctxt::{language_items, traits, ty};
+use crate::hlr;
+
+use super::{ExprExtra, TypeckError, TypeckResult};
+
+impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
+    pub(super) fn check_binary_op(
+        &mut self,
+        expr_id: hlr::ExprId,
+        left: hlr::Expr<'hlr>,
+        right: hlr::Expr<'hlr>,
+        operator: hlr::BinaryOperator,
+    ) -> TypeckResult<ty::Ty> {
+        let left_ty = self.check_expr(left, None)?;
+        let left_ty = self.normalize(left_ty);
+        let right_ty = self.check_expr(right, None)?;
+        let right_ty = self.normalize(right_ty);
+
+        if let Some(result) = self.try_check_short_circuit_op(left_ty, right_ty, operator) {
+            result
+        } else if let Some((prim, result_ty)) = self.try_check_builtin_binary_prim_op(left_ty, right_ty, operator) {
+            self.typing.expr_extra.insert(expr_id, ExprExtra::BinaryPrim(prim));
+            Ok(result_ty)
+        } else {
+            self.check_overloaded_op(expr_id, left_ty, right_ty, operator)
+        }
+    }
+
+    fn try_check_short_circuit_op(
+        &mut self,
+        left_ty: ty::Ty,
+        right_ty: ty::Ty,
+        operator: hlr::BinaryOperator,
+    ) -> Option<TypeckResult<ty::Ty>> {
+        use hlr::BinaryOperator::*;
+        if !matches!(operator, LogicalAnd | LogicalOr) {
+            return None;
+        }
+        let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
+        if left_ty == bool_ty && right_ty == bool_ty {
+            Some(Ok(bool_ty))
+        } else {
+            Some(Err(TypeckError::BinaryOpTypeMismatch {
+                operator,
+                left_ty,
+                right_ty,
+            }))
+        }
+    }
+
+    fn try_check_builtin_binary_prim_op(
+        &mut self,
+        left_ty: ty::Ty,
+        right_ty: ty::Ty,
+        operator: hlr::BinaryOperator,
+    ) -> Option<(language_items::BinaryPrimOp, ty::Ty)> {
+        use hlr::BinaryOperator::*;
+        use language_items::BinaryPrimOp::*;
+
+        let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
+        let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
+        let unit_ty = self.ctxt.tys.unit();
+
+        let i32 = left_ty == i32_ty && right_ty == i32_ty;
+        let bool = left_ty == bool_ty && right_ty == bool_ty;
+        let unit = left_ty == unit_ty && right_ty == unit_ty;
+
+        match operator {
+            Add if i32 => Some((AddI32, i32_ty)),
+            Subtract if i32 => Some((SubI32, i32_ty)),
+            Multiply if i32 => Some((MulI32, i32_ty)),
+            Divide if i32 => Some((DivI32, i32_ty)),
+            Remainder if i32 => Some((RemI32, i32_ty)),
+            Equal if i32 => Some((EqI32, bool_ty)),
+            Equal if bool => Some((EqBool, bool_ty)),
+            Equal if unit => Some((EqUnit, bool_ty)),
+            NotEqual if i32 => Some((NeI32, bool_ty)),
+            NotEqual if bool => Some((NeBool, bool_ty)),
+            NotEqual if unit => Some((NeUnit, bool_ty)),
+            BitOr if bool => Some((BitOrBool, bool_ty)),
+            BitAnd if bool => Some((BitAndBool, bool_ty)),
+            LessThan if i32 => Some((LtI32, bool_ty)),
+            GreaterThan if i32 => Some((GtI32, bool_ty)),
+            LessThanOrEqual if i32 => Some((LeI32, bool_ty)),
+            GreaterThanOrEqual if i32 => Some((GeI32, bool_ty)),
+            _ => None,
+        }
+    }
+
+    fn check_overloaded_op(
+        &mut self,
+        expr_id: hlr::ExprId,
+        left_ty: ty::Ty,
+        right_ty: ty::Ty,
+        operator: hlr::BinaryOperator,
+    ) -> TypeckResult<ty::Ty> {
+        use hlr::BinaryOperator::*;
+
+        let (trait_, mthd_name) = match operator {
+            Add => (self.ctxt.language_items.add_trait, "add"),
+            Subtract => (self.ctxt.language_items.sub_trait, "sub"),
+            Multiply => (self.ctxt.language_items.mul_trait, "mul"),
+            Divide => (self.ctxt.language_items.div_trait, "div"),
+            _ => {
+                return Err(TypeckError::BinaryOpTypeMismatch {
+                    operator,
+                    left_ty,
+                    right_ty,
+                });
+            }
+        };
+        let trait_ = trait_.ok_or(TypeckError::ArithTraitNotImplemented {
+            operator,
+            left_ty,
+            right_ty,
+        })?;
+
+        let trait_inst = traits::TraitInst {
+            trait_,
+            gen_args: self.ctxt.tys.ty_slice(&[right_ty]),
+        };
+        self.pending_obligations
+            .push((left_ty, ty::ConstraintRequirement::Trait(trait_inst)));
+
+        let found = super::mthd::FoundMthd::Trait {
+            trait_inst,
+            mthd_idx: 0,
+        };
+        let resolution = self.instantiate_mthd(found, left_ty, mthd_name, None)?;
+        self.typing
+            .expr_extra
+            .insert(expr_id, ExprExtra::BinaryOpMthd(resolution));
+
+        Ok(self.ctxt.tys.assoc_ty(left_ty, trait_inst, 0))
+    }
+}
