@@ -82,6 +82,7 @@ pub enum TypeckError {
         operator: hlr::UnaryOperator,
         operand_ty: ty::Ty,
     },
+    AssignmentTargetNotAPlace,
     AssignmentTypeMismatch {
         expected: ty::Ty,
         actual: ty::Ty,

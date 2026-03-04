@@ -590,7 +590,16 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(tuple_ty)
     }
 
+    fn check_expr_is_place(&self, expr: hlr::Expr<'hlr>) -> TypeckResult<()> {
+        match expr.0 {
+            hlr::ExprDef::Val(hlr::Val::Var(_)) | hlr::ExprDef::Deref(_) | hlr::ExprDef::FieldAccess { .. } => Ok(()),
+            _ => Err(TypeckError::AssignmentTargetNotAPlace),
+        }
+    }
+
     fn infer_assignment_ty(&mut self, target: hlr::Expr<'hlr>, value: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        self.check_expr_is_place(target)?;
+
         let target_ty = self.infer_expr_ty(target, None)?;
         let value_ty = self.infer_expr_ty(value, None)?;
         if !self.unify(target_ty, value_ty) {
