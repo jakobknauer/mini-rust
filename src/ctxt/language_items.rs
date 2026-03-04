@@ -5,6 +5,9 @@ pub struct LanguageItems {
     pub size_of: Option<Fn>,
     pub ptr_offset: Option<Fn>,
     pub add_trait: Option<Trait>,
+    pub sub_trait: Option<Trait>,
+    pub mul_trait: Option<Trait>,
+    pub div_trait: Option<Trait>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

@@ -4,9 +4,9 @@ pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     register_size_of(ctxt)
 }
 
-pub fn register_add_trait(ctxt: &mut ctxt::Ctxt) {
+fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str) -> traits::Trait {
     let rhs_var = ctxt.tys.register_gen_var("Rhs");
-    let trait_ = ctxt.traits.register_trait("Add", vec![rhs_var]);
+    let trait_ = ctxt.traits.register_trait(trait_name, vec![rhs_var]);
     ctxt.traits.register_assoc_ty(trait_, "Output");
 
     let self_ty = ctxt.tys.trait_self(trait_);
@@ -20,7 +20,7 @@ pub fn register_add_trait(ctxt: &mut ctxt::Ctxt) {
     ctxt.traits.register_mthd(
         trait_,
         fns::FnSig {
-            name: "add".to_string(),
+            name: mthd_name.to_string(),
             associated_ty: None,
             associated_trait_inst: Some(traits::TraitInst {
                 trait_,
@@ -43,7 +43,23 @@ pub fn register_add_trait(ctxt: &mut ctxt::Ctxt) {
         },
     );
 
-    ctxt.language_items.add_trait = Some(trait_);
+    trait_
+}
+
+pub fn register_add_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.add_trait = Some(register_arith_trait(ctxt, "Add", "add"));
+}
+
+pub fn register_sub_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.sub_trait = Some(register_arith_trait(ctxt, "Sub", "sub"));
+}
+
+pub fn register_mul_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.mul_trait = Some(register_arith_trait(ctxt, "Mul", "mul"));
+}
+
+pub fn register_div_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.div_trait = Some(register_arith_trait(ctxt, "Div", "div"));
 }
 
 fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {

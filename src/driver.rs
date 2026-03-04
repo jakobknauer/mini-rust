@@ -205,6 +205,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
     fn register_traits(&mut self) -> Result<(), ()> {
         stdlib::register_add_trait(&mut self.ctxt);
+        stdlib::register_sub_trait(&mut self.ctxt);
+        stdlib::register_mul_trait(&mut self.ctxt);
+        stdlib::register_div_trait(&mut self.ctxt);
 
         for ast_trait in self.ast.traits().iter() {
             let trait_gen_params: Vec<_> = ast_trait

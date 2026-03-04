@@ -344,9 +344,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             GreaterThan if i32 => (GtI32, bool_ty),
             LessThanOrEqual if i32 => (LeI32, bool_ty),
             GreaterThanOrEqual if i32 => (GeI32, bool_ty),
-            Add => {
-                return self.check_binary_op_add_trait(expr_id, left_ty, right_ty);
-            }
+            Add => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
+            Subtract => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
+            Multiply => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
+            Divide => return self.check_binary_op_arith_trait(expr_id, left_ty, right_ty, operator),
             _ => {
                 return Err(TypeckError::BinaryOpTypeMismatch {
                     operator,
@@ -360,20 +361,29 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(result_ty)
     }
 
-    fn check_binary_op_add_trait(
+    fn check_binary_op_arith_trait(
         &mut self,
         expr_id: hlr::ExprId,
         left_ty: ty::Ty,
         right_ty: ty::Ty,
+        operator: hlr::BinaryOperator,
     ) -> TypeckResult<ty::Ty> {
-        let add_trait = self
-            .ctxt
-            .language_items
-            .add_trait
-            .ok_or(TypeckError::AddTraitNotImplemented { left_ty, right_ty })?;
+        use hlr::BinaryOperator::*;
+        let (trait_, mthd_name) = match operator {
+            Add => (self.ctxt.language_items.add_trait, "add"),
+            Subtract => (self.ctxt.language_items.sub_trait, "sub"),
+            Multiply => (self.ctxt.language_items.mul_trait, "mul"),
+            Divide => (self.ctxt.language_items.div_trait, "div"),
+            _ => unreachable!(),
+        };
+        let trait_ = trait_.ok_or(TypeckError::ArithTraitNotImplemented {
+            operator,
+            left_ty,
+            right_ty,
+        })?;
 
         let trait_inst = traits::TraitInst {
-            trait_: add_trait,
+            trait_,
             gen_args: self.ctxt.tys.ty_slice(&[right_ty]),
         };
         self.pending_obligations
@@ -383,7 +393,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             trait_inst,
             mthd_idx: 0,
         };
-        let resolution = self.instantiate_mthd(found, left_ty, "add", None)?;
+        let resolution = self.instantiate_mthd(found, left_ty, mthd_name, None)?;
         self.typing
             .expr_extra
             .insert(expr_id, ExprExtra::BinaryOpMthd(resolution));

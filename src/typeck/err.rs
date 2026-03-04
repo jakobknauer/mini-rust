@@ -78,7 +78,8 @@ pub enum TypeckError {
         left_ty: ty::Ty,
         right_ty: ty::Ty,
     },
-    AddTraitNotImplemented {
+    ArithTraitNotImplemented {
+        operator: hlr::BinaryOperator,
         left_ty: ty::Ty,
         right_ty: ty::Ty,
     },
