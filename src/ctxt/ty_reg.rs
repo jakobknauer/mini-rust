@@ -976,6 +976,18 @@ impl TyReg {
         });
     }
 
+    pub fn get_trait_inst_constraint(&self, gen_var: GenVar, trait_: Trait) -> Option<TraitInst> {
+        self.constraints.iter().find_map(|c| {
+            if c.subject != gen_var {
+                return None;
+            }
+            match c.requirement {
+                ConstraintRequirement::Trait(trait_inst) if trait_inst.trait_ == trait_ => Some(trait_inst),
+                _ => None,
+            }
+        })
+    }
+
     pub fn implements_trait_constraint_exists(&self, gen_var: GenVar, trait_: Trait) -> bool {
         self.constraints
             .iter()

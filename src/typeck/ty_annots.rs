@@ -121,9 +121,11 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                             base: base_ty,
                             name: name.to_string(),
                         })?;
+                let n_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+                let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
                 let trait_inst = traits::TraitInst {
                     trait_,
-                    gen_args: self.ctxt.tys.ty_slice(&[]),
+                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
                 };
                 Ok(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }

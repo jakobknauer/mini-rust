@@ -4,6 +4,8 @@ fn main() -> i32 {
     1.add(2);
     1 + 2;
 
+    my_add(Vector3 { x: 1, y: 2, z: 3 }, Vector3 { x: 4, y: 5, z: 6 });
+
     11
 }
 
@@ -19,6 +21,12 @@ impl Add<Vector3> for Vector3 {
     fn add(self, other: Vector3) -> Vector3 {
         Vector3 { x: self.x + other.x, y: self.y + other.y, z: self.z + other.z }
     }
+}
+
+fn my_add<T>(x: T, y: T) -> T::Output
+    where T: Add<T>
+{
+    x + y
 }
 
 fn apply<A, B, F>(f: F, a: A) -> B

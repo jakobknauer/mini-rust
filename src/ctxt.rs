@@ -390,9 +390,23 @@ impl Ctxt {
                 let impl_insts = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
+                    // No concrete impl — base_ty is likely a GenVar with a trait constraint.
+                    // Look up the constraint to get the specific TraitInst (including gen args).
+                    if let &ty::TyDef::GenVar(gen_var) = self.tys.get_ty_def(base_ty) {
+                        if let Some(trait_inst) = self.tys.get_trait_inst_constraint(gen_var, *trait_) {
+                            return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
+                        }
+                    }
+                    let gen_args: Vec<_> = self
+                        .traits
+                        .get_trait_def(*trait_)
+                        .gen_params
+                        .iter()
+                        .map(|gp| self.tys.gen_var(*gp))
+                        .collect();
                     let trait_inst = traits::TraitInst {
                         trait_: *trait_,
-                        gen_args: self.tys.ty_slice(&[]), // TODO add gen args
+                        gen_args: self.tys.ty_slice(&gen_args),
                     };
                     return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
