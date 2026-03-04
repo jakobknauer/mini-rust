@@ -32,7 +32,7 @@ struct CaptureData {
 }
 
 impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
-    pub(super) fn infer_closure_ty(
+    pub(super) fn check_closure(
         &mut self,
         expr_id: hlr::ExprId,
         params: hlr::ClosureParams<'hlr>,
@@ -141,7 +141,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
         let stack_entry = return_ty;
         self.return_ty_stack.push(stack_entry);
-        let body_ty = self.infer_expr_ty(body, Some(return_ty));
+        let body_ty = self.check_expr(body, Some(return_ty));
         self.return_ty_stack.pop();
         let body_ty = body_ty?;
 

@@ -90,7 +90,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
         let return_ty = sig.return_ty;
         self.return_ty_stack.push(return_ty);
-        let body_ty = self.infer_expr_ty(self.fn_.body, Some(return_ty))?;
+        let body_ty = self.check_expr(self.fn_.body, Some(return_ty))?;
 
         if self.unify(body_ty, return_ty) {
             Ok(())
@@ -102,44 +102,42 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn infer_expr_ty(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
+    fn check_expr(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty>) -> TypeckResult<ty::Ty> {
         let ty = match expr.0 {
-            hlr::ExprDef::Lit(lit) => self.infer_lit_ty(lit),
-            hlr::ExprDef::Val(val) => self.infer_val_ty(expr.1, val),
-            hlr::ExprDef::BinaryOp { left, right, operator } => {
-                self.infer_binary_op_ty(expr.1, *left, *right, *operator)
-            }
-            hlr::ExprDef::UnaryOp { operand, operator } => self.infer_unary_op_ty(expr.1, *operand, *operator),
-            hlr::ExprDef::Call { callee, args } => self.infer_call_ty(*callee, args),
+            hlr::ExprDef::Lit(lit) => self.check_lit(lit),
+            hlr::ExprDef::Val(val) => self.check_val(expr.1, val),
+            hlr::ExprDef::BinaryOp { left, right, operator } => self.check_binary_op(expr.1, *left, *right, *operator),
+            hlr::ExprDef::UnaryOp { operand, operator } => self.check_unary_op(expr.1, *operand, *operator),
+            hlr::ExprDef::Call { callee, args } => self.check_call(*callee, args),
             hlr::ExprDef::MthdCall {
                 receiver,
                 mthd_name,
                 gen_args,
                 args,
-            } => self.infer_mthd_call_ty(expr.1, *receiver, mthd_name, *gen_args, args),
-            hlr::ExprDef::Struct { constructor, fields } => self.infer_struct_expr_ty(constructor, fields),
-            hlr::ExprDef::FieldAccess { base, field } => self.infer_field_access_ty(expr.1, *base, field),
-            hlr::ExprDef::Tuple(exprs) => self.infer_tuple_expr_ty(exprs),
-            hlr::ExprDef::Assign { target, value } => self.infer_assignment_ty(*target, *value),
-            hlr::ExprDef::Deref(expr) => self.infer_deref_ty(*expr),
-            hlr::ExprDef::AddrOf(expr) => self.infer_addr_of_ty(*expr),
-            hlr::ExprDef::As { expr, ty } => self.infer_as_ty(*expr, ty),
+            } => self.check_mthd_call(expr.1, *receiver, mthd_name, *gen_args, args),
+            hlr::ExprDef::Struct { constructor, fields } => self.check_struct_expr(constructor, fields),
+            hlr::ExprDef::FieldAccess { base, field } => self.check_field_access(expr.1, *base, field),
+            hlr::ExprDef::Tuple(exprs) => self.check_tuple_expr(exprs),
+            hlr::ExprDef::Assign { target, value } => self.check_assignment(*target, *value),
+            hlr::ExprDef::Deref(expr) => self.check_deref(*expr),
+            hlr::ExprDef::AddrOf(expr) => self.check_addr_of(*expr),
+            hlr::ExprDef::As { expr, ty } => self.check_as(*expr, ty),
             hlr::ExprDef::Closure {
                 params,
                 return_ty,
                 body,
-            } => self.infer_closure_ty(expr.1, params, *return_ty, *body, hint),
-            hlr::ExprDef::If { cond, then, else_ } => self.infer_if_ty(*cond, *then, *else_),
-            hlr::ExprDef::Loop { body } => self.infer_loop_ty(*body),
-            hlr::ExprDef::Match { scrutinee, arms } => self.infer_match_ty(*scrutinee, arms),
-            hlr::ExprDef::Block { stmts, trailing } => self.infer_block_ty(stmts, *trailing, hint),
+            } => self.check_closure(expr.1, params, *return_ty, *body, hint),
+            hlr::ExprDef::If { cond, then, else_ } => self.check_if(*cond, *then, *else_),
+            hlr::ExprDef::Loop { body } => self.check_loop(*body),
+            hlr::ExprDef::Match { scrutinee, arms } => self.check_match(*scrutinee, arms),
+            hlr::ExprDef::Block { stmts, trailing } => self.check_block(stmts, *trailing, hint),
             hlr::ExprDef::QualifiedMthd {
                 ty,
                 trait_,
                 trait_args,
                 mthd_name,
                 args,
-            } => self.infer_qualified_mthd_ty(expr.1, ty, *trait_, *trait_args, mthd_name, *args),
+            } => self.check_qualified_mthd(expr.1, ty, *trait_, *trait_args, mthd_name, *args),
         }?;
 
         self.typing.expr_types.insert(expr.1, ty);
@@ -149,14 +147,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
     fn check_stmt(&mut self, stmt: hlr::Stmt<'hlr>) -> TypeckResult<()> {
         match stmt {
-            hlr::StmtDef::Expr(expr) => self.infer_expr_ty(*expr, None).map(|_| ()),
+            hlr::StmtDef::Expr(expr) => self.check_expr(*expr, None).map(|_| ()),
             hlr::StmtDef::Let { var, ty, init } => self.check_let_stmt(*var, *ty, *init),
             hlr::StmtDef::Break => Ok(()),
             hlr::StmtDef::Return(expr) => self.check_return_stmt(*expr),
         }
     }
 
-    fn infer_lit_ty(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
+    fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<ty::Ty> {
         let ty = match lit {
             hlr::Lit::Int(_) => self.ctxt.tys.primitive(ty::Primitive::Integer32),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
@@ -170,7 +168,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn infer_val_ty(&mut self, expr_id: hlr::ExprId, val: &hlr::Val<'hlr>) -> TypeckResult<ty::Ty> {
+    fn check_val(&mut self, expr_id: hlr::ExprId, val: &hlr::Val<'hlr>) -> TypeckResult<ty::Ty> {
         match val {
             &hlr::Val::Var(var_id) => {
                 self.var_uses.push(var_id);
@@ -180,14 +178,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     .copied()
                     .ok_or(TypeckError::VarTypeNotSet { var_id, expr_id })
             }
-            &hlr::Val::Fn(fn_, args) => self.infer_fn_ty(expr_id, fn_, args),
+            &hlr::Val::Fn(fn_, args) => self.check_fn(expr_id, fn_, args),
             hlr::Val::Struct(..) => unreachable!("raw struct values are not supported"),
             hlr::Val::Variant(..) => unreachable!("raw variant values are not supported"),
-            hlr::Val::Mthd(base_ty, mthd_name, gen_args) => self.infer_mthd_ty(expr_id, base_ty, mthd_name, *gen_args),
+            hlr::Val::Mthd(base_ty, mthd_name, gen_args) => self.check_mthd(expr_id, base_ty, mthd_name, *gen_args),
         }
     }
 
-    fn infer_fn_ty(
+    fn check_fn(
         &mut self,
         expr_id: hlr::ExprId,
         fn_: fns::Fn,
@@ -228,7 +226,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(self.ctxt.tys.substitute_gen_vars(fn_ty, &subst))
     }
 
-    fn infer_mthd_ty(
+    fn check_mthd(
         &mut self,
         expr_id: hlr::ExprId,
         base_ty: hlr::TyAnnot<'hlr>,
@@ -243,7 +241,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(fn_ty)
     }
 
-    fn infer_qualified_mthd_ty(
+    fn check_qualified_mthd(
         &mut self,
         expr_id: hlr::ExprId,
         ty: hlr::TyAnnot<'hlr>,
@@ -290,16 +288,16 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(fn_ty)
     }
 
-    fn infer_binary_op_ty(
+    fn check_binary_op(
         &mut self,
         expr_id: hlr::ExprId,
         left: hlr::Expr<'hlr>,
         right: hlr::Expr<'hlr>,
         operator: hlr::BinaryOperator,
     ) -> TypeckResult<ty::Ty> {
-        let left_ty = self.infer_expr_ty(left, None)?;
+        let left_ty = self.check_expr(left, None)?;
         let left_ty = self.normalize(left_ty);
-        let right_ty = self.infer_expr_ty(right, None)?;
+        let right_ty = self.check_expr(right, None)?;
         let right_ty = self.normalize(right_ty);
 
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
@@ -358,13 +356,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(result_ty)
     }
 
-    fn infer_unary_op_ty(
+    fn check_unary_op(
         &mut self,
         expr_id: hlr::ExprId,
         operand: hlr::Expr<'hlr>,
         operator: hlr::UnaryOperator,
     ) -> TypeckResult<ty::Ty> {
-        let operand_ty = self.infer_expr_ty(operand, None)?;
+        let operand_ty = self.check_expr(operand, None)?;
 
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
@@ -382,13 +380,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(result_ty)
     }
 
-    fn infer_field_access_ty(
+    fn check_field_access(
         &mut self,
         expr_id: hlr::ExprId,
         base: hlr::Expr<'hlr>,
         field: &hlr::FieldSpec,
     ) -> TypeckResult<ty::Ty> {
-        let base_ty = self.infer_expr_ty(base, None)?;
+        let base_ty = self.check_expr(base, None)?;
         let mut base_ty = self.normalize(base_ty);
 
         let mut num_derefs = 0;
@@ -435,7 +433,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn infer_struct_expr_ty(
+    fn check_struct_expr(
         &mut self,
         constructor: &hlr::Val<'hlr>,
         fields: hlr::StructFields<'hlr>,
@@ -483,7 +481,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 hlr::FieldSpec::Index(idx) => *idx,
             };
             let field_ty = self.ctxt.tys.get_struct_field_ty(fields_ty, field_idx).unwrap();
-            let expr_ty = self.infer_expr_ty(*field_expr, Some(field_ty))?;
+            let expr_ty = self.check_expr(*field_expr, Some(field_ty))?;
             if !self.unify(expr_ty, field_ty) {
                 return Err(TypeckError::StructFieldTypeMismatch {
                     struct_ty: fields_ty,
@@ -497,7 +495,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(return_ty)
     }
 
-    fn infer_mthd_call_ty(
+    fn check_mthd_call(
         &mut self,
         expr_id: hlr::ExprId,
         receiver: hlr::Expr<'hlr>,
@@ -505,7 +503,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         gen_args: Option<hlr::TyAnnotSlice<'hlr>>,
         args: hlr::ExprSlice<'hlr>,
     ) -> TypeckResult<ty::Ty> {
-        let receiver_ty = self.infer_expr_ty(receiver, None)?;
+        let receiver_ty = self.check_expr(receiver, None)?;
         let receiver_ty = self.normalize(receiver_ty);
 
         let found = self.resolve_mthd(receiver_ty, mthd_name, true)?;
@@ -530,7 +528,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
         for (i, arg) in args.iter().enumerate() {
             let param_hint = param_tys.get(i + 1).copied();
-            let arg_ty = self.infer_expr_ty(*arg, param_hint)?;
+            let arg_ty = self.check_expr(*arg, param_hint)?;
             if let Some(&param_ty) = param_tys.get(i + 1)
                 && !self.unify(arg_ty, param_ty)
             {
@@ -545,8 +543,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(return_ty)
     }
 
-    fn infer_call_ty(&mut self, callee: hlr::Expr<'hlr>, args: hlr::ExprSlice<'hlr>) -> TypeckResult<ty::Ty> {
-        let callee_ty = self.infer_expr_ty(callee, None)?;
+    fn check_call(&mut self, callee: hlr::Expr<'hlr>, args: hlr::ExprSlice<'hlr>) -> TypeckResult<ty::Ty> {
+        let callee_ty = self.check_expr(callee, None)?;
         let callee_ty = self.normalize(callee_ty);
 
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(callee_ty) else {
@@ -565,7 +563,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
         for (i, arg) in args.iter().enumerate() {
             let param_hint = param_tys.get(i).copied();
-            let arg_ty = self.infer_expr_ty(*arg, param_hint)?;
+            let arg_ty = self.check_expr(*arg, param_hint)?;
             if let Some(&param_ty) = param_tys.get(i)
                 && !self.unify(arg_ty, param_ty)
             {
@@ -580,10 +578,10 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(return_ty)
     }
 
-    fn infer_tuple_expr_ty(&mut self, exprs: hlr::ExprSlice<'hlr>) -> TypeckResult<ty::Ty> {
+    fn check_tuple_expr(&mut self, exprs: hlr::ExprSlice<'hlr>) -> TypeckResult<ty::Ty> {
         let expr_tys: Vec<_> = exprs
             .iter()
-            .map(|expr| self.infer_expr_ty(*expr, None))
+            .map(|expr| self.check_expr(*expr, None))
             .collect::<TypeckResult<_>>()?;
 
         let tuple_ty = self.ctxt.tys.tuple(&expr_tys);
@@ -597,11 +595,11 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn infer_assignment_ty(&mut self, target: hlr::Expr<'hlr>, value: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+    fn check_assignment(&mut self, target: hlr::Expr<'hlr>, value: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
         self.check_expr_is_place(target)?;
 
-        let target_ty = self.infer_expr_ty(target, None)?;
-        let value_ty = self.infer_expr_ty(value, None)?;
+        let target_ty = self.check_expr(target, None)?;
+        let value_ty = self.check_expr(value, None)?;
         if !self.unify(target_ty, value_ty) {
             return Err(TypeckError::AssignmentTypeMismatch {
                 expected: target_ty,
@@ -611,8 +609,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(self.ctxt.tys.unit())
     }
 
-    fn infer_deref_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
-        let expr_ty = self.infer_expr_ty(expr, None)?;
+    fn check_deref(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_ty = self.check_expr(expr, None)?;
         let expr_ty = self.normalize(expr_ty);
 
         match self.ctxt.tys.get_ty_def(expr_ty) {
@@ -627,13 +625,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn infer_addr_of_ty(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
-        let expr_ty = self.infer_expr_ty(expr, None)?;
+    fn check_addr_of(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_ty = self.check_expr(expr, None)?;
         Ok(self.ctxt.tys.ref_(expr_ty))
     }
 
-    fn infer_as_ty(&mut self, expr: hlr::Expr<'hlr>, target_ty: hlr::TyAnnot<'hlr>) -> TypeckResult<ty::Ty> {
-        let expr_ty = self.infer_expr_ty(expr, None)?;
+    fn check_as(&mut self, expr: hlr::Expr<'hlr>, target_ty: hlr::TyAnnot<'hlr>) -> TypeckResult<ty::Ty> {
+        let expr_ty = self.check_expr(expr, None)?;
         let expr_ty = self.normalize(expr_ty);
 
         let target_ty = self.resolve_ty_annot(target_ty)?;
@@ -661,22 +659,22 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn infer_if_ty(
+    fn check_if(
         &mut self,
         cond: hlr::Expr<'hlr>,
         then: hlr::Expr<'hlr>,
         else_: Option<hlr::Expr<'hlr>>,
     ) -> TypeckResult<ty::Ty> {
-        let cond_ty = self.infer_expr_ty(cond, None)?;
+        let cond_ty = self.check_expr(cond, None)?;
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
 
         if !self.unify(cond_ty, bool_ty) {
             return Err(TypeckError::IfConditionNotBoolean);
         }
 
-        let then_ty = self.infer_expr_ty(then, None)?;
+        let then_ty = self.check_expr(then, None)?;
         let else_ty = else_
-            .map(|expr| self.infer_expr_ty(expr, None))
+            .map(|expr| self.check_expr(expr, None))
             .transpose()?
             .unwrap_or(self.ctxt.tys.unit());
 
@@ -687,13 +685,13 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(then_ty)
     }
 
-    fn infer_loop_ty(&mut self, body: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
-        self.infer_expr_ty(body, None)?;
+    fn check_loop(&mut self, body: hlr::Expr<'hlr>) -> TypeckResult<ty::Ty> {
+        self.check_expr(body, None)?;
         Ok(self.ctxt.tys.unit())
     }
 
-    fn infer_match_ty(&mut self, scrutinee: hlr::Expr<'hlr>, arms: &[hlr::MatchArm<'hlr>]) -> TypeckResult<ty::Ty> {
-        let scrutinee_ty = self.infer_expr_ty(scrutinee, None)?;
+    fn check_match(&mut self, scrutinee: hlr::Expr<'hlr>, arms: &[hlr::MatchArm<'hlr>]) -> TypeckResult<ty::Ty> {
+        let scrutinee_ty = self.check_expr(scrutinee, None)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
 
         let (enum_ty, by_ref) = match self.ctxt.tys.get_ty_def(scrutinee_ty) {
@@ -744,7 +742,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 self.typing.var_types.insert(field.binding, binding_ty);
             }
 
-            let arm_ty = self.infer_expr_ty(arm.body, result_ty)?;
+            let arm_ty = self.check_expr(arm.body, result_ty)?;
 
             if let Some(ty) = result_ty {
                 if !self.unify(arm_ty, ty) {
@@ -761,7 +759,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         Ok(result_ty.unwrap_or_else(|| self.ctxt.tys.unit()))
     }
 
-    fn infer_block_ty(
+    fn check_block(
         &mut self,
         stmts: hlr::StmtSlice<'hlr>,
         trailing: hlr::Expr<'hlr>,
@@ -770,7 +768,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         for stmt in stmts {
             self.check_stmt(stmt)?;
         }
-        self.infer_expr_ty(trailing, hint)
+        self.check_expr(trailing, hint)
     }
 
     fn check_let_stmt(
@@ -780,7 +778,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         init: hlr::Expr<'hlr>,
     ) -> TypeckResult<()> {
         let annot_ty = ty.map(|ty| self.resolve_ty_annot(ty)).transpose()?;
-        let init_ty = self.infer_expr_ty(init, annot_ty)?;
+        let init_ty = self.check_expr(init, annot_ty)?;
         if let Some(annot_ty) = annot_ty {
             if !self.unify(init_ty, annot_ty) {
                 return Err(TypeckError::LetTypeMismatch {
@@ -799,7 +797,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let expected = *self.return_ty_stack.last().unwrap();
 
         let actual = expr
-            .map(|expr| self.infer_expr_ty(expr, Some(expected)))
+            .map(|expr| self.check_expr(expr, Some(expected)))
             .transpose()?
             .unwrap_or(self.ctxt.tys.unit());
 
