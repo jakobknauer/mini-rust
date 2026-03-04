@@ -197,14 +197,21 @@ impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {
         let val = match operator {
             hlr::BinaryOperator::LogicalAnd => self.lower_logical_and(left, right),
             hlr::BinaryOperator::LogicalOr => self.lower_logical_or(left, right),
-            _ => match self.typing.expr_extra[&expr_id] {
+            _ => match &self.typing.expr_extra[&expr_id] {
                 ExprExtra::BinaryPrim(prim) => {
                     let result_ty = self.typing.expr_types[&expr_id];
                     let lhs = self.lower_to_op(left);
                     let rhs = self.lower_to_op(right);
-                    self.builder.insert_binary_prim_val(prim, lhs, rhs, result_ty)
+                    self.builder.insert_binary_prim_val(*prim, lhs, rhs, result_ty)
                 }
-                _ => panic!("expected BinaryOp or BinaryPrim extra"),
+                ExprExtra::BinaryOpMthd(resolution) => {
+                    let resolution = resolution.clone();
+                    let callee_op = self.lower_mthd_resolution_to_op(&resolution);
+                    let left_op = self.lower_to_op(left);
+                    let right_op = self.lower_to_op(right);
+                    self.builder.insert_call_val(callee_op, vec![left_op, right_op])
+                }
+                _ => panic!("expected BinaryPrim or BinaryOpMthd extra"),
             },
         };
         val.into()

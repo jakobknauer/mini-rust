@@ -157,6 +157,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             },
             ExprExtra::ValFn(fn_inst) => ExprExtra::ValFn(self.normalize_fn_inst(fn_inst)),
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
+            ExprExtra::BinaryOpMthd(resolution) => ExprExtra::BinaryOpMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::FieldAccess { .. } | ExprExtra::BinaryPrim(_) | ExprExtra::UnaryPrim(_) => extra,
         }
     }

@@ -27,6 +27,7 @@ pub enum ExprExtra {
     ValFn(fns::FnInst),
     ValMthd(MthdResolution),
     BinaryPrim(language_items::BinaryPrimOp),
+    BinaryOpMthd(MthdResolution),
     UnaryPrim(language_items::UnaryPrimOp),
     FieldAccess {
         derefs: usize,
@@ -343,6 +344,9 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             GreaterThan if i32 => (GtI32, bool_ty),
             LessThanOrEqual if i32 => (LeI32, bool_ty),
             GreaterThanOrEqual if i32 => (GeI32, bool_ty),
+            Add => {
+                return self.check_binary_op_add_trait(expr_id, left_ty, right_ty);
+            }
             _ => {
                 return Err(TypeckError::BinaryOpTypeMismatch {
                     operator,
@@ -354,6 +358,37 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
         self.typing.expr_extra.insert(expr_id, ExprExtra::BinaryPrim(prim));
         Ok(result_ty)
+    }
+
+    fn check_binary_op_add_trait(
+        &mut self,
+        expr_id: hlr::ExprId,
+        left_ty: ty::Ty,
+        right_ty: ty::Ty,
+    ) -> TypeckResult<ty::Ty> {
+        let add_trait = self
+            .ctxt
+            .language_items
+            .add_trait
+            .ok_or(TypeckError::AddTraitNotImplemented { left_ty, right_ty })?;
+
+        let trait_inst = traits::TraitInst {
+            trait_: add_trait,
+            gen_args: self.ctxt.tys.ty_slice(&[right_ty]),
+        };
+        self.pending_obligations
+            .push((left_ty, ty::ConstraintRequirement::Trait(trait_inst)));
+
+        let found = mthd::FoundMthd::Trait {
+            trait_inst,
+            mthd_idx: 0,
+        };
+        let resolution = self.instantiate_mthd(found, left_ty, "add", None)?;
+        self.typing
+            .expr_extra
+            .insert(expr_id, ExprExtra::BinaryOpMthd(resolution));
+
+        Ok(self.ctxt.tys.assoc_ty(left_ty, trait_inst, 0))
     }
 
     fn check_unary_op(

@@ -78,6 +78,10 @@ pub enum TypeckError {
         left_ty: ty::Ty,
         right_ty: ty::Ty,
     },
+    AddTraitNotImplemented {
+        left_ty: ty::Ty,
+        right_ty: ty::Ty,
+    },
     UnaryOpTypeMismatch {
         operator: hlr::UnaryOperator,
         operand_ty: ty::Ty,

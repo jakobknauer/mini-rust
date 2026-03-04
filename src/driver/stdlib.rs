@@ -1,7 +1,49 @@
-use crate::ctxt::{self, fns, ty};
+use crate::ctxt::{self, fns, traits, ty};
 
 pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     register_size_of(ctxt)
+}
+
+pub fn register_add_trait(ctxt: &mut ctxt::Ctxt) {
+    let rhs_var = ctxt.tys.register_gen_var("Rhs");
+    let trait_ = ctxt.traits.register_trait("Add", vec![rhs_var]);
+    ctxt.traits.register_assoc_ty(trait_, "Output");
+
+    let self_ty = ctxt.tys.trait_self(trait_);
+    let rhs_ty = ctxt.tys.gen_var(rhs_var);
+    let trait_inst = traits::TraitInst {
+        trait_,
+        gen_args: ctxt.tys.ty_slice(&[rhs_ty]),
+    };
+    let output_ty = ctxt.tys.assoc_ty(self_ty, trait_inst, 0);
+
+    ctxt.traits.register_mthd(
+        trait_,
+        fns::FnSig {
+            name: "add".to_string(),
+            associated_ty: None,
+            associated_trait_inst: Some(traits::TraitInst {
+                trait_,
+                gen_args: ctxt.tys.ty_slice(&[]),
+            }),
+            gen_params: vec![],
+            env_gen_params: vec![rhs_var],
+            params: vec![
+                fns::FnParam {
+                    kind: fns::FnParamKind::Self_,
+                    ty: self_ty,
+                },
+                fns::FnParam {
+                    kind: fns::FnParamKind::Regular("rhs".to_string()),
+                    ty: rhs_ty,
+                },
+            ],
+            var_args: false,
+            return_ty: output_ty,
+        },
+    );
+
+    ctxt.language_items.add_trait = Some(trait_);
 }
 
 fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
