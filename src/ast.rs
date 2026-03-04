@@ -23,11 +23,11 @@ pub struct FnId(usize);
 
 #[derive(Debug, Default)]
 pub struct Ast<'ast> {
-    free_fns: RefCell<Vec<&'ast Fn<'ast>>>,
-    structs: RefCell<Vec<&'ast Struct<'ast>>>,
-    enums: RefCell<Vec<&'ast Enum<'ast>>>,
-    impls: RefCell<Vec<&'ast Impl<'ast>>>,
-    traits: RefCell<Vec<&'ast Trait<'ast>>>,
+    free_fns: RefCell<Vec<Fn<'ast>>>,
+    structs: RefCell<Vec<Struct<'ast>>>,
+    enums: RefCell<Vec<Enum<'ast>>>,
+    impls: RefCell<Vec<Impl<'ast>>>,
+    traits: RefCell<Vec<Trait<'ast>>>,
 
     next_struct_id: RefCell<StructId>,
     next_enum_id: RefCell<EnumId>,
@@ -64,68 +64,68 @@ impl<'ast> Ast<'ast> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 
-    pub fn fn_(&'ast self, fn_def: FnDef<'ast>) -> &'ast Fn<'ast> {
+    pub fn fn_(&'ast self, fn_def: FnDef<'ast>) -> Fn<'ast> {
         let id = self.next_fn_id.replace_with(|FnId(n)| FnId(*n + 1));
-        self.arena.alloc(Fn(fn_def, id))
+        Fn(self.arena.alloc(fn_def), id)
     }
 
-    pub fn fn_slice(&'ast self, fns: &[&'ast Fn<'ast>]) -> FnSlice<'ast> {
+    pub fn fn_slice(&'ast self, fns: &[Fn<'ast>]) -> FnSlice<'ast> {
         self.arena.alloc_slice_copy(fns)
     }
 
     pub fn add_struct(&'ast self, def: StructDef<'ast>) {
         let id = self.next_struct_id.replace_with(|StructId(n)| StructId(*n + 1));
-        self.structs.borrow_mut().push(self.arena.alloc(Struct(def, id)));
+        self.structs.borrow_mut().push(Struct(self.arena.alloc(def), id));
     }
 
     pub fn add_enum(&'ast self, def: EnumDef<'ast>) {
         let id = self.next_enum_id.replace_with(|EnumId(n)| EnumId(*n + 1));
-        self.enums.borrow_mut().push(self.arena.alloc(Enum(def, id)));
+        self.enums.borrow_mut().push(Enum(self.arena.alloc(def), id));
     }
 
     pub fn add_trait(&'ast self, def: TraitDef<'ast>) {
         let id = self.next_trait_id.replace_with(|TraitId(n)| TraitId(*n + 1));
-        self.traits.borrow_mut().push(self.arena.alloc(Trait(def, id)));
+        self.traits.borrow_mut().push(Trait(self.arena.alloc(def), id));
     }
 
     pub fn add_impl(&'ast self, def: ImplDef<'ast>) {
         let id = self.next_impl_id.replace_with(|ImplId(n)| ImplId(*n + 1));
-        self.impls.borrow_mut().push(self.arena.alloc(Impl(def, id)));
+        self.impls.borrow_mut().push(Impl(self.arena.alloc(def), id));
     }
 
-    pub fn add_free_fn(&self, fn_: &'ast Fn<'ast>) {
+    pub fn add_free_fn(&self, fn_: Fn<'ast>) {
         self.free_fns.borrow_mut().push(fn_);
     }
 
-    pub fn structs(&self) -> Ref<'_, [&'ast Struct<'ast>]> {
+    pub fn structs(&self) -> Ref<'_, [Struct<'ast>]> {
         Ref::map(self.structs.borrow(), |v| v.as_slice())
     }
 
-    pub fn enums(&self) -> Ref<'_, [&'ast Enum<'ast>]> {
+    pub fn enums(&self) -> Ref<'_, [Enum<'ast>]> {
         Ref::map(self.enums.borrow(), |v| v.as_slice())
     }
 
-    pub fn impls(&self) -> Ref<'_, [&'ast Impl<'ast>]> {
+    pub fn impls(&self) -> Ref<'_, [Impl<'ast>]> {
         Ref::map(self.impls.borrow(), |v| v.as_slice())
     }
 
-    pub fn traits(&self) -> Ref<'_, [&'ast Trait<'ast>]> {
+    pub fn traits(&self) -> Ref<'_, [Trait<'ast>]> {
         Ref::map(self.traits.borrow(), |v| v.as_slice())
     }
 
-    pub fn free_fns(&self) -> Ref<'_, [&'ast Fn<'ast>]> {
+    pub fn free_fns(&self) -> Ref<'_, [Fn<'ast>]> {
         Ref::map(self.free_fns.borrow(), |v| v.as_slice())
     }
 }
 
-#[derive(Debug)]
-pub struct Fn<'ast>(pub FnDef<'ast>, pub FnId);
-pub type FnSlice<'ast> = &'ast [&'ast Fn<'ast>];
+#[derive(Clone, Copy, Debug)]
+pub struct Fn<'ast>(pub &'ast FnDef<'ast>, pub FnId);
+pub type FnSlice<'ast> = &'ast [Fn<'ast>];
 
 impl<'ast> std::ops::Deref for Fn<'ast> {
     type Target = FnDef<'ast>;
     fn deref(&self) -> &FnDef<'ast> {
-        &self.0
+        self.0
     }
 }
 
@@ -172,13 +172,13 @@ pub struct StructDef<'ast> {
     pub fields: Vec<StructField<'ast>>,
 }
 
-#[derive(Debug)]
-pub struct Struct<'ast>(pub StructDef<'ast>, pub StructId);
+#[derive(Clone, Copy, Debug)]
+pub struct Struct<'ast>(pub &'ast StructDef<'ast>, pub StructId);
 
 impl<'ast> Deref for Struct<'ast> {
     type Target = StructDef<'ast>;
     fn deref(&self) -> &StructDef<'ast> {
-        &self.0
+        self.0
     }
 }
 
@@ -195,13 +195,13 @@ pub struct EnumDef<'ast> {
     pub variants: Vec<EnumVariant<'ast>>,
 }
 
-#[derive(Debug)]
-pub struct Enum<'ast>(pub EnumDef<'ast>, pub EnumId);
+#[derive(Clone, Copy, Debug)]
+pub struct Enum<'ast>(pub &'ast EnumDef<'ast>, pub EnumId);
 
 impl<'ast> Deref for Enum<'ast> {
     type Target = EnumDef<'ast>;
     fn deref(&self) -> &EnumDef<'ast> {
-        &self.0
+        self.0
     }
 }
 
@@ -220,13 +220,13 @@ pub struct ImplDef<'ast> {
     pub assoc_tys: Vec<AssocTy<'ast>>,
 }
 
-#[derive(Debug)]
-pub struct Impl<'ast>(pub ImplDef<'ast>, pub ImplId);
+#[derive(Clone, Copy, Debug)]
+pub struct Impl<'ast>(pub &'ast ImplDef<'ast>, pub ImplId);
 
 impl<'ast> Deref for Impl<'ast> {
     type Target = ImplDef<'ast>;
     fn deref(&self) -> &ImplDef<'ast> {
-        &self.0
+        self.0
     }
 }
 
@@ -250,13 +250,13 @@ pub struct TraitDef<'ast> {
     pub assoc_ty_names: Vec<String>,
 }
 
-#[derive(Debug)]
-pub struct Trait<'ast>(pub TraitDef<'ast>, pub TraitId);
+#[derive(Clone, Copy, Debug)]
+pub struct Trait<'ast>(pub &'ast TraitDef<'ast>, pub TraitId);
 
 impl<'ast> Deref for Trait<'ast> {
     type Target = TraitDef<'ast>;
     fn deref(&self) -> &TraitDef<'ast> {
-        &self.0
+        self.0
     }
 }
 

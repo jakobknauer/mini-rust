@@ -294,7 +294,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
     fn register_function(
         &mut self,
-        ast_fn: &'ast ast::Fn<'ast>,
+        ast_fn: ast::Fn<'ast>,
         associated_ty: Option<ty::Ty>,
         associated_trait_inst: Option<traits::TraitInst>,
         env_gen_params: Vec<ty::GenVar>,

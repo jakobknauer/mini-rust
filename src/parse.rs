@@ -153,7 +153,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(())
     }
 
-    fn parse_function(&mut self, allow_receiver_param: bool) -> Result<&'ast Fn<'ast>, ParserErr> {
+    fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn<'ast>, ParserErr> {
         self.expect_keyword(Keyword::Fn)?;
         let name = self.expect_identifier()?;
 

@@ -10,11 +10,11 @@ impl<'ast> AstBuilder<'ast> {
         AstBuilder { ast }
     }
 
-    pub fn add_fn(&self, fn_: FnDef<'ast>) -> &'ast Fn<'ast> {
+    pub fn add_fn(&self, fn_: FnDef<'ast>) -> Fn<'ast> {
         self.ast.fn_(fn_)
     }
 
-    pub fn add_free_fn(&self, fn_: &'ast Fn<'ast>) {
+    pub fn add_free_fn(&self, fn_: Fn<'ast>) {
         self.ast.add_free_fn(fn_);
     }
 
@@ -26,7 +26,7 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.add_enum(def);
     }
 
-    pub fn fn_slice(&self, fns: &[&'ast Fn<'ast>]) -> FnSlice<'ast> {
+    pub fn fn_slice(&self, fns: &[Fn<'ast>]) -> FnSlice<'ast> {
         self.ast.fn_slice(fns)
     }
 
