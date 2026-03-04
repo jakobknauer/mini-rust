@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefCell},
+    cell::{Cell, Ref, RefCell},
     marker::PhantomData,
     ops::Deref,
 };
@@ -29,11 +29,11 @@ pub struct Ast<'ast> {
     impls: RefCell<Vec<Impl<'ast>>>,
     traits: RefCell<Vec<Trait<'ast>>>,
 
-    next_struct_id: RefCell<StructId>,
-    next_enum_id: RefCell<EnumId>,
-    next_trait_id: RefCell<TraitId>,
-    next_impl_id: RefCell<ImplId>,
-    next_fn_id: RefCell<FnId>,
+    next_struct_id: Cell<StructId>,
+    next_enum_id: Cell<EnumId>,
+    next_trait_id: Cell<TraitId>,
+    next_impl_id: Cell<ImplId>,
+    next_fn_id: Cell<FnId>,
 
     arena: bumpalo::Bump,
     _marker: PhantomData<&'ast ()>,
@@ -65,7 +65,8 @@ impl<'ast> Ast<'ast> {
     }
 
     pub fn fn_(&'ast self, fn_def: FnDef<'ast>) -> Fn<'ast> {
-        let id = self.next_fn_id.replace_with(|FnId(n)| FnId(*n + 1));
+        let id = self.next_fn_id.get();
+        self.next_fn_id.set(FnId(id.0 + 1));
         Fn(self.arena.alloc(fn_def), id)
     }
 
@@ -74,22 +75,26 @@ impl<'ast> Ast<'ast> {
     }
 
     pub fn add_struct(&'ast self, def: StructDef<'ast>) {
-        let id = self.next_struct_id.replace_with(|StructId(n)| StructId(*n + 1));
+        let id = self.next_struct_id.get();
+        self.next_struct_id.set(StructId(id.0 + 1));
         self.structs.borrow_mut().push(Struct(self.arena.alloc(def), id));
     }
 
     pub fn add_enum(&'ast self, def: EnumDef<'ast>) {
-        let id = self.next_enum_id.replace_with(|EnumId(n)| EnumId(*n + 1));
+        let id = self.next_enum_id.get();
+        self.next_enum_id.set(EnumId(id.0 + 1));
         self.enums.borrow_mut().push(Enum(self.arena.alloc(def), id));
     }
 
     pub fn add_trait(&'ast self, def: TraitDef<'ast>) {
-        let id = self.next_trait_id.replace_with(|TraitId(n)| TraitId(*n + 1));
+        let id = self.next_trait_id.get();
+        self.next_trait_id.set(TraitId(id.0 + 1));
         self.traits.borrow_mut().push(Trait(self.arena.alloc(def), id));
     }
 
     pub fn add_impl(&'ast self, def: ImplDef<'ast>) {
-        let id = self.next_impl_id.replace_with(|ImplId(n)| ImplId(*n + 1));
+        let id = self.next_impl_id.get();
+        self.next_impl_id.set(ImplId(id.0 + 1));
         self.impls.borrow_mut().push(Impl(self.arena.alloc(def), id));
     }
 

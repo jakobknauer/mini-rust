@@ -2,7 +2,7 @@ mod expr;
 mod stmt;
 mod ty_annot;
 
-use std::{cell::RefCell, marker::PhantomData};
+use std::{cell::Cell, marker::PhantomData};
 
 use crate::ctxt::fns;
 
@@ -15,8 +15,8 @@ pub struct Hlr<'hlr> {
     arena: bumpalo::Bump,
     _marker: PhantomData<&'hlr ()>,
 
-    next_var_id: RefCell<VarId>,
-    next_expr_id: RefCell<ExprId>,
+    next_var_id: Cell<VarId>,
+    next_expr_id: Cell<ExprId>,
 }
 
 pub struct Fn<'hlr> {
@@ -36,14 +36,17 @@ impl std::fmt::Display for VarId {
 
 impl<'hlr> Hlr<'hlr> {
     pub fn var_id(&self) -> VarId {
-        self.next_var_id.replace_with(|VarId(id)| VarId(*id + 1))
+        let id = self.next_var_id.get();
+        self.next_var_id.set(VarId(id.0 + 1));
+        id
     }
 
     pub fn expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
-        Expr(
-            self.arena.alloc(expr),
-            self.next_expr_id.replace_with(|ExprId(id)| ExprId(*id + 1)),
-        )
+        Expr(self.arena.alloc(expr), {
+            let id = self.next_expr_id.get();
+            self.next_expr_id.set(ExprId(id.0 + 1));
+            id
+        })
     }
 
     pub fn stmt(&'hlr self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
