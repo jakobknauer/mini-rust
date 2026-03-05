@@ -1,6 +1,6 @@
 fn main() -> i32 {
-    let v = Vector3::new(4, 5, 6) - Vector3::new(1, 2, 3);
-    v.x + v.y + v.z
+    let b = Vector3::new(1, 2, 3) | Vector3::new(4, 5, 3);
+    if b { 1 } else { 0 }
 }
 
 struct Vector3 {
@@ -15,19 +15,11 @@ impl Vector3 {
     }
 }
 
-impl Add<Vector3> for Vector3 {
-    type Output = Vector3;
+impl BitOr<Vector3> for Vector3 {
+    type Output = bool;
 
-    fn add(self, other: Vector3) -> Vector3 {
-        Vector3 { x: self.x + other.x, y: self.y + other.y, z: self.z + other.z }
-    }
-}
-
-impl Sub<Vector3> for Vector3 {
-    type Output = Vector3;
-
-    fn sub(self, other: Vector3) -> Vector3 {
-        Vector3 { x: self.x - other.x, y: self.y - other.y, z: self.z - other.z }
+    fn bitor(self, other: Vector3) -> bool {
+        self.x == other.x || self.y == other.y || self.z == other.z
     }
 }
 

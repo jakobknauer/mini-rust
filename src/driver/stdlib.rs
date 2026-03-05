@@ -62,6 +62,14 @@ pub fn register_div_trait(ctxt: &mut ctxt::Ctxt) {
     ctxt.language_items.div_trait = Some(register_arith_trait(ctxt, "Div", "div"));
 }
 
+pub fn register_bit_or_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.bit_or_trait = Some(register_arith_trait(ctxt, "BitOr", "bitor"));
+}
+
+pub fn register_bit_and_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.bit_and_trait = Some(register_arith_trait(ctxt, "BitAnd", "bitand"));
+}
+
 fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let fn_ = ctxt.fns.register_fn(
         fns::FnSig {
