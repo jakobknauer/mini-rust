@@ -32,7 +32,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
         match ty_def {
             InfVar(_) => true,
-            Primitive(_) | GenVar(_) | TraitSelf(_) => false,
+            Primitive(_) | GenVar(_) | TraitSelf(_) | Opaque(_) => false,
             &Tuple(items) => self.slice_contains_inf_var(items),
             &Ref(inner) | &Ptr(inner) => self.contains_inf_var(inner),
             &Struct { gen_args, .. } => self.slice_contains_inf_var(gen_args),

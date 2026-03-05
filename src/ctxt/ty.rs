@@ -35,6 +35,9 @@ pub struct GenVar(pub(in crate::ctxt) usize);
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct InfVar(pub(in crate::ctxt) usize);
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct OpaqueId(pub(in crate::ctxt) usize);
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyDef {
     Primitive(Primitive),
@@ -67,6 +70,7 @@ pub enum TyDef {
         assoc_ty_idx: usize,
     },
     InfVar(InfVar),
+    Opaque(OpaqueId),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

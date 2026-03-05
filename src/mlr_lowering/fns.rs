@@ -365,6 +365,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         }
 
         let callable_ty = self.substitute(callable.1);
+        let callable_ty = self.parent.mr_ctxt.tys.resolve_opaque_in_ty(callable_ty);
         let callable_ty_def = self.tys().get_ty_def(callable_ty).clone();
 
         if let mr_ty::TyDef::Closure {

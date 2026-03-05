@@ -22,6 +22,9 @@ pub struct TyReg {
     constraints: Vec<Constraint>,
 
     next_inf_var: InfVar,
+    next_opaque_id: usize,
+    opaque_resolutions: HashMap<OpaqueId, Ty>,
+    opaque_constraints: HashMap<OpaqueId, Vec<ConstraintRequirement>>,
 }
 
 #[derive(Clone, Copy)]
@@ -233,6 +236,125 @@ impl TyReg {
         self.register_ty(inf_var)
     }
 
+    pub fn opaque(&mut self) -> (OpaqueId, Ty) {
+        let id = OpaqueId(self.next_opaque_id);
+        self.next_opaque_id += 1;
+        let ty = self.register_ty(TyDef::Opaque(id));
+        (id, ty)
+    }
+
+    pub fn set_opaque_resolution(&mut self, id: OpaqueId, ty: Ty) {
+        self.opaque_resolutions.insert(id, ty);
+    }
+
+    pub fn get_opaque_resolution(&self, id: OpaqueId) -> Option<Ty> {
+        self.opaque_resolutions.get(&id).copied()
+    }
+
+    pub fn add_opaque_constraint(&mut self, id: OpaqueId, req: ConstraintRequirement) {
+        self.opaque_constraints.entry(id).or_default().push(req);
+    }
+
+    pub fn opaque_satisfies_trait_inst(&self, id: OpaqueId, trait_inst: TraitInst) -> bool {
+        let Some(reqs) = self.opaque_constraints.get(&id) else {
+            return false;
+        };
+        reqs.iter()
+            .any(|r| matches!(r, ConstraintRequirement::Trait(ti) if ti.trait_ == trait_inst.trait_))
+    }
+
+    pub fn try_get_opaque_callable_constraint(&self, id: OpaqueId) -> Option<(Vec<Ty>, Ty)> {
+        let reqs = self.opaque_constraints.get(&id)?;
+        reqs.iter().find_map(|r| {
+            if let ConstraintRequirement::Callable { param_tys, return_ty } = r {
+                Some((param_tys.clone(), *return_ty))
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_opaque_constraints(&self, id: OpaqueId) -> &[ConstraintRequirement] {
+        self.opaque_constraints.get(&id).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    pub fn resolve_opaque_in_ty(&mut self, ty: Ty) -> Ty {
+        use TyDef::*;
+
+        let ty_def = self.tys.get(ty.0).unwrap().clone();
+
+        match ty_def {
+            Opaque(id) => self.opaque_resolutions.get(&id).copied().unwrap_or(ty),
+            Primitive(_) | GenVar(_) | TraitSelf(_) | InfVar(_) => ty,
+            Ref(inner) => {
+                let inner = self.resolve_opaque_in_ty(inner);
+                self.ref_(inner)
+            }
+            Ptr(inner) => {
+                let inner = self.resolve_opaque_in_ty(inner);
+                self.ptr(inner)
+            }
+            Tuple(items) => {
+                let items: Vec<_> = (0..items.len)
+                    .map(|i| {
+                        let t = self.ty_slices[items.offset + i];
+                        self.resolve_opaque_in_ty(t)
+                    })
+                    .collect();
+                self.tuple(&items)
+            }
+            Struct { struct_, gen_args } => {
+                let gen_args: Vec<_> = (0..gen_args.len)
+                    .map(|i| {
+                        let t = self.ty_slices[gen_args.offset + i];
+                        self.resolve_opaque_in_ty(t)
+                    })
+                    .collect();
+                self.inst_struct(struct_, &gen_args).unwrap()
+            }
+            Enum { enum_, gen_args } => {
+                let gen_args: Vec<_> = (0..gen_args.len)
+                    .map(|i| {
+                        let t = self.ty_slices[gen_args.offset + i];
+                        self.resolve_opaque_in_ty(t)
+                    })
+                    .collect();
+                self.inst_enum(enum_, &gen_args).unwrap()
+            }
+            Fn {
+                param_tys,
+                return_ty,
+                var_args,
+            } => {
+                let param_tys: Vec<_> = (0..param_tys.len)
+                    .map(|i| {
+                        let t = self.ty_slices[param_tys.offset + i];
+                        self.resolve_opaque_in_ty(t)
+                    })
+                    .collect();
+                let return_ty = self.resolve_opaque_in_ty(return_ty);
+                self.fn_(&param_tys, return_ty, var_args)
+            }
+            Closure {
+                fn_inst,
+                name,
+                captures_ty,
+            } => {
+                let captures_ty = self.resolve_opaque_in_ty(captures_ty);
+                // Don't recurse into fn_inst for now
+                self.closure(fn_inst, name, captures_ty)
+            }
+            AssocTy {
+                base_ty,
+                trait_inst,
+                assoc_ty_idx,
+            } => {
+                let base_ty = self.resolve_opaque_in_ty(base_ty);
+                self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
+            }
+        }
+    }
+
     pub fn inst_struct(&mut self, struct_: Struct, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         if struct_def.gen_params.len() != gen_args.len() {
@@ -414,6 +536,7 @@ impl TyReg {
                 )
             }
             InfVar(_) => unreachable!(),
+            Opaque(id) => format!("impl({})", id.0),
         }
     }
 
@@ -513,6 +636,7 @@ impl TyReg {
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
             InfVar(_) => unreachable!(),
+            Opaque(_) => ty,
         }
     }
 
@@ -592,6 +716,7 @@ impl TyReg {
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
             InfVar(_) => unreachable!(),
+            Opaque(_) => ty,
         }
     }
 

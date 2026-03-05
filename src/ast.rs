@@ -457,5 +457,6 @@ pub enum TyAnnotKind<'ast> {
         param_tys: TyAnnotSlice<'ast>,
         return_ty: Option<TyAnnot<'ast>>,
     },
+    ImplTrait(ConstraintRequirement<'ast>),
     Wildcard,
 }

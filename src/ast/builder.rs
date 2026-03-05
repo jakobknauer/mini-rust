@@ -189,6 +189,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.ty_annot(TyAnnotKind::Fn { param_tys, return_ty })
     }
 
+    pub fn impl_trait_annot(&self, req: ConstraintRequirement<'ast>) -> TyAnnot<'ast> {
+        self.ast.ty_annot(TyAnnotKind::ImplTrait(req))
+    }
+
     pub fn wildcard_annot(&self) -> TyAnnot<'ast> {
         self.ast.ty_annot(TyAnnotKind::Wildcard)
     }

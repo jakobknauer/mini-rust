@@ -135,7 +135,9 @@ impl Ctxt {
         trait_mthd_inst: fns::TraitMthdInst,
         subst: &GenVarSubst,
     ) -> fns::FnInst {
-        let trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
+        let mut trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
+        // Resolve opaque types to their concrete types for monomorphization
+        trait_mthd_inst.impl_ty = self.tys.resolve_opaque_in_ty(trait_mthd_inst.impl_ty);
 
         let matching_impl_insts: Vec<_> = self
             .get_impl_insts_for_ty_and_trait_inst(trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst)
@@ -225,6 +227,11 @@ impl Ctxt {
         {
             return true;
         }
+        if let &ty::TyDef::Opaque(id) = ty_def
+            && self.tys.opaque_satisfies_trait_inst(id, trait_inst)
+        {
+            return true;
+        }
 
         self.get_impl_insts_for_ty_and_trait_inst(ty, trait_inst)
             .next()
@@ -268,6 +275,10 @@ impl Ctxt {
                 signature.return_ty,
                 false,
             ))
+        } else if let &ty::TyDef::Opaque(id) = self.tys.get_ty_def(ty) {
+            self.tys
+                .try_get_opaque_callable_constraint(id)
+                .map(|(p, r)| (p, r, false))
         } else {
             None
         }
@@ -278,6 +289,7 @@ impl Ctxt {
         annot: ast::TyAnnot,
         gen_vars: &[ty::GenVar],
         self_ty: Option<ty::Ty>,
+        allow_opaque: bool,
     ) -> Option<ty::Ty> {
         use ast::TyAnnotKind::*;
 
@@ -295,19 +307,19 @@ impl Ctxt {
                 _ => None,
             },
             &Ref(ty_annot) => self
-                .try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty)
+                .try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty, false)
                 .map(|inner| self.tys.ref_(inner)),
             &Ptr(ty_annot) => self
-                .try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty)
+                .try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty, false)
                 .map(|inner| self.tys.ptr(inner)),
             &Fn { param_tys, return_ty } => {
                 let param_tys: Vec<ty::Ty> = param_tys
                     .iter()
-                    .map(|&pt| self.try_resolve_ast_ty_annot(pt, gen_vars, self_ty))
+                    .map(|&pt| self.try_resolve_ast_ty_annot(pt, gen_vars, self_ty, false))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_ast_ty_annot(rt, gen_vars, self_ty),
+                    Some(rt) => self.try_resolve_ast_ty_annot(rt, gen_vars, self_ty, false),
                     None => Some(self.tys.unit()),
                 }?;
 
@@ -316,9 +328,43 @@ impl Ctxt {
             &Tuple(ty_annots) => {
                 let tys: Vec<ty::Ty> = ty_annots
                     .iter()
-                    .map(|ty_annot| self.try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty))
+                    .map(|ty_annot| self.try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty, false))
                     .collect::<Option<Vec<_>>>()?;
                 Some(self.tys.tuple(&tys))
+            }
+            ImplTrait(req) => {
+                if !allow_opaque {
+                    return None;
+                }
+                let (id, opaque_ty) = self.tys.opaque();
+                match req {
+                    ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
+                        let trait_ = self.traits.resolve_trait_name(trait_name)?;
+                        let gen_args: Vec<_> = trait_args
+                            .iter()
+                            .map(|&a| self.try_resolve_ast_ty_annot(a, gen_vars, self_ty, false))
+                            .collect::<Option<_>>()?;
+                        let trait_inst = traits::TraitInst {
+                            trait_,
+                            gen_args: self.tys.ty_slice(&gen_args),
+                        };
+                        self.tys
+                            .add_opaque_constraint(id, ty::ConstraintRequirement::Trait(trait_inst));
+                    }
+                    ast::ConstraintRequirement::Callable { params, return_ty } => {
+                        let param_tys: Vec<_> = params
+                            .iter()
+                            .map(|&p| self.try_resolve_ast_ty_annot(p, gen_vars, self_ty, false))
+                            .collect::<Option<_>>()?;
+                        let return_ty = match return_ty {
+                            Some(rt) => self.try_resolve_ast_ty_annot(rt, gen_vars, self_ty, false)?,
+                            None => self.tys.unit(),
+                        };
+                        self.tys
+                            .add_opaque_constraint(id, ty::ConstraintRequirement::Callable { param_tys, return_ty });
+                    }
+                }
+                Some(opaque_ty)
             }
             Wildcard => panic!("wildcard type annotation not supported at this position"),
         }
@@ -351,7 +397,7 @@ impl Ctxt {
             } => {
                 let gen_args: Vec<ty::Ty> = args
                     .iter()
-                    .map(|arg_annot| self.try_resolve_ast_ty_annot(arg_annot, gen_vars, self_ty))
+                    .map(|arg_annot| self.try_resolve_ast_ty_annot(arg_annot, gen_vars, self_ty, false))
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.tys.get_ty_by_name(ident).ok()? {
@@ -392,10 +438,10 @@ impl Ctxt {
                 let [impl_inst] = &impl_insts[..] else {
                     // No concrete impl — base_ty is likely a GenVar with a trait constraint.
                     // Look up the constraint to get the specific TraitInst (including gen args).
-                    if let &ty::TyDef::GenVar(gen_var) = self.tys.get_ty_def(base_ty) {
-                        if let Some(trait_inst) = self.tys.get_trait_inst_constraint(gen_var, *trait_) {
-                            return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
-                        }
+                    if let &ty::TyDef::GenVar(gen_var) = self.tys.get_ty_def(base_ty)
+                        && let Some(trait_inst) = self.tys.get_trait_inst_constraint(gen_var, *trait_)
+                    {
+                        return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                     }
                     let gen_args: Vec<_> = self
                         .traits
@@ -486,6 +532,7 @@ impl Ctxt {
                 self.tys.substitute_gen_vars(assoc_ty, &subst)
             }
             InfVar(_) => unreachable!(),
+            &Opaque(id) => self.tys.get_opaque_resolution(id).unwrap_or(ty),
         }
     }
 

@@ -24,7 +24,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 None => ty,
             },
 
-            Primitive(_) | GenVar(_) => ty,
+            Primitive(_) | GenVar(_) | Opaque(_) => ty,
 
             Closure {
                 fn_inst,

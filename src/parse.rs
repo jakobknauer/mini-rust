@@ -1149,6 +1149,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let annot = self.builder.fn_annot(&param_tys, return_ty);
                 Ok(annot)
             }
+            Token::Keyword(Keyword::Impl) => {
+                self.position += 1;
+                let req = self.parse_constraint_requirement()?;
+                Ok(self.builder.impl_trait_annot(req))
+            }
             Token::Underscore => {
                 self.position += 1;
                 let annot = self.builder.wildcard_annot();

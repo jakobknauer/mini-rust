@@ -137,6 +137,14 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
                 let ty = self.mr_ctxt.normalize_ty(ty);
                 self.get_or_define_ty(ty).unwrap()
             }
+            Opaque(id) => {
+                let resolved = self
+                    .mr_ctxt
+                    .tys
+                    .get_opaque_resolution(id)
+                    .expect("opaque type must be resolved before MLR lowering");
+                self.get_or_define_ty(resolved).unwrap()
+            }
             InfVar(_) => unreachable!(),
         };
 

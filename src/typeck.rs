@@ -75,15 +75,21 @@ struct Typeck<'ctxt, 'hlr> {
 
 impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     fn check(mut self) -> TypeckResult<HlrTyping> {
-        self.check_body()?;
+        let opaque_return = self.check_body()?;
         self.normalize_all();
         self.check_pending_obligations()?;
+
+        if let Some((opaque_id, inf_var_ty)) = opaque_return {
+            let concrete_ty = self.normalize(inf_var_ty);
+            self.ctxt.tys.set_opaque_resolution(opaque_id, concrete_ty);
+        }
+
         self.post_check();
 
         Ok(self.typing)
     }
 
-    fn check_body(&mut self) -> TypeckResult<()> {
+    fn check_body(&mut self) -> TypeckResult<Option<(ty::OpaqueId, ty::Ty)>> {
         let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
 
         for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
@@ -91,14 +97,26 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
 
         let return_ty = sig.return_ty;
-        self.return_ty_stack.push(return_ty);
-        let body_ty = self.check_expr(self.fn_.body, Some(return_ty))?;
 
-        if self.unify(body_ty, return_ty) {
-            Ok(())
+        let (effective_return_ty, opaque_return) = if let ty::TyDef::Opaque(id) = *self.ctxt.tys.get_ty_def(return_ty) {
+            let inf_var = self.ctxt.tys.inf_var();
+            let reqs = self.ctxt.tys.get_opaque_constraints(id).to_vec();
+            for req in reqs {
+                self.pending_obligations.push((inf_var, req));
+            }
+            (inf_var, Some((id, inf_var)))
+        } else {
+            (return_ty, None)
+        };
+
+        self.return_ty_stack.push(effective_return_ty);
+        let body_ty = self.check_expr(self.fn_.body, Some(effective_return_ty))?;
+
+        if self.unify(body_ty, effective_return_ty) {
+            Ok(opaque_return)
         } else {
             Err(TypeckError::ReturnTypeMismatch {
-                expected: return_ty,
+                expected: effective_return_ty,
                 actual: body_ty,
             })
         }

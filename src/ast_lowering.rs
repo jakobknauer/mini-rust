@@ -237,6 +237,11 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
                 }
             }
             ast::TyAnnotKind::Wildcard => hlr::TyAnnotDef::Infer,
+            ast::TyAnnotKind::ImplTrait(_) => {
+                return Err(AstLoweringError {
+                    msg: "impl Trait is only valid in return position".to_string(),
+                });
+            }
         };
 
         let ty_annot = self.hlr.ty_annot(ty_annot);
