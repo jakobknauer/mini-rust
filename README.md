@@ -11,7 +11,7 @@ Supported features include:
 - Closures capturing local variables
 - Traits and impls, including associated types
 - Pattern matching (for enums and references to enums only)
-- Operator overloading via `Add`, `Sub`, `Mul`, and `Div` traits
+- Operator overloading via `Add`, `Sub`, `Mul`, `Div`, `BitOr`, and `BitAnd` traits
 
 As backend LLVM is used via the [inkwell](https://github.com/TheDan64/inkwell) library.
 
