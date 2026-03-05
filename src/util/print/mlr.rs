@@ -46,7 +46,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             writeln!(self.writer)?;
             self.print_stmt(mlr.body)
         } else {
-            write!(self.writer, ";")
+            writeln!(self.writer, ";")
         }
     }
 
@@ -117,7 +117,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
 
         write!(
             self.writer,
-            "{}{}{}{}",
+            "fn {}{}{}{}",
             assoc_ty, signature.name, env_gen_args, gen_args
         )?;
 
