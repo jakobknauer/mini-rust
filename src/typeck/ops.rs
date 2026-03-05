@@ -79,6 +79,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             NotEqual if unit => Some((NeUnit, bool_ty)),
             BitOr if bool => Some((BitOrBool, bool_ty)),
             BitAnd if bool => Some((BitAndBool, bool_ty)),
+            BitOr if i32 => Some((BitOrI32, i32_ty)),
+            BitAnd if i32 => Some((BitAndI32, i32_ty)),
             LessThan if i32 => Some((LtI32, bool_ty)),
             GreaterThan if i32 => Some((GtI32, bool_ty)),
             LessThanOrEqual if i32 => Some((LeI32, bool_ty)),

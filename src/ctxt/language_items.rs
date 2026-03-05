@@ -33,6 +33,8 @@ pub enum BinaryPrimOp {
     NeUnit,
     BitOrBool,
     BitAndBool,
+    BitOrI32,
+    BitAndI32,
     LtI32,
     GtI32,
     LeI32,
