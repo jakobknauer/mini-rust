@@ -196,7 +196,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                             ResCtxt {
                                 gen_vars: &gen_params,
                                 self_ty: None,
-                                fn_: None,
+                                constraints: &[],
                             },
                             false,
                         )
@@ -257,7 +257,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     ResCtxt {
                         gen_vars: &gen_params,
                         self_ty: None,
-                        fn_: None,
+                        constraints: &[],
                     },
                     false,
                 )
@@ -279,7 +279,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                                         ResCtxt {
                                             gen_vars: &gen_params,
                                             self_ty: None,
-                                            fn_: None,
+                                            constraints: &[],
                                         },
                                         false,
                                     )
@@ -308,7 +308,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         ResCtxt {
                             gen_vars: &gen_params,
                             self_ty: None,
-                            fn_: None,
+                            constraints: &[],
                         },
                         false,
                     )
@@ -352,7 +352,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         let param_res_ctxt = ResCtxt {
             gen_vars: &all_gen_params,
             self_ty: associated_ty,
-            fn_: None,
+            constraints: &[],
         };
         let params = ast_fn
             .params
@@ -361,27 +361,13 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .map(|(idx, param)| self.build_fn_param(param, param_res_ctxt, idx == 0))
             .collect::<Result<_, _>>()?;
 
-        let signature = fns::FnSig {
-            name: ast_fn.name.clone(),
-            associated_ty,
-            associated_trait_inst,
-            gen_params,
-            env_gen_params,
-            params,
-            var_args: ast_fn.var_args,
-            return_ty: self.ctxt.tys.unit(), // placeholder -- we need constraints to determine the
-                                             // return type in case it uses associated types,
-                                             // but we need fn_ to register constraints
-        };
-
-        let fn_ = self.ctxt.fns.register_fn(signature, associated_ty.is_none())?;
-        let res_ctxt = ResCtxt {
-            gen_vars: &all_gen_params,
-            self_ty: associated_ty,
-            fn_: Some(fn_),
-        };
-
+        let mut constraints: Vec<ty::Constraint> = Vec::new();
         for constraint in &ast_fn.constraints {
+            let res_ctxt = ResCtxt {
+                gen_vars: &all_gen_params,
+                self_ty: associated_ty,
+                constraints: &constraints,
+            };
             let subject = self
                 .ctxt
                 .try_resolve_ast_ty_annot(constraint.subject, res_ctxt, false)
@@ -398,10 +384,13 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         trait_,
                         gen_args: self.ctxt.tys.ty_slice(&trait_args),
                     };
-                    self.ctxt.tys.add_implements_trait_constraint(fn_, subject, trait_inst);
+                    constraints.push(ty::Constraint {
+                        subject,
+                        requirement: ty::ConstraintRequirement::Trait(trait_inst),
+                    });
                 }
                 ast::ConstraintRequirement::Callable { params, return_ty } => {
-                    let params = params
+                    let param_tys = params
                         .iter()
                         .map(|&ty| self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
@@ -412,19 +401,37 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                             .ok_or(())?,
                         None => self.ctxt.tys.unit(),
                     };
-                    self.ctxt.tys.add_callable_constraint(fn_, subject, params, return_ty);
+                    constraints.push(ty::Constraint {
+                        subject,
+                        requirement: ty::ConstraintRequirement::Callable { param_tys, return_ty },
+                    });
                 }
             }
         }
 
+        let res_ctxt = ResCtxt {
+            gen_vars: &all_gen_params,
+            self_ty: associated_ty,
+            constraints: &constraints,
+        };
         let return_ty = match ast_fn.return_ty {
             Some(ty) => self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, true).ok_or(())?,
             None => self.ctxt.tys.unit(),
         };
 
-        self.ctxt.fns.get_mut_sig(fn_).unwrap().return_ty = return_ty;
+        let signature = fns::FnSig {
+            name: ast_fn.name.clone(),
+            associated_ty,
+            associated_trait_inst,
+            gen_params,
+            env_gen_params,
+            params,
+            var_args: ast_fn.var_args,
+            return_ty,
+            constraints,
+        };
 
-        Ok(fn_)
+        self.ctxt.fns.register_fn(signature, associated_ty.is_none())
     }
 
     fn build_fn_param(
@@ -467,7 +474,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 let trait_res_ctxt = ResCtxt {
                     gen_vars: &all_gen_params,
                     self_ty: Some(self_type),
-                    fn_: None,
+                    constraints: &[],
                 };
                 let params = mthd
                     .params
@@ -499,6 +506,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     params,
                     var_args: false,
                     return_ty,
+                    constraints: Vec::new(),
                 };
 
                 self.ctxt.traits.register_mthd(trait_, sig);

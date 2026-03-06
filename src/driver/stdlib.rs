@@ -40,6 +40,7 @@ fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str
             ],
             var_args: false,
             return_ty: output_ty,
+            constraints: Vec::new(),
         },
     );
 
@@ -81,6 +82,7 @@ fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
             params: vec![],
             var_args: false,
             return_ty: ctxt.tys.primitive(ty::Primitive::Integer32),
+            constraints: Vec::new(),
         },
         true,
     )?;
@@ -114,6 +116,7 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
             ],
             var_args: false,
             return_ty: ptr_ty,
+            constraints: Vec::new(),
         },
         true,
     )?;

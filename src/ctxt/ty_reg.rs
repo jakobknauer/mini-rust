@@ -19,8 +19,6 @@ pub struct TyReg {
     named_tys: HashMap<String, Named>,
     ty_slices_inv: HashMap<Vec<Ty>, TySlice>, // This is probably very inefficient
 
-    constraints: HashMap<fns::Fn, Vec<Constraint>>,
-
     next_inf_var: InfVar,
     next_opaque_id: usize,
     opaque_resolutions: HashMap<OpaqueId, Ty>,
@@ -1084,31 +1082,13 @@ impl TyReg {
         }
     }
 
-    pub fn add_implements_trait_constraint(&mut self, fn_: fns::Fn, subject: Ty, trait_inst: TraitInst) {
-        self.constraints.entry(fn_).or_default().push(Constraint {
-            subject,
-            requirement: ConstraintRequirement::Trait(trait_inst),
-        });
-    }
-
-    pub fn add_callable_constraint(&mut self, fn_: fns::Fn, subject: Ty, params: Vec<Ty>, return_ty: Ty) {
-        self.constraints.entry(fn_).or_default().push(Constraint {
-            subject,
-            requirement: ConstraintRequirement::Callable {
-                param_tys: params,
-                return_ty,
-            },
-        });
-    }
-
     pub fn get_trait_inst_constraint(
         &self,
-        constraint_scope: Option<fns::Fn>,
+        constraints: &[Constraint],
         subject: Ty,
         trait_: Trait,
     ) -> Option<TraitInst> {
-        let fn_ = constraint_scope?;
-        self.constraints.get(&fn_).into_iter().flatten().find_map(|c| {
+        constraints.iter().find_map(|c| {
             if c.subject != subject {
                 return None;
             }
@@ -1119,22 +1099,21 @@ impl TyReg {
         })
     }
 
-    pub fn implements_trait_constraint_exists(
-        &self,
-        constraint_scope: Option<fns::Fn>,
-        subject: Ty,
-        trait_: Trait,
-    ) -> bool {
-        let Some(fn_) = constraint_scope else { return false };
-        self.constraints.get(&fn_).into_iter().flatten().any(|c| {
+    pub fn implements_trait_constraint_exists(&self, constraints: &[Constraint], subject: Ty, trait_: Trait) -> bool {
+        constraints.iter().any(|c| {
             c.subject == subject
                 && matches!(c.requirement,
                     ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_)
         })
     }
 
-    pub fn implements_trait_inst_constraint_exists(&self, fn_: fns::Fn, subject: Ty, trait_inst: TraitInst) -> bool {
-        self.constraints.get(&fn_).into_iter().flatten().any(|c| {
+    pub fn implements_trait_inst_constraint_exists(
+        &self,
+        constraints: &[Constraint],
+        subject: Ty,
+        trait_inst: TraitInst,
+    ) -> bool {
+        constraints.iter().any(|c| {
             if c.subject != subject {
                 return false;
             }
@@ -1154,28 +1133,18 @@ impl TyReg {
         })
     }
 
-    pub fn try_get_callable_constraint(&self, constraint_scope: Option<fns::Fn>, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
-        let fn_ = constraint_scope?;
-        self.constraints
-            .get(&fn_)
-            .into_iter()
-            .flatten()
-            .filter_map(|c| {
-                if c.subject == subject {
-                    if let ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
-                        Some((param_tys.clone(), *return_ty))
-                    } else {
-                        None
-                    }
+    pub fn try_get_callable_constraint(&self, constraints: &[Constraint], subject: Ty) -> Option<(Vec<Ty>, Ty)> {
+        constraints.iter().find_map(|c| {
+            if c.subject == subject {
+                if let ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
+                    Some((param_tys.clone(), *return_ty))
                 } else {
                     None
                 }
-            })
-            .next()
-    }
-
-    pub fn get_requirements_for(&self, fn_: fns::Fn) -> impl Iterator<Item = &Constraint> {
-        self.constraints.get(&fn_).map(Vec::as_slice).unwrap_or(&[]).iter()
+            } else {
+                None
+            }
+        })
     }
 
     pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named, NotATypeName> {

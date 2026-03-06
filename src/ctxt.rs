@@ -21,7 +21,7 @@ use crate::{ast, ctxt::ty::GenVarSubst};
 pub struct ResCtxt<'a> {
     pub gen_vars: &'a [ty::GenVar],
     pub self_ty: Option<ty::Ty>,
-    pub fn_: Option<fns::Fn>,
+    pub constraints: &'a [ty::Constraint],
 }
 
 #[derive(Default)]
@@ -134,6 +134,7 @@ impl Ctxt {
             params: inst_params,
             var_args: signature.var_args,
             return_ty: inst_return_ty,
+            constraints: Vec::new(),
         }
     }
 
@@ -227,8 +228,16 @@ impl Ctxt {
         }
     }
 
-    pub fn ty_implements_trait_inst(&mut self, fn_: fns::Fn, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
-        if self.tys.implements_trait_inst_constraint_exists(fn_, ty, trait_inst) {
+    pub fn ty_implements_trait_inst(
+        &mut self,
+        constraints: &[ty::Constraint],
+        ty: ty::Ty,
+        trait_inst: traits::TraitInst,
+    ) -> bool {
+        if self
+            .tys
+            .implements_trait_inst_constraint_exists(constraints, ty, trait_inst)
+        {
             return true;
         }
 
@@ -244,16 +253,8 @@ impl Ctxt {
             .is_some()
     }
 
-    pub fn ty_implements_trait(
-        &mut self,
-        constraint_scope: Option<fns::Fn>,
-        ty: ty::Ty,
-        trait_: traits::Trait,
-    ) -> bool {
-        if self
-            .tys
-            .implements_trait_constraint_exists(constraint_scope, ty, trait_)
-        {
+    pub fn ty_implements_trait(&mut self, constraints: &[ty::Constraint], ty: ty::Ty, trait_: traits::Trait) -> bool {
+        if self.tys.implements_trait_constraint_exists(constraints, ty, trait_) {
             return true;
         }
 
@@ -270,7 +271,7 @@ impl Ctxt {
     // TODO return TySlice instead of Vec
     pub fn ty_is_callable(
         &mut self,
-        constraint_scope: Option<fns::Fn>,
+        constraints: &[ty::Constraint],
         ty: ty::Ty,
     ) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
         if let &ty::TyDef::Fn {
@@ -280,7 +281,7 @@ impl Ctxt {
         } = self.tys.get_ty_def(ty)
         {
             Some((self.tys.get_ty_slice(param_tys).to_vec(), return_ty, var_args))
-        } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraint_scope, ty) {
+        } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraints, ty) {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(fn_inst);
@@ -313,7 +314,7 @@ impl Ctxt {
                     let base_ty = self.try_resolve_ast_path_segment_to_ty(base_ty, res_ctxt)?;
 
                     let ty = self
-                        .resolve_associated_ty_completely(res_ctxt.fn_, base_ty, &assoc_ty.ident)
+                        .resolve_associated_ty_completely(res_ctxt.constraints, base_ty, &assoc_ty.ident)
                         .expect("associated type not found");
                     Some(ty)
                 }
@@ -427,7 +428,7 @@ impl Ctxt {
 
     fn resolve_associated_ty_completely(
         &mut self,
-        constraint_scope: Option<fns::Fn>,
+        constraints: &[ty::Constraint],
         base_ty: ty::Ty,
         ident: &str,
     ) -> Option<ty::Ty> {
@@ -448,7 +449,7 @@ impl Ctxt {
         let candidate_assoc_tys: Vec<_> = self.traits.get_trait_assoc_ty_with_name(ident).collect::<Vec<_>>();
         let candidate_assoc_tys: Vec<_> = candidate_assoc_tys
             .into_iter()
-            .filter(|&(trait_, _)| self.ty_implements_trait(constraint_scope, base_ty, trait_))
+            .filter(|&(trait_, _)| self.ty_implements_trait(constraints, base_ty, trait_))
             .collect();
 
         match &candidate_assoc_tys[..] {
@@ -457,7 +458,7 @@ impl Ctxt {
                 let impl_insts = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
-                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraint_scope, base_ty, *trait_) {
+                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraints, base_ty, *trait_) {
                         return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                     }
                     let gen_args: Vec<_> = self

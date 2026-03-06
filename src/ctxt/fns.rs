@@ -1,6 +1,6 @@
 use crate::ctxt::{
     traits::TraitInst,
-    ty::{GenVar, Ty, TySlice},
+    ty::{Constraint, GenVar, Ty, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -30,6 +30,7 @@ pub struct FnSig {
     pub params: Vec<FnParam>,
     pub var_args: bool,
     pub return_ty: Ty,
+    pub constraints: Vec<Constraint>,
 }
 
 impl FnSig {

@@ -41,9 +41,11 @@ pub enum ExprExtra {
 }
 
 pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckResult<HlrTyping> {
+    let constraints = ctxt.fns.get_sig(fn_.fn_).unwrap().constraints.clone();
     let typeck = Typeck {
         ctxt,
         fn_,
+        constraints,
         type_vars: HashMap::new(),
         typing: Default::default(),
         closure_counter: 0,
@@ -60,6 +62,7 @@ pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckRe
 struct Typeck<'ctxt, 'hlr> {
     ctxt: &'ctxt mut ctxt::Ctxt,
     fn_: &'hlr hlr::Fn<'hlr>,
+    constraints: Vec<ty::Constraint>,
 
     type_vars: HashMap<ty::InfVar, ty::Ty>,
     typing: HlrTyping,
@@ -462,7 +465,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), fn_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
 
@@ -498,7 +501,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let callee_ty = self.check_expr(callee, None)?;
         let callee_ty = self.normalize(callee_ty);
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), callee_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, callee_ty) else {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
 
@@ -760,7 +763,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     }
 
     pub(super) fn add_constraint_obligations(&mut self, fn_: fns::Fn, subst: &ty::GenVarSubst) {
-        let relevant_constraints: Vec<_> = self.ctxt.tys.get_requirements_for(fn_).cloned().collect();
+        let relevant_constraints = self.ctxt.fns.get_sig(fn_).unwrap().constraints.clone();
 
         for constraint in relevant_constraints {
             let subject = self.ctxt.tys.substitute_gen_vars(constraint.subject, subst);
@@ -804,14 +807,14 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                         trait_: trait_inst.trait_,
                         gen_args,
                     };
-                    if !self.ctxt.ty_implements_trait_inst(self.fn_.fn_, ty, trait_inst) {
+                    if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
                     }
                 }
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
                     let param_tys: Vec<_> = param_tys.iter().map(|&t| self.normalize(t)).collect();
                     let return_ty = self.normalize(return_ty);
-                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), ty)
+                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(&self.constraints, ty)
                     else {
                         return Err(TypeckError::CallableConstraintNotSatisfied {
                             ty,
