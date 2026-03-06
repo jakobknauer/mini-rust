@@ -19,7 +19,7 @@ pub struct TyReg {
     named_tys: HashMap<String, Named>,
     ty_slices_inv: HashMap<Vec<Ty>, TySlice>, // This is probably very inefficient
 
-    constraints: Vec<Constraint>,
+    constraints: HashMap<fns::Fn, Vec<Constraint>>,
 
     next_inf_var: InfVar,
     next_opaque_id: usize,
@@ -1084,15 +1084,15 @@ impl TyReg {
         }
     }
 
-    pub fn add_implements_trait_constraint(&mut self, subject: GenVar, trait_inst: TraitInst) {
-        self.constraints.push(Constraint {
+    pub fn add_implements_trait_constraint(&mut self, fn_: fns::Fn, subject: Ty, trait_inst: TraitInst) {
+        self.constraints.entry(fn_).or_default().push(Constraint {
             subject,
             requirement: ConstraintRequirement::Trait(trait_inst),
         });
     }
 
-    pub fn add_callable_constraint(&mut self, subject: GenVar, params: Vec<Ty>, return_ty: Ty) {
-        self.constraints.push(Constraint {
+    pub fn add_callable_constraint(&mut self, fn_: fns::Fn, subject: Ty, params: Vec<Ty>, return_ty: Ty) {
+        self.constraints.entry(fn_).or_default().push(Constraint {
             subject,
             requirement: ConstraintRequirement::Callable {
                 param_tys: params,
@@ -1101,9 +1101,9 @@ impl TyReg {
         });
     }
 
-    pub fn get_trait_inst_constraint(&self, gen_var: GenVar, trait_: Trait) -> Option<TraitInst> {
-        self.constraints.iter().find_map(|c| {
-            if c.subject != gen_var {
+    pub fn get_trait_inst_constraint(&self, subject: Ty, trait_: Trait) -> Option<TraitInst> {
+        self.constraints.values().flatten().find_map(|c| {
+            if c.subject != subject {
                 return None;
             }
             match c.requirement {
@@ -1113,16 +1113,17 @@ impl TyReg {
         })
     }
 
-    pub fn implements_trait_constraint_exists(&self, gen_var: GenVar, trait_: Trait) -> bool {
-        self.constraints
-            .iter()
-            .any(|c| c.subject == gen_var &&
-                matches!(c.requirement , ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_))
+    pub fn implements_trait_constraint_exists(&self, subject: Ty, trait_: Trait) -> bool {
+        self.constraints.values().flatten().any(|c| {
+            c.subject == subject
+                && matches!(c.requirement,
+                    ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_)
+        })
     }
 
-    pub fn implements_trait_inst_constraint_exists(&self, gen_var: GenVar, trait_inst: TraitInst) -> bool {
-        self.constraints.iter().any(|c| {
-            if c.subject != gen_var {
+    pub fn implements_trait_inst_constraint_exists(&self, fn_: fns::Fn, subject: Ty, trait_inst: TraitInst) -> bool {
+        self.constraints.get(&fn_).into_iter().flatten().any(|c| {
+            if c.subject != subject {
                 return false;
             }
 
@@ -1141,9 +1142,10 @@ impl TyReg {
         })
     }
 
-    pub fn try_get_callable_constraint(&self, subject: GenVar) -> Option<(Vec<Ty>, Ty)> {
+    pub fn try_get_callable_constraint(&self, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
         self.constraints
-            .iter()
+            .values()
+            .flatten()
             .filter_map(|c| {
                 if c.subject == subject {
                     if let ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
@@ -1158,14 +1160,8 @@ impl TyReg {
             .next()
     }
 
-    pub fn get_requirements_for(&self, subject: GenVar) -> impl Iterator<Item = &ConstraintRequirement> {
-        self.constraints.iter().filter_map(move |c| {
-            if c.subject == subject {
-                Some(&c.requirement)
-            } else {
-                None
-            }
-        })
+    pub fn get_requirements_for(&self, fn_: fns::Fn) -> impl Iterator<Item = &Constraint> {
+        self.constraints.get(&fn_).map(Vec::as_slice).unwrap_or(&[]).iter()
     }
 
     pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named, NotATypeName> {

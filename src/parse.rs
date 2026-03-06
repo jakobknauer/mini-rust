@@ -249,7 +249,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_constraint(&mut self) -> Result<Constraint<'ast>, ParserErr> {
-        let subject = self.expect_identifier()?;
+        let subject = self.parse_ty_annot()?;
         self.expect_token(Token::Colon)?;
         let requirement = self.parse_constraint_requirement()?;
         Ok(Constraint { subject, requirement })

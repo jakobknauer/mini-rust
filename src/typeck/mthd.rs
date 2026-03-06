@@ -133,10 +133,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let fn_subst =
                     ty::GenVarSubst::new(&sig.gen_params.clone(), resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(env_subst, fn_subst);
-                let env_gen_params = sig.env_gen_params.clone();
-                let fn_gen_params = sig.gen_params.clone();
-                self.add_constraint_obligations(&env_gen_params, &env_gen_args_slice, &full_subst);
-                self.add_constraint_obligations(&fn_gen_params, &resolved_gen_args, &full_subst);
+                self.add_constraint_obligations(fn_, &full_subst);
 
                 let fn_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
                 Ok(MthdResolution::Inherent(fns::FnInst {
@@ -146,12 +143,9 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 }))
             }
             FoundMthd::Trait { trait_inst, mthd_idx } => {
-                let n_mthd_gen_params = self
-                    .ctxt
-                    .traits
-                    .get_trait_mthd_sig(trait_inst.trait_, mthd_idx)
-                    .gen_params
-                    .len();
+                let sig = self.ctxt.traits.get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
+
+                let n_mthd_gen_params = sig.gen_params.len();
                 let resolved_gen_args = self.resolve_optional_gen_args(gen_args, n_mthd_gen_params, |actual| {
                     TypeckError::MthdGenArgCountMismatch {
                         mthd_name: mthd_name.to_string(),
@@ -159,11 +153,6 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                         actual,
                     }
                 })?;
-
-                let sig = self.ctxt.traits.get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
-                let mthd_gen_params = sig.gen_params.clone();
-                let mthd_subst = ty::GenVarSubst::new(&mthd_gen_params, resolved_gen_args.iter().copied()).unwrap();
-                self.add_constraint_obligations(&mthd_gen_params, &resolved_gen_args, &mthd_subst);
 
                 let mthd_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
                 Ok(MthdResolution::Trait(fns::TraitMthdInst {

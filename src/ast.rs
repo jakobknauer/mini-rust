@@ -154,7 +154,7 @@ pub enum Param<'ast> {
 
 #[derive(Debug)]
 pub struct Constraint<'ast> {
-    pub subject: String,
+    pub subject: TyAnnot<'ast>,
     pub requirement: ConstraintRequirement<'ast>,
 }
 

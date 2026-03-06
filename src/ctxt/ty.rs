@@ -109,7 +109,7 @@ pub struct EnumVariant {
 
 #[derive(Clone)]
 pub struct Constraint {
-    pub subject: GenVar,
+    pub subject: Ty,
     pub requirement: ConstraintRequirement,
 }
 

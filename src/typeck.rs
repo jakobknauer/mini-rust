@@ -226,9 +226,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
         let return_ty = signature.return_ty;
         let var_args = signature.var_args;
-        let _ = signature;
 
-        self.add_constraint_obligations(&gen_params, &gen_args, &subst);
+        self.add_constraint_obligations(fn_, &subst);
 
         let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
 
@@ -760,43 +759,39 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         }
     }
 
-    pub(super) fn add_constraint_obligations(
-        &mut self,
-        gen_params: &[ty::GenVar],
-        gen_args: &[ty::Ty],
-        subst: &ty::GenVarSubst,
-    ) {
-        for (&gen_param, &gen_arg) in gen_params.iter().zip(gen_args) {
-            let reqs: Vec<_> = self.ctxt.tys.get_requirements_for(gen_param).cloned().collect();
-            for req in reqs {
-                match &req {
-                    ty::ConstraintRequirement::Trait(trait_inst) => {
-                        let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
-                        let new_inst = traits::TraitInst {
-                            trait_: trait_inst.trait_,
-                            gen_args: new_gen_args,
-                        };
-                        self.pending_obligations
-                            .push((gen_arg, ty::ConstraintRequirement::Trait(new_inst)));
-                    }
-                    ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
-                        let param_tys = param_tys
-                            .iter()
-                            .map(|&t| self.ctxt.tys.substitute_gen_vars(t, subst))
-                            .collect();
-                        let return_ty = self.ctxt.tys.substitute_gen_vars(*return_ty, subst);
-                        self.pending_obligations
-                            .push((gen_arg, ty::ConstraintRequirement::Callable { param_tys, return_ty }));
-                    }
+    pub(super) fn add_constraint_obligations(&mut self, fn_: fns::Fn, subst: &ty::GenVarSubst) {
+        let relevant_constraints: Vec<_> = self.ctxt.tys.get_requirements_for(fn_).cloned().collect();
+
+        for constraint in relevant_constraints {
+            let subject = self.ctxt.tys.substitute_gen_vars(constraint.subject, subst);
+
+            let req = match constraint.requirement {
+                ty::ConstraintRequirement::Trait(trait_inst) => {
+                    let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
+                    let new_inst = traits::TraitInst {
+                        trait_: trait_inst.trait_,
+                        gen_args: new_gen_args,
+                    };
+                    ty::ConstraintRequirement::Trait(new_inst)
                 }
-            }
+                ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+                    let param_tys = param_tys
+                        .iter()
+                        .map(|&t| self.ctxt.tys.substitute_gen_vars(t, subst))
+                        .collect();
+                    let return_ty = self.ctxt.tys.substitute_gen_vars(return_ty, subst);
+                    ty::ConstraintRequirement::Callable { param_tys, return_ty }
+                }
+            };
+
+            self.pending_obligations.push((subject, req));
         }
     }
 
     fn check_pending_obligations(&mut self) -> TypeckResult<()> {
         let obligations = std::mem::take(&mut self.pending_obligations);
-        for (ty, req) in obligations {
-            let ty = self.normalize(ty);
+        for (subject, req) in obligations {
+            let ty = self.normalize(subject);
             if matches!(self.ctxt.tys.get_ty_def(ty), ty::TyDef::InfVar(_)) {
                 continue;
             }
@@ -809,7 +804,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                         trait_: trait_inst.trait_,
                         gen_args,
                     };
-                    if !self.ctxt.ty_implements_trait_inst(ty, trait_inst) {
+                    if !self.ctxt.ty_implements_trait_inst(self.fn_.fn_, ty, trait_inst) {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
                     }
                 }

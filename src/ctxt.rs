@@ -220,13 +220,12 @@ impl Ctxt {
         }
     }
 
-    pub fn ty_implements_trait_inst(&mut self, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
-        let ty_def = self.tys.get_ty_def(ty);
-        if let &ty::TyDef::GenVar(gen_var) = ty_def
-            && self.tys.implements_trait_inst_constraint_exists(gen_var, trait_inst)
-        {
+    pub fn ty_implements_trait_inst(&mut self, fn_: fns::Fn, ty: ty::Ty, trait_inst: traits::TraitInst) -> bool {
+        if self.tys.implements_trait_inst_constraint_exists(fn_, ty, trait_inst) {
             return true;
         }
+
+        let ty_def = self.tys.get_ty_def(ty);
         if let &ty::TyDef::Opaque(id) = ty_def
             && self.tys.opaque_satisfies_trait_inst(id, trait_inst)
         {
@@ -239,13 +238,11 @@ impl Ctxt {
     }
 
     pub fn ty_implements_trait(&mut self, ty: ty::Ty, trait_: traits::Trait) -> bool {
-        let ty_def = self.tys.get_ty_def(ty);
-        if let &ty::TyDef::GenVar(gen_var) = ty_def
-            && self.tys.implements_trait_constraint_exists(gen_var, trait_)
-        {
+        if self.tys.implements_trait_constraint_exists(ty, trait_) {
             return true;
         }
 
+        let ty_def = self.tys.get_ty_def(ty);
         if let &ty::TyDef::TraitSelf(trait_2) = ty_def
             && trait_2 == trait_
         {
@@ -264,9 +261,7 @@ impl Ctxt {
         } = self.tys.get_ty_def(ty)
         {
             Some((self.tys.get_ty_slice(param_tys).to_vec(), return_ty, var_args))
-        } else if let ty::TyDef::GenVar(gen_var) = self.tys.get_ty_def(ty)
-            && let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(*gen_var)
-        {
+        } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(ty) {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(fn_inst);
@@ -436,11 +431,7 @@ impl Ctxt {
                 let impl_insts = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
-                    // No concrete impl — base_ty is likely a GenVar with a trait constraint.
-                    // Look up the constraint to get the specific TraitInst (including gen args).
-                    if let &ty::TyDef::GenVar(gen_var) = self.tys.get_ty_def(base_ty)
-                        && let Some(trait_inst) = self.tys.get_trait_inst_constraint(gen_var, *trait_)
-                    {
+                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(base_ty, *trait_) {
                         return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                     }
                     let gen_args: Vec<_> = self

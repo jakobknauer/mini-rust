@@ -317,11 +317,32 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .collect();
         let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
+        let params = ast_fn
+            .params
+            .iter()
+            .enumerate()
+            .map(|(idx, param)| self.build_fn_param(param, &all_gen_params, associated_ty, idx == 0))
+            .collect::<Result<_, _>>()?;
+
+        let signature = fns::FnSig {
+            name: ast_fn.name.clone(),
+            associated_ty,
+            associated_trait_inst,
+            gen_params,
+            env_gen_params,
+            params,
+            var_args: ast_fn.var_args,
+            return_ty: self.ctxt.tys.unit(), // placeholder -- we need constraints to determine the
+                                             // return type in case it uses associated types,
+                                             // but we need fn_ to register constraints
+        };
+
+        let fn_ = self.ctxt.fns.register_fn(signature, associated_ty.is_none())?;
+
         for constraint in &ast_fn.constraints {
-            let subject = gen_params
-                .iter()
-                .cloned()
-                .find(|&gp| self.ctxt.tys.get_gen_var_name(gp) == constraint.subject)
+            let subject = self
+                .ctxt
+                .try_resolve_ast_ty_annot(constraint.subject, &all_gen_params, associated_ty, false)
                 .ok_or(())?;
 
             match &constraint.requirement {
@@ -339,9 +360,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         trait_,
                         gen_args: self.ctxt.tys.ty_slice(&trait_args),
                     };
-                    self.ctxt.tys.add_implements_trait_constraint(subject, trait_inst);
+                    self.ctxt.tys.add_implements_trait_constraint(fn_, subject, trait_inst);
                 }
-                &ast::ConstraintRequirement::Callable { params, return_ty } => {
+                ast::ConstraintRequirement::Callable { params, return_ty } => {
                     let params = params
                         .iter()
                         .map(|&ty| {
@@ -357,17 +378,10 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                             .ok_or(())?,
                         None => self.ctxt.tys.unit(),
                     };
-                    self.ctxt.tys.add_callable_constraint(subject, params, return_ty);
+                    self.ctxt.tys.add_callable_constraint(fn_, subject, params, return_ty);
                 }
             }
         }
-
-        let params = ast_fn
-            .params
-            .iter()
-            .enumerate()
-            .map(|(idx, param)| self.build_fn_param(param, &all_gen_params, associated_ty, idx == 0))
-            .collect::<Result<_, _>>()?;
 
         let return_ty = match ast_fn.return_ty {
             Some(ty) => self
@@ -377,18 +391,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             None => self.ctxt.tys.unit(),
         };
 
-        let signature = fns::FnSig {
-            name: ast_fn.name.clone(),
-            associated_ty,
-            associated_trait_inst,
-            gen_params,
-            env_gen_params,
-            params,
-            var_args: ast_fn.var_args,
-            return_ty,
-        };
+        self.ctxt.fns.get_mut_sig(fn_).unwrap().return_ty = return_ty;
 
-        self.ctxt.fns.register_fn(signature, associated_ty.is_none())
+        Ok(fn_)
     }
 
     fn build_fn_param(
