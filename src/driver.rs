@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     ast, ast_lowering,
-    ctxt::{self, fns, impls, traits, ty},
+    ctxt::{self, ResCtxt, fns, impls, traits, ty},
     driver::{err::print_impl_check_error, impl_check::check_trait_impls},
     hlr, hlr_lowering, mlr, mlr_lowering, parse, typeck,
     util::print,
@@ -191,7 +191,15 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     name: field.name.clone(),
                     ty: self
                         .ctxt
-                        .try_resolve_ast_ty_annot(field.ty, &gen_params, None, false)
+                        .try_resolve_ast_ty_annot(
+                            field.ty,
+                            ResCtxt {
+                                gen_vars: &gen_params,
+                                self_ty: None,
+                                fn_: None,
+                            },
+                            false,
+                        )
                         .ok_or(())?,
                 })
             })
@@ -244,7 +252,15 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
             let ty = self
                 .ctxt
-                .try_resolve_ast_ty_annot(ast_impl.ty, &gen_params, None, false)
+                .try_resolve_ast_ty_annot(
+                    ast_impl.ty,
+                    ResCtxt {
+                        gen_vars: &gen_params,
+                        self_ty: None,
+                        fn_: None,
+                    },
+                    false,
+                )
                 .ok_or(())?;
 
             let trait_inst = ast_impl
@@ -258,7 +274,15 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                             .iter()
                             .map(|&arg| {
                                 self.ctxt
-                                    .try_resolve_ast_ty_annot(arg, &gen_params, None, false)
+                                    .try_resolve_ast_ty_annot(
+                                        arg,
+                                        ResCtxt {
+                                            gen_vars: &gen_params,
+                                            self_ty: None,
+                                            fn_: None,
+                                        },
+                                        false,
+                                    )
                                     .ok_or(())
                             })
                             .collect::<Result<_, _>>()?,
@@ -279,7 +303,15 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             for assoc_ty in &ast_impl.assoc_tys {
                 let ty = self
                     .ctxt
-                    .try_resolve_ast_ty_annot(assoc_ty.ty, &gen_params, None, false)
+                    .try_resolve_ast_ty_annot(
+                        assoc_ty.ty,
+                        ResCtxt {
+                            gen_vars: &gen_params,
+                            self_ty: None,
+                            fn_: None,
+                        },
+                        false,
+                    )
                     .ok_or(())?;
                 let assoc_ty_idx = self
                     .ctxt
@@ -317,11 +349,16 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .collect();
         let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
+        let param_res_ctxt = ResCtxt {
+            gen_vars: &all_gen_params,
+            self_ty: associated_ty,
+            fn_: None,
+        };
         let params = ast_fn
             .params
             .iter()
             .enumerate()
-            .map(|(idx, param)| self.build_fn_param(param, &all_gen_params, associated_ty, idx == 0))
+            .map(|(idx, param)| self.build_fn_param(param, param_res_ctxt, idx == 0))
             .collect::<Result<_, _>>()?;
 
         let signature = fns::FnSig {
@@ -338,11 +375,16 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         };
 
         let fn_ = self.ctxt.fns.register_fn(signature, associated_ty.is_none())?;
+        let res_ctxt = ResCtxt {
+            gen_vars: &all_gen_params,
+            self_ty: associated_ty,
+            fn_: Some(fn_),
+        };
 
         for constraint in &ast_fn.constraints {
             let subject = self
                 .ctxt
-                .try_resolve_ast_ty_annot(constraint.subject, &all_gen_params, associated_ty, false)
+                .try_resolve_ast_ty_annot(constraint.subject, res_ctxt, false)
                 .ok_or(())?;
 
             match &constraint.requirement {
@@ -350,11 +392,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     let trait_ = self.ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
                     let trait_args: Vec<_> = trait_args
                         .iter()
-                        .map(|&arg| {
-                            self.ctxt
-                                .try_resolve_ast_ty_annot(arg, &all_gen_params, associated_ty, false)
-                                .ok_or(())
-                        })
+                        .map(|&arg| self.ctxt.try_resolve_ast_ty_annot(arg, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
                     let trait_inst = traits::TraitInst {
                         trait_,
@@ -365,16 +403,12 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 ast::ConstraintRequirement::Callable { params, return_ty } => {
                     let params = params
                         .iter()
-                        .map(|&ty| {
-                            self.ctxt
-                                .try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, false)
-                                .ok_or(())
-                        })
+                        .map(|&ty| self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
                     let return_ty = match return_ty {
                         Some(return_ty) => self
                             .ctxt
-                            .try_resolve_ast_ty_annot(return_ty, &all_gen_params, associated_ty, false)
+                            .try_resolve_ast_ty_annot(return_ty, res_ctxt, false)
                             .ok_or(())?,
                         None => self.ctxt.tys.unit(),
                     };
@@ -384,10 +418,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         }
 
         let return_ty = match ast_fn.return_ty {
-            Some(ty) => self
-                .ctxt
-                .try_resolve_ast_ty_annot(ty, &all_gen_params, associated_ty, true)
-                .ok_or(())?,
+            Some(ty) => self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, true).ok_or(())?,
             None => self.ctxt.tys.unit(),
         };
 
@@ -399,25 +430,21 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
     fn build_fn_param(
         &mut self,
         param: &ast::Param,
-        gen_params: &[ty::GenVar],
-        self_ty: Option<ty::Ty>,
+        res_ctxt: ResCtxt<'_>,
         allow_receiver: bool,
     ) -> Result<fns::FnParam, ()> {
         match param {
             ast::Param::Regular { name, ty } => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Regular(name.clone()),
-                ty: self
-                    .ctxt
-                    .try_resolve_ast_ty_annot(ty, gen_params, self_ty, false)
-                    .ok_or(())?,
+                ty: self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(())?,
             }),
             ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Self_,
-                ty: self_ty.ok_or(())?,
+                ty: res_ctxt.self_ty.ok_or(())?,
             }),
             ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::SelfByRef,
-                ty: self_ty.map(|self_ty| self.ctxt.tys.ref_(self_ty)).ok_or(())?,
+                ty: res_ctxt.self_ty.map(|self_ty| self.ctxt.tys.ref_(self_ty)).ok_or(())?,
             }),
             _ => Err(()),
         }
@@ -437,17 +464,22 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     .collect();
                 let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_gen_params).cloned().collect();
 
+                let trait_res_ctxt = ResCtxt {
+                    gen_vars: &all_gen_params,
+                    self_ty: Some(self_type),
+                    fn_: None,
+                };
                 let params = mthd
                     .params
                     .iter()
                     .enumerate()
-                    .map(|(idx, param)| self.build_fn_param(param, &all_gen_params, Some(self_type), idx == 0))
+                    .map(|(idx, param)| self.build_fn_param(param, trait_res_ctxt, idx == 0))
                     .collect::<Result<_, _>>()?;
 
                 let return_ty = match mthd.return_ty {
                     Some(ty) => self
                         .ctxt
-                        .try_resolve_ast_ty_annot(ty, &all_gen_params, Some(self_type), false)
+                        .try_resolve_ast_ty_annot(ty, trait_res_ctxt, false)
                         .ok_or(())?,
                     None => self.ctxt.tys.unit(),
                 };

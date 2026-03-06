@@ -145,7 +145,7 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
     pub fn insert_call_val(&mut self, callable: mlr::Op<'mlr>, args: Vec<mlr::Op<'mlr>>) -> mlr::Val<'mlr> {
         let return_ty = self
             .ctxt
-            .ty_is_callable(callable.1)
+            .ty_is_callable(Some(self.fn_), callable.1)
             .map(|(_, return_ty, _)| return_ty)
             .expect("callable op should have a callable type");
         self.mlr.insert_val(mlr::ValDef::Call { callable, args }, return_ty)

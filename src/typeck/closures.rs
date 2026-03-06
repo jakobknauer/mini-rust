@@ -97,7 +97,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
     fn try_get_callable_hint_info(&mut self, hint: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty)> {
         let normalized = self.normalize(hint);
-        if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(normalized) {
+        if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), normalized) {
             return Some((param_tys, return_ty));
         }
         let obligations = self.pending_obligations.clone();

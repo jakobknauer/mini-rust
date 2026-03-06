@@ -1101,8 +1101,14 @@ impl TyReg {
         });
     }
 
-    pub fn get_trait_inst_constraint(&self, subject: Ty, trait_: Trait) -> Option<TraitInst> {
-        self.constraints.values().flatten().find_map(|c| {
+    pub fn get_trait_inst_constraint(
+        &self,
+        constraint_scope: Option<fns::Fn>,
+        subject: Ty,
+        trait_: Trait,
+    ) -> Option<TraitInst> {
+        let fn_ = constraint_scope?;
+        self.constraints.get(&fn_).into_iter().flatten().find_map(|c| {
             if c.subject != subject {
                 return None;
             }
@@ -1113,8 +1119,14 @@ impl TyReg {
         })
     }
 
-    pub fn implements_trait_constraint_exists(&self, subject: Ty, trait_: Trait) -> bool {
-        self.constraints.values().flatten().any(|c| {
+    pub fn implements_trait_constraint_exists(
+        &self,
+        constraint_scope: Option<fns::Fn>,
+        subject: Ty,
+        trait_: Trait,
+    ) -> bool {
+        let Some(fn_) = constraint_scope else { return false };
+        self.constraints.get(&fn_).into_iter().flatten().any(|c| {
             c.subject == subject
                 && matches!(c.requirement,
                     ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_)
@@ -1142,9 +1154,11 @@ impl TyReg {
         })
     }
 
-    pub fn try_get_callable_constraint(&self, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
+    pub fn try_get_callable_constraint(&self, constraint_scope: Option<fns::Fn>, subject: Ty) -> Option<(Vec<Ty>, Ty)> {
+        let fn_ = constraint_scope?;
         self.constraints
-            .values()
+            .get(&fn_)
+            .into_iter()
             .flatten()
             .filter_map(|c| {
                 if c.subject == subject {

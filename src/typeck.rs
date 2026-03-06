@@ -462,7 +462,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(fn_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
 
@@ -498,7 +498,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let callee_ty = self.check_expr(callee, None)?;
         let callee_ty = self.normalize(callee_ty);
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(callee_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), callee_ty) else {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
 
@@ -811,7 +811,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
                     let param_tys: Vec<_> = param_tys.iter().map(|&t| self.normalize(t)).collect();
                     let return_ty = self.normalize(return_ty);
-                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(ty) else {
+                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(Some(self.fn_.fn_), ty)
+                    else {
                         return Err(TypeckError::CallableConstraintNotSatisfied {
                             ty,
                             expected_param_tys: param_tys,

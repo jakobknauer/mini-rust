@@ -17,6 +17,13 @@ pub use ty_reg::*;
 
 use crate::{ast, ctxt::ty::GenVarSubst};
 
+#[derive(Copy, Clone)]
+pub struct ResCtxt<'a> {
+    pub gen_vars: &'a [ty::GenVar],
+    pub self_ty: Option<ty::Ty>,
+    pub fn_: Option<fns::Fn>,
+}
+
 #[derive(Default)]
 pub struct Ctxt {
     pub tys: TyReg,
@@ -237,8 +244,16 @@ impl Ctxt {
             .is_some()
     }
 
-    pub fn ty_implements_trait(&mut self, ty: ty::Ty, trait_: traits::Trait) -> bool {
-        if self.tys.implements_trait_constraint_exists(ty, trait_) {
+    pub fn ty_implements_trait(
+        &mut self,
+        constraint_scope: Option<fns::Fn>,
+        ty: ty::Ty,
+        trait_: traits::Trait,
+    ) -> bool {
+        if self
+            .tys
+            .implements_trait_constraint_exists(constraint_scope, ty, trait_)
+        {
             return true;
         }
 
@@ -253,7 +268,11 @@ impl Ctxt {
     }
 
     // TODO return TySlice instead of Vec
-    pub fn ty_is_callable(&mut self, ty: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
+    pub fn ty_is_callable(
+        &mut self,
+        constraint_scope: Option<fns::Fn>,
+        ty: ty::Ty,
+    ) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
         if let &ty::TyDef::Fn {
             param_tys,
             return_ty,
@@ -261,7 +280,7 @@ impl Ctxt {
         } = self.tys.get_ty_def(ty)
         {
             Some((self.tys.get_ty_slice(param_tys).to_vec(), return_ty, var_args))
-        } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(ty) {
+        } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraint_scope, ty) {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(fn_inst);
@@ -282,39 +301,38 @@ impl Ctxt {
     pub fn try_resolve_ast_ty_annot(
         &mut self,
         annot: ast::TyAnnot,
-        gen_vars: &[ty::GenVar],
-        self_ty: Option<ty::Ty>,
+        res_ctxt: ResCtxt<'_>,
         allow_opaque: bool,
     ) -> Option<ty::Ty> {
         use ast::TyAnnotKind::*;
 
         match annot {
             Path(path) => match path.segments.as_slice() {
-                [segment] => self.try_resolve_ast_path_segment_to_ty(segment, gen_vars, self_ty),
+                [segment] => self.try_resolve_ast_path_segment_to_ty(segment, res_ctxt),
                 [base_ty, assoc_ty] if !assoc_ty.is_self && assoc_ty.args.is_none() => {
-                    let base_ty = self.try_resolve_ast_path_segment_to_ty(base_ty, gen_vars, self_ty)?;
+                    let base_ty = self.try_resolve_ast_path_segment_to_ty(base_ty, res_ctxt)?;
 
                     let ty = self
-                        .resolve_associated_ty_completely(base_ty, &assoc_ty.ident)
+                        .resolve_associated_ty_completely(res_ctxt.fn_, base_ty, &assoc_ty.ident)
                         .expect("associated type not found");
                     Some(ty)
                 }
                 _ => None,
             },
             &Ref(ty_annot) => self
-                .try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty, false)
+                .try_resolve_ast_ty_annot(ty_annot, res_ctxt, false)
                 .map(|inner| self.tys.ref_(inner)),
             &Ptr(ty_annot) => self
-                .try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty, false)
+                .try_resolve_ast_ty_annot(ty_annot, res_ctxt, false)
                 .map(|inner| self.tys.ptr(inner)),
             &Fn { param_tys, return_ty } => {
                 let param_tys: Vec<ty::Ty> = param_tys
                     .iter()
-                    .map(|&pt| self.try_resolve_ast_ty_annot(pt, gen_vars, self_ty, false))
+                    .map(|&pt| self.try_resolve_ast_ty_annot(pt, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;
 
                 let return_ty = match return_ty {
-                    Some(rt) => self.try_resolve_ast_ty_annot(rt, gen_vars, self_ty, false),
+                    Some(rt) => self.try_resolve_ast_ty_annot(rt, res_ctxt, false),
                     None => Some(self.tys.unit()),
                 }?;
 
@@ -323,7 +341,7 @@ impl Ctxt {
             &Tuple(ty_annots) => {
                 let tys: Vec<ty::Ty> = ty_annots
                     .iter()
-                    .map(|ty_annot| self.try_resolve_ast_ty_annot(ty_annot, gen_vars, self_ty, false))
+                    .map(|ty_annot| self.try_resolve_ast_ty_annot(ty_annot, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;
                 Some(self.tys.tuple(&tys))
             }
@@ -337,7 +355,7 @@ impl Ctxt {
                         let trait_ = self.traits.resolve_trait_name(trait_name)?;
                         let gen_args: Vec<_> = trait_args
                             .iter()
-                            .map(|&a| self.try_resolve_ast_ty_annot(a, gen_vars, self_ty, false))
+                            .map(|&a| self.try_resolve_ast_ty_annot(a, res_ctxt, false))
                             .collect::<Option<_>>()?;
                         let trait_inst = traits::TraitInst {
                             trait_,
@@ -349,10 +367,10 @@ impl Ctxt {
                     ast::ConstraintRequirement::Callable { params, return_ty } => {
                         let param_tys: Vec<_> = params
                             .iter()
-                            .map(|&p| self.try_resolve_ast_ty_annot(p, gen_vars, self_ty, false))
+                            .map(|&p| self.try_resolve_ast_ty_annot(p, res_ctxt, false))
                             .collect::<Option<_>>()?;
                         let return_ty = match return_ty {
-                            Some(rt) => self.try_resolve_ast_ty_annot(rt, gen_vars, self_ty, false)?,
+                            Some(rt) => self.try_resolve_ast_ty_annot(rt, res_ctxt, false)?,
                             None => self.tys.unit(),
                         };
                         self.tys
@@ -368,13 +386,16 @@ impl Ctxt {
     pub fn try_resolve_ast_path_segment_to_ty(
         &mut self,
         path_segment: &ast::PathSegment,
-        gen_vars: &[ty::GenVar],
-        self_ty: Option<ty::Ty>,
+        res_ctxt: ResCtxt<'_>,
     ) -> Option<ty::Ty> {
         match path_segment {
-            ast::PathSegment { is_self: true, .. } => Some(self_ty.expect("self type not available")),
+            ast::PathSegment { is_self: true, .. } => Some(res_ctxt.self_ty.expect("self type not available")),
             ast::PathSegment { ident, args: None, .. } => {
-                if let Some(&gv) = gen_vars.iter().find(|&&gv| self.tys.get_gen_var_name(gv) == *ident) {
+                if let Some(&gv) = res_ctxt
+                    .gen_vars
+                    .iter()
+                    .find(|&&gv| self.tys.get_gen_var_name(gv) == *ident)
+                {
                     let ty = self.tys.gen_var(gv);
                     return Some(ty);
                 }
@@ -392,7 +413,7 @@ impl Ctxt {
             } => {
                 let gen_args: Vec<ty::Ty> = args
                     .iter()
-                    .map(|arg_annot| self.try_resolve_ast_ty_annot(arg_annot, gen_vars, self_ty, false))
+                    .map(|arg_annot| self.try_resolve_ast_ty_annot(arg_annot, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;
 
                 match *self.tys.get_ty_by_name(ident).ok()? {
@@ -404,7 +425,12 @@ impl Ctxt {
         }
     }
 
-    fn resolve_associated_ty_completely(&mut self, base_ty: ty::Ty, ident: &str) -> Option<ty::Ty> {
+    fn resolve_associated_ty_completely(
+        &mut self,
+        constraint_scope: Option<fns::Fn>,
+        base_ty: ty::Ty,
+        ident: &str,
+    ) -> Option<ty::Ty> {
         let base_ty_def = self.tys.get_ty_def(base_ty);
 
         if let &ty::TyDef::TraitSelf(trait_) = base_ty_def {
@@ -422,7 +448,7 @@ impl Ctxt {
         let candidate_assoc_tys: Vec<_> = self.traits.get_trait_assoc_ty_with_name(ident).collect::<Vec<_>>();
         let candidate_assoc_tys: Vec<_> = candidate_assoc_tys
             .into_iter()
-            .filter(|&(trait_, _)| self.ty_implements_trait(base_ty, trait_))
+            .filter(|&(trait_, _)| self.ty_implements_trait(constraint_scope, base_ty, trait_))
             .collect();
 
         match &candidate_assoc_tys[..] {
@@ -431,7 +457,7 @@ impl Ctxt {
                 let impl_insts = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
-                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(base_ty, *trait_) {
+                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraint_scope, base_ty, *trait_) {
                         return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                     }
                     let gen_args: Vec<_> = self

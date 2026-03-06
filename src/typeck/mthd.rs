@@ -86,7 +86,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             .collect();
         let candidates: Vec<_> = candidates
             .into_iter()
-            .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(base_ty, trait_))
+            .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(Some(self.fn_.fn_), base_ty, trait_))
             .collect();
 
         match candidates.as_slice() {
