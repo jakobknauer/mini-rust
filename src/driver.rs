@@ -1,6 +1,7 @@
 mod err;
 mod impl_check;
 mod stdlib;
+mod ty_annots;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -9,11 +10,18 @@ use std::{
 
 use crate::{
     ast, ast_lowering,
-    ctxt::{self, ResCtxt, fns, impls, traits, ty},
+    ctxt::{self, fns, impls, traits, ty},
     driver::{err::print_impl_check_error, impl_check::check_trait_impls},
     hlr, hlr_lowering, mlr, mlr_lowering, parse, typeck,
     util::print,
 };
+
+#[derive(Copy, Clone)]
+struct ResCtxt<'a> {
+    gen_vars: &'a [ty::GenVar],
+    self_ty: Option<ty::Ty>,
+    constraints: &'a [ty::Constraint],
+}
 
 #[derive(Default)]
 pub struct OutputPaths<'a> {
@@ -190,7 +198,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 Ok(ty::StructField {
                     name: field.name.clone(),
                     ty: self
-                        .ctxt
                         .try_resolve_ast_ty_annot(
                             field.ty,
                             ResCtxt {
@@ -251,7 +258,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 .collect();
 
             let ty = self
-                .ctxt
                 .try_resolve_ast_ty_annot(
                     ast_impl.ty,
                     ResCtxt {
@@ -273,17 +279,16 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         &Some(args) => args
                             .iter()
                             .map(|&arg| {
-                                self.ctxt
-                                    .try_resolve_ast_ty_annot(
-                                        arg,
-                                        ResCtxt {
-                                            gen_vars: &gen_params,
-                                            self_ty: None,
-                                            constraints: &[],
-                                        },
-                                        false,
-                                    )
-                                    .ok_or(())
+                                self.try_resolve_ast_ty_annot(
+                                    arg,
+                                    ResCtxt {
+                                        gen_vars: &gen_params,
+                                        self_ty: None,
+                                        constraints: &[],
+                                    },
+                                    false,
+                                )
+                                .ok_or(())
                             })
                             .collect::<Result<_, _>>()?,
                         None => vec![],
@@ -302,7 +307,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
             for assoc_ty in &ast_impl.assoc_tys {
                 let ty = self
-                    .ctxt
                     .try_resolve_ast_ty_annot(
                         assoc_ty.ty,
                         ResCtxt {
@@ -369,7 +373,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 constraints: &constraints,
             };
             let subject = self
-                .ctxt
                 .try_resolve_ast_ty_annot(constraint.subject, res_ctxt, false)
                 .ok_or(())?;
 
@@ -378,7 +381,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     let trait_ = self.ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
                     let trait_args: Vec<_> = trait_args
                         .iter()
-                        .map(|&arg| self.ctxt.try_resolve_ast_ty_annot(arg, res_ctxt, false).ok_or(()))
+                        .map(|&arg| self.try_resolve_ast_ty_annot(arg, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
                     let trait_inst = traits::TraitInst {
                         trait_,
@@ -392,13 +395,10 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 ast::ConstraintRequirement::Callable { params, return_ty } => {
                     let param_tys = params
                         .iter()
-                        .map(|&ty| self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(()))
+                        .map(|&ty| self.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
                     let return_ty = match return_ty {
-                        Some(return_ty) => self
-                            .ctxt
-                            .try_resolve_ast_ty_annot(return_ty, res_ctxt, false)
-                            .ok_or(())?,
+                        Some(return_ty) => self.try_resolve_ast_ty_annot(return_ty, res_ctxt, false).ok_or(())?,
                         None => self.ctxt.tys.unit(),
                     };
                     constraints.push(ty::Constraint {
@@ -415,7 +415,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             constraints: &constraints,
         };
         let return_ty = match ast_fn.return_ty {
-            Some(ty) => self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, true).ok_or(())?,
+            Some(ty) => self.try_resolve_ast_ty_annot(ty, res_ctxt, true).ok_or(())?,
             None => self.ctxt.tys.unit(),
         };
 
@@ -443,7 +443,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         match param {
             ast::Param::Regular { name, ty } => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Regular(name.clone()),
-                ty: self.ctxt.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(())?,
+                ty: self.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(())?,
             }),
             ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Self_,
@@ -484,10 +484,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     .collect::<Result<_, _>>()?;
 
                 let return_ty = match mthd.return_ty {
-                    Some(ty) => self
-                        .ctxt
-                        .try_resolve_ast_ty_annot(ty, trait_res_ctxt, false)
-                        .ok_or(())?,
+                    Some(ty) => self.try_resolve_ast_ty_annot(ty, trait_res_ctxt, false).ok_or(())?,
                     None => self.ctxt.tys.unit(),
                 };
 
