@@ -1,15 +1,7 @@
 fn main() -> i32 {
-    let f = make_linear(2, 3);
-
-    let i = 0;
-    while i < 10 {
-        let x = f(i);
-        printf("%d\n", x);
-
-        i = i + 1
-    }
-
-    0
+    let a = 1;
+    let f = |x| x + a;
+    f(3)
 }
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 

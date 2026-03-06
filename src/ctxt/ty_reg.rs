@@ -533,7 +533,7 @@ impl TyReg {
                     assoc_ty_idx
                 )
             }
-            InfVar(_) => unreachable!(),
+            InfVar(id) => format!("inf({})", id.0),
             Opaque(id) => format!("impl({})", id.0),
         }
     }
@@ -561,6 +561,7 @@ impl TyReg {
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
+            Primitive(_) | TraitSelf(_) | InfVar(_) | Opaque(_) => ty,
             GenVar(gen_var) => {
                 if let Some(replacement_ty) = subst.get(gen_var) {
                     replacement_ty
@@ -596,8 +597,6 @@ impl TyReg {
                     iter_ty_slice!(self, gen_args, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
-            Primitive(..) => ty,
-            TraitSelf(_) => ty,
             Closure {
                 fn_inst,
                 ref name,
@@ -633,8 +632,6 @@ impl TyReg {
                 };
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
-            InfVar(_) => unreachable!(),
-            Opaque(_) => ty,
         }
     }
 
@@ -649,7 +646,7 @@ impl TyReg {
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
-            GenVar(..) => ty,
+            Primitive(_) | InfVar(_) | Opaque(_) | GenVar(_) => ty,
             Fn {
                 param_tys,
                 return_ty,
@@ -678,8 +675,7 @@ impl TyReg {
                     iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, subst))).collect();
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
-            Primitive(..) => ty,
-            TraitSelf(_) => subst,
+            TraitSelf(_) => subst, // TODO: check actual trait
             Closure {
                 fn_inst,
                 ref name,
@@ -713,8 +709,6 @@ impl TyReg {
                 };
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
-            InfVar(_) => unreachable!(),
-            Opaque(_) => ty,
         }
     }
 
