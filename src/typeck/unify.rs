@@ -190,6 +190,24 @@ impl<'a> Unify<'a> {
                     && gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
+            (
+                &ty::TyDef::Opaque {
+                    id: id1,
+                    gen_args: gen_args1,
+                },
+                &ty::TyDef::Opaque {
+                    id: id2,
+                    gen_args: gen_args2,
+                },
+            ) => {
+                if id1 != id2 || gen_args1.len != gen_args2.len {
+                    return false;
+                }
+                let gen_args1 = self.tys.get_ty_slice(gen_args1);
+                let gen_args2 = self.tys.get_ty_slice(gen_args2);
+                gen_args1.iter().zip(gen_args2).all(|(t1, t2)| self.unify(*t1, *t2))
+            }
+
             _ => false,
         }
     }

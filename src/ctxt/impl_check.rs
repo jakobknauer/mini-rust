@@ -1,4 +1,7 @@
-use crate::ctxt::{fns, impls, traits, ty, ty::GenVarSubst};
+use crate::ctxt::{
+    fns, impls, traits,
+    ty::{self, GenVarSubst},
+};
 
 impl super::Ctxt {
     pub fn resolve_trait_mthd_to_fn(
@@ -67,7 +70,7 @@ impl super::Ctxt {
         }
 
         let ty_def = self.tys.get_ty_def(ty);
-        if let &ty::TyDef::Opaque(id) = ty_def
+        if let &ty::TyDef::Opaque { id, .. } = ty_def
             && self.tys.opaque_satisfies_trait_inst(id, trait_inst)
         {
             return true;
@@ -115,10 +118,21 @@ impl super::Ctxt {
                 signature.return_ty,
                 false,
             ))
-        } else if let &ty::TyDef::Opaque(id) = self.tys.get_ty_def(ty) {
+        } else if let &ty::TyDef::Opaque { id, gen_args } = self.tys.get_ty_def(ty) {
             self.tys
                 .try_get_opaque_callable_constraint(id)
-                .map(|(p, r)| (p, r, false))
+                .map(|(param_tys, return_ty)| {
+                    let opaque_def = self.tys.get_opaque_def(id);
+                    let subst = GenVarSubst::new(&opaque_def.gen_params, self.tys.get_ty_slice(gen_args)).unwrap();
+
+                    let param_tys = param_tys
+                        .iter()
+                        .map(|&ty| self.tys.substitute_gen_vars(ty, &subst))
+                        .collect();
+                    let return_ty = self.tys.substitute_gen_vars(return_ty, &subst);
+
+                    (param_tys, return_ty, false)
+                })
         } else {
             None
         }

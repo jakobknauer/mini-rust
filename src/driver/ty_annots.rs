@@ -58,7 +58,7 @@ impl Driver<'_, '_, '_, '_> {
                 if !allow_opaque {
                     return None;
                 }
-                let (id, opaque_ty) = self.ctxt.tys.opaque();
+                let (id, opaque_ty) = self.ctxt.tys.opaque(res_ctxt.gen_vars);
                 match req {
                     ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
                         let trait_ = self.ctxt.traits.resolve_trait_name(trait_name)?;

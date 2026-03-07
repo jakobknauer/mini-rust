@@ -137,13 +137,17 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
                 let ty = self.mr_ctxt.normalize_ty(ty);
                 self.get_or_define_ty(ty).unwrap()
             }
-            Opaque(id) => {
+            Opaque { id, gen_args } => {
                 let resolved = self
                     .mr_ctxt
                     .tys
                     .get_opaque_resolution(id)
                     .expect("opaque type must be resolved before MLR lowering");
-                self.get_or_define_ty(resolved).unwrap()
+                let gen_params = self.mr_ctxt.tys.get_opaque_def(id).gen_params.clone();
+                let gen_args = self.mr_ctxt.tys.get_ty_slice(gen_args).to_vec();
+                let subst = mr_tys::GenVarSubst::new(&gen_params, &gen_args).unwrap();
+                let instantiated = self.mr_ctxt.tys.substitute_gen_vars(resolved, &subst);
+                self.get_or_define_ty(instantiated).unwrap()
             }
             InfVar(_) => unreachable!(),
         };

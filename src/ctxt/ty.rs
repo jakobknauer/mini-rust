@@ -70,7 +70,10 @@ pub enum TyDef {
         assoc_ty_idx: usize,
     },
     InfVar(InfVar),
-    Opaque(OpaqueId),
+    Opaque {
+        id: OpaqueId,
+        gen_args: TySlice,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -105,6 +108,12 @@ pub struct EnumDef {
 pub struct EnumVariant {
     pub name: String,
     pub struct_: Struct,
+}
+
+#[derive(Clone)]
+pub struct OpaqueDef {
+    pub gen_params: Vec<GenVar>,
+    pub constraints: Vec<ConstraintRequirement>,
 }
 
 #[derive(Clone)]

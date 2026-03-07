@@ -24,7 +24,12 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 None => ty,
             },
 
-            Primitive(_) | GenVar(_) | Opaque(_) => ty,
+            Primitive(_) | GenVar(_) => ty,
+
+            Opaque { id, gen_args } => {
+                let gen_args = self.normalize_slice(gen_args);
+                self.ctxt.tys.inst_opaque(id, &gen_args)
+            }
 
             Closure {
                 fn_inst,

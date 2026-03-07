@@ -89,7 +89,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     }
 
     fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> MlrLoweringResult<FunctionType<'iw>> {
-        let mr_ty = op.1;
+        let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
             return Err(MlrLoweringError);
@@ -106,7 +106,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     }
 
     fn get_closure_fn_ty(&mut self, op: mlr::Op, captures_ty: mr_ty::Ty) -> MlrLoweringResult<FunctionType<'iw>> {
-        let mr_ty = op.1;
+        let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
             return Err(MlrLoweringError);

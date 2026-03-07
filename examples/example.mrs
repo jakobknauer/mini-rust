@@ -1,7 +1,8 @@
 fn main() -> i32 {
-    let a = 1;
-    let f = |x| x + a;
-    f(3)
+    let f = |x| x + 1;
+    let g = |y| y * 2;
+    let h = compose(f, g);
+    h(1)
 }
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 
@@ -13,6 +14,14 @@ fn apply<A, B, F>(f: F, a: A) -> B
     where F: Fn(A) -> B
 {
     f(a)
+}
+
+fn compose<A, B, C, F, G>(f: F, g: G) -> impl Fn(A) -> C
+where
+    F: Fn(A) -> B,
+    G: Fn(B) -> C
+{
+    |a| g(f(a))
 }
 
 fn malloc(size: i32) -> *c_void;

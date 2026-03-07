@@ -198,7 +198,16 @@ impl Ctxt {
                 self.tys.substitute_gen_vars(assoc_ty, &subst)
             }
             InfVar(_) => unreachable!(),
-            &Opaque(id) => self.tys.get_opaque_resolution(id).unwrap_or(ty),
+            &Opaque { id, gen_args } => {
+                let Some(resolved) = self.tys.get_opaque_resolution(id) else {
+                    return ty;
+                };
+                let gen_params = self.tys.get_opaque_def(id).gen_params.clone();
+                let gen_args = self.tys.get_ty_slice(gen_args).to_vec();
+                let subst = GenVarSubst::new(&gen_params, &gen_args).unwrap();
+                let instantiated = self.tys.substitute_gen_vars(resolved, &subst);
+                self.normalize_ty(instantiated)
+            }
         }
     }
 

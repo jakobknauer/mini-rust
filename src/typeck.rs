@@ -81,6 +81,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let opaque_return = self.check_body()?;
         self.normalize_all();
         self.check_pending_obligations()?;
+        self.normalize_all();
 
         if let Some((opaque_id, inf_var_ty)) = opaque_return {
             let concrete_ty = self.normalize(inf_var_ty);
@@ -101,16 +102,17 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
 
         let return_ty = sig.return_ty;
 
-        let (effective_return_ty, opaque_return) = if let ty::TyDef::Opaque(id) = *self.ctxt.tys.get_ty_def(return_ty) {
-            let inf_var = self.ctxt.tys.inf_var();
-            let reqs = self.ctxt.tys.get_opaque_constraints(id).to_vec();
-            for req in reqs {
-                self.pending_obligations.push((inf_var, req));
-            }
-            (inf_var, Some((id, inf_var)))
-        } else {
-            (return_ty, None)
-        };
+        let (effective_return_ty, opaque_return) =
+            if let ty::TyDef::Opaque { id, .. } = *self.ctxt.tys.get_ty_def(return_ty) {
+                let inf_var = self.ctxt.tys.inf_var();
+                let reqs = self.ctxt.tys.get_opaque_constraints(id).to_vec();
+                for req in reqs {
+                    self.pending_obligations.push((inf_var, req));
+                }
+                (inf_var, Some((id, inf_var)))
+            } else {
+                (return_ty, None)
+            };
 
         self.return_ty_stack.push(effective_return_ty);
         let body_ty = self.check_expr(self.fn_.body, Some(effective_return_ty))?;
@@ -823,11 +825,17 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                         });
                     };
                     let actual_params: Vec<_> = actual_params.iter().map(|&t| self.normalize(t)).collect();
+                    let actual_params: Vec<_> = actual_params.iter().map(|&t| self.normalize(t)).collect();
                     let actual_return = self.normalize(actual_return);
-                    let types_match = param_tys.len() == actual_params.len()
-                        && param_tys.iter().zip(&actual_params).all(|(&a, &b)| a == b)
-                        && return_ty == actual_return;
-                    if !types_match {
+                    if param_tys.len() != actual_params.len()
+                        || param_tys
+                            .iter()
+                            .zip(actual_params.iter())
+                            .any(|(&expected, &actual)| !self.unify(expected, actual))
+                        || !self.unify(return_ty, actual_return)
+                    {
+                        let param_tys: Vec<_> = param_tys.iter().map(|&t| self.normalize(t)).collect();
+                        let return_ty = self.normalize(return_ty);
                         return Err(TypeckError::CallableConstraintNotSatisfied {
                             ty,
                             expected_param_tys: param_tys,

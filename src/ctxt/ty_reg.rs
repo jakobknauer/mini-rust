@@ -22,7 +22,7 @@ pub struct TyReg {
     next_inf_var: InfVar,
     next_opaque_id: usize,
     opaque_resolutions: HashMap<OpaqueId, Ty>,
-    opaque_constraints: HashMap<OpaqueId, Vec<ConstraintRequirement>>,
+    opaques: Vec<OpaqueDef>,
 }
 
 #[derive(Clone, Copy)]
@@ -234,11 +234,22 @@ impl TyReg {
         self.register_ty(inf_var)
     }
 
-    pub fn opaque(&mut self) -> (OpaqueId, Ty) {
+    pub fn opaque(&mut self, gen_params: &[GenVar]) -> (OpaqueId, Ty) {
         let id = OpaqueId(self.next_opaque_id);
         self.next_opaque_id += 1;
-        let ty = self.register_ty(TyDef::Opaque(id));
+        let gen_args: Vec<Ty> = gen_params.iter().map(|&gv| self.gen_var(gv)).collect();
+        let gen_args = self.ty_slice(&gen_args);
+        let opaque_def = OpaqueDef {
+            gen_params: gen_params.to_vec(),
+            constraints: Vec::new(),
+        };
+        self.opaques.push(opaque_def);
+        let ty = self.register_ty(TyDef::Opaque { id, gen_args });
         (id, ty)
+    }
+
+    pub fn get_opaque_def(&self, id: OpaqueId) -> &OpaqueDef {
+        &self.opaques[id.0]
     }
 
     pub fn set_opaque_resolution(&mut self, id: OpaqueId, ty: Ty) {
@@ -250,20 +261,18 @@ impl TyReg {
     }
 
     pub fn add_opaque_constraint(&mut self, id: OpaqueId, req: ConstraintRequirement) {
-        self.opaque_constraints.entry(id).or_default().push(req);
+        self.opaques[id.0].constraints.push(req);
     }
 
     pub fn opaque_satisfies_trait_inst(&self, id: OpaqueId, trait_inst: TraitInst) -> bool {
-        let Some(reqs) = self.opaque_constraints.get(&id) else {
-            return false;
-        };
-        reqs.iter()
+        self.opaques[id.0]
+            .constraints
+            .iter()
             .any(|r| matches!(r, ConstraintRequirement::Trait(ti) if ti.trait_ == trait_inst.trait_))
     }
 
     pub fn try_get_opaque_callable_constraint(&self, id: OpaqueId) -> Option<(Vec<Ty>, Ty)> {
-        let reqs = self.opaque_constraints.get(&id)?;
-        reqs.iter().find_map(|r| {
+        self.opaques[id.0].constraints.iter().find_map(|r| {
             if let ConstraintRequirement::Callable { param_tys, return_ty } = r {
                 Some((param_tys.clone(), *return_ty))
             } else {
@@ -273,7 +282,12 @@ impl TyReg {
     }
 
     pub fn get_opaque_constraints(&self, id: OpaqueId) -> &[ConstraintRequirement] {
-        self.opaque_constraints.get(&id).map(Vec::as_slice).unwrap_or(&[])
+        &self.opaques[id.0].constraints
+    }
+
+    pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty]) -> Ty {
+        let gen_args = self.ty_slice(gen_args);
+        self.register_ty(TyDef::Opaque { id, gen_args })
     }
 
     pub fn resolve_opaque_in_ty(&mut self, ty: Ty) -> Ty {
@@ -282,7 +296,16 @@ impl TyReg {
         let ty_def = self.tys.get(ty.0).unwrap().clone();
 
         match ty_def {
-            Opaque(id) => self.opaque_resolutions.get(&id).copied().unwrap_or(ty),
+            Opaque { id, gen_args } => {
+                let Some(resolved) = self.opaque_resolutions.get(&id).copied() else {
+                    return ty;
+                };
+                let gen_params = self.opaques[id.0].gen_params.clone();
+                let gen_args: Vec<Ty> = self.get_ty_slice(gen_args).to_vec();
+                let subst = GenVarSubst::new(&gen_params, &gen_args).unwrap();
+                let instantiated = self.substitute_gen_vars(resolved, &subst);
+                self.resolve_opaque_in_ty(instantiated)
+            }
             Primitive(_) | GenVar(_) | TraitSelf(_) | InfVar(_) => ty,
             Ref(inner) => {
                 let inner = self.resolve_opaque_in_ty(inner);
@@ -534,7 +557,15 @@ impl TyReg {
                 )
             }
             InfVar(id) => format!("inf({})", id.0),
-            Opaque(id) => format!("impl({})", id.0),
+            Opaque { id, gen_args } => {
+                if gen_args.is_empty() {
+                    return format!("impl({})", id.0);
+                }
+                let gen_arg_names = iter_ty_slice!(self, gen_args, map(|ga| self.get_string_rep_with_subst(ga, subst)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("impl({})<{}>", id.0, gen_arg_names)
+            }
         }
     }
 
@@ -561,7 +592,16 @@ impl TyReg {
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
-            Primitive(_) | TraitSelf(_) | InfVar(_) | Opaque(_) => ty,
+            Primitive(_) | TraitSelf(_) | InfVar(_) => ty,
+            Opaque { id, gen_args } => {
+                let new_gen_args: Vec<_> =
+                    iter_ty_slice!(self, gen_args, map(|ga| self.substitute_gen_vars(ga, subst))).collect();
+                let new_gen_args = self.ty_slice(&new_gen_args);
+                self.register_ty(TyDef::Opaque {
+                    id,
+                    gen_args: new_gen_args,
+                })
+            }
             GenVar(gen_var) => {
                 if let Some(replacement_ty) = subst.get(gen_var) {
                     replacement_ty
@@ -646,7 +686,7 @@ impl TyReg {
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
-            Primitive(_) | InfVar(_) | Opaque(_) | GenVar(_) => ty,
+            Primitive(_) | InfVar(_) | Opaque { .. } | GenVar(_) => ty,
             Fn {
                 param_tys,
                 return_ty,
@@ -890,6 +930,21 @@ impl TyReg {
             }
 
             (
+                &Opaque {
+                    id: id1,
+                    gen_args: gen_args1,
+                },
+                &Opaque {
+                    id: id2,
+                    gen_args: gen_args2,
+                },
+            ) => {
+                id1 == id2
+                    && gen_args1.len == gen_args2.len
+                    && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
+            }
+
+            (
                 AssocTy {
                     base_ty: base_ty1,
                     trait_inst: trait_inst1,
@@ -1070,6 +1125,25 @@ impl TyReg {
                         all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
                     )
                     && assoc_ty_idx1 == assoc_ty_idx2
+            }
+
+            (
+                &Opaque {
+                    id: id1,
+                    gen_args: gen_args1,
+                },
+                &Opaque {
+                    id: id2,
+                    gen_args: gen_args2,
+                },
+            ) => {
+                id1 == id2
+                    && gen_args1.len == gen_args2.len
+                    && zip_ty_slices!(
+                        self,
+                        (gen_args1, gen_args2),
+                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    )
             }
 
             (_, _) => false,
