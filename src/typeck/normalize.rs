@@ -39,11 +39,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let captures_ty = self.normalize(captures_ty);
                 let gen_args = self.normalize_slice(fn_inst.gen_args);
                 let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
-                let fn_inst = fns::FnInst {
-                    fn_: fn_inst.fn_,
-                    gen_args,
-                    env_gen_args,
-                };
+                let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
                 self.ctxt.tys.closure(fn_inst, name, captures_ty)
             }
 
@@ -168,11 +164,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     fn normalize_fn_inst(&mut self, fn_inst: fns::FnInst) -> fns::FnInst {
         let gen_args = self.normalize_slice(fn_inst.gen_args);
         let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
-        fns::FnInst {
-            fn_: fn_inst.fn_,
-            gen_args,
-            env_gen_args,
-        }
+        fn_inst.with_gen_args(gen_args, env_gen_args).unwrap()
     }
 
     fn normalize_mthd_resolution(&mut self, resolution: MthdResolution) -> MthdResolution {

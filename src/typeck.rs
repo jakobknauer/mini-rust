@@ -242,11 +242,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let empty = self.ctxt.tys.ty_slice(&[]);
         self.typing.expr_extra.insert(
             expr_id,
-            ExprExtra::ValFn(fns::FnInst {
-                fn_,
-                gen_args,
-                env_gen_args: empty,
-            }),
+            ExprExtra::ValFn(self.ctxt.fns.inst_fn(fn_, gen_args, empty).unwrap()),
         );
 
         Ok(self.ctxt.tys.substitute_gen_vars(fn_ty, &subst))

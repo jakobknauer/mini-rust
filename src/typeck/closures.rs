@@ -247,10 +247,6 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
         let gen_args = self.ctxt.tys.ty_slice(&[]);
         let env_gen_args = self.ctxt.tys.ty_slice(&generics.env_gen_args);
-        fns::FnInst {
-            fn_: closure_fn,
-            gen_args,
-            env_gen_args,
-        }
+        self.ctxt.fns.inst_fn(closure_fn, gen_args, env_gen_args).unwrap()
     }
 }

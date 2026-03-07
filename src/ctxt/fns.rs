@@ -55,11 +55,57 @@ pub enum FnParamKind {
     SelfByRef,
 }
 
+#[derive(Debug)]
+pub enum FnInstError {
+    GenArgCountMismatch {
+        #[allow(unused)]
+        fn_: Fn,
+        #[allow(unused)]
+        expected: usize,
+        #[allow(unused)]
+        actual: usize,
+    },
+    EnvGenArgCountMismatch {
+        #[allow(unused)]
+        fn_: Fn,
+        #[allow(unused)]
+        expected: usize,
+        #[allow(unused)]
+        actual: usize,
+    },
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct FnInst {
     pub fn_: Fn,
     pub gen_args: TySlice,
     pub env_gen_args: TySlice,
+    pub(in crate::ctxt) _private: (),
+}
+
+impl FnInst {
+    pub fn with_gen_args(self, gen_args: TySlice, env_gen_args: TySlice) -> Result<FnInst, FnInstError> {
+        if gen_args.len != self.gen_args.len {
+            return Err(FnInstError::GenArgCountMismatch {
+                fn_: self.fn_,
+                expected: self.gen_args.len,
+                actual: gen_args.len,
+            });
+        }
+        if env_gen_args.len != self.env_gen_args.len {
+            return Err(FnInstError::EnvGenArgCountMismatch {
+                fn_: self.fn_,
+                expected: self.env_gen_args.len,
+                actual: env_gen_args.len,
+            });
+        }
+        Ok(FnInst {
+            fn_: self.fn_,
+            gen_args,
+            env_gen_args,
+            _private: (),
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]

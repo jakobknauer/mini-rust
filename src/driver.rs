@@ -604,11 +604,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
     fn monomorphize_functions(&mut self) -> Result<HashSet<fns::FnInst>, ()> {
         let mut open = VecDeque::new();
-        open.push_back(fns::FnInst {
-            fn_: self.ctxt.fns.get_fn_by_name("main").ok_or(())?,
-            gen_args: self.ctxt.tys.ty_slice(&[]),
-            env_gen_args: self.ctxt.tys.ty_slice(&[]),
-        });
+        let main_fn = self.ctxt.fns.get_fn_by_name("main").ok_or(())?;
+        let empty = self.ctxt.tys.ty_slice(&[]);
+        open.push_back(self.ctxt.fns.inst_fn(main_fn, empty, empty).unwrap());
 
         let mut closed = HashSet::new();
 
@@ -622,11 +620,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             let fn_insts = self.ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
                 let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.gen_args, &subst);
                 let new_env_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.env_gen_args, &subst);
-                fns::FnInst {
-                    fn_: fn_inst.fn_,
-                    gen_args: new_gen_args,
-                    env_gen_args: new_env_gen_args,
-                }
+                fn_inst.with_gen_args(new_gen_args, new_env_gen_args).unwrap()
             });
             open.extend(fn_insts);
 

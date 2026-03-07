@@ -28,11 +28,9 @@ impl super::Ctxt {
         let impl_def = self.impls.get_impl_def(impl_inst.impl_);
         let fn_ = impl_def.mthds_by_name[trait_mthd_name];
 
-        fns::FnInst {
-            fn_,
-            gen_args: trait_mthd_inst.gen_args,
-            env_gen_args: impl_inst.gen_args,
-        }
+        self.fns
+            .inst_fn(fn_, trait_mthd_inst.gen_args, impl_inst.gen_args)
+            .unwrap()
     }
 
     pub(crate) fn get_impl_insts_for_ty_and_trait_inst(

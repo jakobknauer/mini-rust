@@ -696,11 +696,7 @@ impl TyReg {
                 let name = name.clone();
                 let gen_args = self.substitute_gen_vars_on_slice(fn_inst.gen_args, subst);
                 let env_gen_args = self.substitute_gen_vars_on_slice(fn_inst.env_gen_args, subst);
-                let fn_inst = fns::FnInst {
-                    gen_args,
-                    env_gen_args,
-                    ..fn_inst
-                };
+                let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
 
                 let captures_ty = self.substitute_gen_vars(captures_ty, subst);
                 self.closure(fn_inst, name, captures_ty)
@@ -772,13 +768,9 @@ impl TyReg {
                 let name = name.clone();
                 let gen_args = self.substitute_self_ty_on_slice(fn_inst.gen_args, subst);
                 let env_gen_args = self.substitute_self_ty_on_slice(fn_inst.env_gen_args, subst);
-                let fn_insnt = fns::FnInst {
-                    gen_args,
-                    env_gen_args,
-                    ..fn_inst
-                };
+                let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
 
-                self.closure(fn_insnt, name, captures_ty)
+                self.closure(fn_inst, name, captures_ty)
             }
             Tuple(items) => {
                 let items: Vec<_> = iter_ty_slice!(self, items, map(|ty| self.substitute_self_ty(ty, subst))).collect();

@@ -330,11 +330,9 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     fn build_global_function(&mut self, fn_inst: mr_fns::FnInst) -> MlrLoweringResult<BasicValueEnum<'iw>> {
         let substituted_gen_args = self.substitute_slice(fn_inst.gen_args);
         let substituted_env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
-        let substituted_fn_inst = mr_fns::FnInst {
-            fn_: fn_inst.fn_,
-            gen_args: substituted_gen_args,
-            env_gen_args: substituted_env_gen_args,
-        };
+        let substituted_fn_inst = fn_inst
+            .with_gen_args(substituted_gen_args, substituted_env_gen_args)
+            .unwrap();
 
         let result = self
             .parent

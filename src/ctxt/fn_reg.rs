@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ctxt::fns::{Fn, FnInst, FnSig, TraitMthdInst};
+use crate::ctxt::{
+    fns::{Fn, FnInst, FnInstError, FnSig, TraitMthdInst},
+    ty::TySlice,
+};
 
 #[derive(Default)]
 pub struct FnReg {
@@ -12,6 +15,30 @@ pub struct FnReg {
 }
 
 impl FnReg {
+    pub fn inst_fn(&self, fn_: Fn, gen_args: TySlice, env_gen_args: TySlice) -> Result<FnInst, FnInstError> {
+        let sig = self.sigs.get(fn_.0).unwrap();
+        if sig.gen_params.len() != gen_args.len {
+            return Err(FnInstError::GenArgCountMismatch {
+                fn_,
+                expected: sig.gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
+        if sig.env_gen_params.len() != env_gen_args.len {
+            return Err(FnInstError::EnvGenArgCountMismatch {
+                fn_,
+                expected: sig.env_gen_params.len(),
+                actual: env_gen_args.len,
+            });
+        }
+        Ok(FnInst {
+            fn_,
+            gen_args,
+            env_gen_args,
+            _private: (),
+        })
+    }
+
     pub fn register_fn(&mut self, signature: FnSig, register_name: bool) -> Result<Fn, ()> {
         let fn_ = Fn(self.sigs.len());
 
