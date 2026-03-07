@@ -199,7 +199,7 @@ impl super::Ctxt {
                     .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
                     .ok()?;
 
-                let impl_inst = impls::ImplInst { impl_, gen_args };
+                let impl_inst = self.impls.inst_impl(impl_, gen_args).unwrap();
                 Some(impl_inst)
             })
             .collect()

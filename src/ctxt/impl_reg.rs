@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::Fn,
-    impls::{Impl, ImplDef},
+    impls::{Impl, ImplDef, ImplInst, ImplInstError},
     traits::{Trait, TraitInst},
-    ty::{GenVar, Ty},
+    ty::{GenVar, Ty, TySlice},
 };
 
 #[derive(Default)]
@@ -13,6 +13,22 @@ pub struct ImplReg {
 }
 
 impl ImplReg {
+    pub fn inst_impl(&self, impl_: Impl, gen_args: TySlice) -> Result<ImplInst, ImplInstError> {
+        let impl_def = self.impls.get(impl_.0).unwrap();
+        if impl_def.gen_params.len() != gen_args.len {
+            return Err(ImplInstError {
+                impl_,
+                expected: impl_def.gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
+        Ok(ImplInst {
+            impl_,
+            gen_args,
+            _private: (),
+        })
+    }
+
     pub fn register_impl(&mut self, ty: Ty, gen_params: Vec<GenVar>, trait_inst: Option<TraitInst>) -> Impl {
         let impl_ = Impl(self.impls.len());
         let impl_def = ImplDef {

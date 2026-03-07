@@ -9,10 +9,21 @@ use crate::ctxt::{
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Impl(pub(in crate::ctxt) usize);
 
+#[derive(Debug)]
+pub struct ImplInstError {
+    #[allow(unused)]
+    pub impl_: Impl,
+    #[allow(unused)]
+    pub expected: usize,
+    #[allow(unused)]
+    pub actual: usize,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ImplInst {
     pub impl_: Impl,
     pub gen_args: TySlice,
+    pub(in crate::ctxt) _private: (),
 }
 
 #[derive(Debug, Clone)]
