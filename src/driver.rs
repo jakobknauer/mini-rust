@@ -485,9 +485,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     None => self.ctxt.tys.unit(),
                 };
 
-                let gen_args: Vec<_> = mthd_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
-                let gen_args = self.ctxt.tys.ty_slice(&gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                let trait_gen_args: Vec<_> = trait_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
+                let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
 
                 let sig = fns::FnSig {
                     name: mthd.name.clone(),

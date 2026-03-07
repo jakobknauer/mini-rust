@@ -20,7 +20,7 @@ fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str
         fns::FnSig {
             name: mthd_name.to_string(),
             associated_ty: None,
-            associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[])).unwrap()),
+            associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[rhs_ty])).unwrap()),
             gen_params: vec![],
             env_gen_params: vec![rhs_var],
             params: vec![
