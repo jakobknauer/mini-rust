@@ -236,7 +236,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                     return_ty: checked.return_ty,
                     associated_ty: None,
                     associated_trait_inst: None,
-                    constraints: Vec::new(),
+                    constraints: self.constraints.clone(),
                 },
                 false,
             )

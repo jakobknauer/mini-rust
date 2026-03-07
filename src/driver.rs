@@ -101,14 +101,14 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         self.print_pretty("Type checking");
         let hlr_typings = self.typeck(&hlr_fns)?;
 
-        self.print_pretty("Lowering HLR to MLR");
-        let mlr_fns = self.hlr_lowering(&hlr_fns, &hlr_typings);
-
         if let Some(hlr_path) = self.output_paths.hlr {
             self.print_detail(&format!("Saving HLR to {}", hlr_path.display()));
             self.print_hlr_fns(hlr_path, &hlr_fns, &hlr_typings)
                 .map_err(|_| "Error printing HLR")?;
         }
+
+        self.print_pretty("Lowering HLR to MLR");
+        let mlr_fns = self.hlr_lowering(&hlr_fns, &hlr_typings);
 
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
