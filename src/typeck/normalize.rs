@@ -28,7 +28,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
             Opaque { id, gen_args } => {
                 let gen_args = self.normalize_slice(gen_args);
-                self.ctxt.tys.inst_opaque_from_ty_slice(id, gen_args)
+                self.ctxt.tys.inst_opaque_from_ty_slice(id, gen_args).unwrap()
             }
 
             Closure {

@@ -58,6 +58,14 @@ pub enum TyInstError {
         #[allow(unused)]
         actual: usize,
     },
+    OpaqueGenericArgCountMismatch {
+        #[allow(unused)]
+        opaque: OpaqueId,
+        #[allow(unused)]
+        expected: usize,
+        #[allow(unused)]
+        actual: usize,
+    },
 }
 #[derive(Debug)]
 pub struct NotATypeName(#[allow(unused)] pub String);
@@ -290,16 +298,32 @@ impl TyReg {
         &self.opaques[id.0].constraints
     }
 
-    // TODO check gen_args count
     #[expect(unused)]
-    pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty]) -> Ty {
+    pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
+        let opaque_def = self.opaques.get(id.0).unwrap();
+        if opaque_def.gen_params.len() != gen_args.len() {
+            return Err(TyInstError::OpaqueGenericArgCountMismatch {
+                opaque: id,
+                expected: opaque_def.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+
         let gen_args = self.ty_slice(gen_args);
-        self.register_ty(TyDef::Opaque { id, gen_args })
+        self.inst_opaque_from_ty_slice(id, gen_args)
     }
 
-    // TODO check gen_args count
-    pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice) -> Ty {
-        self.register_ty(TyDef::Opaque { id, gen_args })
+    pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice) -> Result<Ty, TyInstError> {
+        let opaque_def = self.opaques.get(id.0).unwrap();
+        if opaque_def.gen_params.len() != gen_args.len {
+            return Err(TyInstError::OpaqueGenericArgCountMismatch {
+                opaque: id,
+                expected: opaque_def.gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
+
+        Ok(self.register_ty(TyDef::Opaque { id, gen_args }))
     }
 
     pub fn resolve_opaque_in_ty(&mut self, ty: Ty) -> Ty {
