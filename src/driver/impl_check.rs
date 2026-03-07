@@ -205,23 +205,25 @@ fn check_mthd_sig(
     {
         let subst_expected = do_substitutions(ctxt, expected.ty);
 
-        if !ctxt.tys.tys_eq(subst_expected, actual.ty) {
+        let actual_ty = ctxt.normalize_ty(actual.ty);
+        if !ctxt.tys.tys_eq(subst_expected, actual_ty) {
             return Err(ImplCheckErrorKind::ArgTypeMismatch {
                 mthd: impl_mthd_sig.name.to_string(),
                 arg_idx: idx,
                 expected: subst_expected,
-                actual: actual.ty,
+                actual: actual_ty,
             });
         }
     }
 
     // Compare return type
     let subst_return_ty = do_substitutions(ctxt, trait_mthd_sig.return_ty);
-    if !ctxt.tys.tys_eq(subst_return_ty, impl_mthd_sig.return_ty) {
+    let actual_return_ty = ctxt.normalize_ty(impl_mthd_sig.return_ty);
+    if !ctxt.tys.tys_eq(subst_return_ty, actual_return_ty) {
         return Err(ImplCheckErrorKind::ReturnTypeMismatch {
             mthd: impl_mthd_sig.name.to_string(),
             expected: subst_return_ty,
-            actual: impl_mthd_sig.return_ty,
+            actual: actual_return_ty,
         });
     }
 

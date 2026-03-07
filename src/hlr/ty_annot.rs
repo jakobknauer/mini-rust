@@ -1,4 +1,4 @@
-use crate::ctxt::ty;
+use crate::ctxt::{traits, ty};
 
 pub type TyAnnot<'hlr> = &'hlr TyAnnotDef<'hlr>;
 pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
@@ -12,7 +12,7 @@ pub enum TyAnnotDef<'hlr> {
 
     AssocTy {
         base: TyAnnot<'hlr>,
-        trait_: Option<TyAnnot<'hlr>>,
+        trait_: Option<(traits::Trait, Option<TyAnnotSlice<'hlr>>)>,
         name: String,
     },
 

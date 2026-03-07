@@ -5,13 +5,12 @@ fn main() -> i32 {
     h(1)
 }
 
-fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 
-{
+fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {
     |x| a * x + b
 }
 
 fn apply<A, B, F>(f: F, a: A) -> B
-    where F: Fn(A) -> B
+where F: Fn(A) -> B
 {
     f(a)
 }

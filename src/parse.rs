@@ -1159,6 +1159,20 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let annot = self.builder.wildcard_annot();
                 Ok(annot)
             }
+            Token::Smaller => {
+                self.position += 1;
+                let ty = self.parse_ty_annot()?;
+                let trait_ = if self.advance_if(Token::Keyword(Keyword::As)) {
+                    Some(self.parse_trait_annot()?)
+                } else {
+                    None
+                };
+                self.expect_token(Token::Greater)?;
+                self.expect_token(Token::ColonColon)?;
+                let path = self.parse_path(false)?;
+                let qual_path = QualifiedPath { ty, trait_, path };
+                Ok(self.builder.qualified_path_annot(qual_path))
+            }
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }

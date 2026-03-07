@@ -236,6 +236,7 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
                     ret: return_ty,
                 }
             }
+            ast::TyAnnotKind::QualifiedPath(qual_path) => self.lower_qualified_path_ty_annot(qual_path)?,
             ast::TyAnnotKind::Wildcard => hlr::TyAnnotDef::Infer,
             ast::TyAnnotKind::ImplTrait(_) => {
                 return Err(AstLoweringError {
@@ -278,6 +279,47 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
                 msg: format!("Complex path type annotations are not supported yet: {:#?}", path),
             }),
         }
+    }
+
+    fn lower_qualified_path_ty_annot(
+        &mut self,
+        qual_path: &ast::QualifiedPath,
+    ) -> AstLoweringResult<hlr::TyAnnotDef<'hlr>> {
+        let [assoc_seg] = qual_path.path.segments.as_slice() else {
+            return Err(AstLoweringError {
+                msg: "Qualified path type annotations must have exactly one segment after '::'".to_string(),
+            });
+        };
+
+        if assoc_seg.args.is_some() {
+            return Err(AstLoweringError {
+                msg: "Generic arguments on associated types in qualified paths are not supported".to_string(),
+            });
+        }
+
+        let base = self.lower_ty_annot(qual_path.ty)?;
+
+        let trait_ = qual_path
+            .trait_
+            .as_ref()
+            .map(|trait_annot| {
+                let trait_ =
+                    self.ctxt
+                        .traits
+                        .resolve_trait_name(&trait_annot.name)
+                        .ok_or_else(|| AstLoweringError {
+                            msg: format!("Unknown trait name in qualified path: '{}'", trait_annot.name),
+                        })?;
+                let gen_args = trait_annot.args.map(|args| self.lower_ty_annots(args)).transpose()?;
+                Ok((trait_, gen_args))
+            })
+            .transpose()?;
+
+        Ok(hlr::TyAnnotDef::AssocTy {
+            base,
+            trait_,
+            name: assoc_seg.ident.clone(),
+        })
     }
 
     fn lower_path_segment_to_ty_annot(

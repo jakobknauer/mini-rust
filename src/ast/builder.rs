@@ -171,6 +171,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.ty_annot(TyAnnotKind::Path(path))
     }
 
+    pub fn qualified_path_annot(&self, path: QualifiedPath<'ast>) -> TyAnnot<'ast> {
+        self.ast.ty_annot(TyAnnotKind::QualifiedPath(path))
+    }
+
     pub fn tuple_annot(&self, ty_annots: &[TyAnnot<'ast>]) -> TyAnnot<'ast> {
         let ty_annots = self.ast.ty_annot_slice(ty_annots);
         self.ast.ty_annot(TyAnnotKind::Tuple(ty_annots))

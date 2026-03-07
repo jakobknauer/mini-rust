@@ -1,6 +1,7 @@
 trait Iterator {
     type Item;
-    fn next(&self) -> Option<Self::Item>;
+
+    fn next(&self) -> Option<<Self as Iterator>::Item>;
 }
 
 fn iter_len<T>(iter: T) -> i32
@@ -14,16 +15,15 @@ where
     len
 }
 
-fn first<T>(iter: T) -> Option<T::Item>
-where
-    T: Iterator,
+fn first<T>(iter: T) -> Option<<T as Iterator>::Item>
+where T: Iterator,
 {
     iter.next()
 }
 
 fn for_each<T, F>(iter: T, f: F)
-    where T: Iterator,
-          F: Fn(T::Item)
+where T: Iterator,
+      F: Fn(<T as Iterator>::Item)
 {
     let current = iter.next();
     loop {

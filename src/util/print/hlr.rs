@@ -439,9 +439,18 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
             AssocTy { base, trait_, name } => {
                 write!(self.writer, "<")?;
                 self.print_ty_annot(base)?;
-                if let Some(trait_annot) = trait_ {
-                    write!(self.writer, " as ")?;
-                    self.print_ty_annot(trait_annot)?;
+                if let Some((trait_, gen_args)) = trait_ {
+                    write!(self.writer, " as {}", self.ctxt.traits.get_trait_name(*trait_))?;
+                    if let Some(args) = gen_args {
+                        write!(self.writer, "<")?;
+                        for (i, arg) in args.iter().enumerate() {
+                            if i > 0 {
+                                write!(self.writer, ", ")?;
+                            }
+                            self.print_ty_annot(arg)?;
+                        }
+                        write!(self.writer, ">")?;
+                    }
                 }
                 write!(self.writer, ">::{}", name)
             }

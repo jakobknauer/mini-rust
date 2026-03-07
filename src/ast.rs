@@ -450,6 +450,7 @@ pub type TyAnnotSlice<'ast> = &'ast [TyAnnot<'ast>];
 #[derive(Debug)]
 pub enum TyAnnotKind<'ast> {
     Path(Path<'ast>),
+    QualifiedPath(QualifiedPath<'ast>),
     Tuple(TyAnnotSlice<'ast>),
     Ref(TyAnnot<'ast>),
     Ptr(TyAnnot<'ast>),

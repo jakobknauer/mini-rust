@@ -54,6 +54,25 @@ impl Driver<'_, '_, '_, '_> {
                     .collect::<Option<Vec<_>>>()?;
                 Some(self.ctxt.tys.tuple(&tys))
             }
+            QualifiedPath(qual_path) => {
+                let [assoc_seg] = qual_path.path.segments.as_slice() else {
+                    return None;
+                };
+                let base_ty = self.try_resolve_ast_ty_annot(qual_path.ty, res_ctxt, false)?;
+                let trait_annot = qual_path.trait_.as_ref()?;
+                let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name)?;
+                let gen_args: Vec<_> = match trait_annot.args {
+                    Some(args) => args
+                        .iter()
+                        .map(|&a| self.try_resolve_ast_ty_annot(a, res_ctxt, false))
+                        .collect::<Option<_>>()?,
+                    None => vec![],
+                };
+                let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).ok()?;
+                let assoc_ty_idx = self.ctxt.traits.get_trait_assoc_ty_index(trait_, &assoc_seg.ident);
+                Some(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
+            }
             ImplTrait(req) => {
                 if !allow_opaque {
                     return None;

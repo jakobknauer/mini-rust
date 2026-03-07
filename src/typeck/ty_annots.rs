@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::ty,
+    ctxt::{traits, ty},
     hlr,
     typeck::{TypeckError, TypeckResult},
 };
@@ -105,12 +105,25 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     fn resolve_assoc_ty_annot(
         &mut self,
         base: hlr::TyAnnot<'hlr>,
-        trait_: Option<hlr::TyAnnot<'hlr>>,
+        trait_: Option<(traits::Trait, Option<hlr::TyAnnotSlice<'hlr>>)>,
         name: &str,
     ) -> TypeckResult<ty::Ty> {
         let base_ty = self.resolve_ty_annot(base)?;
         match trait_ {
-            Some(_) => todo!("AssocTy with explicit trait disambiguation"),
+            Some((trait_, gen_arg_annots)) => {
+                let n_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+                let gen_args = self.resolve_optional_gen_args(gen_arg_annots, n_gen_params, |actual| {
+                    TypeckError::TraitGenArgCountMismatch {
+                        trait_,
+                        expected: n_gen_params,
+                        actual,
+                    }
+                })?;
+                let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                let assoc_ty_idx = self.ctxt.traits.get_trait_assoc_ty_index(trait_, name);
+                Ok(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
+            }
             None => {
                 let (trait_, assoc_ty_idx) =
                     self.ctxt
