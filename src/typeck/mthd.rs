@@ -150,12 +150,12 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 })?;
 
                 let mthd_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
-                Ok(MthdResolution::Trait(fns::TraitMthdInst {
-                    trait_inst,
-                    mthd_idx,
-                    impl_ty: base_ty,
-                    gen_args: mthd_gen_args,
-                }))
+                Ok(MthdResolution::Trait(
+                    self.ctxt
+                        .traits
+                        .inst_trait_mthd(trait_inst, mthd_idx, base_ty, mthd_gen_args)
+                        .unwrap(),
+                ))
             }
         }
     }

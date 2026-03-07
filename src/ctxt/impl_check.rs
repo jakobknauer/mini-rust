@@ -213,11 +213,9 @@ impl super::Ctxt {
         trait_mthd_inst: fns::TraitMthdInst,
         subst: &GenVarSubst,
     ) -> fns::TraitMthdInst {
-        fns::TraitMthdInst {
-            impl_ty: self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst),
-            trait_inst: self.subst_trait_inst(trait_mthd_inst.trait_inst, subst),
-            gen_args: self.tys.substitute_gen_vars_on_slice(trait_mthd_inst.gen_args, subst),
-            mthd_idx: trait_mthd_inst.mthd_idx,
-        }
+        let impl_ty = self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst);
+        let trait_inst = self.subst_trait_inst(trait_mthd_inst.trait_inst, subst);
+        let gen_args = self.tys.substitute_gen_vars_on_slice(trait_mthd_inst.gen_args, subst);
+        trait_mthd_inst.with_updated(impl_ty, trait_inst, gen_args).unwrap()
     }
 }

@@ -1,7 +1,7 @@
 use crate::ctxt::{
-    fns::FnSig,
+    fns::{FnSig, TraitMthdInst, TraitMthdInstError},
     traits::{Trait, TraitDef, TraitInst},
-    ty::{GenVar, TySlice},
+    ty::{GenVar, Ty, TySlice},
 };
 
 pub use crate::ctxt::traits::TraitInstError;
@@ -12,6 +12,38 @@ pub struct TraitReg {
 }
 
 impl TraitReg {
+    pub fn inst_trait_mthd(
+        &self,
+        trait_inst: TraitInst,
+        mthd_idx: usize,
+        impl_ty: Ty,
+        gen_args: TySlice,
+    ) -> Result<TraitMthdInst, TraitMthdInstError> {
+        let trait_def = self.traits.get(trait_inst.trait_.0).unwrap();
+        if mthd_idx >= trait_def.mthds.len() {
+            return Err(TraitMthdInstError::MthdIdxOutOfRange {
+                trait_: trait_inst.trait_,
+                mthd_count: trait_def.mthds.len(),
+                actual: mthd_idx,
+            });
+        }
+        if trait_def.mthds[mthd_idx].gen_params.len() != gen_args.len {
+            return Err(TraitMthdInstError::GenArgCountMismatch {
+                trait_: trait_inst.trait_,
+                mthd_idx,
+                expected: trait_def.mthds[mthd_idx].gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
+        Ok(TraitMthdInst {
+            trait_inst,
+            mthd_idx,
+            impl_ty,
+            gen_args,
+            _private: (),
+        })
+    }
+
     pub fn inst_trait(&self, trait_: Trait, gen_args: TySlice) -> Result<TraitInst, TraitInstError> {
         let trait_def = self.traits.get(trait_.0).unwrap();
         if trait_def.gen_params.len() != gen_args.len {

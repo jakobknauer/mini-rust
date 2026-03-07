@@ -1,5 +1,5 @@
 use crate::ctxt::{
-    traits::TraitInst,
+    traits::{Trait, TraitInst},
     ty::{Constraint, GenVar, Ty, TySlice},
 };
 
@@ -108,10 +108,70 @@ impl FnInst {
     }
 }
 
+#[derive(Debug)]
+pub enum TraitMthdInstError {
+    MthdIdxOutOfRange {
+        #[allow(unused)]
+        trait_: Trait,
+        #[allow(unused)]
+        mthd_count: usize,
+        #[allow(unused)]
+        actual: usize,
+    },
+    GenArgCountMismatch {
+        #[allow(unused)]
+        trait_: Trait,
+        #[allow(unused)]
+        mthd_idx: usize,
+        #[allow(unused)]
+        expected: usize,
+        #[allow(unused)]
+        actual: usize,
+    },
+    TraitMismatch {
+        #[allow(unused)]
+        expected: Trait,
+        #[allow(unused)]
+        actual: Trait,
+    },
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct TraitMthdInst {
     pub trait_inst: TraitInst,
     pub mthd_idx: usize,
     pub impl_ty: Ty,
     pub gen_args: TySlice,
+    pub(in crate::ctxt) _private: (),
+}
+
+impl TraitMthdInst {
+    pub fn with_updated(
+        self,
+        impl_ty: Ty,
+        trait_inst: TraitInst,
+        gen_args: TySlice,
+    ) -> Result<TraitMthdInst, TraitMthdInstError> {
+        if trait_inst.trait_ != self.trait_inst.trait_ {
+            return Err(TraitMthdInstError::TraitMismatch {
+                expected: self.trait_inst.trait_,
+                actual: trait_inst.trait_,
+            });
+        }
+        if gen_args.len != self.gen_args.len {
+            return Err(TraitMthdInstError::GenArgCountMismatch {
+                trait_: self.trait_inst.trait_,
+                mthd_idx: self.mthd_idx,
+                expected: self.gen_args.len,
+                actual: gen_args.len,
+            });
+        }
+        Ok(TraitMthdInst {
+            trait_inst,
+            mthd_idx: self.mthd_idx,
+            impl_ty,
+            gen_args,
+            _private: (),
+        })
+    }
 }
