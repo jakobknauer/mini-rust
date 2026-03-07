@@ -11,7 +11,10 @@ use std::{
 use crate::{
     ast, ast_lowering,
     ctxt::{self, fns, impls, traits, ty},
-    driver::{err::print_impl_check_error, impl_check::check_trait_impls},
+    driver::{
+        err::{DriverError, format_driver_error},
+        impl_check::check_trait_impls,
+    },
     hlr, hlr_lowering, mlr, mlr_lowering, parse, typeck,
     util::print,
 };
@@ -51,7 +54,7 @@ pub fn compile(
         mlr: &mlr::Mlr::new(&arena),
     };
 
-    driver.compile()
+    driver.compile().map_err(|err| format_driver_error(err, &driver.ctxt))
 }
 
 struct Driver<'a, 'ast, 'hlr, 'mlr> {
@@ -77,25 +80,22 @@ struct AstMeta {
 }
 
 impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
-    pub fn compile(&mut self) -> Result<(), String> {
+    pub fn compile(&mut self) -> Result<(), DriverError> {
         self.print_pretty("Building AST from source");
         for source in &self.sources {
-            parse::parse(source, self.ast).map_err(|parser_err| err::print_parser_err(&parser_err, source))?;
+            parse::parse(source, self.ast).map_err(DriverError::Parse)?;
         }
 
         self.print_pretty("Building context");
-        self.register_tys().map_err(|_| "Error registering types")?;
-        self.define_tys().map_err(|_| "Error defining types")?;
-        self.register_traits().map_err(|_| "Error registering traits")?;
-        self.register_impls().map_err(|_| "Error registering impls")?;
+        self.register_tys()?;
+        self.define_tys()?;
+        self.register_traits()?;
+        self.register_impls()?;
+        self.register_free_fns()?;
+        self.register_trait_methods()?;
+        self.register_impl_methods()?;
 
-        self.register_free_fns().map_err(|_| "Error registering functions")?;
-        self.register_trait_methods()
-            .map_err(|_| "Error registering trait methods")?;
-        self.register_impl_methods()
-            .map_err(|_| "Error registering impl methods")?;
-
-        check_trait_impls(&mut self.ctxt).map_err(|err| print_impl_check_error(err, &self.ctxt))?;
+        check_trait_impls(&mut self.ctxt).map_err(DriverError::ImplCheck)?;
 
         self.print_pretty("Lowering AST to HLR");
         let hlr_fns = self.ast_lowering()?;
@@ -106,7 +106,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         if let Some(hlr_path) = self.output_paths.hlr {
             self.print_detail(&format!("Saving HLR to {}", hlr_path.display()));
             self.print_hlr_fns(hlr_path, &hlr_fns, &hlr_typings)
-                .map_err(|_| "Error printing HLR")?;
+                .map_err(|_| DriverError::Io("Error printing HLR"))?;
         }
 
         self.print_pretty("Lowering HLR to MLR");
@@ -115,20 +115,18 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
             self.print_mlr_fns(mlr_path, &mlr_fns)
-                .map_err(|_| "Error printing MLR")?;
+                .map_err(|_| DriverError::Io("Error printing MLR"))?;
         }
 
         self.print_pretty("Monomorphizing functions");
-        let fn_insts = self
-            .monomorphize_functions()
-            .map_err(|_| "Error monomorphizing functions")?;
+        let fn_insts = self.monomorphize_functions()?;
 
         self.print_pretty("Lowering MLR to LLVM IR");
         let llvm_ir = self.mlr_lowering(mlr_fns, fn_insts);
 
         if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
             self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
-            std::fs::write(llvm_ir_path, &llvm_ir).map_err(|_| "Could not write LLVM IR file")?;
+            std::fs::write(llvm_ir_path, &llvm_ir).map_err(|_| DriverError::Io("Could not write LLVM IR file"))?;
         }
 
         Ok(())
@@ -142,23 +140,42 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         (self.print_detail)(msg);
     }
 
-    fn register_tys(&mut self) -> Result<(), ()> {
-        self.ctxt.tys.register_primitive_tys()?;
+    fn register_tys(&mut self) -> Result<(), DriverError> {
+        self.ctxt
+            .tys
+            .register_primitive_tys()
+            .map_err(|_| DriverError::ContextBuild("Failed to register primitive types"))?;
 
         for struct_ in self.ast.structs().iter() {
-            let ty = self.ctxt.tys.register_struct(&struct_.name, &struct_.gen_params)?;
+            let ty = self
+                .ctxt
+                .tys
+                .register_struct(&struct_.name, &struct_.gen_params)
+                .map_err(|_| DriverError::ContextBuild("Failed to register struct (duplicate name?)"))?;
             self.ast_meta.struct_ids.insert(struct_.1, ty);
         }
 
         for enum_ in self.ast.enums().iter() {
-            let ty = self.ctxt.tys.register_enum(&enum_.name, &enum_.gen_params)?;
+            let ty = self
+                .ctxt
+                .tys
+                .register_enum(&enum_.name, &enum_.gen_params)
+                .map_err(|_| DriverError::ContextBuild("Failed to register enum (duplicate name?)"))?;
             self.ast_meta.enum_ids.insert(enum_.1, ty);
 
             for variant in &enum_.variants {
                 let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
-                let variant_ty = self.ctxt.tys.register_struct(&variant_struct_name, &enum_.gen_params)?;
+                let variant_ty = self
+                    .ctxt
+                    .tys
+                    .register_struct(&variant_struct_name, &enum_.gen_params)
+                    .map_err(|_| DriverError::ContextBuild("Failed to register enum variant"))?;
 
-                let enum_def = self.ctxt.tys.get_mut_enum_def(ty).ok_or(())?;
+                let enum_def = self
+                    .ctxt
+                    .tys
+                    .get_mut_enum_def(ty)
+                    .ok_or(DriverError::ContextBuild("Enum definition not found"))?;
 
                 enum_def.variants.push(ty::EnumVariant {
                     name: variant.name.clone(),
@@ -170,14 +187,20 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn define_tys(&mut self) -> Result<(), ()> {
+    fn define_tys(&mut self) -> Result<(), DriverError> {
         for struct_ in self.ast.structs().iter() {
             self.set_struct_fields(self.ast_meta.struct_ids[&struct_.1], &struct_.fields)?
         }
 
         for ast_enum in self.ast.enums().iter() {
             let enum_ = self.ast_meta.enum_ids[&ast_enum.1];
-            let variants = self.ctxt.tys.get_enum_def(enum_).ok_or(())?.variants.clone();
+            let variants = self
+                .ctxt
+                .tys
+                .get_enum_def(enum_)
+                .ok_or(DriverError::ContextBuild("Enum definition not found"))?
+                .variants
+                .clone();
 
             for (ast_variant, variant) in ast_enum.variants.iter().zip(variants) {
                 self.set_struct_fields(variant.struct_, &ast_variant.fields)?;
@@ -191,8 +214,14 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         &mut self,
         struct_: ty::Struct,
         fields: impl IntoIterator<Item = &'b ast::StructField<'b>>,
-    ) -> Result<(), ()> {
-        let gen_params = self.ctxt.tys.get_struct_def(struct_).ok_or(())?.gen_params.clone();
+    ) -> Result<(), DriverError> {
+        let gen_params = self
+            .ctxt
+            .tys
+            .get_struct_def(struct_)
+            .ok_or(DriverError::ContextBuild("Struct definition not found"))?
+            .gen_params
+            .clone();
 
         let fields = fields
             .into_iter()
@@ -209,18 +238,22 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                             },
                             false,
                         )
-                        .ok_or(())?,
+                        .ok_or(DriverError::ContextBuild("Failed to resolve field type"))?,
                 })
             })
             .collect::<Result<_, _>>()?;
 
-        let struct_def = self.ctxt.tys.get_mut_struct_def(struct_).ok_or(())?;
+        let struct_def = self
+            .ctxt
+            .tys
+            .get_mut_struct_def(struct_)
+            .ok_or(DriverError::ContextBuild("Struct definition not found"))?;
         struct_def.fields = fields;
 
         Ok(())
     }
 
-    fn register_traits(&mut self) -> Result<(), ()> {
+    fn register_traits(&mut self) -> Result<(), DriverError> {
         stdlib::register_add_trait(&mut self.ctxt);
         stdlib::register_sub_trait(&mut self.ctxt);
         stdlib::register_mul_trait(&mut self.ctxt);
@@ -249,8 +282,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_impls(&mut self) -> Result<(), ()> {
-        stdlib::register_impl_for_ptr(&mut self.ctxt)?;
+    fn register_impls(&mut self) -> Result<(), DriverError> {
+        stdlib::register_impl_for_ptr(&mut self.ctxt)
+            .map_err(|_| DriverError::ContextBuild("Failed to register stdlib pointer impl"))?;
 
         for ast_impl in self.ast.impls().iter() {
             let gen_params: Vec<_> = ast_impl
@@ -269,13 +303,17 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     },
                     false,
                 )
-                .ok_or(())?;
+                .ok_or(DriverError::ContextBuild("Failed to resolve impl type"))?;
 
             let trait_inst = ast_impl
                 .trait_annot
                 .as_ref()
                 .map(|trait_annot| {
-                    let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or(())?;
+                    let trait_ = self
+                        .ctxt
+                        .traits
+                        .resolve_trait_name(&trait_annot.name)
+                        .ok_or(DriverError::ContextBuild("Unknown trait in impl"))?;
 
                     let trait_args: Vec<_> = match &trait_annot.args {
                         &Some(args) => args
@@ -290,7 +328,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                                     },
                                     false,
                                 )
-                                .ok_or(())
+                                .ok_or(DriverError::ContextBuild("Failed to resolve trait argument in impl"))
                             })
                             .collect::<Result<_, _>>()?,
                         None => vec![],
@@ -316,7 +354,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         },
                         false,
                     )
-                    .ok_or(())?;
+                    .ok_or(DriverError::ContextBuild("Failed to resolve associated type"))?;
                 let assoc_ty_idx = self
                     .ctxt
                     .traits
@@ -328,8 +366,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_free_fns(&mut self) -> Result<(), ()> {
-        stdlib::register_fns(&mut self.ctxt)?;
+    fn register_free_fns(&mut self) -> Result<(), DriverError> {
+        stdlib::register_fns(&mut self.ctxt)
+            .map_err(|_| DriverError::ContextBuild("Failed to register stdlib functions"))?;
 
         for &function in self.ast.free_fns().iter() {
             let fn_ = self.register_function(function, None, None, Vec::new())?;
@@ -345,7 +384,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         associated_ty: Option<ty::Ty>,
         associated_trait_inst: Option<traits::TraitInst>,
         env_gen_params: Vec<ty::GenVar>,
-    ) -> Result<fns::Fn, ()> {
+    ) -> Result<fns::Fn, DriverError> {
         let gen_params: Vec<_> = ast_fn
             .gen_params
             .iter()
@@ -374,14 +413,21 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             };
             let subject = self
                 .try_resolve_ast_ty_annot(constraint.subject, res_ctxt, false)
-                .ok_or(())?;
+                .ok_or(DriverError::ContextBuild("Failed to resolve constraint subject type"))?;
 
             match &constraint.requirement {
                 ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
-                    let trait_ = self.ctxt.traits.resolve_trait_name(trait_name).ok_or(())?;
+                    let trait_ = self
+                        .ctxt
+                        .traits
+                        .resolve_trait_name(trait_name)
+                        .ok_or(DriverError::ContextBuild("Unknown trait in constraint"))?;
                     let trait_args: Vec<_> = trait_args
                         .iter()
-                        .map(|&arg| self.try_resolve_ast_ty_annot(arg, res_ctxt, false).ok_or(()))
+                        .map(|&arg| {
+                            self.try_resolve_ast_ty_annot(arg, res_ctxt, false)
+                                .ok_or(DriverError::ContextBuild("Failed to resolve constraint trait argument"))
+                        })
                         .collect::<Result<_, _>>()?;
                     let gen_args = self.ctxt.tys.ty_slice(&trait_args);
                     let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
@@ -393,11 +439,18 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 ast::ConstraintRequirement::Callable { params, return_ty } => {
                     let param_tys: Vec<_> = params
                         .iter()
-                        .map(|&ty| self.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(()))
+                        .map(|&ty| {
+                            self.try_resolve_ast_ty_annot(ty, res_ctxt, false)
+                                .ok_or(DriverError::ContextBuild(
+                                    "Failed to resolve constraint callable parameter type",
+                                ))
+                        })
                         .collect::<Result<_, _>>()?;
                     let param_tys = self.ctxt.tys.ty_slice(&param_tys);
                     let return_ty = match return_ty {
-                        Some(return_ty) => self.try_resolve_ast_ty_annot(return_ty, res_ctxt, false).ok_or(())?,
+                        Some(return_ty) => self.try_resolve_ast_ty_annot(return_ty, res_ctxt, false).ok_or(
+                            DriverError::ContextBuild("Failed to resolve constraint callable return type"),
+                        )?,
                         None => self.ctxt.tys.unit(),
                     };
                     constraints.push(ty::Constraint {
@@ -414,7 +467,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             constraints: &constraints,
         };
         let return_ty = match ast_fn.return_ty {
-            Some(ty) => self.try_resolve_ast_ty_annot(ty, res_ctxt, true).ok_or(())?,
+            Some(ty) => self
+                .try_resolve_ast_ty_annot(ty, res_ctxt, true)
+                .ok_or(DriverError::ContextBuild("Failed to resolve return type"))?,
             None => self.ctxt.tys.unit(),
         };
 
@@ -430,7 +485,10 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             constraints,
         };
 
-        self.ctxt.fns.register_fn(signature, associated_ty.is_none())
+        self.ctxt
+            .fns
+            .register_fn(signature, associated_ty.is_none())
+            .map_err(|_| DriverError::ContextBuild("Failed to register function"))
     }
 
     fn build_fn_param(
@@ -438,25 +496,32 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         param: &ast::Param,
         res_ctxt: ResCtxt<'_>,
         allow_receiver: bool,
-    ) -> Result<fns::FnParam, ()> {
+    ) -> Result<fns::FnParam, DriverError> {
         match param {
             ast::Param::Regular { name, ty } => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Regular(name.clone()),
-                ty: self.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(())?,
+                ty: self
+                    .try_resolve_ast_ty_annot(ty, res_ctxt, false)
+                    .ok_or(DriverError::ContextBuild("Failed to resolve parameter type"))?,
             }),
             ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Self_,
-                ty: res_ctxt.self_ty.ok_or(())?,
+                ty: res_ctxt
+                    .self_ty
+                    .ok_or(DriverError::ContextBuild("Self type not available"))?,
             }),
             ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::SelfByRef,
-                ty: res_ctxt.self_ty.map(|self_ty| self.ctxt.tys.ref_(self_ty)).ok_or(())?,
+                ty: res_ctxt
+                    .self_ty
+                    .map(|self_ty| self.ctxt.tys.ref_(self_ty))
+                    .ok_or(DriverError::ContextBuild("Self type not available"))?,
             }),
-            _ => Err(()),
+            _ => Err(DriverError::ContextBuild("Unexpected receiver parameter")),
         }
     }
 
-    fn register_trait_methods(&mut self) -> Result<(), ()> {
+    fn register_trait_methods(&mut self) -> Result<(), DriverError> {
         for ast_trait in self.ast.traits().iter() {
             let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
             let self_type = self.ctxt.tys.trait_self(trait_);
@@ -483,7 +548,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     .collect::<Result<_, _>>()?;
 
                 let return_ty = match mthd.return_ty {
-                    Some(ty) => self.try_resolve_ast_ty_annot(ty, trait_res_ctxt, false).ok_or(())?,
+                    Some(ty) => self
+                        .try_resolve_ast_ty_annot(ty, trait_res_ctxt, false)
+                        .ok_or(DriverError::ContextBuild("Failed to resolve trait method return type"))?,
                     None => self.ctxt.tys.unit(),
                 };
 
@@ -510,7 +577,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_impl_methods(&mut self) -> Result<(), ()> {
+    fn register_impl_methods(&mut self) -> Result<(), DriverError> {
         for ast_impl in self.ast.impls().iter() {
             let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
             let impl_def = self.ctxt.impls.get_impl_def(impl_);
@@ -528,14 +595,14 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, String> {
+    fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, DriverError> {
         let mut hlr_fns = Vec::new();
 
         for &ast_fn in self.ast.free_fns().iter() {
             let Some(body) = ast_fn.body else { continue };
             let target_fn = self.ast_meta.fn_ids[&ast_fn.1];
-            let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
-                .map_err(|err| format!("failed to lower {} to HLR: {}", ast_fn.name, err.msg))?;
+            let hlr_fn =
+                ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr).map_err(DriverError::AstLowering)?;
             hlr_fns.push(hlr_fn);
         }
 
@@ -544,7 +611,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 let Some(body) = ast_mthd.body else { continue };
                 let target_fn = self.ast_meta.fn_ids[&ast_mthd.1];
                 let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
-                    .map_err(|err| format!("failed to lower {} to HLR: {}", ast_mthd.name, err.msg))?;
+                    .map_err(DriverError::AstLowering)?;
                 hlr_fns.push(hlr_fn);
             }
         }
@@ -552,13 +619,15 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(hlr_fns)
     }
 
-    fn typeck(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<HashMap<fns::Fn, typeck::HlrTyping>, String> {
+    fn typeck(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<HashMap<fns::Fn, typeck::HlrTyping>, DriverError> {
         hlr_fns
             .iter()
             .map(|hlr_fn| {
                 let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
-                let typing =
-                    typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|e| format!("failed to typeck {fn_name}: {e:?}"))?;
+                let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|error| DriverError::Typeck {
+                    fn_name: fn_name.clone(),
+                    error,
+                })?;
                 Ok((hlr_fn.fn_, typing))
             })
             .collect()
@@ -604,9 +673,13 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn monomorphize_functions(&mut self) -> Result<HashSet<fns::FnInst>, ()> {
+    fn monomorphize_functions(&mut self) -> Result<HashSet<fns::FnInst>, DriverError> {
         let mut open = VecDeque::new();
-        let main_fn = self.ctxt.fns.get_fn_by_name("main").ok_or(())?;
+        let main_fn = self
+            .ctxt
+            .fns
+            .get_fn_by_name("main")
+            .ok_or(DriverError::NoMainFunction)?;
         let empty = self.ctxt.tys.ty_slice(&[]);
         open.push_back(self.ctxt.fns.inst_fn(main_fn, empty, empty).unwrap());
 
