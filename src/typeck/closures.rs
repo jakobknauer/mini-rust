@@ -95,7 +95,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         }
     }
 
-    fn try_get_callable_hint_info(&mut self, hint: ty::Ty) -> Option<(Vec<ty::Ty>, ty::Ty)> {
+    fn try_get_callable_hint_info(&mut self, hint: ty::Ty) -> Option<(ty::TySlice, ty::Ty)> {
         let normalized = self.normalize(hint);
         if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(&self.constraints, normalized) {
             return Some((param_tys, return_ty));
@@ -103,8 +103,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         let obligations = self.pending_obligations.clone();
         obligations.iter().find_map(|(ty, req)| {
             if self.normalize(*ty) == normalized {
-                if let ty::ConstraintRequirement::Callable { param_tys, return_ty } = req {
-                    Some((param_tys.clone(), *return_ty))
+                if let &ty::ConstraintRequirement::Callable { param_tys, return_ty } = req {
+                    Some((param_tys, return_ty))
                 } else {
                     None
                 }
@@ -133,6 +133,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         if let Some(hint) = hint
             && let Some((hint_param_tys, hint_return_ty)) = self.try_get_callable_hint_info(hint)
         {
+            let hint_param_tys = self.ctxt.tys.get_ty_slice(hint_param_tys).to_vec();
             for (ty, hint_ty) in param_tys.iter().zip(hint_param_tys) {
                 self.unify(*ty, hint_ty);
             }

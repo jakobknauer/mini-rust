@@ -97,9 +97,10 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
 
         let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrLoweringError)?;
 
+        let param_tys = self.tys().get_ty_slice(param_tys).to_vec();
         let param_tys: Vec<_> = param_tys
-            .iter()
-            .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrLoweringError))
+            .into_iter()
+            .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrLoweringError))
             .collect::<MlrLoweringResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, var_args))
@@ -117,11 +118,13 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         let captures_ty = self
             .get_ty_as_basic_metadata_type_enum(captures_ty)
             .ok_or(MlrLoweringError);
+
+        let param_tys = self.tys().get_ty_slice(param_tys).to_vec();
         let param_tys: Vec<_> = std::iter::once(captures_ty)
             .chain(
                 param_tys
-                    .iter()
-                    .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrLoweringError)),
+                    .into_iter()
+                    .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrLoweringError)),
             )
             .collect::<MlrLoweringResult<_>>()?;
 

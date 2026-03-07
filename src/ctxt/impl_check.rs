@@ -96,28 +96,27 @@ impl super::Ctxt {
         !self.get_impl_insts_for_ty_and_trait(ty, trait_).is_empty()
     }
 
-    // TODO return TySlice instead of Vec
     pub fn ty_is_callable(
         &mut self,
         constraints: &[ty::Constraint],
         ty: ty::Ty,
-    ) -> Option<(Vec<ty::Ty>, ty::Ty, bool)> {
+    ) -> Option<(ty::TySlice, ty::Ty, bool)> {
         if let &ty::TyDef::Fn {
             param_tys,
             return_ty,
             var_args,
         } = self.tys.get_ty_def(ty)
         {
-            Some((self.tys.get_ty_slice(param_tys).to_vec(), return_ty, var_args))
+            Some((param_tys, return_ty, var_args))
         } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraints, ty) {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(fn_inst);
-            Some((
-                signature.params.iter().skip(1).map(|p| p.ty).collect(),
-                signature.return_ty,
-                false,
-            ))
+
+            let params_without_captures: Vec<_> = signature.params.iter().skip(1).map(|p| p.ty).collect();
+            let params_without_captures = self.tys.ty_slice(&params_without_captures);
+
+            Some((params_without_captures, signature.return_ty, false))
         } else if let &ty::TyDef::Opaque { id, gen_args } = self.tys.get_ty_def(ty) {
             self.tys
                 .try_get_opaque_callable_constraint(id)
@@ -125,10 +124,7 @@ impl super::Ctxt {
                     let opaque_def = self.tys.get_opaque_def(id);
                     let subst = GenVarSubst::new(&opaque_def.gen_params, self.tys.get_ty_slice(gen_args)).unwrap();
 
-                    let param_tys = param_tys
-                        .iter()
-                        .map(|&ty| self.tys.substitute_gen_vars(ty, &subst))
-                        .collect();
+                    let param_tys = self.tys.substitute_gen_vars_on_slice(param_tys, &subst);
                     let return_ty = self.tys.substitute_gen_vars(return_ty, &subst);
 
                     (param_tys, return_ty, false)

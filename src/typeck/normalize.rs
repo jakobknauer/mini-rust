@@ -28,7 +28,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
             Opaque { id, gen_args } => {
                 let gen_args = self.normalize_slice(gen_args);
-                self.ctxt.tys.inst_opaque(id, &gen_args)
+                self.ctxt.tys.inst_opaque_from_ty_slice(id, gen_args)
             }
 
             Closure {
@@ -41,8 +41,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
                 let fn_inst = fns::FnInst {
                     fn_: fn_inst.fn_,
-                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
-                    env_gen_args: self.ctxt.tys.ty_slice(&env_gen_args),
+                    gen_args,
+                    env_gen_args,
                 };
                 self.ctxt.tys.closure(fn_inst, name, captures_ty)
             }
@@ -60,17 +60,17 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
             Tuple(items) => {
                 let items = self.normalize_slice(items);
-                self.ctxt.tys.tuple(&items)
+                self.ctxt.tys.tuple_from_ty_slice(items)
             }
 
             Struct { struct_, gen_args } => {
                 let gen_args = self.normalize_slice(gen_args);
-                self.ctxt.tys.inst_struct(struct_, &gen_args).unwrap()
+                self.ctxt.tys.inst_struct_from_ty_slice(struct_, gen_args).unwrap()
             }
 
             Enum { enum_, gen_args } => {
                 let gen_args = self.normalize_slice(gen_args);
-                self.ctxt.tys.inst_enum(enum_, &gen_args).unwrap()
+                self.ctxt.tys.inst_enum_from_ty_slice(enum_, gen_args).unwrap()
             }
 
             Fn {
@@ -79,6 +79,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 var_args,
             } => {
                 let param_tys = self.normalize_slice(param_tys);
+                let param_tys = self.ctxt.tys.get_ty_slice(param_tys).to_vec();
                 let return_ty = self.normalize(return_ty);
                 self.ctxt.tys.fn_(&param_tys, return_ty, var_args)
             }
@@ -102,7 +103,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let trait_gen_args = self.normalize_slice(trait_inst.gen_args);
                 let trait_inst = traits::TraitInst {
                     trait_: trait_inst.trait_,
-                    gen_args: self.ctxt.tys.ty_slice(&trait_gen_args),
+                    gen_args: trait_gen_args,
                 };
 
                 let impl_insts: Vec<_> = self
@@ -123,12 +124,12 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         }
     }
 
-    pub(super) fn normalize_slice(&mut self, slice: ty::TySlice) -> Vec<ty::Ty> {
+    pub(super) fn normalize_slice(&mut self, slice: ty::TySlice) -> ty::TySlice {
         let mut tys = self.ctxt.tys.get_ty_slice(slice).to_vec();
         for t in &mut tys {
             *t = self.normalize(*t);
         }
-        tys
+        self.ctxt.tys.ty_slice(&tys)
     }
 
     fn normalize_hlr_typing(&mut self) {
@@ -172,8 +173,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
         fns::FnInst {
             fn_: fn_inst.fn_,
-            gen_args: self.ctxt.tys.ty_slice(&gen_args),
-            env_gen_args: self.ctxt.tys.ty_slice(&env_gen_args),
+            gen_args,
+            env_gen_args,
         }
     }
 
@@ -186,11 +187,11 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let trait_gen_args = self.normalize_slice(trait_mthd_inst.trait_inst.gen_args);
                 let trait_inst = traits::TraitInst {
                     trait_: trait_mthd_inst.trait_inst.trait_,
-                    gen_args: self.ctxt.tys.ty_slice(&trait_gen_args),
+                    gen_args: trait_gen_args,
                 };
                 MthdResolution::Trait(fns::TraitMthdInst {
                     impl_ty,
-                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
+                    gen_args,
                     trait_inst,
                     ..trait_mthd_inst
                 })

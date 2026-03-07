@@ -141,7 +141,7 @@ pub enum TypeckError {
     },
     CallableConstraintNotSatisfied {
         ty: ty::Ty,
-        expected_param_tys: Vec<ty::Ty>,
+        expected_param_tys: ty::TySlice,
         expected_return_ty: ty::Ty,
     },
 }

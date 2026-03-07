@@ -125,7 +125,7 @@ pub struct Constraint {
 #[derive(Clone, PartialEq, Eq)]
 pub enum ConstraintRequirement {
     Trait(traits::TraitInst),
-    Callable { param_tys: Vec<Ty>, return_ty: Ty },
+    Callable { param_tys: TySlice, return_ty: Ty },
 }
 
 #[derive(Clone)]
@@ -183,3 +183,5 @@ macro_rules! zip_ty_slices {
         })
     }};
 }
+
+pub(crate) use zip_ty_slices;

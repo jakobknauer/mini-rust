@@ -79,6 +79,7 @@ impl Driver<'_, '_, '_, '_> {
                             .iter()
                             .map(|&p| self.try_resolve_ast_ty_annot(p, res_ctxt, false))
                             .collect::<Option<_>>()?;
+                        let param_tys = self.ctxt.tys.ty_slice(&param_tys);
                         let return_ty = match return_ty {
                             Some(rt) => self.try_resolve_ast_ty_annot(rt, res_ctxt, false)?,
                             None => self.ctxt.tys.unit(),

@@ -121,6 +121,11 @@ impl TyReg {
         self.register_ty(tuple_ty)
     }
 
+    pub fn tuple_from_ty_slice(&mut self, slice: TySlice) -> Ty {
+        let tuple_ty = TyDef::Tuple(slice);
+        self.register_ty(tuple_ty)
+    }
+
     pub fn unit(&mut self) -> Ty {
         self.tuple(&[])
     }
@@ -271,10 +276,10 @@ impl TyReg {
             .any(|r| matches!(r, ConstraintRequirement::Trait(ti) if ti.trait_ == trait_inst.trait_))
     }
 
-    pub fn try_get_opaque_callable_constraint(&self, id: OpaqueId) -> Option<(Vec<Ty>, Ty)> {
+    pub fn try_get_opaque_callable_constraint(&self, id: OpaqueId) -> Option<(TySlice, Ty)> {
         self.opaques[id.0].constraints.iter().find_map(|r| {
-            if let ConstraintRequirement::Callable { param_tys, return_ty } = r {
-                Some((param_tys.clone(), *return_ty))
+            if let &ConstraintRequirement::Callable { param_tys, return_ty } = r {
+                Some((param_tys, return_ty))
             } else {
                 None
             }
@@ -285,8 +290,15 @@ impl TyReg {
         &self.opaques[id.0].constraints
     }
 
+    // TODO check gen_args count
+    #[expect(unused)]
     pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty]) -> Ty {
         let gen_args = self.ty_slice(gen_args);
+        self.register_ty(TyDef::Opaque { id, gen_args })
+    }
+
+    // TODO check gen_args count
+    pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice) -> Ty {
         self.register_ty(TyDef::Opaque { id, gen_args })
     }
 
@@ -416,6 +428,21 @@ impl TyReg {
         }
 
         let gen_args = self.ty_slice(gen_args);
+
+        let enum_ty = TyDef::Enum { enum_, gen_args };
+        Ok(self.register_ty(enum_ty))
+    }
+
+    pub fn inst_enum_from_ty_slice(&mut self, enum_: Enum, gen_args: TySlice) -> Result<Ty, TyInstError> {
+        let enum_def = self.enums.get(enum_.0).unwrap();
+
+        if enum_def.gen_params.len() != gen_args.len {
+            return Err(TyInstError::EnumGenericArgCountMismatch {
+                enum_,
+                expected: enum_def.gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
 
         let enum_ty = TyDef::Enum { enum_, gen_args };
         Ok(self.register_ty(enum_ty))
@@ -1201,11 +1228,11 @@ impl TyReg {
         })
     }
 
-    pub fn try_get_callable_constraint(&self, constraints: &[Constraint], subject: Ty) -> Option<(Vec<Ty>, Ty)> {
+    pub fn try_get_callable_constraint(&self, constraints: &[Constraint], subject: Ty) -> Option<(TySlice, Ty)> {
         constraints.iter().find_map(|c| {
             if c.subject == subject {
-                if let ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
-                    Some((param_tys.clone(), *return_ty))
+                if let &ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
+                    Some((param_tys, return_ty))
                 } else {
                     None
                 }

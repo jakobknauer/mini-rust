@@ -393,10 +393,11 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     });
                 }
                 ast::ConstraintRequirement::Callable { params, return_ty } => {
-                    let param_tys = params
+                    let param_tys: Vec<_> = params
                         .iter()
                         .map(|&ty| self.try_resolve_ast_ty_annot(ty, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
+                    let param_tys = self.ctxt.tys.ty_slice(&param_tys);
                     let return_ty = match return_ty {
                         Some(return_ty) => self.try_resolve_ast_ty_annot(return_ty, res_ctxt, false).ok_or(())?,
                         None => self.ctxt.tys.unit(),

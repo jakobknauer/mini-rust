@@ -14,6 +14,8 @@ use crate::{
     hlr,
 };
 
+use crate::ctxt::ty::zip_ty_slices;
+
 pub use err::*;
 pub use mthd::MthdResolution;
 
@@ -470,6 +472,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
+        let param_tys = self.ctxt.tys.get_ty_slice(param_tys).to_vec();
 
         // param_tys[0] is self; user-supplied args map to param_tys[1..]
         let n_params = param_tys.len().saturating_sub(1);
@@ -506,6 +509,8 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, callee_ty) else {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
+
+        let param_tys = self.ctxt.tys.get_ty_slice(param_tys).to_vec();
 
         let n_args = args.len();
         let n_params = param_tys.len();
@@ -780,10 +785,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     ty::ConstraintRequirement::Trait(new_inst)
                 }
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
-                    let param_tys = param_tys
-                        .iter()
-                        .map(|&t| self.ctxt.tys.substitute_gen_vars(t, subst))
-                        .collect();
+                    let param_tys = self.ctxt.tys.substitute_gen_vars_on_slice(param_tys, subst);
                     let return_ty = self.ctxt.tys.substitute_gen_vars(return_ty, subst);
                     ty::ConstraintRequirement::Callable { param_tys, return_ty }
                 }
@@ -814,8 +816,9 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     }
                 }
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
-                    let param_tys: Vec<_> = param_tys.iter().map(|&t| self.normalize(t)).collect();
+                    let param_tys = self.normalize_slice(param_tys);
                     let return_ty = self.normalize(return_ty);
+
                     let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(&self.constraints, ty)
                     else {
                         return Err(TypeckError::CallableConstraintNotSatisfied {
@@ -824,17 +827,19 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                             expected_return_ty: return_ty,
                         });
                     };
-                    let actual_params: Vec<_> = actual_params.iter().map(|&t| self.normalize(t)).collect();
-                    let actual_params: Vec<_> = actual_params.iter().map(|&t| self.normalize(t)).collect();
+
+                    let actual_params = self.normalize_slice(actual_params);
                     let actual_return = self.normalize(actual_return);
-                    if param_tys.len() != actual_params.len()
-                        || param_tys
-                            .iter()
-                            .zip(actual_params.iter())
-                            .any(|(&expected, &actual)| !self.unify(expected, actual))
+
+                    if param_tys.len != actual_params.len
+                        || zip_ty_slices!(
+                            self.ctxt.tys,
+                            (param_tys, actual_params),
+                            any(|ty1, ty2| !self.unify(ty1, ty2))
+                        )
                         || !self.unify(return_ty, actual_return)
                     {
-                        let param_tys: Vec<_> = param_tys.iter().map(|&t| self.normalize(t)).collect();
+                        let param_tys = self.normalize_slice(param_tys);
                         let return_ty = self.normalize(return_ty);
                         return Err(TypeckError::CallableConstraintNotSatisfied {
                             ty,
