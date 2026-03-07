@@ -8,12 +8,18 @@ use crate::ctxt::{
     ty::Ty,
 };
 
-#[derive(Default)]
 pub struct Mlr<'mlr> {
     next_loc_id: Cell<usize>,
+    arena: &'mlr bumpalo::Bump,
+}
 
-    _marker: std::marker::PhantomData<&'mlr ()>,
-    arena: bumpalo::Bump,
+impl<'mlr> Mlr<'mlr> {
+    pub fn new(arena: &'mlr bumpalo::Bump) -> Self {
+        Self {
+            next_loc_id: Cell::new(0),
+            arena,
+        }
+    }
 }
 
 pub type Stmt<'mlr> = &'mlr StmtDef<'mlr>;
@@ -146,23 +152,23 @@ pub struct Fn<'mlr> {
 }
 
 impl<'mlr> Mlr<'mlr> {
-    pub fn insert_stmt(&'mlr self, stmt_def: StmtDef<'mlr>) -> Stmt<'mlr> {
+    pub fn insert_stmt(&self, stmt_def: StmtDef<'mlr>) -> Stmt<'mlr> {
         self.arena.alloc(stmt_def)
     }
 
-    pub fn insert_stmt_slice(&'mlr self, stmts: &[Stmt<'mlr>]) -> &'mlr [Stmt<'mlr>] {
+    pub fn insert_stmt_slice(&self, stmts: &[Stmt<'mlr>]) -> &'mlr [Stmt<'mlr>] {
         self.arena.alloc_slice_copy(stmts)
     }
 
-    pub fn insert_val(&'mlr self, val_def: ValDef<'mlr>, ty: Ty) -> Val<'mlr> {
+    pub fn insert_val(&self, val_def: ValDef<'mlr>, ty: Ty) -> Val<'mlr> {
         Val(self.arena.alloc(val_def), ty)
     }
 
-    pub fn insert_place(&'mlr self, place_def: PlaceDef<'mlr>, ty: Ty) -> Place<'mlr> {
+    pub fn insert_place(&self, place_def: PlaceDef<'mlr>, ty: Ty) -> Place<'mlr> {
         Place(self.arena.alloc(place_def), ty)
     }
 
-    pub fn insert_op(&'mlr self, op_def: OpDef<'mlr>, ty: Ty) -> Op<'mlr> {
+    pub fn insert_op(&self, op_def: OpDef<'mlr>, ty: Ty) -> Op<'mlr> {
         Op(self.arena.alloc(op_def), ty)
     }
 

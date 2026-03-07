@@ -1,6 +1,5 @@
 use std::{
     cell::{Cell, Ref, RefCell},
-    marker::PhantomData,
     ops::Deref,
 };
 
@@ -21,7 +20,7 @@ pub struct ImplId(usize);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnId(usize);
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Ast<'ast> {
     free_fns: RefCell<Vec<Fn<'ast>>>,
     structs: RefCell<Vec<Struct<'ast>>>,
@@ -35,64 +34,81 @@ pub struct Ast<'ast> {
     next_impl_id: Cell<ImplId>,
     next_fn_id: Cell<FnId>,
 
-    arena: bumpalo::Bump,
-    _marker: PhantomData<&'ast ()>,
+    arena: &'ast bumpalo::Bump,
 }
 
 impl<'ast> Ast<'ast> {
-    pub fn expr(&'ast self, expr: ExprKind<'ast>) -> Expr<'ast> {
+    pub fn new(arena: &'ast bumpalo::Bump) -> Self {
+        Self {
+            free_fns: RefCell::new(Vec::new()),
+            structs: RefCell::new(Vec::new()),
+            enums: RefCell::new(Vec::new()),
+            impls: RefCell::new(Vec::new()),
+            traits: RefCell::new(Vec::new()),
+            next_struct_id: Cell::new(StructId(0)),
+            next_enum_id: Cell::new(EnumId(0)),
+            next_trait_id: Cell::new(TraitId(0)),
+            next_impl_id: Cell::new(ImplId(0)),
+            next_fn_id: Cell::new(FnId(0)),
+            arena,
+        }
+    }
+}
+
+impl<'ast> Ast<'ast> {
+    pub fn expr(&self, expr: ExprKind<'ast>) -> Expr<'ast> {
         self.arena.alloc(expr)
     }
 
-    pub fn expr_slice(&'ast self, exprs: &[Expr<'ast>]) -> ExprSlice<'ast> {
+    pub fn expr_slice(&self, exprs: &[Expr<'ast>]) -> ExprSlice<'ast> {
         self.arena.alloc_slice_copy(exprs)
     }
 
-    pub fn stmt(&'ast self, stmt: StmtKind<'ast>) -> Stmt<'ast> {
+    pub fn stmt(&self, stmt: StmtKind<'ast>) -> Stmt<'ast> {
         self.arena.alloc(stmt)
     }
 
-    pub fn stmt_slice(&'ast self, stmts: &[Stmt<'ast>]) -> StmtSlice<'ast> {
+    pub fn stmt_slice(&self, stmts: &[Stmt<'ast>]) -> StmtSlice<'ast> {
         self.arena.alloc_slice_copy(stmts)
     }
 
-    pub fn ty_annot(&'ast self, annot: TyAnnotKind<'ast>) -> TyAnnot<'ast> {
+    pub fn ty_annot(&self, annot: TyAnnotKind<'ast>) -> TyAnnot<'ast> {
         self.arena.alloc(annot)
     }
 
-    pub fn ty_annot_slice(&'ast self, ty_annots: &[TyAnnot<'ast>]) -> TyAnnotSlice<'ast> {
+    pub fn ty_annot_slice(&self, ty_annots: &[TyAnnot<'ast>]) -> TyAnnotSlice<'ast> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 
-    pub fn fn_(&'ast self, fn_def: FnDef<'ast>) -> Fn<'ast> {
+    pub fn fn_(&self, fn_def: FnDef<'ast>) -> Fn<'ast> {
         let id = self.next_fn_id.get();
         self.next_fn_id.set(FnId(id.0 + 1));
         Fn(self.arena.alloc(fn_def), id)
     }
 
-    pub fn fn_slice(&'ast self, fns: &[Fn<'ast>]) -> FnSlice<'ast> {
+    pub fn fn_slice(&self, fns: &[Fn<'ast>]) -> FnSlice<'ast> {
         self.arena.alloc_slice_copy(fns)
     }
 
-    pub fn add_struct(&'ast self, def: StructDef<'ast>) {
+    pub fn add_struct(&self, def: StructDef<'ast>) {
         let id = self.next_struct_id.get();
         self.next_struct_id.set(StructId(id.0 + 1));
         self.structs.borrow_mut().push(Struct(self.arena.alloc(def), id));
     }
 
-    pub fn add_enum(&'ast self, def: EnumDef<'ast>) {
+    pub fn add_enum(&self, def: EnumDef<'ast>) {
         let id = self.next_enum_id.get();
         self.next_enum_id.set(EnumId(id.0 + 1));
         self.enums.borrow_mut().push(Enum(self.arena.alloc(def), id));
     }
 
-    pub fn add_trait(&'ast self, def: TraitDef<'ast>) {
+    pub fn add_trait(&self, def: TraitDef<'ast>) {
         let id = self.next_trait_id.get();
         self.next_trait_id.set(TraitId(id.0 + 1));
         self.traits.borrow_mut().push(Trait(self.arena.alloc(def), id));
     }
 
-    pub fn add_impl(&'ast self, def: ImplDef<'ast>) {
+    pub fn add_impl(&self, def: ImplDef<'ast>) {
         let id = self.next_impl_id.get();
         self.next_impl_id.set(ImplId(id.0 + 1));
         self.impls.borrow_mut().push(Impl(self.arena.alloc(def), id));

@@ -2,7 +2,7 @@ mod expr;
 mod stmt;
 mod ty_annot;
 
-use std::{cell::Cell, marker::PhantomData};
+use std::cell::Cell;
 
 use crate::ctxt::fns;
 
@@ -10,13 +10,21 @@ pub use expr::*;
 pub use stmt::*;
 pub use ty_annot::*;
 
-#[derive(Default)]
 pub struct Hlr<'hlr> {
-    arena: bumpalo::Bump,
-    _marker: PhantomData<&'hlr ()>,
+    arena: &'hlr bumpalo::Bump,
 
     next_var_id: Cell<VarId>,
     next_expr_id: Cell<ExprId>,
+}
+
+impl<'hlr> Hlr<'hlr> {
+    pub fn new(arena: &'hlr bumpalo::Bump) -> Self {
+        Self {
+            arena,
+            next_var_id: Cell::new(VarId(0)),
+            next_expr_id: Cell::new(ExprId(0)),
+        }
+    }
 }
 
 pub struct Fn<'hlr> {
@@ -41,7 +49,7 @@ impl<'hlr> Hlr<'hlr> {
         id
     }
 
-    pub fn expr(&'hlr self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
+    pub fn expr(&self, expr: ExprDef<'hlr>) -> Expr<'hlr> {
         Expr(self.arena.alloc(expr), {
             let id = self.next_expr_id.get();
             self.next_expr_id.set(ExprId(id.0 + 1));
@@ -49,23 +57,23 @@ impl<'hlr> Hlr<'hlr> {
         })
     }
 
-    pub fn stmt(&'hlr self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
+    pub fn stmt(&self, stmt: StmtDef<'hlr>) -> Stmt<'hlr> {
         self.arena.alloc(stmt)
     }
 
-    pub fn ty_annot(&'hlr self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
+    pub fn ty_annot(&self, annot: TyAnnotDef<'hlr>) -> TyAnnot<'hlr> {
         self.arena.alloc(annot)
     }
 
-    pub fn expr_slice(&'hlr self, exprs: &[Expr<'hlr>]) -> ExprSlice<'hlr> {
+    pub fn expr_slice(&self, exprs: &[Expr<'hlr>]) -> ExprSlice<'hlr> {
         self.arena.alloc_slice_copy(exprs)
     }
 
-    pub fn stmt_slice(&'hlr self, stmts: &[Stmt<'hlr>]) -> StmtSlice<'hlr> {
+    pub fn stmt_slice(&self, stmts: &[Stmt<'hlr>]) -> StmtSlice<'hlr> {
         self.arena.alloc_slice_copy(stmts)
     }
 
-    pub fn ty_annot_slice(&'hlr self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
+    pub fn ty_annot_slice(&self, ty_annots: &[TyAnnot<'hlr>]) -> TyAnnotSlice<'hlr> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 

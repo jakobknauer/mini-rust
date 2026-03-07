@@ -27,7 +27,7 @@ struct HlrLowerer<'ctxt, 'hlr, 'mlr> {
     typing: &'ctxt HlrTyping,
     var_locs: HashMap<hlr::VarId, mlr::Loc>,
     mlr_fns: Vec<mlr::Fn<'mlr>>,
-    _hlr: std::marker::PhantomData<&'hlr hlr::Hlr<'hlr>>,
+    _hlr: std::marker::PhantomData<hlr::Fn<'hlr>>,
 }
 
 impl<'ctxt, 'hlr, 'mlr> HlrLowerer<'ctxt, 'hlr, 'mlr> {

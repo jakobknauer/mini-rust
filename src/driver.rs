@@ -36,6 +36,8 @@ pub fn compile(
     print_detail: impl Fn(&str),
     output_paths: &OutputPaths,
 ) -> Result<(), String> {
+    let arena = bumpalo::Bump::new();
+
     let mut driver = Driver {
         sources: sources.to_vec(),
         print_pretty: &print_pretty,
@@ -43,10 +45,10 @@ pub fn compile(
         output_paths,
 
         ctxt: ctxt::Ctxt::default(),
-        ast: &ast::Ast::default(),
+        ast: &ast::Ast::new(&arena),
         ast_meta: AstMeta::default(),
-        hlr: &hlr::Hlr::default(),
-        mlr: &mlr::Mlr::default(),
+        hlr: &hlr::Hlr::new(&arena),
+        mlr: &mlr::Mlr::new(&arena),
     };
 
     driver.compile()
