@@ -26,15 +26,15 @@ pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
 }
 
 #[derive(Debug)]
-pub struct MlrLoweringError;
+pub struct MlrFnLoweringError;
 
-impl From<BuilderError> for MlrLoweringError {
+impl From<BuilderError> for MlrFnLoweringError {
     fn from(_: BuilderError) -> Self {
-        MlrLoweringError
+        MlrFnLoweringError
     }
 }
 
-pub type MlrLoweringResult<T> = Result<T, MlrLoweringError>;
+pub type MlrFnLoweringResult<T> = Result<T, MlrFnLoweringError>;
 
 impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     pub fn new(
@@ -60,7 +60,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         }
     }
 
-    pub fn build_fn(&mut self) -> MlrLoweringResult<()> {
+    pub fn build_fn(&mut self) -> MlrFnLoweringResult<()> {
         let entry_block = self.build_entry_block()?;
         let body_block = self.build_function_body()?;
 
@@ -78,60 +78,60 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         &self.mr_ctxt().tys
     }
 
-    fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<BasicTypeEnum<'iw>> {
-        let iw_ty = self.get_ty_as_basic_type_enum(loc.1).ok_or(MlrLoweringError)?;
+    fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc) -> MlrFnLoweringResult<BasicTypeEnum<'iw>> {
+        let iw_ty = self.get_ty_as_basic_type_enum(loc.1).ok_or(MlrFnLoweringError)?;
         Ok(iw_ty)
     }
 
-    fn get_iw_ty_of_place(&mut self, place: mlr::Place) -> MlrLoweringResult<BasicTypeEnum<'iw>> {
-        let iw_ty = self.get_ty_as_basic_type_enum(place.1).ok_or(MlrLoweringError)?;
+    fn get_iw_ty_of_place(&mut self, place: mlr::Place) -> MlrFnLoweringResult<BasicTypeEnum<'iw>> {
+        let iw_ty = self.get_ty_as_basic_type_enum(place.1).ok_or(MlrFnLoweringError)?;
         Ok(iw_ty)
     }
 
-    fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> MlrLoweringResult<FunctionType<'iw>> {
+    fn get_fn_ty_of_loc(&mut self, op: mlr::Op) -> MlrFnLoweringResult<FunctionType<'iw>> {
         let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
-            return Err(MlrLoweringError);
+            return Err(MlrFnLoweringError);
         };
 
-        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrLoweringError)?;
+        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrFnLoweringError)?;
 
         let param_tys = self.tys().get_ty_slice(param_tys).to_vec();
         let param_tys: Vec<_> = param_tys
             .into_iter()
-            .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrLoweringError))
-            .collect::<MlrLoweringResult<_>>()?;
+            .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError))
+            .collect::<MlrFnLoweringResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, var_args))
     }
 
-    fn get_closure_fn_ty(&mut self, op: mlr::Op, captures_ty: mr_ty::Ty) -> MlrLoweringResult<FunctionType<'iw>> {
+    fn get_closure_fn_ty(&mut self, op: mlr::Op, captures_ty: mr_ty::Ty) -> MlrFnLoweringResult<FunctionType<'iw>> {
         let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
-            return Err(MlrLoweringError);
+            return Err(MlrFnLoweringError);
         };
 
-        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrLoweringError)?;
+        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrFnLoweringError)?;
 
         let captures_ty = self
             .get_ty_as_basic_metadata_type_enum(captures_ty)
-            .ok_or(MlrLoweringError);
+            .ok_or(MlrFnLoweringError);
 
         let param_tys = self.tys().get_ty_slice(param_tys).to_vec();
         let param_tys: Vec<_> = std::iter::once(captures_ty)
             .chain(
                 param_tys
                     .into_iter()
-                    .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrLoweringError)),
+                    .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError)),
             )
-            .collect::<MlrLoweringResult<_>>()?;
+            .collect::<MlrFnLoweringResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, var_args))
     }
 
-    fn build_alloca_for_loc(&mut self, loc: mlr::Loc) -> MlrLoweringResult<PointerValue<'iw>> {
+    fn build_alloca_for_loc(&mut self, loc: mlr::Loc) -> MlrFnLoweringResult<PointerValue<'iw>> {
         let iw_ty = self.get_iw_ty_of_loc(loc)?;
         let name = loc.to_string();
         let address = self.build_alloca(iw_ty, &name)?;
@@ -139,11 +139,11 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(address)
     }
 
-    fn build_alloca(&mut self, iw_ty: BasicTypeEnum<'iw>, name: &str) -> MlrLoweringResult<PointerValue<'iw>> {
+    fn build_alloca(&mut self, iw_ty: BasicTypeEnum<'iw>, name: &str) -> MlrFnLoweringResult<PointerValue<'iw>> {
         // Remember current block to restore later
-        let current_block = self.iw_builder.get_insert_block().ok_or(MlrLoweringError)?;
+        let current_block = self.iw_builder.get_insert_block().ok_or(MlrFnLoweringError)?;
         // Position builder at the entry block to ensure allocations are at the start
-        let entry_block = self.entry_block.ok_or(MlrLoweringError)?;
+        let entry_block = self.entry_block.ok_or(MlrFnLoweringError)?;
         self.iw_builder.position_at_end(entry_block);
         // Allocate
         let address = self.iw_builder.build_alloca(iw_ty, name)?;
@@ -153,7 +153,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(address)
     }
 
-    fn build_entry_block(&mut self) -> MlrLoweringResult<BasicBlock<'iw>> {
+    fn build_entry_block(&mut self) -> MlrFnLoweringResult<BasicBlock<'iw>> {
         let entry_block = self.parent.iw_ctxt.append_basic_block(self.iw_fn, "entry");
         self.entry_block = Some(entry_block);
         self.iw_builder.position_at_end(entry_block);
@@ -169,14 +169,14 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(entry_block)
     }
 
-    fn build_function_body(&mut self) -> MlrLoweringResult<BasicBlock<'iw>> {
+    fn build_function_body(&mut self) -> MlrFnLoweringResult<BasicBlock<'iw>> {
         let body_block = self.parent.iw_ctxt.append_basic_block(self.iw_fn, "body");
         self.iw_builder.position_at_end(body_block);
         self.build_stmt(self.mlr_fn.body)?;
         Ok(body_block)
     }
 
-    fn build_stmt(&mut self, stmt: mlr::Stmt) -> MlrLoweringResult<()> {
+    fn build_stmt(&mut self, stmt: mlr::Stmt) -> MlrFnLoweringResult<()> {
         use mlr::StmtDef::*;
 
         match *stmt {
@@ -193,7 +193,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
                 self.iw_builder.build_return(Some(&ret_value))?;
             }
             Break => {
-                let after_loop_block = self.after_loop_blocks.back().ok_or(MlrLoweringError)?;
+                let after_loop_block = self.after_loop_blocks.back().ok_or(MlrFnLoweringError)?;
                 self.iw_builder.build_unconditional_branch(*after_loop_block)?;
             }
             Block(stmts) => self.build_block(stmts)?,
@@ -204,7 +204,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(())
     }
 
-    fn build_val(&mut self, val: mlr::Val) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_val(&mut self, val: mlr::Val) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use mlr::ValDef::*;
 
         match *val {
@@ -224,16 +224,16 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         }
     }
 
-    fn build_place(&mut self, place: mlr::Place) -> MlrLoweringResult<PointerValue<'iw>> {
+    fn build_place(&mut self, place: mlr::Place) -> MlrFnLoweringResult<PointerValue<'iw>> {
         use mlr::PlaceDef::*;
 
         match *place {
-            Loc(loc) => self.locs.get(&loc).ok_or(MlrLoweringError).cloned(),
+            Loc(loc) => self.locs.get(&loc).ok_or(MlrFnLoweringError).cloned(),
             FieldAccess { base, field_index, .. } => {
                 let iw_base_struct_type: StructType<'iw> = self
                     .get_iw_ty_of_place(base)?
                     .try_into()
-                    .map_err(|_| MlrLoweringError)?;
+                    .map_err(|_| MlrFnLoweringError)?;
 
                 let base_address = self.build_place(base)?;
 
@@ -250,7 +250,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
                 let iw_base_struct_type: StructType<'iw> = self
                     .get_iw_ty_of_place(base)?
                     .try_into()
-                    .map_err(|_| MlrLoweringError)?;
+                    .map_err(|_| MlrFnLoweringError)?;
 
                 let base_address = self.build_place(base)?;
 
@@ -264,7 +264,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
                 let iw_base_struct_type: StructType<'iw> = self
                     .get_iw_ty_of_place(base)?
                     .try_into()
-                    .map_err(|_| MlrLoweringError)?;
+                    .map_err(|_| MlrFnLoweringError)?;
 
                 let base_address = self.build_place(base)?;
 
@@ -282,14 +282,14 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         }
     }
 
-    fn build_block(&mut self, stmts: &[mlr::Stmt]) -> MlrLoweringResult<()> {
+    fn build_block(&mut self, stmts: &[mlr::Stmt]) -> MlrFnLoweringResult<()> {
         for &stmt in stmts {
             self.build_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn build_constant(&mut self, constant: &mlr::Const) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_constant(&mut self, constant: &mlr::Const) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use mlr::Const::*;
 
         let value = match constant {
@@ -311,7 +311,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(value)
     }
 
-    fn build_op(&mut self, op: mlr::Op) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_op(&mut self, op: mlr::Op) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use mlr::OpDef::*;
 
         match *op {
@@ -327,7 +327,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         }
     }
 
-    fn build_global_function(&mut self, fn_inst: mr_fns::FnInst) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_global_function(&mut self, fn_inst: mr_fns::FnInst) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let substituted_gen_args = self.substitute_slice(fn_inst.gen_args);
         let substituted_env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
         let substituted_fn_inst = fn_inst
@@ -338,14 +338,14 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
             .parent
             .get_fn(substituted_fn_inst)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
-            .ok_or(MlrLoweringError)?;
+            .ok_or(MlrFnLoweringError)?;
         Ok(result)
     }
 
     fn build_trait_mthd_inst(
         &mut self,
         trait_mthd_inst: mr_fns::TraitMthdInst,
-    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let fn_inst = self
             .parent
             .mr_ctxt
@@ -353,7 +353,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         self.build_global_function(fn_inst)
     }
 
-    fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_call(&mut self, callable: mlr::Op, args: &[mlr::Op]) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let maybe_fn_inst = match *callable {
             mlr::OpDef::Fn(fn_inst) => Some(fn_inst),
             _ => None,
@@ -402,7 +402,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         }
     }
 
-    fn build_if(&mut self, if_: mlr::If) -> MlrLoweringResult<()> {
+    fn build_if(&mut self, if_: mlr::If) -> MlrFnLoweringResult<()> {
         // Build condition
         let cond_value = self.build_op(if_.cond)?.into_int_value();
 
@@ -430,7 +430,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(())
     }
 
-    fn build_loop(&mut self, body: mlr::Stmt) -> MlrLoweringResult<()> {
+    fn build_loop(&mut self, body: mlr::Stmt) -> MlrFnLoweringResult<()> {
         let body_block = self.parent.iw_ctxt.append_basic_block(self.iw_fn, "loop");
         let after_loop = self.parent.iw_ctxt.append_basic_block(self.iw_fn, "loop_after");
 

@@ -9,14 +9,14 @@ use crate::{
     mlr,
 };
 
-use super::{MlrFnLowerer, MlrLoweringError, MlrLoweringResult};
+use super::{MlrFnLowerer, MlrFnLoweringError, MlrFnLoweringResult};
 
 impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
     pub(super) fn try_build_intrinsic_call(
         &mut self,
         fn_inst: mr_fns::FnInst,
         args: &[mlr::Op],
-    ) -> MlrLoweringResult<Option<BasicValueEnum<'iw>>> {
+    ) -> MlrFnLoweringResult<Option<BasicValueEnum<'iw>>> {
         let lang = &self.parent.mr_ctxt.language_items;
         if Some(fn_inst.fn_) == lang.size_of {
             return Ok(Some(self.build_size_of_intrinsic(fn_inst)?));
@@ -27,10 +27,10 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(None)
     }
 
-    fn build_size_of_intrinsic(&mut self, fn_inst: mr_fns::FnInst) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    fn build_size_of_intrinsic(&mut self, fn_inst: mr_fns::FnInst) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let gen_args = self.substitute_slice(fn_inst.gen_args);
         let ty = self.parent.mr_ctxt.tys.get_ty_slice(gen_args)[0];
-        let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(MlrLoweringError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(MlrFnLoweringError)?;
         let size = TargetData::create("").get_store_size(&iw_ty) as u32;
         let int_ty = self.parent.iw_ctxt.i32_type();
         Ok(int_ty.const_int(size as u64, false).as_basic_value_enum())
@@ -41,7 +41,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         op: language_items::BinaryPrimOp,
         lhs: mlr::Op,
         rhs: mlr::Op,
-    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::BinaryPrimOp::*;
 
         match op {
@@ -90,7 +90,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         &mut self,
         op: language_items::UnaryPrimOp,
         operand: mlr::Op,
-    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::UnaryPrimOp::*;
         let operand = self.build_op(operand)?.into_int_value();
         let result = match op {
@@ -100,7 +100,7 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(result.as_basic_value_enum())
     }
 
-    fn build_int_pair(&mut self, lhs: mlr::Op, rhs: mlr::Op) -> MlrLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
+    fn build_int_pair(&mut self, lhs: mlr::Op, rhs: mlr::Op) -> MlrFnLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
         let lhs = self.build_op(lhs)?.into_int_value();
         let rhs = self.build_op(rhs)?.into_int_value();
         Ok((lhs, rhs))
@@ -110,14 +110,14 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         &mut self,
         fn_inst: mr_fns::FnInst,
         args: &[mlr::Op],
-    ) -> MlrLoweringResult<BasicValueEnum<'iw>> {
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let &[ptr, offset] = args else {
-            return Err(MlrLoweringError);
+            return Err(MlrFnLoweringError);
         };
 
         let env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
         let pointee_ty = self.parent.mr_ctxt.tys.get_ty_slice(env_gen_args)[0];
-        let iw_pointee_ty = self.get_ty_as_basic_type_enum(pointee_ty).ok_or(MlrLoweringError)?;
+        let iw_pointee_ty = self.get_ty_as_basic_type_enum(pointee_ty).ok_or(MlrFnLoweringError)?;
 
         let ptr_ty = self.parent.iw_ctxt.ptr_type(AddressSpace::default());
 

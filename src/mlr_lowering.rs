@@ -17,19 +17,28 @@ use crate::{
     mlr_lowering::fns::MlrFnLowerer,
 };
 
+#[derive(Debug)]
+pub enum MlrLoweringError {
+    FnLowering {
+        fn_inst: mr_fns::FnInst,
+        #[allow(unused)]
+        error: fns::MlrFnLoweringError,
+    },
+}
+
 pub fn mlr_to_llvm_ir<'mlr>(
     mr_ctxt: &mut mr_ctxt::Ctxt,
     mlr_fns: Vec<mlr::Fn<'mlr>>,
     fn_insts: Vec<mr_fns::FnInst>,
-) -> String {
+) -> Result<String, MlrLoweringError> {
     let iw_ctxt = IwContext::create();
     let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, mlr_fns, fn_insts);
 
     generator.set_target_triple();
     generator.declare_functions();
-    generator.define_functions();
+    generator.define_functions()?;
 
-    generator.iw_module.print_to_string().to_string()
+    Ok(generator.iw_module.print_to_string().to_string())
 }
 
 struct MlrLowerer<'iw, 'mr, 'mlr> {
@@ -92,17 +101,17 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
         }
     }
 
-    fn define_functions(&mut self) {
+    fn define_functions(&mut self) -> Result<(), MlrLoweringError> {
         for fn_inst in self.fn_insts.clone() {
             let Some(mlr_fn) = self.mlr_fns.get(&fn_inst.fn_).cloned() else {
                 continue;
             };
             let mut fn_gen = MlrFnLowerer::new(self, fn_inst, mlr_fn);
-            if fn_gen.build_fn().is_err() {
-                let fn_name = self.mr_ctxt.get_fn_inst_name(fn_inst);
-                eprintln!("Failed to define function {fn_name}");
-            }
+            fn_gen
+                .build_fn()
+                .map_err(|error| MlrLoweringError::FnLowering { fn_inst, error })?;
         }
+        Ok(())
     }
 
     fn get_or_define_ty(&mut self, ty: mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {

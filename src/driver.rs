@@ -122,7 +122,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         let fn_insts = self.monomorphize_functions()?;
 
         self.print_pretty("Lowering MLR to LLVM IR");
-        let llvm_ir = self.mlr_lowering(mlr_fns, fn_insts);
+        let llvm_ir = self.mlr_lowering(mlr_fns, fn_insts)?;
 
         if let Some(llvm_ir_path) = self.output_paths.llvm_ir {
             self.print_detail(&format!("Saving LLVM IR to {}", llvm_ir_path.display()));
@@ -711,7 +711,12 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         Ok(closed)
     }
 
-    fn mlr_lowering(&mut self, mlr_fns: Vec<mlr::Fn<'mlr>>, fn_insts: HashSet<fns::FnInst>) -> String {
+    fn mlr_lowering(
+        &mut self,
+        mlr_fns: Vec<mlr::Fn<'mlr>>,
+        fn_insts: HashSet<fns::FnInst>,
+    ) -> Result<String, DriverError> {
         mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, mlr_fns, fn_insts.into_iter().collect())
+            .map_err(DriverError::MlrLowering)
     }
 }
