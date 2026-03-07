@@ -290,10 +290,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     }
                 })?;
                 let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
-                let trait_inst = traits::TraitInst {
-                    trait_,
-                    gen_args: trait_gen_args,
-                };
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
 
                 let mthd_idx = self
                     .ctxt
@@ -778,10 +775,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
             let req = match constraint.requirement {
                 ty::ConstraintRequirement::Trait(trait_inst) => {
                     let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
-                    let new_inst = traits::TraitInst {
-                        trait_: trait_inst.trait_,
-                        gen_args: new_gen_args,
-                    };
+                    let new_inst = trait_inst.with_gen_args(new_gen_args).unwrap();
                     ty::ConstraintRequirement::Trait(new_inst)
                 }
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
@@ -807,10 +801,7 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     let gen_args: Vec<_> = self.ctxt.tys.get_ty_slice(trait_inst.gen_args).to_vec();
                     let gen_args: Vec<_> = gen_args.iter().map(|&t| self.normalize(t)).collect();
                     let gen_args = self.ctxt.tys.ty_slice(&gen_args);
-                    let trait_inst = traits::TraitInst {
-                        trait_: trait_inst.trait_,
-                        gen_args,
-                    };
+                    let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
                     if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
                     }

@@ -1,4 +1,4 @@
-use crate::ctxt::{fns, traits, ty};
+use crate::ctxt::{fns, ty};
 
 use super::{ExprExtra, MthdResolution};
 
@@ -101,10 +101,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             } => {
                 let base_ty = self.normalize(base_ty);
                 let trait_gen_args = self.normalize_slice(trait_inst.gen_args);
-                let trait_inst = traits::TraitInst {
-                    trait_: trait_inst.trait_,
-                    gen_args: trait_gen_args,
-                };
+                let trait_inst = trait_inst.with_gen_args(trait_gen_args).unwrap();
 
                 let impl_insts: Vec<_> = self
                     .ctxt
@@ -185,10 +182,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let impl_ty = self.normalize(trait_mthd_inst.impl_ty);
                 let gen_args = self.normalize_slice(trait_mthd_inst.gen_args);
                 let trait_gen_args = self.normalize_slice(trait_mthd_inst.trait_inst.gen_args);
-                let trait_inst = traits::TraitInst {
-                    trait_: trait_mthd_inst.trait_inst.trait_,
-                    gen_args: trait_gen_args,
-                };
+                let trait_inst = trait_mthd_inst.trait_inst.with_gen_args(trait_gen_args).unwrap();
                 MthdResolution::Trait(fns::TraitMthdInst {
                     impl_ty,
                     gen_args,

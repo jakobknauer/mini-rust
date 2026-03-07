@@ -11,10 +11,8 @@ fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str
 
     let self_ty = ctxt.tys.trait_self(trait_);
     let rhs_ty = ctxt.tys.gen_var(rhs_var);
-    let trait_inst = traits::TraitInst {
-        trait_,
-        gen_args: ctxt.tys.ty_slice(&[rhs_ty]),
-    };
+    let gen_args = ctxt.tys.ty_slice(&[rhs_ty]);
+    let trait_inst = ctxt.traits.inst_trait(trait_, gen_args).unwrap();
     let output_ty = ctxt.tys.assoc_ty(self_ty, trait_inst, 0);
 
     ctxt.traits.register_mthd(
@@ -22,10 +20,7 @@ fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str
         fns::FnSig {
             name: mthd_name.to_string(),
             associated_ty: None,
-            associated_trait_inst: Some(traits::TraitInst {
-                trait_,
-                gen_args: ctxt.tys.ty_slice(&[]),
-            }),
+            associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[])).unwrap()),
             gen_params: vec![],
             env_gen_params: vec![rhs_var],
             params: vec![

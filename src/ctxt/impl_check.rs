@@ -146,10 +146,8 @@ impl super::Ctxt {
             let trait_def = self.traits.get_trait_def(trait_);
             let assoc_ty_index = trait_def.assoc_tys.iter().position(|name| name == ident)?;
             let gen_args: Vec<_> = trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
-            let default_trait_inst = traits::TraitInst {
-                trait_,
-                gen_args: self.tys.ty_slice(&gen_args),
-            };
+            let gen_args = self.tys.ty_slice(&gen_args);
+            let default_trait_inst = self.traits.inst_trait(trait_, gen_args).unwrap();
             let ty = self.tys.assoc_ty(base_ty, default_trait_inst, assoc_ty_index);
             return Some(ty);
         }
@@ -176,10 +174,8 @@ impl super::Ctxt {
                         .iter()
                         .map(|gp| self.tys.gen_var(*gp))
                         .collect();
-                    let trait_inst = traits::TraitInst {
-                        trait_: *trait_,
-                        gen_args: self.tys.ty_slice(&gen_args),
-                    };
+                    let gen_args = self.tys.ty_slice(&gen_args);
+                    let trait_inst = self.traits.inst_trait(*trait_, gen_args).unwrap();
                     return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
 
@@ -211,10 +207,7 @@ impl super::Ctxt {
 
     fn subst_trait_inst(&mut self, trait_inst: traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
         let gen_args = self.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
-        traits::TraitInst {
-            gen_args,
-            trait_: trait_inst.trait_,
-        }
+        self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap()
     }
 
     fn subst_trait_mthd_inst(

@@ -1,8 +1,10 @@
 use crate::ctxt::{
     fns::FnSig,
-    traits::{Trait, TraitDef},
-    ty::GenVar,
+    traits::{Trait, TraitDef, TraitInst},
+    ty::{GenVar, TySlice},
 };
+
+pub use crate::ctxt::traits::TraitInstError;
 
 #[derive(Default)]
 pub struct TraitReg {
@@ -10,6 +12,22 @@ pub struct TraitReg {
 }
 
 impl TraitReg {
+    pub fn inst_trait(&self, trait_: Trait, gen_args: TySlice) -> Result<TraitInst, TraitInstError> {
+        let trait_def = self.traits.get(trait_.0).unwrap();
+        if trait_def.gen_params.len() != gen_args.len {
+            return Err(TraitInstError {
+                trait_,
+                expected: trait_def.gen_params.len(),
+                actual: gen_args.len,
+            });
+        }
+        Ok(TraitInst {
+            trait_,
+            gen_args,
+            _private: (),
+        })
+    }
+
     pub fn register_trait(&mut self, name: &str, gen_params: Vec<GenVar>) -> Trait {
         let trait_ = Trait(self.traits.len());
         self.traits.push(TraitDef {

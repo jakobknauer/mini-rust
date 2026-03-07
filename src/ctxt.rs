@@ -181,10 +181,8 @@ impl Ctxt {
                 let base_ty = self.normalize_ty(base_ty);
                 let gen_args: Vec<_> =
                     iter_ty_slice!(self.tys, trait_inst.gen_args, map(|ty| self.normalize_ty(ty))).collect();
-                let trait_inst = traits::TraitInst {
-                    trait_: trait_inst.trait_,
-                    gen_args: self.tys.ty_slice(&gen_args),
-                };
+                let gen_args = self.tys.ty_slice(&gen_args);
+                let trait_inst = self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap();
 
                 let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait_inst(base_ty, trait_inst).collect();
 

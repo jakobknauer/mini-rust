@@ -1,6 +1,6 @@
 use crate::{
     ast,
-    ctxt::{Named, traits, ty},
+    ctxt::{Named, ty},
 };
 
 use super::{Driver, ResCtxt};
@@ -66,10 +66,8 @@ impl Driver<'_, '_, '_, '_> {
                             .iter()
                             .map(|&a| self.try_resolve_ast_ty_annot(a, res_ctxt, false))
                             .collect::<Option<_>>()?;
-                        let trait_inst = traits::TraitInst {
-                            trait_,
-                            gen_args: self.ctxt.tys.ty_slice(&gen_args),
-                        };
+                        let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                        let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
                         self.ctxt
                             .tys
                             .add_opaque_constraint(id, ty::ConstraintRequirement::Trait(trait_inst));

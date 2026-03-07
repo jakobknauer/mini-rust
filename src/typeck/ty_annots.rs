@@ -1,5 +1,5 @@
 use crate::{
-    ctxt::{traits, ty},
+    ctxt::ty,
     hlr,
     typeck::{TypeckError, TypeckResult},
 };
@@ -123,10 +123,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                         })?;
                 let n_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
                 let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
-                let trait_inst = traits::TraitInst {
-                    trait_,
-                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
-                };
+                let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
                 Ok(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }
         }

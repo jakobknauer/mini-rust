@@ -294,10 +294,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         None => vec![],
                     };
 
-                    let trait_inst = traits::TraitInst {
-                        trait_,
-                        gen_args: self.ctxt.tys.ty_slice(&trait_args),
-                    };
+                    let gen_args = self.ctxt.tys.ty_slice(&trait_args);
+                    let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
                     Ok(trait_inst)
                 })
                 .transpose()?;
@@ -383,10 +381,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         .iter()
                         .map(|&arg| self.try_resolve_ast_ty_annot(arg, res_ctxt, false).ok_or(()))
                         .collect::<Result<_, _>>()?;
-                    let trait_inst = traits::TraitInst {
-                        trait_,
-                        gen_args: self.ctxt.tys.ty_slice(&trait_args),
-                    };
+                    let gen_args = self.ctxt.tys.ty_slice(&trait_args);
+                    let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
                     constraints.push(ty::Constraint {
                         subject,
                         requirement: ty::ConstraintRequirement::Trait(trait_inst),
@@ -490,10 +486,8 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 };
 
                 let gen_args: Vec<_> = mthd_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
-                let trait_inst = traits::TraitInst {
-                    trait_,
-                    gen_args: self.ctxt.tys.ty_slice(&gen_args),
-                };
+                let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
 
                 let sig = fns::FnSig {
                     name: mthd.name.clone(),

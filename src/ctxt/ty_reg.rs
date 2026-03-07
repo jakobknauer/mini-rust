@@ -717,10 +717,7 @@ impl TyReg {
             } => {
                 let base_ty = self.substitute_gen_vars(base_ty, subst);
                 let gen_args = self.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
-                let trait_inst = traits::TraitInst {
-                    trait_: trait_inst.trait_,
-                    gen_args,
-                };
+                let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
         }
@@ -794,10 +791,7 @@ impl TyReg {
             } => {
                 let base_ty = self.substitute_self_ty(base_ty, subst);
                 let gen_args = self.substitute_self_ty_on_slice(trait_inst.gen_args, subst);
-                let trait_inst = traits::TraitInst {
-                    trait_: trait_inst.trait_,
-                    gen_args,
-                };
+                let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
         }

@@ -95,10 +95,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 let n_trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
                 let trait_gen_args: Vec<_> = (0..n_trait_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
                 let trait_gen_args_slice = self.ctxt.tys.ty_slice(&trait_gen_args);
-                let trait_inst = traits::TraitInst {
-                    trait_,
-                    gen_args: trait_gen_args_slice,
-                };
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args_slice).unwrap();
                 Ok(Some(FoundMthd::Trait { trait_inst, mthd_idx }))
             }
             _ => Err(TypeckError::AmbiguousMthd {

@@ -1,4 +1,4 @@
-use crate::ctxt::{language_items, traits, ty};
+use crate::ctxt::{language_items, ty};
 use crate::hlr;
 
 use super::{ExprExtra, TypeckError, TypeckResult};
@@ -119,10 +119,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             right_ty,
         })?;
 
-        let trait_inst = traits::TraitInst {
-            trait_,
-            gen_args: self.ctxt.tys.ty_slice(&[right_ty]),
-        };
+        let gen_args = self.ctxt.tys.ty_slice(&[right_ty]);
+        let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
         self.pending_obligations
             .push((left_ty, ty::ConstraintRequirement::Trait(trait_inst)));
 
