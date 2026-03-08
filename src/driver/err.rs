@@ -93,6 +93,7 @@ fn format_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String {
             expected, actual
         ),
         MissingAssocTy(name) => format!("missing associated type '{}'", name),
+        ConstraintMismatch { mthd } => format!("constraint mismatch for method '{}'", mthd),
     };
 
     format!(

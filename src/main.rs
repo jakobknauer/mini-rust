@@ -43,7 +43,7 @@ fn main() {
     };
 
     if let Err(err) = mini_rust::driver::compile(&sources, print_pretty, print_detail, &output_paths) {
-        print_error(&format!("Compilation failed: {}", err));
+        print_error(&err);
         std::process::exit(1);
     };
 

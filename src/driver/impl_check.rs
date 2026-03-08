@@ -4,7 +4,7 @@ use crate::ctxt::{
     self, fns,
     impls::Impl,
     traits::{Trait, TraitInst},
-    ty,
+    ty::{self, zip_ty_slices},
 };
 
 pub struct ImplCheckError {
@@ -47,6 +47,9 @@ pub enum ImplCheckErrorKind {
         expected: usize,
     },
     MissingAssocTy(String),
+    ConstraintMismatch {
+        mthd: String,
+    },
 }
 
 pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
@@ -227,5 +230,96 @@ fn check_mthd_sig(
         });
     }
 
+    // Compare constraints
+    let subst_trait_constraints: Vec<_> = trait_mthd_sig
+        .constraints
+        .iter()
+        .map(|c| subst_constraint(ctxt, c, &all_gen_params_subst, impl_ty))
+        .collect();
+    let impl_constraints = impl_mthd_sig.constraints.clone();
+
+    let constraints_equal = constraints_subset(ctxt, &subst_trait_constraints, &impl_constraints)
+        && constraints_subset(ctxt, &impl_constraints, &subst_trait_constraints);
+
+    if !constraints_equal {
+        return Err(ImplCheckErrorKind::ConstraintMismatch {
+            mthd: impl_mthd_sig.name.to_string(),
+        });
+    }
+
     Ok(())
+}
+
+fn constraint_req_eq(ctxt: &mut ctxt::Ctxt, a: &ty::ConstraintRequirement, b: &ty::ConstraintRequirement) -> bool {
+    match (a, b) {
+        (ty::ConstraintRequirement::Trait(ta), ty::ConstraintRequirement::Trait(tb)) => {
+            ta.trait_ == tb.trait_
+                && ta.gen_args.len == tb.gen_args.len
+                && zip_ty_slices!(
+                    ctxt.tys,
+                    (ta.gen_args, tb.gen_args),
+                    all(|t1, t2| ctxt.tys.tys_eq(t1, t2))
+                )
+        }
+        (
+            ty::ConstraintRequirement::Callable {
+                param_tys: pa,
+                return_ty: ra,
+            },
+            ty::ConstraintRequirement::Callable {
+                param_tys: pb,
+                return_ty: rb,
+            },
+        ) => {
+            ctxt.tys.tys_eq(*ra, *rb)
+                && pa.len == pb.len
+                && zip_ty_slices!(ctxt.tys, (*pa, *pb), all(|t1, t2| ctxt.tys.tys_eq(t1, t2)))
+        }
+        _ => false,
+    }
+}
+
+fn constraints_subset(ctxt: &mut ctxt::Ctxt, a: &[ty::Constraint], b: &[ty::Constraint]) -> bool {
+    a.iter().all(|ca| {
+        b.iter().any(|cb| {
+            ctxt.tys.tys_eq(ca.subject, cb.subject) && constraint_req_eq(ctxt, &ca.requirement, &cb.requirement)
+        })
+    })
+}
+
+fn subst_constraint(
+    ctxt: &mut ctxt::Ctxt,
+    c: &ty::Constraint,
+    subst: &ty::GenVarSubst,
+    self_ty: ty::Ty,
+) -> ty::Constraint {
+    let subject = subst_normalize_ty(ctxt, c.subject, subst, self_ty);
+    let requirement = match c.requirement {
+        ty::ConstraintRequirement::Trait(trait_inst) => {
+            let gen_args = ctxt.tys.get_ty_slice(trait_inst.gen_args).to_vec();
+            let gen_args: Vec<_> = gen_args
+                .into_iter()
+                .map(|t| subst_normalize_ty(ctxt, t, subst, self_ty))
+                .collect();
+            let gen_args = ctxt.tys.ty_slice(&gen_args);
+            ty::ConstraintRequirement::Trait(trait_inst.with_gen_args(gen_args).unwrap())
+        }
+        ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+            let params = ctxt.tys.get_ty_slice(param_tys).to_vec();
+            let param_tys: Vec<_> = params
+                .into_iter()
+                .map(|t| subst_normalize_ty(ctxt, t, subst, self_ty))
+                .collect();
+            let param_tys = ctxt.tys.ty_slice(&param_tys);
+            let return_ty = subst_normalize_ty(ctxt, return_ty, subst, self_ty);
+            ty::ConstraintRequirement::Callable { param_tys, return_ty }
+        }
+    };
+    ty::Constraint { subject, requirement }
+}
+
+fn subst_normalize_ty(ctxt: &mut ctxt::Ctxt, ty: ty::Ty, subst: &ty::GenVarSubst, self_ty: ty::Ty) -> ty::Ty {
+    let ty = ctxt.tys.substitute_gen_vars(ty, subst);
+    let ty = ctxt.tys.substitute_self_ty(ty, self_ty);
+    ctxt.normalize_ty(ty)
 }
