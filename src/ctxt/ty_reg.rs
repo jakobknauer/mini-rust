@@ -637,55 +637,50 @@ impl TyReg {
     }
 
     #[must_use]
-    pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
+    pub fn substitute(&mut self, ty: Ty, gen_vars: &GenVarSubst, self_ty: Option<Ty>) -> Ty {
         use TyDef::*;
 
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
 
         match *ty_def {
-            Primitive(_) | TraitSelf(_) | InfVar(_) => ty,
+            Primitive(_) | InfVar(_) => ty,
+            GenVar(gen_var) => gen_vars.get(gen_var).unwrap_or(ty),
+            TraitSelf(_) => self_ty.unwrap_or(ty), // TODO: check actual trait
             Opaque { id, gen_args } => {
                 let new_gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ga| self.substitute_gen_vars(ga, subst))).collect();
+                    iter_ty_slice!(self, gen_args, map(|ga| self.substitute(ga, gen_vars, self_ty))).collect();
                 let new_gen_args = self.ty_slice(&new_gen_args);
                 self.register_ty(TyDef::Opaque {
                     id,
                     gen_args: new_gen_args,
                 })
             }
-            GenVar(gen_var) => {
-                if let Some(replacement_ty) = subst.get(gen_var) {
-                    replacement_ty
-                } else {
-                    ty
-                }
-            }
             Fn {
                 param_tys,
                 return_ty,
                 var_args,
             } => {
                 let param_tys: Vec<_> =
-                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
-                let return_ty = self.substitute_gen_vars(return_ty, subst);
+                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
+                let return_ty = self.substitute(return_ty, gen_vars, self_ty);
                 self.fn_(&param_tys, return_ty, var_args)
             }
             Ref(inner_ty) => {
-                let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
+                let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
                 self.ref_(new_inner_ty)
             }
             Ptr(inner_ty) => {
-                let new_inner_ty = self.substitute_gen_vars(inner_ty, subst);
+                let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
                 self.ptr(new_inner_ty)
             }
             Struct { struct_, gen_args } => {
                 let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
                 self.inst_struct(struct_, &gen_args).unwrap()
             }
             Enum { enum_, gen_args } => {
                 let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
             Closure {
@@ -694,16 +689,15 @@ impl TyReg {
                 captures_ty,
             } => {
                 let name = name.clone();
-                let gen_args = self.substitute_gen_vars_on_slice(fn_inst.gen_args, subst);
-                let env_gen_args = self.substitute_gen_vars_on_slice(fn_inst.env_gen_args, subst);
+                let gen_args = self.substitute_on_slice(fn_inst.gen_args, gen_vars, self_ty);
+                let env_gen_args = self.substitute_on_slice(fn_inst.env_gen_args, gen_vars, self_ty);
                 let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
-
-                let captures_ty = self.substitute_gen_vars(captures_ty, subst);
+                let captures_ty = self.substitute(captures_ty, gen_vars, self_ty);
                 self.closure(fn_inst, name, captures_ty)
             }
             Tuple(items) => {
                 let items: Vec<_> =
-                    iter_ty_slice!(self, items, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
+                    iter_ty_slice!(self, items, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
                 self.tuple(&items)
             }
             AssocTy {
@@ -711,87 +705,25 @@ impl TyReg {
                 trait_inst,
                 assoc_ty_idx,
             } => {
-                let base_ty = self.substitute_gen_vars(base_ty, subst);
-                let gen_args = self.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
+                let base_ty = self.substitute(base_ty, gen_vars, self_ty);
+                let gen_args = self.substitute_on_slice(trait_inst.gen_args, gen_vars, self_ty);
                 let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
                 self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
             }
         }
+    }
+
+    pub fn substitute_on_slice(&mut self, slice: TySlice, gen_vars: &GenVarSubst, self_ty: Option<Ty>) -> TySlice {
+        let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
+        self.ty_slice(&slice)
+    }
+
+    pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
+        self.substitute(ty, subst, None)
     }
 
     pub fn substitute_gen_vars_on_slice(&mut self, slice: TySlice, subst: &GenVarSubst) -> TySlice {
-        let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute_gen_vars(ty, subst))).collect();
-        self.ty_slice(&slice)
-    }
-
-    pub fn substitute_self_ty(&mut self, ty: Ty, subst: Ty) -> Ty {
-        use TyDef::*;
-
-        let ty_def = self.tys.get(ty.0).expect("ty should be registered");
-
-        match *ty_def {
-            Primitive(_) | InfVar(_) | Opaque { .. } | GenVar(_) => ty,
-            Fn {
-                param_tys,
-                return_ty,
-                var_args,
-            } => {
-                let param_tys: Vec<_> =
-                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute_self_ty(ty, subst))).collect();
-                let return_ty = self.substitute_self_ty(return_ty, subst);
-                self.fn_(&param_tys, return_ty, var_args)
-            }
-            Ref(inner_ty) => {
-                let new_inner_ty = self.substitute_self_ty(inner_ty, subst);
-                self.ref_(new_inner_ty)
-            }
-            Ptr(inner_ty) => {
-                let new_inner_ty = self.substitute_self_ty(inner_ty, subst);
-                self.ptr(new_inner_ty)
-            }
-            Struct { struct_, gen_args } => {
-                let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, subst))).collect();
-                self.inst_struct(struct_, &gen_args).unwrap()
-            }
-            Enum { enum_, gen_args } => {
-                let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute_self_ty(ty, subst))).collect();
-                self.inst_enum(enum_, &gen_args).unwrap()
-            }
-            TraitSelf(_) => subst, // TODO: check actual trait
-            Closure {
-                fn_inst,
-                ref name,
-                captures_ty,
-            } => {
-                let name = name.clone();
-                let gen_args = self.substitute_self_ty_on_slice(fn_inst.gen_args, subst);
-                let env_gen_args = self.substitute_self_ty_on_slice(fn_inst.env_gen_args, subst);
-                let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
-
-                self.closure(fn_inst, name, captures_ty)
-            }
-            Tuple(items) => {
-                let items: Vec<_> = iter_ty_slice!(self, items, map(|ty| self.substitute_self_ty(ty, subst))).collect();
-                self.tuple(&items)
-            }
-            AssocTy {
-                base_ty,
-                trait_inst,
-                assoc_ty_idx,
-            } => {
-                let base_ty = self.substitute_self_ty(base_ty, subst);
-                let gen_args = self.substitute_self_ty_on_slice(trait_inst.gen_args, subst);
-                let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
-                self.assoc_ty(base_ty, trait_inst, assoc_ty_idx)
-            }
-        }
-    }
-
-    pub fn substitute_self_ty_on_slice(&mut self, slice: TySlice, substitute: Ty) -> TySlice {
-        let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute_self_ty(ty, substitute))).collect();
-        self.ty_slice(&slice)
+        self.substitute_on_slice(slice, subst, None)
     }
 
     pub fn get_struct_field_ty(&mut self, ty: Ty, index: usize) -> Result<Ty, NotAStruct> {

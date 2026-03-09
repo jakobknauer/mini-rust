@@ -192,7 +192,6 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         let gen_var_subst = ty::GenVarSubst::new(&sig_gen_params, self.ctxt.tys.get_ty_slice(inst.gen_args)).unwrap();
         let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
 
-        let fn_ty = self.ctxt.tys.substitute_self_ty(fn_ty, inst.impl_ty);
-        self.ctxt.tys.substitute_gen_vars(fn_ty, &all_gen_var_subst)
+        self.ctxt.tys.substitute(fn_ty, &all_gen_var_subst, Some(inst.impl_ty))
     }
 }

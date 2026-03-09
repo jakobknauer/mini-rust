@@ -194,8 +194,7 @@ fn check_mthd_sig(
 
     // Little helper closure to avoid code duplication
     let do_substitutions = |ctxt: &mut ctxt::Ctxt, ty: ty::Ty| {
-        let ty = ctxt.tys.substitute_gen_vars(ty, &all_gen_params_subst);
-        let ty = ctxt.tys.substitute_self_ty(ty, impl_ty);
+        let ty = ctxt.tys.substitute(ty, &all_gen_params_subst, Some(impl_ty));
         ctxt.normalize_ty(ty)
     };
 
@@ -319,7 +318,6 @@ fn subst_constraint(
 }
 
 fn subst_normalize_ty(ctxt: &mut ctxt::Ctxt, ty: ty::Ty, subst: &ty::GenVarSubst, self_ty: ty::Ty) -> ty::Ty {
-    let ty = ctxt.tys.substitute_gen_vars(ty, subst);
-    let ty = ctxt.tys.substitute_self_ty(ty, self_ty);
+    let ty = ctxt.tys.substitute(ty, subst, Some(self_ty));
     ctxt.normalize_ty(ty)
 }
