@@ -763,20 +763,37 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
     }
 
     pub(super) fn add_constraint_obligations(&mut self, fn_: fns::Fn, subst: &ty::GenVarSubst) {
-        let relevant_constraints = self.ctxt.fns.get_sig(fn_).unwrap().constraints.clone();
+        let constraints = self.ctxt.fns.get_sig(fn_).unwrap().constraints.clone();
+        self.push_constraint_obligations(&constraints, subst, None);
+    }
 
-        for constraint in relevant_constraints {
-            let subject = self.ctxt.tys.substitute_gen_vars(constraint.subject, subst);
+    pub(super) fn add_trait_mthd_constraint_obligations(
+        &mut self,
+        constraints: &[ty::Constraint],
+        subst: &ty::GenVarSubst,
+        base_ty: ty::Ty,
+    ) {
+        self.push_constraint_obligations(constraints, subst, Some(base_ty));
+    }
+
+    fn push_constraint_obligations(
+        &mut self,
+        constraints: &[ty::Constraint],
+        subst: &ty::GenVarSubst,
+        self_ty: Option<ty::Ty>,
+    ) {
+        for constraint in constraints {
+            let subject = self.ctxt.tys.substitute(constraint.subject, subst, self_ty);
 
             let req = match constraint.requirement {
                 ty::ConstraintRequirement::Trait(trait_inst) => {
-                    let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
+                    let new_gen_args = self.ctxt.tys.substitute_on_slice(trait_inst.gen_args, subst, self_ty);
                     let new_inst = trait_inst.with_gen_args(new_gen_args).unwrap();
                     ty::ConstraintRequirement::Trait(new_inst)
                 }
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
-                    let param_tys = self.ctxt.tys.substitute_gen_vars_on_slice(param_tys, subst);
-                    let return_ty = self.ctxt.tys.substitute_gen_vars(return_ty, subst);
+                    let param_tys = self.ctxt.tys.substitute_on_slice(param_tys, subst, self_ty);
+                    let return_ty = self.ctxt.tys.substitute(return_ty, subst, self_ty);
                     ty::ConstraintRequirement::Callable { param_tys, return_ty }
                 }
             };

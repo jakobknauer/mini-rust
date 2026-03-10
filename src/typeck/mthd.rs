@@ -138,7 +138,8 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 ))
             }
             FoundMthd::Trait { trait_inst, mthd_idx } => {
-                let sig = self.ctxt.traits.get_trait_mthd_sig(trait_inst.trait_, mthd_idx);
+                let sig = self.ctxt.traits.get_trait_mthd_sig(trait_inst.trait_, mthd_idx).clone();
+                let trait_gen_params = self.ctxt.traits.get_trait_def(trait_inst.trait_).gen_params.clone();
 
                 let n_mthd_gen_params = sig.gen_params.len();
                 let resolved_gen_args = self.resolve_optional_gen_args(gen_args, n_mthd_gen_params, |actual| {
@@ -148,6 +149,13 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                         actual,
                     }
                 })?;
+
+                let trait_gen_args = self.ctxt.tys.get_ty_slice(trait_inst.gen_args).to_vec();
+                let trait_subst = ty::GenVarSubst::new(&trait_gen_params, trait_gen_args).unwrap();
+                let mthd_subst = ty::GenVarSubst::new(&sig.gen_params, resolved_gen_args.iter().copied()).unwrap();
+                let full_subst = ty::GenVarSubst::compose(trait_subst, mthd_subst);
+
+                self.add_trait_mthd_constraint_obligations(&sig.constraints.clone(), &full_subst, base_ty);
 
                 let mthd_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
                 Ok(MthdResolution::Trait(
