@@ -166,7 +166,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let return_ty = self.parse_function_return_type()?;
 
         let constraints = if self.advance_if(Token::Keyword(Keyword::Where)) {
-            self.parse_function_constraints()?
+            self.parse_generic_constraints()?
         } else {
             Vec::new()
         };
@@ -237,7 +237,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         }
     }
 
-    fn parse_function_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
+    fn parse_generic_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
         let mut constraints = Vec::new();
         while let Some(Token::Identifier(_)) = self.current() {
             constraints.push(self.parse_constraint()?);
@@ -405,6 +405,12 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             (None, ty)
         };
 
+        let constraints = if self.advance_if(Token::Keyword(Keyword::Where)) {
+            self.parse_generic_constraints()?
+        } else {
+            Vec::new()
+        };
+
         let mut mthds = Vec::new();
         let mut assoc_tys = Vec::new();
 
@@ -435,6 +441,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             gen_params,
             trait_annot,
             ty,
+            constraints,
             mthds: self.builder.fn_slice(&mthds),
             assoc_tys,
         })

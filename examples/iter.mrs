@@ -38,3 +38,19 @@ where T: Iterator,
         }
     }
 }
+
+struct Filter<I, F> {
+    iter: I,
+    f: F
+}
+
+impl<I, F> Iterator for Filter<I, F>
+where I: Iterator,
+      F: Fn(<I as Iterator>::Item) -> bool
+{
+    type Item = <I as Iterator>::Item;
+
+    fn next(&self) -> Option<<Self as Iterator>::Item> {
+        Option::None {}
+    }
+}

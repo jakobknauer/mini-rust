@@ -237,6 +237,7 @@ pub struct ImplDef<'ast> {
     pub gen_params: Vec<String>,
     pub trait_annot: Option<TraitAnnot<'ast>>,
     pub ty: TyAnnot<'ast>,
+    pub constraints: Vec<Constraint<'ast>>,
     pub mthds: FnSlice<'ast>,
     pub assoc_tys: Vec<AssocTy<'ast>>,
 }
