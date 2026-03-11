@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::ctxt::{self, fns, traits, ty};
 
 pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
@@ -23,6 +25,7 @@ fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str
             associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[rhs_ty])).unwrap()),
             gen_params: vec![],
             env_gen_params: vec![rhs_var],
+            env_constraints: Vec::new(),
             params: vec![
                 fns::FnParam {
                     kind: fns::FnParamKind::Self_,
@@ -74,6 +77,7 @@ fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
             associated_trait_inst: None,
             gen_params: vec![ctxt.tys.register_gen_var("T")],
             env_gen_params: vec![],
+            env_constraints: Vec::new(),
             params: vec![],
             var_args: false,
             return_ty: ctxt.tys.primitive(ty::Primitive::Integer32),
@@ -91,7 +95,9 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let ptr_ty = ctxt.tys.ptr(var_ty);
     let ref_ptr_ty = ctxt.tys.ref_(ptr_ty);
 
-    let impl_ = ctxt.impls.register_impl(ptr_ty, vec![var], None);
+    let impl_ = ctxt
+        .impls
+        .register_impl(ptr_ty, vec![var], None, Vec::new(), HashMap::new());
     let fn_ = ctxt.fns.register_fn(
         fns::FnSig {
             name: "offset".to_string(),
@@ -99,6 +105,7 @@ pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
             associated_trait_inst: None,
             gen_params: vec![],
             env_gen_params: vec![var],
+            env_constraints: Vec::new(),
             params: vec![
                 ctxt::fns::FnParam {
                     kind: ctxt::fns::FnParamKind::SelfByRef,

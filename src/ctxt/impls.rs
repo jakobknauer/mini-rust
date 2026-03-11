@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::ctxt::{
     fns::Fn,
     traits::TraitInst,
-    ty::{GenVar, Ty, TySlice},
+    ty::{Constraint, GenVar, Ty, TySlice},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -26,7 +26,7 @@ pub struct ImplInst {
     pub(in crate::ctxt) _private: (),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ImplDef {
     pub gen_params: Vec<GenVar>,
     pub ty: Ty,
@@ -34,4 +34,5 @@ pub struct ImplDef {
     pub mthds_by_name: HashMap<String, Fn>,
     pub trait_inst: Option<TraitInst>,
     pub assoc_tys: HashMap<usize, Ty>,
+    pub constraints: Vec<Constraint>,
 }

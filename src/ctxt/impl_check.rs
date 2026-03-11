@@ -14,7 +14,7 @@ impl super::Ctxt {
         trait_mthd_inst.impl_ty = self.tys.resolve_opaque_in_ty(trait_mthd_inst.impl_ty);
 
         let matching_impl_insts: Vec<_> = self
-            .get_impl_insts_for_ty_and_trait_inst(trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst)
+            .get_impl_insts_for_ty_and_trait_inst(&[], trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst)
             .collect();
 
         // TODO proper error handling
@@ -35,10 +35,11 @@ impl super::Ctxt {
 
     pub(crate) fn get_impl_insts_for_ty_and_trait_inst(
         &mut self,
+        constraints: &[ty::Constraint],
         ty: ty::Ty,
         trait_inst: traits::TraitInst,
     ) -> impl Iterator<Item = impls::ImplInst> {
-        let impl_insts = self.get_impl_insts_for_ty_and_trait(ty, trait_inst.trait_);
+        let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, ty, trait_inst.trait_);
 
         impl_insts.into_iter().filter(move |impl_inst| {
             let impl_def = self.impls.get_impl_def(impl_inst.impl_).clone();
@@ -74,7 +75,7 @@ impl super::Ctxt {
             return true;
         }
 
-        self.get_impl_insts_for_ty_and_trait_inst(ty, trait_inst)
+        self.get_impl_insts_for_ty_and_trait_inst(constraints, ty, trait_inst)
             .next()
             .is_some()
     }
@@ -91,7 +92,7 @@ impl super::Ctxt {
             return true;
         }
 
-        !self.get_impl_insts_for_ty_and_trait(ty, trait_).is_empty()
+        !self.get_impl_insts_for_ty_and_trait(constraints, ty, trait_).is_empty()
     }
 
     pub fn ty_is_callable(
@@ -159,7 +160,7 @@ impl super::Ctxt {
         match &candidate_assoc_tys[..] {
             [] => None,
             [(trait_, assoc_ty_idx)] => {
-                let impl_insts = self.get_impl_insts_for_ty_and_trait(base_ty, *trait_);
+                let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, base_ty, *trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
                     if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraints, base_ty, *trait_) {
@@ -186,9 +187,15 @@ impl super::Ctxt {
         }
     }
 
-    fn get_impl_insts_for_ty_and_trait(&mut self, ty: ty::Ty, trait_: traits::Trait) -> Vec<impls::ImplInst> {
-        self.impls
-            .get_impls_for_trait(trait_)
+    fn get_impl_insts_for_ty_and_trait(
+        &mut self,
+        constraints: &[ty::Constraint],
+        ty: ty::Ty,
+        trait_: traits::Trait,
+    ) -> Vec<impls::ImplInst> {
+        let candidate_impls: Vec<_> = self.impls.get_impls_for_trait(trait_).collect();
+        candidate_impls
+            .into_iter()
             .filter_map(|impl_| {
                 let impl_def = self.impls.get_impl_def(impl_).clone();
 
@@ -196,6 +203,34 @@ impl super::Ctxt {
                     .tys
                     .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
                     .ok()?;
+
+                let gen_args_vec = self.tys.get_ty_slice(gen_args).to_vec();
+                let subst = ty::GenVarSubst::new(&impl_def.gen_params, &gen_args_vec).unwrap();
+
+                let all_satisfied = impl_def.constraints.iter().all(|c| {
+                    let subject = self.tys.substitute_gen_vars(c.subject, &subst);
+                    match c.requirement.clone() {
+                        ty::ConstraintRequirement::Trait(trait_inst) => {
+                            let inst_gen_args: Vec<_> = self
+                                .tys
+                                .get_ty_slice(trait_inst.gen_args)
+                                .to_vec()
+                                .into_iter()
+                                .map(|t| self.tys.substitute_gen_vars(t, &subst))
+                                .collect();
+                            let inst_gen_args = self.tys.ty_slice(&inst_gen_args);
+                            let inst_trait_inst = self.traits.inst_trait(trait_inst.trait_, inst_gen_args).unwrap();
+                            self.ty_implements_trait_inst(constraints, subject, inst_trait_inst)
+                        }
+                        ty::ConstraintRequirement::Callable { .. } => {
+                            self.ty_is_callable(constraints, subject).is_some()
+                        }
+                    }
+                });
+
+                if !all_satisfied {
+                    return None;
+                }
 
                 let impl_inst = self.impls.inst_impl(impl_, gen_args).unwrap();
                 Some(impl_inst)

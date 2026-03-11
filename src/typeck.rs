@@ -43,7 +43,7 @@ pub enum ExprExtra {
 }
 
 pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckResult<HlrTyping> {
-    let constraints = ctxt.fns.get_sig(fn_.fn_).unwrap().constraints.clone();
+    let constraints: Vec<_> = ctxt.fns.get_sig(fn_.fn_).unwrap().all_constraints().cloned().collect();
     let typeck = Typeck {
         ctxt,
         fn_,

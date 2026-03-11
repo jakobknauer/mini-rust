@@ -4,38 +4,41 @@ trait Iterator {
     fn next(&self) -> Option<<Self as Iterator>::Item>;
 }
 
-fn iter_len<T>(iter: T) -> i32
+impl<I> I
 where
-    T: Iterator,
+    I: Iterator 
 {
-    let len = 0;
-    while iter.next().is_some() {
-        len = len + 1;
+    fn count(self) -> i32 {
+        let len = 0;
+        while self.next().is_some() {
+            len = len + 1;
+        }
+        len
     }
-    len
-}
 
-fn first<T>(iter: T) -> Option<<T as Iterator>::Item>
-where T: Iterator,
-{
-    iter.next()
-}
-
-fn for_each<T, F>(iter: T, f: F)
-where T: Iterator,
-      F: Fn(<T as Iterator>::Item)
-{
-    let current = iter.next();
-    loop {
-        match current {
-            Option::Some { item: x } => {
-                f(x);
-                current = iter.next();
-            },
-            Option::None => {
-                break;
+    fn for_each<F>(self, f: F)
+    where
+        F: Fn(<I as Iterator>::Item)
+    {
+        let current = self.next();
+        loop {
+            match current {
+                Option::Some { item: x } => {
+                    f(x);
+                    current = self.next();
+                },
+                Option::None => {
+                    break;
+                }
             }
         }
+    }
+
+    fn filter<F>(self, f: F) -> Filter<I, F>
+    where
+        F: Fn(<I as Iterator>::Item) -> bool
+    {
+        Filter { iter: self, f: f }
     }
 }
 
@@ -51,6 +54,18 @@ where I: Iterator,
     type Item = <I as Iterator>::Item;
 
     fn next(&self) -> Option<<Self as Iterator>::Item> {
+        loop {
+            match self.iter.next() {
+                Option::Some { item: x } => {
+                    if (self.f)(x) {
+                        return Option::Some { item: x };
+                    }
+                },
+                Option::None => {
+                    break;
+                }
+            }
+        }
         Option::None {}
     }
 }

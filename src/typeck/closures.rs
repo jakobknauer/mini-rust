@@ -232,6 +232,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                     name: fn_name.to_string(),
                     gen_params: vec![],
                     env_gen_params: generics.env_gen_params.clone(),
+                    env_constraints: Vec::new(),
                     params: fn_params,
                     var_args: false,
                     return_ty: checked.return_ty,

@@ -125,6 +125,7 @@ impl Ctxt {
             associated_trait_inst: signature.associated_trait_inst,
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
+            env_constraints: Vec::new(),
             params: inst_params,
             var_args: signature.var_args,
             return_ty: inst_return_ty,
@@ -184,7 +185,9 @@ impl Ctxt {
                 let gen_args = self.tys.ty_slice(&gen_args);
                 let trait_inst = self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap();
 
-                let impl_insts: Vec<_> = self.get_impl_insts_for_ty_and_trait_inst(base_ty, trait_inst).collect();
+                let impl_insts: Vec<_> = self
+                    .get_impl_insts_for_ty_and_trait_inst(&[], base_ty, trait_inst)
+                    .collect();
 
                 let [impl_inst] = &impl_insts[..] else { return ty };
 
@@ -193,7 +196,8 @@ impl Ctxt {
 
                 let subst = GenVarSubst::new(&impl_def.gen_params, self.tys.get_ty_slice(impl_inst.gen_args)).unwrap();
 
-                self.tys.substitute_gen_vars(assoc_ty, &subst)
+                let resolved = self.tys.substitute_gen_vars(assoc_ty, &subst);
+                self.normalize_ty(resolved)
             }
             InfVar(_) => unreachable!(),
             &Opaque { id, gen_args } => {

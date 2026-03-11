@@ -143,7 +143,14 @@ impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
     }
 
     pub fn insert_call_val(&mut self, callable: mlr::Op<'mlr>, args: Vec<mlr::Op<'mlr>>) -> mlr::Val<'mlr> {
-        let constraints = self.ctxt.fns.get_sig(self.fn_).unwrap().constraints.clone();
+        let constraints: Vec<_> = self
+            .ctxt
+            .fns
+            .get_sig(self.fn_)
+            .unwrap()
+            .all_constraints()
+            .cloned()
+            .collect();
         let return_ty = self
             .ctxt
             .ty_is_callable(&constraints, callable.1)

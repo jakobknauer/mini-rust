@@ -44,20 +44,45 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
         mthd_name: &str,
         require_receiver: bool,
     ) -> TypeckResult<Option<FoundMthd>> {
-        let candidates: Vec<_> = self
-            .ctxt
-            .impls
-            .get_inherent_impls()
+        let inherent_impls: Vec<_> = self.ctxt.impls.get_inherent_impls().collect();
+        let candidates: Vec<_> = inherent_impls
+            .into_iter()
             .filter_map(|impl_id| {
-                let impl_def = self.ctxt.impls.get_impl_def(impl_id);
-                let impl_ty = impl_def.ty;
-                let gen_params = impl_def.gen_params.clone();
+                let impl_def = self.ctxt.impls.get_impl_def(impl_id).clone();
                 let mthd_fn = *impl_def.mthds_by_name.get(mthd_name)?;
                 let env_gen_args = self
                     .ctxt
                     .tys
-                    .try_find_instantiation(base_ty, impl_ty, &gen_params)
+                    .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
                     .ok()?;
+                let gen_args_vec = self.ctxt.tys.get_ty_slice(env_gen_args).to_vec();
+                let subst = ty::GenVarSubst::new(&impl_def.gen_params, &gen_args_vec).unwrap();
+                let constraints_satisfied = impl_def.constraints.iter().all(|c| {
+                    let subject = self.ctxt.tys.substitute_gen_vars(c.subject, &subst);
+                    match c.requirement.clone() {
+                        ty::ConstraintRequirement::Trait(trait_inst) => {
+                            let inst_gen_args: Vec<_> = self
+                                .ctxt
+                                .tys
+                                .get_ty_slice(trait_inst.gen_args)
+                                .to_vec()
+                                .into_iter()
+                                .map(|t| self.ctxt.tys.substitute_gen_vars(t, &subst))
+                                .collect();
+                            let inst_gen_args = self.ctxt.tys.ty_slice(&inst_gen_args);
+                            let inst_trait_inst =
+                                self.ctxt.traits.inst_trait(trait_inst.trait_, inst_gen_args).unwrap();
+                            self.ctxt
+                                .ty_implements_trait_inst(&self.constraints.clone(), subject, inst_trait_inst)
+                        }
+                        ty::ConstraintRequirement::Callable { .. } => {
+                            self.ctxt.ty_is_callable(&self.constraints, subject).is_some()
+                        }
+                    }
+                });
+                if !constraints_satisfied {
+                    return None;
+                }
                 let has_receiver = self.ctxt.fns.get_sig(mthd_fn).unwrap().has_receiver();
                 (!require_receiver || has_receiver).then_some((mthd_fn, env_gen_args))
             })

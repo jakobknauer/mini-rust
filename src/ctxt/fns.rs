@@ -27,6 +27,9 @@ pub struct FnSig {
     /// e.g. the generic parameters of the surrounding impl block of the function,
     /// or the generic parameters of the surrounding function of a closure.
     pub env_gen_params: Vec<GenVar>,
+    /// Constraints from the surrounding context (e.g. impl block where clause).
+    /// Not compared during impl checking; only used during typechecking.
+    pub env_constraints: Vec<Constraint>,
     pub params: Vec<FnParam>,
     pub var_args: bool,
     pub return_ty: Ty,
@@ -34,6 +37,10 @@ pub struct FnSig {
 }
 
 impl FnSig {
+    pub fn all_constraints(&self) -> impl Iterator<Item = &Constraint> {
+        self.env_constraints.iter().chain(&self.constraints)
+    }
+
     pub fn has_receiver(&self) -> bool {
         self.params
             .first()

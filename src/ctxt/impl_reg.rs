@@ -4,7 +4,7 @@ use crate::ctxt::{
     fns::Fn,
     impls::{Impl, ImplDef, ImplInst, ImplInstError},
     traits::{Trait, TraitInst},
-    ty::{GenVar, Ty, TySlice},
+    ty::{Constraint, GenVar, Ty, TySlice},
 };
 
 #[derive(Default)]
@@ -29,7 +29,14 @@ impl ImplReg {
         })
     }
 
-    pub fn register_impl(&mut self, ty: Ty, gen_params: Vec<GenVar>, trait_inst: Option<TraitInst>) -> Impl {
+    pub fn register_impl(
+        &mut self,
+        ty: Ty,
+        gen_params: Vec<GenVar>,
+        trait_inst: Option<TraitInst>,
+        constraints: Vec<Constraint>,
+        assoc_tys: HashMap<usize, Ty>,
+    ) -> Impl {
         let impl_ = Impl(self.impls.len());
         let impl_def = ImplDef {
             gen_params,
@@ -37,7 +44,8 @@ impl ImplReg {
             mthds: Vec::new(),
             mthds_by_name: HashMap::new(),
             trait_inst,
-            assoc_tys: HashMap::new(),
+            assoc_tys,
+            constraints,
         };
         self.impls.push(impl_def);
         impl_
@@ -47,11 +55,6 @@ impl ImplReg {
         let impl_ = self.impls.get_mut(impl_.0).unwrap();
         impl_.mthds.push(mthd);
         impl_.mthds_by_name.insert(name.to_string(), mthd);
-    }
-
-    pub fn register_assoc_ty(&mut self, impl_: Impl, idx: usize, ty: Ty) {
-        let impl_ = self.impls.get_mut(impl_.0).unwrap();
-        impl_.assoc_tys.insert(idx, ty);
     }
 
     pub fn get_all_impls(&self) -> impl Iterator<Item = Impl> {

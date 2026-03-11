@@ -284,84 +284,92 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         stdlib::register_impl_for_ptr(&mut self.ctxt)
             .map_err(|_| DriverError::ContextBuild("Failed to register stdlib pointer impl"))?;
 
-        for ast_impl in self.ast.impls().iter() {
-            let gen_params: Vec<_> = ast_impl
-                .gen_params
-                .iter()
-                .map(|gp| self.ctxt.tys.register_gen_var(gp))
-                .collect();
-
-            let ty = self
-                .try_resolve_ast_ty_annot(
-                    ast_impl.ty,
-                    ResCtxt {
-                        gen_vars: &gen_params,
-                        self_ty: None,
-                        constraints: &[],
-                    },
-                    false,
-                )
-                .ok_or(DriverError::ContextBuild("Failed to resolve impl type"))?;
-
-            let trait_inst = ast_impl
-                .trait_annot
-                .as_ref()
-                .map(|trait_annot| {
-                    let trait_ = self
-                        .ctxt
-                        .traits
-                        .resolve_trait_name(&trait_annot.name)
-                        .ok_or(DriverError::ContextBuild("Unknown trait in impl"))?;
-
-                    let trait_args: Vec<_> = match &trait_annot.args {
-                        &Some(args) => args
-                            .iter()
-                            .map(|&arg| {
-                                self.try_resolve_ast_ty_annot(
-                                    arg,
-                                    ResCtxt {
-                                        gen_vars: &gen_params,
-                                        self_ty: None,
-                                        constraints: &[],
-                                    },
-                                    false,
-                                )
-                                .ok_or(DriverError::ContextBuild("Failed to resolve trait argument in impl"))
-                            })
-                            .collect::<Result<_, _>>()?,
-                        None => vec![],
-                    };
-
-                    let gen_args = self.ctxt.tys.ty_slice(&trait_args);
-                    let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
-                    Ok(trait_inst)
-                })
-                .transpose()?;
-
-            let impl_ = self.ctxt.impls.register_impl(ty, gen_params.clone(), trait_inst);
+        for &ast_impl in self.ast.impls().iter() {
+            let impl_ = self.register_impl(ast_impl)?;
             self.ast_meta.impl_ids.insert(ast_impl.1, impl_);
-
-            for assoc_ty in &ast_impl.assoc_tys {
-                let ty = self
-                    .try_resolve_ast_ty_annot(
-                        assoc_ty.ty,
-                        ResCtxt {
-                            gen_vars: &gen_params,
-                            self_ty: None,
-                            constraints: &[],
-                        },
-                        false,
-                    )
-                    .ok_or(DriverError::ContextBuild("Failed to resolve associated type"))?;
-                let assoc_ty_idx = self
-                    .ctxt
-                    .traits
-                    .get_trait_assoc_ty_index(trait_inst.unwrap().trait_, &assoc_ty.name);
-                self.ctxt.impls.register_assoc_ty(impl_, assoc_ty_idx, ty);
-            }
         }
 
         Ok(())
+    }
+
+    fn register_impl(&mut self, ast_impl: ast::Impl<'ast>) -> Result<impls::Impl, DriverError> {
+        let gen_params: Vec<_> = ast_impl
+            .gen_params
+            .iter()
+            .map(|gp| self.ctxt.tys.register_gen_var(gp))
+            .collect();
+
+        let mut constraints: Vec<ty::Constraint> = Vec::new();
+        for constraint in &ast_impl.constraints {
+            let res_ctxt = ResCtxt {
+                gen_vars: &gen_params,
+                self_ty: None,
+                constraints: &constraints,
+            };
+            constraints.push(self.resolve_constraint(constraint, res_ctxt)?);
+        }
+
+        let res_ctxt = ResCtxt {
+            gen_vars: &gen_params,
+            self_ty: None,
+            constraints: &constraints,
+        };
+
+        let ty = self
+            .try_resolve_ast_ty_annot(ast_impl.ty, res_ctxt, false)
+            .ok_or(DriverError::ContextBuild("Failed to resolve impl type"))?;
+
+        let res_ctxt = ResCtxt {
+            gen_vars: &gen_params,
+            self_ty: Some(ty),
+            constraints: &constraints,
+        };
+
+        let trait_inst = ast_impl
+            .trait_annot
+            .as_ref()
+            .map(|trait_annot| {
+                let trait_ = self
+                    .ctxt
+                    .traits
+                    .resolve_trait_name(&trait_annot.name)
+                    .ok_or(DriverError::ContextBuild("Unknown trait in impl"))?;
+
+                let trait_args: Vec<_> = match &trait_annot.args {
+                    &Some(args) => args
+                        .iter()
+                        .map(|&arg| {
+                            self.try_resolve_ast_ty_annot(arg, res_ctxt, false)
+                                .ok_or(DriverError::ContextBuild("Failed to resolve trait argument in impl"))
+                        })
+                        .collect::<Result<_, _>>()?,
+                    None => vec![],
+                };
+
+                let gen_args = self.ctxt.tys.ty_slice(&trait_args);
+                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                Ok(trait_inst)
+            })
+            .transpose()?;
+
+        let mut assoc_tys = HashMap::new();
+        for assoc_ty in &ast_impl.assoc_tys {
+            let ty = self
+                .try_resolve_ast_ty_annot(assoc_ty.ty, res_ctxt, false)
+                .ok_or(DriverError::ContextBuild("Failed to resolve associated type"))?;
+            let assoc_ty_idx = self
+                .ctxt
+                .traits
+                .get_trait_assoc_ty_index(trait_inst.unwrap().trait_, &assoc_ty.name);
+            assoc_tys.insert(assoc_ty_idx, ty);
+        }
+
+        let impl_ = self
+            .ctxt
+            .impls
+            .register_impl(ty, gen_params.clone(), trait_inst, constraints.clone(), assoc_tys);
+
+        Ok(impl_)
     }
 
     fn register_free_fns(&mut self) -> Result<(), DriverError> {
@@ -369,7 +377,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .map_err(|_| DriverError::ContextBuild("Failed to register stdlib functions"))?;
 
         for &function in self.ast.free_fns().iter() {
-            let fn_ = self.register_function(function, None, None, Vec::new())?;
+            let fn_ = self.register_function(function, None, None, Vec::new(), Vec::new())?;
             self.ast_meta.fn_ids.insert(function.1, fn_);
         }
 
@@ -382,6 +390,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         associated_ty: Option<ty::Ty>,
         associated_trait_inst: Option<traits::TraitInst>,
         env_gen_params: Vec<ty::GenVar>,
+        env_constraints: Vec<ty::Constraint>,
     ) -> Result<fns::Fn, DriverError> {
         let gen_params: Vec<_> = ast_fn
             .gen_params
@@ -390,33 +399,32 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .collect();
         let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
-        let param_res_ctxt = ResCtxt {
-            gen_vars: &all_gen_params,
-            self_ty: associated_ty,
-            constraints: &[],
-        };
-        let params = ast_fn
-            .params
-            .iter()
-            .enumerate()
-            .map(|(idx, param)| self.build_fn_param(param, param_res_ctxt, idx == 0))
-            .collect::<Result<_, _>>()?;
-
+        let mut all_constraints: Vec<ty::Constraint> = env_constraints.clone();
         let mut constraints: Vec<ty::Constraint> = Vec::new();
         for constraint in &ast_fn.constraints {
             let res_ctxt = ResCtxt {
                 gen_vars: &all_gen_params,
                 self_ty: associated_ty,
-                constraints: &constraints,
+                constraints: &all_constraints,
             };
-            constraints.push(self.resolve_constraint(constraint, res_ctxt)?);
+            let c = self.resolve_constraint(constraint, res_ctxt)?;
+            all_constraints.push(c.clone());
+            constraints.push(c);
         }
 
         let res_ctxt = ResCtxt {
             gen_vars: &all_gen_params,
             self_ty: associated_ty,
-            constraints: &constraints,
+            constraints: &all_constraints,
         };
+
+        let params = ast_fn
+            .params
+            .iter()
+            .enumerate()
+            .map(|(idx, param)| self.build_fn_param(param, res_ctxt, idx == 0))
+            .collect::<Result<_, _>>()?;
+
         let return_ty = match ast_fn.return_ty {
             Some(ty) => self
                 .try_resolve_ast_ty_annot(ty, res_ctxt, true)
@@ -430,6 +438,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             associated_trait_inst,
             gen_params,
             env_gen_params,
+            env_constraints,
             params,
             var_args: ast_fn.var_args,
             return_ty,
@@ -577,6 +586,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                     associated_trait_inst: Some(trait_inst),
                     gen_params: mthd_gen_params,
                     env_gen_params: trait_gen_params.clone(),
+                    env_constraints: Vec::new(),
                     params,
                     var_args: false,
                     return_ty,
@@ -597,9 +607,11 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             let ty = impl_def.ty;
             let gen_params = impl_def.gen_params.clone();
             let trait_inst = impl_def.trait_inst;
+            let impl_constraints = impl_def.constraints.clone();
 
             for &mthd in ast_impl.mthds.iter() {
-                let fn_ = self.register_function(mthd, Some(ty), trait_inst, gen_params.clone())?;
+                let fn_ =
+                    self.register_function(mthd, Some(ty), trait_inst, gen_params.clone(), impl_constraints.clone())?;
                 self.ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
                 self.ast_meta.fn_ids.insert(mthd.1, fn_);
             }

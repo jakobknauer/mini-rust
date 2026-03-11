@@ -117,9 +117,9 @@ impl<'iw, 'mr, 'mlr> MlrLowerer<'iw, 'mr, 'mlr> {
     fn get_or_define_ty(&mut self, ty: mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Primitive::*, TyDef::*};
 
+        let ty = self.mr_ctxt.normalize_ty(ty);
+
         if self.types.contains_key(&ty) {
-            // TODO real canonicalization, such that the lookup actually considers true type equivalence
-            // For now, structs and enums contain separate mechanisms to avoid duplicate definitions
             return self.types.get(&ty).cloned();
         }
 

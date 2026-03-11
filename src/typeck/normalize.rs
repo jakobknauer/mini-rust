@@ -101,7 +101,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
 
                 let impl_insts: Vec<_> = self
                     .ctxt
-                    .get_impl_insts_for_ty_and_trait_inst(base_ty, trait_inst)
+                    .get_impl_insts_for_ty_and_trait_inst(&self.constraints.clone(), base_ty, trait_inst)
                     .collect();
                 let [impl_inst] = &impl_insts[..] else {
                     return self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);
