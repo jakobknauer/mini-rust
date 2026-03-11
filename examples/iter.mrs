@@ -66,6 +66,6 @@ where I: Iterator,
                 }
             }
         }
-        Option::None {}
+        Option::None
     }
 }

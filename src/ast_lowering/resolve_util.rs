@@ -36,7 +36,7 @@ impl<'ctxt, 'hlr> super::AstLowerer<'ctxt, 'hlr> {
         Ok(hlr::Val::Struct(struct_, args))
     }
 
-    fn resolve_path_segments_to_variant(
+    pub(super) fn resolve_path_segments_to_variant(
         &mut self,
         enum_seg: &ast::PathSegment,
         variant_seg: &ast::PathSegment,

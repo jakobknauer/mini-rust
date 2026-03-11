@@ -104,7 +104,7 @@ impl bool {
         if self {
             Option::Some { item: item }
         } else {
-            Option::None {}
+            Option::None
         }
     }
 }

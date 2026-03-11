@@ -398,15 +398,28 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
                 }
             }
             [ty_path, mthd] => {
-                let ty = self.lower_path_segment_to_ty_annot(ty_path)?;
-                let ty = self.hlr.ty_annot(ty);
-
                 if mthd.is_self {
                     return Err(AstLoweringError {
                         msg: "Invalid use of 'Self' as method name".to_string(),
                     });
                 }
 
+                // Try to resolve as a fieldless enum variant first (e.g. `Option::None`)
+                if mthd.args.is_none() {
+                    if let Ok(constructor @ hlr::Val::Variant(enum_, variant_index, _)) =
+                        self.resolve_path_segments_to_variant(ty_path, mthd)
+                    {
+                        let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
+                        let is_fieldless = self.ctxt.tys.get_struct_def(variant_struct).unwrap().fields.is_empty();
+                        if is_fieldless {
+                            let fields = self.hlr.struct_expr_field_slice(vec![]);
+                            return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
+                        }
+                    }
+                }
+
+                let ty = self.lower_path_segment_to_ty_annot(ty_path)?;
+                let ty = self.hlr.ty_annot(ty);
                 let args = mthd.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
                 hlr::ExprDef::Val(hlr::Val::Mthd(ty, mthd.ident.clone(), args))
