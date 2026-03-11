@@ -105,8 +105,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
         if let Some(hlr_path) = self.output_paths.hlr {
             self.print_detail(&format!("Saving HLR to {}", hlr_path.display()));
-            self.print_hlr_fns(hlr_path, &hlr_fns, &hlr_typings)
-                .map_err(|_| DriverError::Io("Error printing HLR"))?;
+            self.print_hlr_fns(hlr_path, &hlr_fns, &hlr_typings)?;
         }
 
         self.print_pretty("Lowering HLR to MLR");
@@ -114,8 +113,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
-            self.print_mlr_fns(mlr_path, &mlr_fns)
-                .map_err(|_| DriverError::Io("Error printing MLR"))?;
+            self.print_mlr_fns(mlr_path, &mlr_fns)?;
         }
 
         self.print_pretty("Monomorphizing functions");
@@ -665,24 +663,23 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
         path: &Path,
         hlr_fns: &[hlr::Fn<'hlr>],
         typings: &HashMap<fns::Fn, typeck::HlrTyping>,
-    ) -> Result<(), ()> {
-        let mut file = std::fs::File::create(path).map_err(|_| ())?;
+    ) -> Result<(), DriverError> {
+        let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating HLR file"))?;
         for hlr_fn in hlr_fns {
             let typing = typings.get(&hlr_fn.fn_);
-            print::print_hlr(hlr_fn, &self.ctxt, typing, &mut file).map_err(|_| ())?;
-            use std::io::Write;
-            writeln!(file).map_err(|_| ())?;
+            print::print_hlr(hlr_fn, &self.ctxt, typing, &mut file)
+                .map_err(|_| DriverError::Io("Error printing HLR"))?;
         }
         Ok(())
     }
 
-    fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'mlr>]) -> Result<(), ()> {
-        let mut file = std::fs::File::create(path).map_err(|_| ())?;
+    fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'mlr>]) -> Result<(), DriverError> {
+        let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating MLR file"))?;
 
         let mlr_fn_map: HashMap<fns::Fn, &mlr::Fn<'mlr>> = mlr_fns.iter().map(|f| (f.fn_, f)).collect();
         for fn_ in self.ctxt.fns.get_all_fns() {
             let mlr_fn = mlr_fn_map.get(&fn_).copied();
-            print::print_mlr(fn_, mlr_fn, &self.ctxt, &mut file).map_err(|_| ())?;
+            print::print_mlr(fn_, mlr_fn, &self.ctxt, &mut file).map_err(|_| DriverError::Io("Error printing MLR"))?;
         }
 
         Ok(())
