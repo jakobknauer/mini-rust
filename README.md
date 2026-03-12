@@ -7,12 +7,12 @@ Supported features include:
 - Basic syntax (functions, variables, control flow etc.)
 - Type inference within functions
 - Primitive types, tuples, structs and enums, references and raw pointers, function pointers
-- Generics (functions, structs and enums, traits and impls) with constraints (for functions and methods)
+- Generics (functions, structs and enums, traits and impls) with constraints (for functions, methods, and impls)
 - Opaque return types (`impl Trait`/`impl Fn`)
 - Closures capturing local variables
 - Traits and impls, including associated types
 - Pattern matching (for enums and references to enums only)
-- Operator overloading via `Add`, `Sub`, `Mul`, `Div`, `BitOr`, and `BitAnd` traits
+- Operator overloading for `+`, `-`, `*`, `/`, `%`, `&`, `|`
 
 As backend LLVM is used via the [inkwell](https://github.com/TheDan64/inkwell) library.
 
