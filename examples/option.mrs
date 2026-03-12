@@ -6,7 +6,7 @@ enum Option<T> {
 impl<T> Option<T> {
     fn unwrap_or(self, default: T) -> T {
         match self {
-            Option::Some { item: item } => item,
+            Option::Some { item } => item,
             Option::None => default,
         }
     }
@@ -15,7 +15,7 @@ impl<T> Option<T> {
         where F: Fn(T) -> U
     {
         match self {
-            Option::Some { item: item } => Option::Some { item: f(item) },
+            Option::Some { item } => Option::Some { item: f(item) },
             Option::None => Option::None,
         }
     }
@@ -24,21 +24,21 @@ impl<T> Option<T> {
         where F: Fn(&T)
     {
         match self {
-            Option::Some { item: item } => f(item),
+            Option::Some { item } => f(item),
             Option::None => {}
         }
     }
 
     fn as_ref(&self) -> Option<&T> {
         match self {
-            Option::Some { item: item } => Option::Some { item: item },
+            Option::Some { item } => Option::Some { item },
             Option::None => Option::None,
         }
     }
 
     fn is_some(&self) -> bool {
         match self {
-            Option::Some { item: item } => true,
+            Option::Some { item } => true,
             Option::None => false,
         }
     }

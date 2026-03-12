@@ -817,8 +817,18 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                     while let Some(Token::Identifier(field_name)) = self.current() {
                         let field_name = field_name.clone();
                         self.position += 1; // consume field name
-                        self.expect_token(Token::Colon)?;
-                        let field_value = self.parse_expr(true)?;
+                        let field_value = if self.advance_if(Token::Colon) {
+                            self.parse_expr(true)?
+                        } else {
+                            let segment = PathSegment {
+                                ident: field_name.clone(),
+                                args: None,
+                                is_self: false,
+                            };
+                            self.builder.path(Path {
+                                segments: vec![segment],
+                            })
+                        };
                         fields.push((field_name, field_value));
                         if !self.advance_if(Token::Comma) {
                             break;
@@ -1062,8 +1072,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             while let Some(Token::Identifier(field_name)) = self.current() {
                 let field_name = field_name.clone();
                 self.position += 1; // consume field name
-                self.expect_token(Token::Colon)?;
-                let binding_name = self.expect_identifier()?;
+                let binding_name = if self.advance_if(Token::Colon) {
+                    self.expect_identifier()?
+                } else {
+                    field_name.clone()
+                };
 
                 fields.push(VariantPatternField {
                     field_name,

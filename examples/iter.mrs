@@ -23,8 +23,8 @@ where
         let current = self.next();
         loop {
             match current {
-                Option::Some { item: x } => {
-                    f(x);
+                Option::Some { item } => {
+                    f(item);
                     current = self.next();
                 },
                 Option::None => {
@@ -34,31 +34,31 @@ where
         }
     }
 
-    fn filter<F>(self, f: F) -> Filter<I, F>
+    fn filter<P>(self, pred: P) -> Filter<I, P>
     where
-        F: Fn(<I as Iterator>::Item) -> bool
+        P: Fn(<I as Iterator>::Item) -> bool
     {
-        Filter { iter: self, f: f }
+        Filter { iter: self, pred }
     }
 }
 
-struct Filter<I, F> {
+struct Filter<I, P> {
     iter: I,
-    f: F
+    pred: P
 }
 
-impl<I, F> Iterator for Filter<I, F>
+impl<I, P> Iterator for Filter<I, P>
 where I: Iterator,
-      F: Fn(<I as Iterator>::Item) -> bool
+      P: Fn(<I as Iterator>::Item) -> bool
 {
     type Item = <I as Iterator>::Item;
 
     fn next(&self) -> Option<<Self as Iterator>::Item> {
         loop {
             match self.iter.next() {
-                Option::Some { item: x } => {
-                    if (self.f)(x) {
-                        return Option::Some { item: x };
+                Option::Some { item } => {
+                    if (self.pred)(item) {
+                        return Option::Some { item };
                     }
                 },
                 Option::None => {
