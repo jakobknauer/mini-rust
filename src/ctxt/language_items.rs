@@ -10,6 +10,7 @@ pub struct LanguageItems {
     pub div_trait: Option<Trait>,
     pub bit_or_trait: Option<Trait>,
     pub bit_and_trait: Option<Trait>,
+    pub rem_trait: Option<Trait>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

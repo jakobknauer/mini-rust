@@ -69,6 +69,10 @@ pub fn register_bit_and_trait(ctxt: &mut ctxt::Ctxt) {
     ctxt.language_items.bit_and_trait = Some(register_arith_trait(ctxt, "BitAnd", "bitand"));
 }
 
+pub fn register_rem_trait(ctxt: &mut ctxt::Ctxt) {
+    ctxt.language_items.rem_trait = Some(register_arith_trait(ctxt, "Rem", "rem"));
+}
+
 fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     let fn_ = ctxt.fns.register_fn(
         fns::FnSig {

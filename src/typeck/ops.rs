@@ -105,6 +105,7 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
             Divide => (self.ctxt.language_items.div_trait, "div"),
             BitOr => (self.ctxt.language_items.bit_or_trait, "bitor"),
             BitAnd => (self.ctxt.language_items.bit_and_trait, "bitand"),
+            Remainder => (self.ctxt.language_items.rem_trait, "rem"),
             _ => {
                 return Err(TypeckError::BinaryOpTypeMismatch {
                     operator,
