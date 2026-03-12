@@ -140,6 +140,10 @@ impl TraitReg {
             })
     }
 
+    pub fn resolve_assoc_ty_name(&self, trait_: Trait, name: &str) -> Option<usize> {
+        self.traits[trait_.0].assoc_tys.iter().position(|n| n == name)
+    }
+
     pub fn get_trait_assoc_ty_index(&self, trait_: Trait, name: &str) -> usize {
         self.traits[trait_.0]
             .assoc_tys

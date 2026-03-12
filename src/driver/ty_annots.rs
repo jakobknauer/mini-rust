@@ -79,7 +79,9 @@ impl Driver<'_, '_, '_, '_> {
                 }
                 let (id, opaque_ty) = self.ctxt.tys.opaque(res_ctxt.gen_vars);
                 match req {
-                    ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
+                    ast::ConstraintRequirement::Trait {
+                        trait_name, trait_args, ..
+                    } => {
                         let trait_ = self.ctxt.traits.resolve_trait_name(trait_name)?;
                         let gen_args: Vec<_> = trait_args
                             .iter()

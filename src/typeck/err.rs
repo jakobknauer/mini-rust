@@ -144,4 +144,8 @@ pub enum TypeckError {
         expected_param_tys: ty::TySlice,
         expected_return_ty: ty::Ty,
     },
+    AssocTyEqNotSatisfied {
+        subject: ty::Ty,
+        expected: ty::Ty,
+    },
 }

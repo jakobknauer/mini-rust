@@ -126,6 +126,7 @@ pub struct Constraint {
 pub enum ConstraintRequirement {
     Trait(traits::TraitInst),
     Callable { param_tys: TySlice, return_ty: Ty },
+    AssocTyEq(Ty),
 }
 
 #[derive(Clone)]

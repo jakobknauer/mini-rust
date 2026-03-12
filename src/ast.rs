@@ -80,6 +80,10 @@ impl<'ast> Ast<'ast> {
         self.arena.alloc_slice_copy(ty_annots)
     }
 
+    pub fn assoc_binding_slice(&self, bindings: &[AssocBinding<'ast>]) -> &'ast [AssocBinding<'ast>] {
+        self.arena.alloc_slice_clone(bindings)
+    }
+
     pub fn fn_(&self, fn_def: FnDef<'ast>) -> Fn<'ast> {
         let id = self.next_fn_id.get();
         self.next_fn_id.set(FnId(id.0 + 1));
@@ -174,15 +178,28 @@ pub struct Constraint<'ast> {
     pub requirement: ConstraintRequirement<'ast>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConstraintRequirement<'ast> {
     Trait {
         trait_name: String,
         trait_args: TyAnnotSlice<'ast>,
+        assoc_bindings: &'ast [AssocBinding<'ast>],
     },
     Callable {
         params: TyAnnotSlice<'ast>,
         return_ty: Option<TyAnnot<'ast>>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum AssocBinding<'ast> {
+    Eq {
+        name: String,
+        ty: TyAnnot<'ast>,
+    },
+    Bound {
+        name: String,
+        requirement: ConstraintRequirement<'ast>,
     },
 }
 

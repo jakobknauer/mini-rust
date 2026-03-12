@@ -78,6 +78,12 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                         ty::ConstraintRequirement::Callable { .. } => {
                             self.ctxt.ty_is_callable(&self.constraints, subject).is_some()
                         }
+                        ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+                            let eq_ty = self.ctxt.tys.substitute_gen_vars(eq_ty, &subst);
+                            let subject = self.ctxt.normalize_ty(subject);
+                            let eq_ty = self.ctxt.normalize_ty(eq_ty);
+                            self.ctxt.tys.tys_eq(subject, eq_ty)
+                        }
                     }
                 });
                 if !constraints_satisfied {

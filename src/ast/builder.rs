@@ -167,6 +167,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.ty_annot_slice(ty_annots)
     }
 
+    pub fn assoc_binding_slice(&self, bindings: &[AssocBinding<'ast>]) -> &'ast [AssocBinding<'ast>] {
+        self.ast.assoc_binding_slice(bindings)
+    }
+
     pub fn path_annot(&self, path: Path<'ast>) -> TyAnnot<'ast> {
         self.ast.ty_annot(TyAnnotKind::Path(path))
     }

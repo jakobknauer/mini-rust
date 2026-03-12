@@ -66,6 +66,29 @@ impl<T> Vec<T> {
     fn iter(&self) -> RefVecIter<T> {
         RefVecIter { vec: self, idx: 0 }
     }
+
+    fn into_iter(self) -> VecIter<T> {
+        VecIter { vec: self, idx: 0 }
+    }
+}
+
+struct VecIter<T> {
+    vec: Vec<T>,
+    idx: i32,
+}
+
+impl<T> Iterator for VecIter<T> {
+    type Item = T;
+
+    fn next(&self) -> Option<T> {
+        if self.idx >= self.vec.len {
+            Option::None
+        } else {
+            let item = *self.vec.ptr.offset(self.idx);
+            self.idx = self.idx + 1;
+            Option::Some { item }
+        }
+    }
 }
 
 struct RefVecIter<T> {

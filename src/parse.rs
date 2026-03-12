@@ -284,22 +284,47 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let trait_name = trait_.clone();
                 self.position += 1;
 
-                let trait_args = if self.advance_if(Token::Smaller) {
-                    let mut gen_args = Vec::new();
+                let mut trait_args = Vec::new();
+                let mut assoc_bindings = Vec::new();
+                if self.advance_if(Token::Smaller) {
                     while self.current() != Some(&Token::Greater) {
-                        gen_args.push(self.parse_ty_annot()?);
+                        if let Some(Token::Identifier(_)) = self.current() {
+                            if self.next() == Some(&Token::Equal) {
+                                let name = self.expect_identifier()?;
+                                self.expect_token(Token::Equal)?;
+                                let ty = self.parse_ty_annot()?;
+                                assoc_bindings.push(AssocBinding::Eq { name, ty });
+                                if !self.advance_if(Token::Comma) {
+                                    break;
+                                }
+                                continue;
+                            }
+                            if self.next() == Some(&Token::Colon) {
+                                let name = self.expect_identifier()?;
+                                self.expect_token(Token::Colon)?;
+                                let requirement = self.parse_constraint_requirement()?;
+                                assoc_bindings.push(AssocBinding::Bound { name, requirement });
+                                if !self.advance_if(Token::Comma) {
+                                    break;
+                                }
+                                continue;
+                            }
+                        }
+                        trait_args.push(self.parse_ty_annot()?);
                         if !self.advance_if(Token::Comma) {
                             break;
                         }
                     }
                     self.expect_token(Token::Greater)?;
-                    gen_args
-                } else {
-                    vec![]
-                };
+                }
                 let trait_args = self.builder.ty_annot_slice(&trait_args);
+                let assoc_bindings = self.builder.assoc_binding_slice(&assoc_bindings);
 
-                ConstraintRequirement::Trait { trait_name, trait_args }
+                ConstraintRequirement::Trait {
+                    trait_name,
+                    trait_args,
+                    assoc_bindings,
+                }
             }
             _ => return Err(ParserErr::UnexpectedToken(self.current().unwrap().clone())),
         };

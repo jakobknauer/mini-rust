@@ -313,6 +313,9 @@ fn subst_constraint(
             let return_ty = subst_normalize_ty(ctxt, return_ty, subst, self_ty);
             ty::ConstraintRequirement::Callable { param_tys, return_ty }
         }
+        ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+            ty::ConstraintRequirement::AssocTyEq(subst_normalize_ty(ctxt, eq_ty, subst, self_ty))
+        }
     };
     ty::Constraint { subject, requirement }
 }

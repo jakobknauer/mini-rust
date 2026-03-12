@@ -796,6 +796,9 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     let return_ty = self.ctxt.tys.substitute(return_ty, subst, self_ty);
                     ty::ConstraintRequirement::Callable { param_tys, return_ty }
                 }
+                ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+                    ty::ConstraintRequirement::AssocTyEq(self.ctxt.tys.substitute(eq_ty, subst, self_ty))
+                }
             };
 
             self.pending_obligations.push((subject, req));
@@ -817,6 +820,16 @@ impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
                     let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
                     if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
+                    }
+                }
+                ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+                    let subject = self.normalize(subject);
+                    let eq_ty = self.normalize(eq_ty);
+                    if !self.ctxt.tys.tys_eq(subject, eq_ty) {
+                        return Err(TypeckError::AssocTyEqNotSatisfied {
+                            subject,
+                            expected: eq_ty,
+                        });
                     }
                 }
                 ty::ConstraintRequirement::Callable { param_tys, return_ty } => {

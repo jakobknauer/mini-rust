@@ -6,15 +6,8 @@ fn main() -> i32 {
     vec.push(4);
     vec.push(10);
 
-    vec
-        .iter()
-        .filter(|x| *x % 2 == 0)
-        .for_each(|x| { printf("%d\n", *x); });
-
-    0
+    vec.into_iter().sum(0)
 }
-
-struct Empty {}
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {
     |x| a * x + b

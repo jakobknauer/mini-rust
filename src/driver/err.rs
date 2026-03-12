@@ -294,5 +294,8 @@ fn format_typeck_error(err: &TypeckError, ctxt: &ctxt::Ctxt) -> String {
                 ty(*expected_return_ty)
             )
         }
+        &TypeckError::AssocTyEqNotSatisfied { subject, expected } => {
+            format!("associated type '{}' does not equal '{}'", ty(subject), ty(expected))
+        }
     }
 }

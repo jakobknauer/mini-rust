@@ -1,3 +1,4 @@
+mod constraints;
 mod err;
 mod impl_check;
 mod stdlib;
@@ -307,7 +308,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 self_ty: None,
                 constraints: &constraints,
             };
-            constraints.push(self.resolve_constraint(constraint, res_ctxt)?);
+            constraints.extend(self.resolve_constraint(constraint, res_ctxt)?);
         }
 
         let res_ctxt = ResCtxt {
@@ -408,9 +409,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                 self_ty: associated_ty,
                 constraints: &all_constraints,
             };
-            let c = self.resolve_constraint(constraint, res_ctxt)?;
-            all_constraints.push(c.clone());
-            constraints.push(c);
+            let resolved = self.resolve_constraint(constraint, res_ctxt)?;
+            all_constraints.extend(resolved.iter().cloned());
+            constraints.extend(resolved);
         }
 
         let res_ctxt = ResCtxt {
@@ -450,58 +451,6 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
             .fns
             .register_fn(signature, associated_ty.is_none())
             .map_err(|_| DriverError::ContextBuild("Failed to register function"))
-    }
-
-    fn resolve_constraint(
-        &mut self,
-        constraint: &ast::Constraint,
-        res_ctxt: ResCtxt,
-    ) -> Result<ty::Constraint, DriverError> {
-        let subject = self
-            .try_resolve_ast_ty_annot(constraint.subject, res_ctxt, false)
-            .ok_or(DriverError::ContextBuild("Failed to resolve constraint subject type"))?;
-
-        let requirement = match &constraint.requirement {
-            ast::ConstraintRequirement::Trait { trait_name, trait_args } => {
-                let trait_ = self
-                    .ctxt
-                    .traits
-                    .resolve_trait_name(trait_name)
-                    .ok_or(DriverError::ContextBuild("Unknown trait in constraint"))?;
-                let trait_args: Vec<_> = trait_args
-                    .iter()
-                    .map(|&arg| {
-                        self.try_resolve_ast_ty_annot(arg, res_ctxt, false)
-                            .ok_or(DriverError::ContextBuild("Failed to resolve constraint trait argument"))
-                    })
-                    .collect::<Result<_, _>>()?;
-                let gen_args = self.ctxt.tys.ty_slice(&trait_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
-                ty::ConstraintRequirement::Trait(trait_inst)
-            }
-            ast::ConstraintRequirement::Callable { params, return_ty } => {
-                let param_tys: Vec<_> = params
-                    .iter()
-                    .map(|&ty| {
-                        self.try_resolve_ast_ty_annot(ty, res_ctxt, false)
-                            .ok_or(DriverError::ContextBuild(
-                                "Failed to resolve constraint callable parameter type",
-                            ))
-                    })
-                    .collect::<Result<_, _>>()?;
-                let param_tys = self.ctxt.tys.ty_slice(&param_tys);
-                let return_ty =
-                    match return_ty {
-                        Some(return_ty) => self.try_resolve_ast_ty_annot(return_ty, res_ctxt, false).ok_or(
-                            DriverError::ContextBuild("Failed to resolve constraint callable return type"),
-                        )?,
-                        None => self.ctxt.tys.unit(),
-                    };
-                ty::ConstraintRequirement::Callable { param_tys, return_ty }
-            }
-        };
-
-        Ok(ty::Constraint { subject, requirement })
     }
 
     fn build_fn_param(
@@ -555,7 +504,7 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
                         self_ty: Some(self_type),
                         constraints: &constraints,
                     };
-                    constraints.push(self.resolve_constraint(constraint, res_ctxt)?);
+                    constraints.extend(self.resolve_constraint(constraint, res_ctxt)?);
                 }
 
                 let trait_res_ctxt = ResCtxt {

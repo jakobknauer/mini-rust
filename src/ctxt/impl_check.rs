@@ -10,8 +10,15 @@ impl super::Ctxt {
         subst: &GenVarSubst,
     ) -> fns::FnInst {
         let mut trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
-        // Resolve opaque types to their concrete types for monomorphization
-        trait_mthd_inst.impl_ty = self.tys.resolve_opaque_in_ty(trait_mthd_inst.impl_ty);
+        // Resolve opaque and associated types to their concrete types for monomorphization
+        trait_mthd_inst.impl_ty = self.normalize_ty(trait_mthd_inst.impl_ty);
+        let trait_gen_args = self.tys.get_ty_slice(trait_mthd_inst.trait_inst.gen_args).to_vec();
+        let trait_gen_args: Vec<_> = trait_gen_args.into_iter().map(|t| self.normalize_ty(t)).collect();
+        let trait_gen_args = self.tys.ty_slice(&trait_gen_args);
+        let trait_inst = trait_mthd_inst.trait_inst.with_gen_args(trait_gen_args).unwrap();
+        trait_mthd_inst = trait_mthd_inst
+            .with_updated(trait_mthd_inst.impl_ty, trait_inst, trait_mthd_inst.gen_args)
+            .unwrap();
 
         let matching_impl_insts: Vec<_> = self
             .get_impl_insts_for_ty_and_trait_inst(&[], trait_mthd_inst.impl_ty, trait_mthd_inst.trait_inst)
@@ -224,6 +231,12 @@ impl super::Ctxt {
                         }
                         ty::ConstraintRequirement::Callable { .. } => {
                             self.ty_is_callable(constraints, subject).is_some()
+                        }
+                        ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+                            let eq_ty = self.tys.substitute_gen_vars(eq_ty, &subst);
+                            let subject = self.normalize_ty(subject);
+                            let eq_ty = self.normalize_ty(eq_ty);
+                            self.tys.tys_eq(subject, eq_ty)
                         }
                     }
                 });

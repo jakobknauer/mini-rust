@@ -40,6 +40,24 @@ where
     {
         Filter { iter: self, pred }
     }
+
+    fn sum<S>(self, init: S) -> S
+    where
+        S: Add<<I as Iterator>::Item, Output=S>
+    {
+        let result = init;
+        loop {
+            match self.next() {
+                Option::Some { item } => {
+                    result = result + item;
+                },
+                Option::None => {
+                    break;
+                }
+            }
+        }
+        result
+    }
 }
 
 struct Filter<I, P> {
