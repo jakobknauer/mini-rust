@@ -14,6 +14,8 @@ fn main() -> i32 {
     0
 }
 
+struct Empty {}
+
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {
     |x| a * x + b
 }

@@ -379,6 +379,18 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
                 });
             }
             [segment] => {
+                // Try fieldless struct construction before erroring (e.g. `MyUnit`)
+                if segment.args.is_none() {
+                    if let Some(struct_) = self.ctxt.tys.get_struct_by_name(&segment.ident) {
+                        let is_fieldless = self.ctxt.tys.get_struct_def(struct_).unwrap().fields.is_empty();
+                        if is_fieldless {
+                            let constructor = hlr::Val::Struct(struct_, None);
+                            let fields = self.hlr.struct_expr_field_slice(vec![]);
+                            return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
+                        }
+                    }
+                }
+
                 let val = self
                     .resolve_ident_to_val_def(&segment.ident)
                     .ok_or_else(|| AstLoweringError {
