@@ -199,6 +199,54 @@ impl super::Ctxt {
         }
     }
 
+    pub fn impl_constraints_satisfied(
+        &mut self,
+        ambient_constraints: &[ty::Constraint],
+        impl_constraints: &[ty::Constraint],
+        subst: &ty::GenVarSubst,
+    ) -> bool {
+        let subst_constraints: Vec<_> = impl_constraints
+            .iter()
+            .map(|c| self.subst_constraint(c, subst))
+            .collect();
+        subst_constraints
+            .iter()
+            .all(|c| self.constraint_satisfied(ambient_constraints, c))
+    }
+
+    fn constraint_satisfied(&mut self, ambient_constraints: &[ty::Constraint], constraint: &ty::Constraint) -> bool {
+        let subject = constraint.subject;
+        match constraint.requirement {
+            ty::ConstraintRequirement::Trait(trait_inst) => {
+                self.ty_implements_trait_inst(ambient_constraints, subject, trait_inst)
+            }
+            ty::ConstraintRequirement::Callable { .. } => self.ty_is_callable(ambient_constraints, subject).is_some(),
+            ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+                let subject = self.normalize_ty(subject);
+                let eq_ty = self.normalize_ty(eq_ty);
+                self.tys.tys_eq(subject, eq_ty)
+            }
+        }
+    }
+
+    fn subst_constraint(&mut self, constraint: &ty::Constraint, subst: &ty::GenVarSubst) -> ty::Constraint {
+        let subject = self.tys.substitute_gen_vars(constraint.subject, subst);
+        let requirement = match constraint.requirement {
+            ty::ConstraintRequirement::Trait(trait_inst) => {
+                ty::ConstraintRequirement::Trait(self.subst_trait_inst(trait_inst, subst))
+            }
+            ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+                let param_tys = self.tys.substitute_gen_vars_on_slice(param_tys, subst);
+                let return_ty = self.tys.substitute_gen_vars(return_ty, subst);
+                ty::ConstraintRequirement::Callable { param_tys, return_ty }
+            }
+            ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
+                ty::ConstraintRequirement::AssocTyEq(self.tys.substitute_gen_vars(eq_ty, subst))
+            }
+        };
+        ty::Constraint { subject, requirement }
+    }
+
     fn get_impl_insts_for_ty_and_trait(
         &mut self,
         constraints: &[ty::Constraint],
@@ -219,34 +267,7 @@ impl super::Ctxt {
                 let gen_args_vec = self.tys.get_ty_slice(gen_args).to_vec();
                 let subst = ty::GenVarSubst::new(&impl_def.gen_params, &gen_args_vec).unwrap();
 
-                let all_satisfied = impl_def.constraints.iter().all(|c| {
-                    let subject = self.tys.substitute_gen_vars(c.subject, &subst);
-                    match c.requirement.clone() {
-                        ty::ConstraintRequirement::Trait(trait_inst) => {
-                            let inst_gen_args: Vec<_> = self
-                                .tys
-                                .get_ty_slice(trait_inst.gen_args)
-                                .to_vec()
-                                .into_iter()
-                                .map(|t| self.tys.substitute_gen_vars(t, &subst))
-                                .collect();
-                            let inst_gen_args = self.tys.ty_slice(&inst_gen_args);
-                            let inst_trait_inst = self.traits.inst_trait(trait_inst.trait_, inst_gen_args).unwrap();
-                            self.ty_implements_trait_inst(constraints, subject, inst_trait_inst)
-                        }
-                        ty::ConstraintRequirement::Callable { .. } => {
-                            self.ty_is_callable(constraints, subject).is_some()
-                        }
-                        ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
-                            let eq_ty = self.tys.substitute_gen_vars(eq_ty, &subst);
-                            let subject = self.normalize_ty(subject);
-                            let eq_ty = self.normalize_ty(eq_ty);
-                            self.tys.tys_eq(subject, eq_ty)
-                        }
-                    }
-                });
-
-                if !all_satisfied {
+                if !self.impl_constraints_satisfied(constraints, &impl_def.constraints, &subst) {
                     return None;
                 }
 
