@@ -125,9 +125,6 @@ where I: Iterator,
     type Item = B;
 
     fn next(&self) -> Option<<Self as Iterator>::Item> {
-        match self.iter.next() {
-            Option::Some { item } => Option::Some { item: (self.f)(item) },
-            Option::None => Option::None,
-        }
+        self.iter.next().map(self.f)
     }
 }
