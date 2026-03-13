@@ -6,7 +6,9 @@ fn main() -> i32 {
     vec.push(4);
     vec.push(10);
 
-    vec.into_iter().sum(0)
+    let result = vec.into_iter().map(|x| x + 1).fold(1, |acc, x| acc * x);
+    printf("Result: %d\n", result);
+    0
 }
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {

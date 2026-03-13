@@ -41,6 +41,31 @@ where
         Filter { iter: self, pred }
     }
 
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        F: Fn(B, <I as Iterator>::Item) -> B
+    {
+        let result = init;
+        loop {
+            match self.next() {
+                Option::Some { item } => {
+                    result = f(result, item);
+                },
+                Option::None => {
+                    break;
+                }
+            }
+        }
+        result
+    }
+
+    fn map<B, F>(self, f: F) -> Map<I, F, B>
+    where
+        F: Fn(<I as Iterator>::Item) -> B
+    {
+        Map { iter: self, f }
+    }
+
     fn sum<S>(self, init: S) -> S
     where
         S: Add<<I as Iterator>::Item, Output=S>
@@ -85,5 +110,24 @@ where I: Iterator,
             }
         }
         Option::None
+    }
+}
+
+struct Map<I, F, B> {
+    iter: I,
+    f: F,
+}
+
+impl<I, F, B> Iterator for Map<I, F, B>
+where I: Iterator,
+      F: Fn(<I as Iterator>::Item) -> B
+{
+    type Item = B;
+
+    fn next(&self) -> Option<<Self as Iterator>::Item> {
+        match self.iter.next() {
+            Option::Some { item } => Option::Some { item: (self.f)(item) },
+            Option::None => Option::None,
+        }
     }
 }
