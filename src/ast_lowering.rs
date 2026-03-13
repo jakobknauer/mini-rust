@@ -22,7 +22,7 @@ pub fn ast_to_hlr<'ast, 'hlr>(
 struct AstLowerer<'ctxt, 'hlr> {
     fn_: fns::Fn,
 
-    ctxt: &'ctxt ctxt::Ctxt,
+    ctxt: &'ctxt ctxt::Ctxt<'ctxt>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 
     scopes: VecDeque<Scope>,

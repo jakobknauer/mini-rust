@@ -11,7 +11,7 @@ use crate::{
 
 use super::{MlrFnLowerer, MlrFnLoweringError, MlrFnLoweringResult};
 
-impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
+impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub(super) fn try_build_intrinsic_call(
         &mut self,
         fn_inst: mr_fns::FnInst,

@@ -7,7 +7,8 @@ use crate::ctxt::{
 };
 
 #[derive(Default)]
-pub struct TyReg {
+pub struct TyReg<'ty> {
+    _phantom: std::marker::PhantomData<&'ty ()>,
     tys: Vec<TyDef>,
     ty_slices: Vec<Ty>,
 
@@ -70,7 +71,7 @@ pub enum TyInstError {
 #[derive(Debug)]
 pub struct NotATypeName(#[allow(unused)] pub String);
 
-impl TyReg {
+impl<'ty> TyReg<'ty> {
     fn register_ty(&mut self, ty_def: TyDef) -> Ty {
         if let Some(existing_ty) = self.tys_inv.get(&ty_def) {
             return *existing_ty;

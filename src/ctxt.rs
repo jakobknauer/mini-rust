@@ -19,15 +19,15 @@ pub use ty_reg::*;
 use crate::ctxt::ty::GenVarSubst;
 
 #[derive(Default)]
-pub struct Ctxt {
-    pub tys: TyReg,
+pub struct Ctxt<'ctxt> {
+    pub tys: TyReg<'ctxt>,
     pub fns: FnReg,
     pub impls: ImplReg,
     pub traits: TraitReg,
     pub language_items: language_items::LanguageItems,
 }
 
-impl Ctxt {
+impl<'ctxt> Ctxt<'ctxt> {
     pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst) -> String {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
 

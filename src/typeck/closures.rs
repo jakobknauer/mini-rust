@@ -31,7 +31,7 @@ struct CaptureData {
     captured_tys: Vec<ty::Ty>,
 }
 
-impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
+impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn check_closure(
         &mut self,
         expr_id: hlr::ExprId,

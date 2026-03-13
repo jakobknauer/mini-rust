@@ -52,7 +52,7 @@ pub enum ImplCheckErrorKind {
     },
 }
 
-pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
+pub fn check_trait_impls<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ImplCheckError> {
     let all_impls: Vec<_> = ctxt.impls.get_all_impls().collect();
     for impl_ in all_impls {
         let Some(trait_inst) = ctxt.impls.get_impl_trait_inst(impl_) else {
@@ -64,7 +64,11 @@ pub fn check_trait_impls(ctxt: &mut ctxt::Ctxt) -> Result<(), ImplCheckError> {
     Ok(())
 }
 
-fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: TraitInst) -> Result<(), ImplCheckError> {
+fn check_trait_impl<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
+    impl_: Impl,
+    trait_inst: TraitInst,
+) -> Result<(), ImplCheckError> {
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
     if trait_def.gen_params.len() != trait_inst.gen_args.len {
         return Err(ImplCheckError {
@@ -125,7 +129,7 @@ fn check_trait_impl(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_inst: TraitInst) -
     Ok(())
 }
 
-fn check_mthd_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result<(), ImplCheckErrorKind> {
+fn check_mthd_names<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, impl_: Impl, trait_: Trait) -> Result<(), ImplCheckErrorKind> {
     let impl_def = ctxt.impls.get_impl_def(impl_);
     let trait_def = ctxt.traits.get_trait_def(trait_);
 
@@ -149,8 +153,8 @@ fn check_mthd_names(ctxt: &mut ctxt::Ctxt, impl_: Impl, trait_: Trait) -> Result
     Ok(())
 }
 
-fn check_mthd_sig(
-    ctxt: &mut ctxt::Ctxt,
+fn check_mthd_sig<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
     impl_mthd_sig: &fns::FnSig,
     trait_mthd_sig: &fns::FnSig,
     impl_ty: ty::Ty,
@@ -193,7 +197,7 @@ fn check_mthd_sig(
     }
 
     // Little helper closure to avoid code duplication
-    let do_substitutions = |ctxt: &mut ctxt::Ctxt, ty: ty::Ty| {
+    let do_substitutions = |ctxt: &mut ctxt::Ctxt<'_>, ty: ty::Ty| {
         let ty = ctxt.tys.substitute(ty, &all_gen_params_subst, Some(impl_ty));
         ctxt.normalize_ty(ty)
     };
@@ -249,7 +253,11 @@ fn check_mthd_sig(
     Ok(())
 }
 
-fn constraint_req_eq(ctxt: &mut ctxt::Ctxt, a: &ty::ConstraintRequirement, b: &ty::ConstraintRequirement) -> bool {
+fn constraint_req_eq<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
+    a: &ty::ConstraintRequirement,
+    b: &ty::ConstraintRequirement,
+) -> bool {
     match (a, b) {
         (ty::ConstraintRequirement::Trait(ta), ty::ConstraintRequirement::Trait(tb)) => {
             ta.trait_ == tb.trait_
@@ -278,7 +286,7 @@ fn constraint_req_eq(ctxt: &mut ctxt::Ctxt, a: &ty::ConstraintRequirement, b: &t
     }
 }
 
-fn constraints_subset(ctxt: &mut ctxt::Ctxt, a: &[ty::Constraint], b: &[ty::Constraint]) -> bool {
+fn constraints_subset<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, a: &[ty::Constraint], b: &[ty::Constraint]) -> bool {
     a.iter().all(|ca| {
         b.iter().any(|cb| {
             ctxt.tys.tys_eq(ca.subject, cb.subject) && constraint_req_eq(ctxt, &ca.requirement, &cb.requirement)
@@ -286,8 +294,8 @@ fn constraints_subset(ctxt: &mut ctxt::Ctxt, a: &[ty::Constraint], b: &[ty::Cons
     })
 }
 
-fn subst_constraint(
-    ctxt: &mut ctxt::Ctxt,
+fn subst_constraint<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
     c: &ty::Constraint,
     subst: &ty::GenVarSubst,
     self_ty: ty::Ty,
@@ -320,7 +328,12 @@ fn subst_constraint(
     ty::Constraint { subject, requirement }
 }
 
-fn subst_normalize_ty(ctxt: &mut ctxt::Ctxt, ty: ty::Ty, subst: &ty::GenVarSubst, self_ty: ty::Ty) -> ty::Ty {
+fn subst_normalize_ty<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
+    ty: ty::Ty,
+    subst: &ty::GenVarSubst,
+    self_ty: ty::Ty,
+) -> ty::Ty {
     let ty = ctxt.tys.substitute(ty, subst, Some(self_ty));
     ctxt.normalize_ty(ty)
 }

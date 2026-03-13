@@ -1,6 +1,6 @@
 use crate::ctxt::ty;
 
-impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
+impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn post_check(&self) {
         for &ty in self.typing.var_types.values() {
             debug_assert!(!self.contains_inf_var(ty));

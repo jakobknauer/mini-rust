@@ -5,7 +5,7 @@ use crate::{
 
 use super::{Driver, ResCtxt};
 
-impl Driver<'_, '_, '_, '_> {
+impl Driver<'_, '_, '_, '_, '_> {
     pub(super) fn try_resolve_ast_ty_annot(
         &mut self,
         annot: ast::TyAnnot,

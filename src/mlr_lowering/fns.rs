@@ -14,8 +14,8 @@ use crate::{
     mlr,
 };
 
-pub struct MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
-    parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
+pub struct MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
+    parent: &'a mut super::MlrLowerer<'iw, 'mr, 'ctxt, 'mlr>,
     mlr_fn: mlr::Fn<'mlr>,
     iw_fn: FunctionValue<'iw>,
     iw_builder: Builder<'iw>,
@@ -36,9 +36,9 @@ impl From<BuilderError> for MlrFnLoweringError {
 
 pub type MlrFnLoweringResult<T> = Result<T, MlrFnLoweringError>;
 
-impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
+impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub fn new(
-        parent: &'a mut super::MlrLowerer<'iw, 'mr, 'mlr>,
+        parent: &'a mut super::MlrLowerer<'iw, 'mr, 'ctxt, 'mlr>,
         fn_inst: mr_fns::FnInst,
         mlr_fn: mlr::Fn<'mlr>,
     ) -> Self {
@@ -70,11 +70,11 @@ impl<'a, 'iw, 'mr, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'mlr> {
         Ok(())
     }
 
-    fn mr_ctxt(&self) -> &mr_ctxt::Ctxt {
+    fn mr_ctxt(&self) -> &mr_ctxt::Ctxt<'ctxt> {
         self.parent.mr_ctxt
     }
 
-    fn tys(&self) -> &mr_ctxt::TyReg {
+    fn tys(&self) -> &mr_ctxt::TyReg<'ctxt> {
         &self.mr_ctxt().tys
     }
 

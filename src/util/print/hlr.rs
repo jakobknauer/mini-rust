@@ -18,7 +18,7 @@ pub fn print_hlr<W: Write>(
 }
 
 struct HlrPrinter<'a, W: Write> {
-    ctxt: &'a ctxt::Ctxt,
+    ctxt: &'a ctxt::Ctxt<'a>,
     typing: Option<&'a HlrTyping>,
     indent_level: usize,
     writer: &'a mut W,

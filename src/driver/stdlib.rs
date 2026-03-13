@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::ctxt::{self, fns, traits, ty};
 
-pub fn register_fns(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+pub fn register_fns<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ()> {
     register_size_of(ctxt)
 }
 
-fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str) -> traits::Trait {
+fn register_arith_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, trait_name: &str, mthd_name: &str) -> traits::Trait {
     let rhs_var = ctxt.tys.register_gen_var("Rhs");
     let trait_ = ctxt.traits.register_trait(trait_name, vec![rhs_var]);
     ctxt.traits.register_assoc_ty(trait_, "Output");
@@ -45,35 +45,35 @@ fn register_arith_trait(ctxt: &mut ctxt::Ctxt, trait_name: &str, mthd_name: &str
     trait_
 }
 
-pub fn register_add_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_add_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.add_trait = Some(register_arith_trait(ctxt, "Add", "add"));
 }
 
-pub fn register_sub_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_sub_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.sub_trait = Some(register_arith_trait(ctxt, "Sub", "sub"));
 }
 
-pub fn register_mul_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_mul_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.mul_trait = Some(register_arith_trait(ctxt, "Mul", "mul"));
 }
 
-pub fn register_div_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_div_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.div_trait = Some(register_arith_trait(ctxt, "Div", "div"));
 }
 
-pub fn register_bit_or_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_bit_or_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.bit_or_trait = Some(register_arith_trait(ctxt, "BitOr", "bitor"));
 }
 
-pub fn register_bit_and_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_bit_and_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.bit_and_trait = Some(register_arith_trait(ctxt, "BitAnd", "bitand"));
 }
 
-pub fn register_rem_trait(ctxt: &mut ctxt::Ctxt) {
+pub fn register_rem_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.rem_trait = Some(register_arith_trait(ctxt, "Rem", "rem"));
 }
 
-fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+fn register_size_of<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ()> {
     let fn_ = ctxt.fns.register_fn(
         fns::FnSig {
             name: "size_of".to_string(),
@@ -93,7 +93,7 @@ fn register_size_of(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
     Ok(())
 }
 
-pub fn register_impl_for_ptr(ctxt: &mut ctxt::Ctxt) -> Result<(), ()> {
+pub fn register_impl_for_ptr<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ()> {
     let var = ctxt.tys.register_gen_var("T");
     let var_ty = ctxt.tys.gen_var(var);
     let ptr_ty = ctxt.tys.ptr(var_ty);

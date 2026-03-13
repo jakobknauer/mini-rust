@@ -31,7 +31,7 @@ struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
     signature: Option<&'a FnSig>,
-    ctxt: &'a ctxt::Ctxt,
+    ctxt: &'a ctxt::Ctxt<'a>,
     indent_level: usize,
     writer: &'a mut W,
 }

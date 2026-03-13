@@ -7,7 +7,7 @@ pub enum UnificationResult {
     Failure,
 }
 
-impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
+impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn unify(&mut self, ty1: ty::Ty, ty2: ty::Ty) -> bool {
         let ty1 = self.normalize(ty1);
         let ty2 = self.normalize(ty2);
@@ -23,14 +23,14 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
     }
 }
 
-struct Unify<'a> {
-    tys: &'a ctxt::TyReg,
-    committed: &'a HashMap<ty::InfVar, ty::Ty>,
+struct Unify<'ty> {
+    tys: &'ty ctxt::TyReg<'ty>,
+    committed: &'ty HashMap<ty::InfVar, ty::Ty>,
     pending: HashMap<ty::InfVar, ty::Ty>,
 }
 
-impl<'a> Unify<'a> {
-    fn new(tys: &'a ctxt::TyReg, committed: &'a HashMap<ty::InfVar, ty::Ty>) -> Self {
+impl<'ty> Unify<'ty> {
+    fn new(tys: &'ty ctxt::TyReg<'ty>, committed: &'ty HashMap<ty::InfVar, ty::Ty>) -> Self {
         Unify {
             tys,
             committed,

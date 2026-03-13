@@ -19,7 +19,7 @@ pub(super) enum FoundMthd {
     },
 }
 
-impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
+impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn resolve_mthd(
         &mut self,
         base_ty: ty::Ty,

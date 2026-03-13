@@ -3,7 +3,7 @@ use crate::ctxt::{
     ty::{self, GenVarSubst},
 };
 
-impl super::Ctxt {
+impl<'ctxt> super::Ctxt<'ctxt> {
     pub fn resolve_trait_mthd_to_fn(
         &mut self,
         trait_mthd_inst: fns::TraitMthdInst,

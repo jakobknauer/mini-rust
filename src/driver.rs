@@ -58,13 +58,13 @@ pub fn compile(
     driver.compile().map_err(|err| format_driver_error(err, &driver.ctxt))
 }
 
-struct Driver<'a, 'ast, 'hlr, 'mlr> {
+struct Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
     sources: Vec<String>,
     print_pretty: &'a dyn Fn(&str),
     print_detail: &'a dyn Fn(&str),
     output_paths: &'a OutputPaths<'a>,
 
-    ctxt: ctxt::Ctxt,
+    ctxt: ctxt::Ctxt<'ctxt>,
     ast: &'ast ast::Ast<'ast>,
     ast_meta: AstMeta,
     hlr: &'hlr hlr::Hlr<'hlr>,
@@ -80,7 +80,7 @@ struct AstMeta {
     impl_ids: HashMap<ast::ImplId, impls::Impl>,
 }
 
-impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
+impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
     pub fn compile(&mut self) -> Result<(), DriverError> {
         self.print_pretty("Building AST from source");
         for source in &self.sources {

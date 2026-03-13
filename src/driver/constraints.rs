@@ -5,7 +5,7 @@ use crate::{
 
 use super::{Driver, DriverError, ResCtxt};
 
-impl Driver<'_, '_, '_, '_> {
+impl Driver<'_, '_, '_, '_, '_> {
     pub(super) fn resolve_constraint(
         &mut self,
         constraint: &ast::Constraint,

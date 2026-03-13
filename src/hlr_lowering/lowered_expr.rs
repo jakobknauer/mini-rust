@@ -27,7 +27,7 @@ impl<'mlr> From<mlr::Op<'mlr>> for LoweredExpr<'mlr> {
 }
 
 impl<'mlr> LoweredExpr<'mlr> {
-    pub(super) fn into_val(self, builder: &mut MlrBuilder<'_, 'mlr>) -> mlr::Val<'mlr> {
+    pub(super) fn into_val(self, builder: &mut MlrBuilder<'_, '_, 'mlr>) -> mlr::Val<'mlr> {
         match self.0 {
             LoweredExprKind::Val(val) => val,
             LoweredExprKind::Place(place) => builder.copy_val(place),
@@ -35,7 +35,7 @@ impl<'mlr> LoweredExpr<'mlr> {
         }
     }
 
-    pub(super) fn into_place(self, builder: &mut MlrBuilder<'_, 'mlr>) -> mlr::Place<'mlr> {
+    pub(super) fn into_place(self, builder: &mut MlrBuilder<'_, '_, 'mlr>) -> mlr::Place<'mlr> {
         match self.0 {
             LoweredExprKind::Place(place) => place,
             LoweredExprKind::Val(val) => builder.store_val(val),
@@ -46,7 +46,7 @@ impl<'mlr> LoweredExpr<'mlr> {
         }
     }
 
-    pub(super) fn into_op(self, builder: &mut MlrBuilder<'_, 'mlr>) -> mlr::Op<'mlr> {
+    pub(super) fn into_op(self, builder: &mut MlrBuilder<'_, '_, 'mlr>) -> mlr::Op<'mlr> {
         match self.0 {
             LoweredExprKind::Op(op) => op,
             LoweredExprKind::Place(place) => builder.insert_copy_op(place),

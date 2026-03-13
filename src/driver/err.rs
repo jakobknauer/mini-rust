@@ -18,7 +18,7 @@ pub enum DriverError {
     Io(&'static str),
 }
 
-pub fn format_driver_error(err: DriverError, ctxt: &ctxt::Ctxt) -> String {
+pub fn format_driver_error<'ctxt>(err: DriverError, ctxt: &ctxt::Ctxt<'ctxt>) -> String {
     match err {
         DriverError::Parse(e) => format_parse_err(&e),
         DriverError::ContextBuild(msg) => format!("Compilation failed: {msg}"),
@@ -50,7 +50,7 @@ fn format_parse_err(err: &parse::ParserErr) -> String {
     }
 }
 
-fn format_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String {
+fn format_impl_check_error<'ctxt>(err: ImplCheckError, ctxt: &ctxt::Ctxt<'ctxt>) -> String {
     use ImplCheckErrorKind::*;
 
     let ty = |t| ctxt.tys.get_string_rep(t);
@@ -104,7 +104,7 @@ fn format_impl_check_error(err: ImplCheckError, ctxt: &ctxt::Ctxt) -> String {
     )
 }
 
-fn format_typeck_error(err: &TypeckError, ctxt: &ctxt::Ctxt) -> String {
+fn format_typeck_error<'ctxt>(err: &TypeckError, ctxt: &ctxt::Ctxt<'ctxt>) -> String {
     use TypeckError::*;
 
     let ty = |t| ctxt.tys.get_string_rep(t);

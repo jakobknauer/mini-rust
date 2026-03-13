@@ -42,7 +42,7 @@ pub enum ExprExtra {
     },
 }
 
-pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckResult<HlrTyping> {
+pub fn typeck<'ctxt, 'hlr>(ctxt: &mut ctxt::Ctxt<'ctxt>, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckResult<HlrTyping> {
     let constraints: Vec<_> = ctxt.fns.get_sig(fn_.fn_).unwrap().all_constraints().cloned().collect();
     let typeck = Typeck {
         ctxt,
@@ -61,8 +61,8 @@ pub fn typeck<'hlr>(ctxt: &mut ctxt::Ctxt, fn_: &'hlr hlr::Fn<'hlr>) -> TypeckRe
     typeck.check()
 }
 
-struct Typeck<'ctxt, 'hlr> {
-    ctxt: &'ctxt mut ctxt::Ctxt,
+struct Typeck<'a, 'ctxt, 'hlr> {
+    ctxt: &'a mut ctxt::Ctxt<'ctxt>,
     fn_: &'hlr hlr::Fn<'hlr>,
     constraints: Vec<ty::Constraint>,
 
@@ -78,7 +78,7 @@ struct Typeck<'ctxt, 'hlr> {
     pending_obligations: Vec<(ty::Ty, ty::ConstraintRequirement)>,
 }
 
-impl<'ctxt, 'hlr> Typeck<'ctxt, 'hlr> {
+impl<'a, 'ctxt, 'hlr> Typeck<'a, 'ctxt, 'hlr> {
     fn check(mut self) -> TypeckResult<HlrTyping> {
         let opaque_return = self.check_body()?;
         self.normalize_all();

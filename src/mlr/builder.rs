@@ -3,15 +3,15 @@ use crate::{
     mlr,
 };
 
-pub struct MlrBuilder<'ctxt, 'mlr> {
-    pub ctxt: &'ctxt mut ctxt::Ctxt,
+pub struct MlrBuilder<'a, 'ctxt, 'mlr> {
+    pub ctxt: &'a mut ctxt::Ctxt<'ctxt>,
     pub mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: fns::Fn,
     blocks: Vec<Vec<mlr::Stmt<'mlr>>>,
 }
 
-impl<'ctxt, 'mlr> MlrBuilder<'ctxt, 'mlr> {
-    pub fn new(ctxt: &'ctxt mut ctxt::Ctxt, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn) -> Self {
+impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
+    pub fn new(ctxt: &'a mut ctxt::Ctxt<'ctxt>, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn) -> Self {
         Self {
             ctxt,
             mlr,
