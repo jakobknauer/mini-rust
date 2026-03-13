@@ -121,6 +121,15 @@ impl<'ctxt, 'hlr> super::Typeck<'ctxt, 'hlr> {
                 })?;
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                if !self
+                    .ctxt
+                    .ty_implements_trait_inst(&self.constraints, base_ty, trait_inst)
+                {
+                    return Err(TypeckError::ConstraintNotSatisfied {
+                        ty: base_ty,
+                        trait_inst,
+                    });
+                }
                 let assoc_ty_idx = self.ctxt.traits.get_trait_assoc_ty_index(trait_, name);
                 Ok(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }

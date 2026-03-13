@@ -76,6 +76,11 @@ impl super::Ctxt {
         }
 
         let ty_def = self.tys.get_ty_def(ty);
+        if let &ty::TyDef::TraitSelf(trait_2) = ty_def
+            && trait_2 == trait_inst.trait_
+        {
+            return true;
+        }
         if let &ty::TyDef::Opaque { id, .. } = ty_def
             && self.tys.opaque_satisfies_trait_inst(id, trait_inst)
         {

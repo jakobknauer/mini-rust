@@ -89,9 +89,9 @@ impl<'a, 'ast, 'hlr, 'mlr> Driver<'a, 'ast, 'hlr, 'mlr> {
 
         self.print_pretty("Building context");
         self.register_tys()?;
-        self.define_tys()?;
         self.register_traits()?;
         self.register_impls()?;
+        self.define_tys()?;
         self.register_free_fns()?;
         self.register_trait_methods()?;
         self.register_impl_methods()?;

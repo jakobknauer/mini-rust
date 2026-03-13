@@ -70,6 +70,12 @@ impl Driver<'_, '_, '_, '_> {
                 };
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).ok()?;
+                if !self
+                    .ctxt
+                    .ty_implements_trait_inst(res_ctxt.constraints, base_ty, trait_inst)
+                {
+                    return None;
+                }
                 let assoc_ty_idx = self.ctxt.traits.get_trait_assoc_ty_index(trait_, &assoc_seg.ident);
                 Some(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }
