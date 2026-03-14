@@ -105,11 +105,11 @@ impl Driver<'_, '_, '_, '_, '_> {
 
             match binding {
                 ast::AssocBinding::Eq { ty, .. } => {
-                    let eq_ty =
-                        self.try_resolve_ast_ty_annot(*ty, res_ctxt, false)
-                            .ok_or(DriverError::ContextBuild(
-                                "Failed to resolve associated type equality binding",
-                            ))?;
+                    let eq_ty = self
+                        .try_resolve_ast_ty_annot(ty, res_ctxt, false)
+                        .ok_or(DriverError::ContextBuild(
+                            "Failed to resolve associated type equality binding",
+                        ))?;
                     result.push(ty::Constraint {
                         subject: assoc_subject,
                         requirement: ty::ConstraintRequirement::AssocTyEq(eq_ty),

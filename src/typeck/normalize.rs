@@ -101,10 +101,10 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
 
                 let current = self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);
                 for c in self.constraints.clone() {
-                    if let ty::ConstraintRequirement::AssocTyEq(eq_ty) = c.requirement {
-                        if self.ctxt.tys.tys_eq(c.subject, current) {
-                            return self.normalize(eq_ty);
-                        }
+                    if let ty::ConstraintRequirement::AssocTyEq(eq_ty) = c.requirement
+                        && self.ctxt.tys.tys_eq(c.subject, current)
+                    {
+                        return self.normalize(eq_ty);
                     }
                 }
 

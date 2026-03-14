@@ -380,14 +380,14 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
             }
             [segment] => {
                 // Try fieldless struct construction before erroring (e.g. `MyUnit`)
-                if segment.args.is_none() {
-                    if let Some(struct_) = self.ctxt.tys.get_struct_by_name(&segment.ident) {
-                        let is_fieldless = self.ctxt.tys.get_struct_def(struct_).unwrap().fields.is_empty();
-                        if is_fieldless {
-                            let constructor = hlr::Val::Struct(struct_, None);
-                            let fields = self.hlr.struct_expr_field_slice(vec![]);
-                            return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
-                        }
+                if segment.args.is_none()
+                    && let Some(struct_) = self.ctxt.tys.get_struct_by_name(&segment.ident)
+                {
+                    let is_fieldless = self.ctxt.tys.get_struct_def(struct_).unwrap().fields.is_empty();
+                    if is_fieldless {
+                        let constructor = hlr::Val::Struct(struct_, None);
+                        let fields = self.hlr.struct_expr_field_slice(vec![]);
+                        return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
                     }
                 }
 
@@ -417,16 +417,15 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
                 }
 
                 // Try to resolve as a fieldless enum variant first (e.g. `Option::None`)
-                if mthd.args.is_none() {
-                    if let Ok(constructor @ hlr::Val::Variant(enum_, variant_index, _)) =
+                if mthd.args.is_none()
+                    && let Ok(constructor @ hlr::Val::Variant(enum_, variant_index, _)) =
                         self.resolve_path_segments_to_variant(ty_path, mthd)
-                    {
-                        let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
-                        let is_fieldless = self.ctxt.tys.get_struct_def(variant_struct).unwrap().fields.is_empty();
-                        if is_fieldless {
-                            let fields = self.hlr.struct_expr_field_slice(vec![]);
-                            return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
-                        }
+                {
+                    let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
+                    let is_fieldless = self.ctxt.tys.get_struct_def(variant_struct).unwrap().fields.is_empty();
+                    if is_fieldless {
+                        let fields = self.hlr.struct_expr_field_slice(vec![]);
+                        return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
                     }
                 }
 

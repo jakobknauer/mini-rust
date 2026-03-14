@@ -44,6 +44,7 @@ pub enum NotAStructField {
     NotAFieldName(#[allow(unused)] Ty, #[allow(unused)] String),
 }
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum TyInstError {
     StructGenericArgCountMismatch {
         #[allow(unused)]
