@@ -21,9 +21,9 @@ use crate::ctxt::ty::GenVarSubst;
 #[derive(Default)]
 pub struct Ctxt<'ctxt> {
     pub tys: TyReg<'ctxt>,
-    pub fns: FnReg,
-    pub impls: ImplReg,
-    pub traits: TraitReg,
+    pub fns: FnReg<'ctxt>,
+    pub impls: ImplReg<'ctxt>,
+    pub traits: TraitReg<'ctxt>,
     pub language_items: language_items::LanguageItems,
 }
 

@@ -7,11 +7,12 @@ use crate::ctxt::{
 pub use crate::ctxt::traits::TraitInstError;
 
 #[derive(Default)]
-pub struct TraitReg {
+pub struct TraitReg<'traits> {
+    _phantom: std::marker::PhantomData<&'traits ()>,
     traits: Vec<TraitDef>,
 }
 
-impl TraitReg {
+impl<'traits> TraitReg<'traits> {
     pub fn inst_trait_mthd(
         &self,
         trait_inst: TraitInst,

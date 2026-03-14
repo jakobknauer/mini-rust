@@ -6,7 +6,8 @@ use crate::ctxt::{
 };
 
 #[derive(Default)]
-pub struct FnReg {
+pub struct FnReg<'fns> {
+    _phantom: std::marker::PhantomData<&'fns ()>,
     sigs: Vec<FnSig>,
     fn_names: HashMap<String, Fn>,
 
@@ -14,7 +15,7 @@ pub struct FnReg {
     called_trait_mthd_insts: HashMap<Fn, Vec<TraitMthdInst>>,
 }
 
-impl FnReg {
+impl<'fns> FnReg<'fns> {
     pub fn inst_fn(&self, fn_: Fn, gen_args: TySlice, env_gen_args: TySlice) -> Result<FnInst, FnInstError> {
         let sig = self.sigs.get(fn_.0).unwrap();
         if sig.gen_params.len() != gen_args.len {
