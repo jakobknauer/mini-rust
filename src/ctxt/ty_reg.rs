@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{
     fns,
@@ -13,7 +13,9 @@ pub struct TyReg<'ty> {
     ty_slices: Vec<Ty>,
 
     structs: Vec<StructDef>,
+    structs_defined: HashSet<usize>,
     enums: Vec<EnumDef>,
+    enums_defined: HashSet<usize>,
     gen_var_names: Vec<String>,
 
     tys_inv: HashMap<TyDef, Ty>,
@@ -495,16 +497,18 @@ impl<'ty> TyReg<'ty> {
         self.structs.get(struct_.0)
     }
 
-    pub fn get_mut_struct_def(&mut self, struct_: Struct) -> Option<&mut StructDef> {
-        self.structs.get_mut(struct_.0)
+    pub fn define_struct_fields(&mut self, struct_: Struct, fields: Vec<StructField>) {
+        assert!(self.structs_defined.insert(struct_.0), "struct fields already defined");
+        self.structs[struct_.0].fields = fields;
     }
 
     pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
         self.enums.get(enum_.0)
     }
 
-    pub fn get_mut_enum_def(&mut self, enum_: Enum) -> Option<&mut EnumDef> {
-        self.enums.get_mut(enum_.0)
+    pub fn define_enum_variants(&mut self, enum_: Enum, variants: Vec<EnumVariant>) {
+        assert!(self.enums_defined.insert(enum_.0), "enum variants already defined");
+        self.enums[enum_.0].variants = variants;
     }
 
     pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {

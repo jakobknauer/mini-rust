@@ -26,10 +26,7 @@ struct ScopeSnapshot {
     var_uses_start: usize,
 }
 
-struct CaptureData {
-    captured_vars: Vec<hlr::VarId>,
-    captured_tys: Vec<ty::Ty>,
-}
+struct CapturedVars(Vec<hlr::VarId>);
 
 impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn check_closure(
@@ -42,19 +39,19 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     ) -> TypeckResult<ty::Ty> {
         let scope_snapshot = self.snapshot_scope();
         let body_signature = self.check_closure_body(params, return_ty, body, hint)?;
-        let capture_data = self.create_capture_data(scope_snapshot);
+        let captured_vars = self.create_capture_data(scope_snapshot);
 
         let names = self.generate_closure_names();
         let generics = self.collect_closure_generics();
 
-        let captures_ty = self.build_closure_captures_ty(&names.captures_name, &generics, &capture_data.captured_tys);
+        let captures_ty = self.build_closure_captures_ty(&names.captures_name, &generics, &captured_vars);
         let fn_inst = self.build_closure_fn_inst(&names.fn_name, &generics, captures_ty, &body_signature);
 
         self.typing.expr_extra.insert(
             expr_id,
             ExprExtra::Closure {
                 fn_inst,
-                captured_vars: capture_data.captured_vars,
+                captured_vars: captured_vars.0,
             },
         );
 
@@ -156,7 +153,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         Ok(ClosureBodySignature { param_tys, return_ty })
     }
 
-    fn create_capture_data(&mut self, scope_snapshot: ScopeSnapshot) -> CaptureData {
+    fn create_capture_data(&mut self, scope_snapshot: ScopeSnapshot) -> CapturedVars {
         let mut seen = HashSet::new();
 
         let captured_vars: Vec<hlr::VarId> = self.var_uses[scope_snapshot.var_uses_start..]
@@ -165,25 +162,14 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
             .copied()
             .collect();
 
-        let captured_tys = captured_vars
-            .iter()
-            .map(|var_id| {
-                let ty = self.typing.var_types[var_id];
-                self.normalize(ty)
-            })
-            .collect();
-
-        CaptureData {
-            captured_vars,
-            captured_tys,
-        }
+        CapturedVars(captured_vars)
     }
 
     fn build_closure_captures_ty(
         &mut self,
         struct_name: &str,
         generics: &ClosureGenerics,
-        captured_tys: &[ty::Ty],
+        captured_vars: &CapturedVars,
     ) -> ty::Ty {
         let captures_struct = self
             .ctxt
@@ -191,15 +177,8 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
             .register_struct_with_existing_gen_vars(struct_name, generics.env_gen_params.clone())
             .unwrap();
 
-        let struct_def = self.ctxt.tys.get_mut_struct_def(captures_struct).unwrap();
-        for (i, field_ty) in captured_tys.iter().enumerate() {
-            struct_def.fields.push(ty::StructField {
-                name: format!("field_{i}"),
-                ty: *field_ty,
-            });
-        }
-
-        self.created_closure_structs.push(captures_struct);
+        self.created_closure_structs
+            .push((captures_struct, captured_vars.0.to_vec()));
 
         self.ctxt
             .tys

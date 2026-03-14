@@ -18,7 +18,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
             }
         }
 
-        for &struct_ in &self.created_closure_structs {
+        for &(struct_, _) in &self.created_closure_structs {
             for field in &self.ctxt.tys.get_struct_def(struct_).unwrap().fields {
                 debug_assert!(!self.contains_inf_var(field.ty));
             }

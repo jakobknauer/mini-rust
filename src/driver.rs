@@ -162,6 +162,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
                 .map_err(|_| DriverError::ContextBuild("Failed to register enum (duplicate name?)"))?;
             self.ast_meta.enum_ids.insert(enum_.1, ty);
 
+            let mut variants = Vec::new();
             for variant in &enum_.variants {
                 let variant_struct_name = format!("{}::{}", enum_.name, variant.name);
                 let variant_ty = self
@@ -169,18 +170,12 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
                     .tys
                     .register_struct(&variant_struct_name, &enum_.gen_params)
                     .map_err(|_| DriverError::ContextBuild("Failed to register enum variant"))?;
-
-                let enum_def = self
-                    .ctxt
-                    .tys
-                    .get_mut_enum_def(ty)
-                    .ok_or(DriverError::ContextBuild("Enum definition not found"))?;
-
-                enum_def.variants.push(ty::EnumVariant {
+                variants.push(ty::EnumVariant {
                     name: variant.name.clone(),
                     struct_: variant_ty,
                 });
             }
+            self.ctxt.tys.define_enum_variants(ty, variants);
         }
 
         Ok(())
@@ -242,12 +237,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
             })
             .collect::<Result<_, _>>()?;
 
-        let struct_def = self
-            .ctxt
-            .tys
-            .get_mut_struct_def(struct_)
-            .ok_or(DriverError::ContextBuild("Struct definition not found"))?;
-        struct_def.fields = fields;
+        self.ctxt.tys.define_struct_fields(struct_, fields);
 
         Ok(())
     }

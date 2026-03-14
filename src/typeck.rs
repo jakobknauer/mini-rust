@@ -73,7 +73,7 @@ struct Typeck<'a, 'ctxt, 'hlr> {
     var_uses: Vec<hlr::VarId>,
 
     created_closure_fns: Vec<fns::Fn>,
-    created_closure_structs: Vec<ty::Struct>,
+    created_closure_structs: Vec<(ty::Struct, Vec<hlr::VarId>)>,
 
     pending_obligations: Vec<(ty::Ty, ty::ConstraintRequirement)>,
 }

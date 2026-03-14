@@ -210,24 +210,20 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     }
 
     fn normalize_closure_structs(&mut self) {
-        let structs = self.created_closure_structs.clone();
-        for struct_ in structs {
-            let field_tys: Vec<ty::Ty> = self
-                .ctxt
-                .tys
-                .get_struct_def(struct_)
-                .unwrap()
-                .fields
+        let structs = std::mem::take(&mut self.created_closure_structs);
+        for (struct_, captured_vars) in structs {
+            let fields = captured_vars
                 .iter()
-                .map(|f| f.ty)
+                .enumerate()
+                .map(|(i, var_id)| {
+                    let ty = self.normalize(self.typing.var_types[var_id]);
+                    ty::StructField {
+                        name: format!("field_{i}"),
+                        ty,
+                    }
+                })
                 .collect();
-
-            let field_tys: Vec<ty::Ty> = field_tys.into_iter().map(|ty| self.normalize(ty)).collect();
-
-            let struct_def = self.ctxt.tys.get_mut_struct_def(struct_).unwrap();
-            for (field, ty) in struct_def.fields.iter_mut().zip(field_tys) {
-                field.ty = ty;
-            }
+            self.ctxt.tys.define_struct_fields(struct_, fields);
         }
     }
 }
