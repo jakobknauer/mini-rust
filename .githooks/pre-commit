@@ -4,8 +4,8 @@ set -e
 # Go to repo root
 cd "$(git rev-parse --show-toplevel)"
 
-if ! cargo check --quiet; then
-  echo "❌ cargo check failed"
+if ! cargo clippy --quiet -- -D warnings; then
+  echo "❌ cargo clippy failed"
   exit 1
 fi
 
