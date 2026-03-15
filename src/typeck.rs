@@ -469,7 +469,6 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
-        let param_tys = param_tys.to_vec();
 
         // param_tys[0] is self; user-supplied args map to param_tys[1..]
         let n_params = param_tys.len().saturating_sub(1);
@@ -510,8 +509,6 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, callee_ty) else {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
-
-        let param_tys = param_tys.to_vec();
 
         let n_args = args.len();
         let n_params = param_tys.len();

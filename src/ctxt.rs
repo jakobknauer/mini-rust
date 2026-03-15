@@ -111,6 +111,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         let name = signature.name.clone();
         let associated_ty = signature.associated_ty;
         let associated_trait_inst = signature.associated_trait_inst;
+
         let var_args = signature.var_args;
         let param_data: Vec<(fns::FnParamKind, ty::Ty<'ctxt>)> =
             signature.params.iter().map(|p| (p.kind.clone(), p.ty)).collect();
