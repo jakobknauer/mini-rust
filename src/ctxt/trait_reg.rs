@@ -63,7 +63,7 @@ impl<'traits> TraitReg<'traits> {
         })
     }
 
-    pub fn register_trait(&mut self, name: &str, gen_params: Vec<GenVar>) -> Trait {
+    pub fn register_trait(&mut self, name: &str, gen_params: Vec<GenVar<'traits>>) -> Trait {
         let trait_ = Trait(self.traits.len());
         self.traits.push(TraitDef {
             name: name.to_string(),

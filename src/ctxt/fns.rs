@@ -22,11 +22,11 @@ pub struct FnSig<'fns> {
     /// At the moment, this is only used for printing names.
     pub associated_trait_inst: Option<TraitInst<'fns>>,
     /// The generic parameters appearing in the function signature
-    pub gen_params: Vec<GenVar>,
+    pub gen_params: Vec<GenVar<'fns>>,
     /// Generic used in the functions' body that do not appear in the signature,
     /// e.g. the generic parameters of the surrounding impl block of the function,
     /// or the generic parameters of the surrounding function of a closure.
-    pub env_gen_params: Vec<GenVar>,
+    pub env_gen_params: Vec<GenVar<'fns>>,
     /// Constraints from the surrounding context (e.g. impl block where clause).
     /// Not compared during impl checking; only used during typechecking.
     pub env_constraints: Vec<Constraint<'fns>>,

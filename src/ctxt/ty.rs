@@ -34,8 +34,26 @@ impl std::fmt::Display for Enum {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct GenVar(pub(in crate::ctxt) usize);
+#[derive(Clone, Copy, Debug)]
+pub struct GenVar<'ty>(pub(in crate::ctxt) usize, pub(in crate::ctxt) &'ty str);
+
+impl<'ty> GenVar<'ty> {
+    pub fn name(self) -> &'ty str {
+        self.1
+    }
+}
+
+impl PartialEq for GenVar<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for GenVar<'_> {}
+impl std::hash::Hash for GenVar<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct InfVar(pub(in crate::ctxt) usize);
@@ -62,7 +80,7 @@ pub enum TyDef<'ty> {
     },
     Ref(Ty<'ty>),
     Ptr(Ty<'ty>),
-    GenVar(GenVar),
+    GenVar(GenVar<'ty>),
     TraitSelf(traits::Trait),
     Closure {
         fn_inst: fns::FnInst<'ty>,
@@ -92,7 +110,7 @@ pub enum Primitive {
 #[derive(Clone)]
 pub struct StructDef<'ty> {
     pub name: String,
-    pub gen_params: Vec<GenVar>,
+    pub gen_params: Vec<GenVar<'ty>>,
     pub fields: Vec<StructField<'ty>>,
 }
 
@@ -103,9 +121,9 @@ pub struct StructField<'ty> {
 }
 
 #[derive(Clone)]
-pub struct EnumDef {
+pub struct EnumDef<'ty> {
     pub name: String,
-    pub gen_params: Vec<GenVar>,
+    pub gen_params: Vec<GenVar<'ty>>,
     pub variants: Vec<EnumVariant>,
 }
 
@@ -117,7 +135,7 @@ pub struct EnumVariant {
 
 #[derive(Clone)]
 pub struct OpaqueDef<'ty> {
-    pub gen_params: Vec<GenVar>,
+    pub gen_params: Vec<GenVar<'ty>>,
     pub constraints: Vec<ConstraintRequirement<'ty>>,
 }
 
@@ -138,12 +156,12 @@ pub enum ConstraintRequirement<'ty> {
 }
 
 #[derive(Clone)]
-pub struct GenVarSubst<'ty>(HashMap<GenVar, Ty<'ty>>);
+pub struct GenVarSubst<'ty>(HashMap<GenVar<'ty>, Ty<'ty>>);
 
 impl<'ty> GenVarSubst<'ty> {
     pub fn new<G, T>(gen_vars: G, tys: T) -> Option<GenVarSubst<'ty>>
     where
-        G: IntoIterator<Item: std::borrow::Borrow<GenVar>, IntoIter: ExactSizeIterator>,
+        G: IntoIterator<Item: std::borrow::Borrow<GenVar<'ty>>, IntoIter: ExactSizeIterator>,
         T: IntoIterator<Item: std::borrow::Borrow<Ty<'ty>>, IntoIter: ExactSizeIterator>,
     {
         use std::borrow::Borrow;
@@ -159,7 +177,7 @@ impl<'ty> GenVarSubst<'ty> {
         Some(GenVarSubst(pairs))
     }
 
-    pub fn get(&self, gen_var: GenVar) -> Option<Ty<'ty>> {
+    pub fn get(&self, gen_var: GenVar<'ty>) -> Option<Ty<'ty>> {
         self.0.get(&gen_var).copied()
     }
 

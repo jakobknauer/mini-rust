@@ -137,7 +137,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
             Closure { captures_ty, .. } => self.get_or_define_ty(captures_ty).unwrap(),
             GenVar(gen_var) => unreachable!(
                 "generic type variable '{}' should be substituted before this point",
-                self.mr_ctxt.tys.get_gen_var_name(gen_var)
+                gen_var.name()
             ),
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
             AssocTy { .. } => {

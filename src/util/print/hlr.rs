@@ -45,11 +45,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
         let gen_params = if sig.gen_params.is_empty() {
             String::new()
         } else {
-            let names: Vec<_> = sig
-                .gen_params
-                .iter()
-                .map(|&gv| self.ctxt.tys.get_gen_var_name(gv).to_string())
-                .collect();
+            let names: Vec<_> = sig.gen_params.iter().map(|&gv| gv.name().to_string()).collect();
             format!("<{}>", names.join(", "))
         };
 
@@ -435,7 +431,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 Ok(())
             }
             Ty(ty) => write!(self.writer, "{}", self.ctxt.tys.get_string_rep(*ty)),
-            GenVar(gv) => write!(self.writer, "{}", self.ctxt.tys.get_gen_var_name(*gv)),
+            GenVar(gv) => write!(self.writer, "{}", gv.name()),
             AssocTy { base, trait_, name } => {
                 write!(self.writer, "<")?;
                 self.print_ty_annot(base)?;

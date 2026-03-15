@@ -8,7 +8,7 @@ pub enum TyAnnotDef<'hlr> {
     Struct(ty::Struct, Option<TyAnnotSlice<'hlr>>),
     Enum(ty::Enum, Option<TyAnnotSlice<'hlr>>),
     Ty(ty::Ty<'hlr>),
-    GenVar(ty::GenVar),
+    GenVar(ty::GenVar<'hlr>),
 
     AssocTy {
         base: TyAnnot<'hlr>,

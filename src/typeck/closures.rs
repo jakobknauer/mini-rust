@@ -17,7 +17,7 @@ struct ClosureNames {
 }
 
 struct ClosureGenerics<'ty> {
-    env_gen_params: Vec<ty::GenVar>,
+    env_gen_params: Vec<ty::GenVar<'ty>>,
     env_gen_args: Vec<ty::Ty<'ty>>,
 }
 
@@ -180,7 +180,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     fn build_closure_captures_ty(
         &mut self,
         struct_name: &str,
-        env_gen_params: &[ty::GenVar],
+        env_gen_params: &[ty::GenVar<'ctxt>],
         env_gen_args: &[ty::Ty<'ctxt>],
         captured_vars: &CapturedVars,
     ) -> ty::Ty<'ctxt> {
@@ -199,7 +199,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     fn build_closure_fn_inst(
         &mut self,
         fn_name: &str,
-        env_gen_params: &[ty::GenVar],
+        env_gen_params: &[ty::GenVar<'ctxt>],
         env_gen_args: &[ty::Ty<'ctxt>],
         captures_ty: ty::Ty<'ctxt>,
         checked: &ClosureBodySignature<'ctxt>,

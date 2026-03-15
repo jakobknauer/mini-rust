@@ -104,7 +104,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
             })
     }
 
-    fn resolve_gen_var_ty_annot(&mut self, gen_var: ty::GenVar) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn resolve_gen_var_ty_annot(&mut self, gen_var: ty::GenVar<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         Ok(self.ctxt.tys.gen_var(gen_var))
     }
 

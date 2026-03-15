@@ -93,7 +93,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 signature
                     .env_gen_params
                     .iter()
-                    .map(|&gv| self.ctxt.tys.get_gen_var_name(gv))
+                    .map(|&gv| gv.name())
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -107,7 +107,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 signature
                     .gen_params
                     .iter()
-                    .map(|&gv| self.ctxt.tys.get_gen_var_name(gv))
+                    .map(|&gv| gv.name())
                     .collect::<Vec<_>>()
                     .join(", ")
             )

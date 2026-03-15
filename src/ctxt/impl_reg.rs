@@ -34,7 +34,7 @@ impl<'impls> ImplReg<'impls> {
     pub fn register_impl(
         &mut self,
         ty: Ty<'impls>,
-        gen_params: Vec<GenVar>,
+        gen_params: Vec<GenVar<'impls>>,
         trait_inst: Option<TraitInst<'impls>>,
         constraints: Vec<Constraint<'impls>>,
         assoc_tys: HashMap<usize, Ty<'impls>>,

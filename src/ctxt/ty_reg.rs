@@ -9,19 +9,20 @@ use crate::ctxt::{
 
 pub struct TyReg<'ty> {
     arena: &'ty bumpalo::Bump,
+
     next_ty_id: Cell<TyId>,
+    next_gen_var: Cell<usize>,
+    next_inf_var: Cell<InfVar>,
 
     structs: Vec<StructDef<'ty>>,
     structs_defined: HashSet<usize>,
-    enums: Vec<EnumDef>,
+    enums: Vec<EnumDef<'ty>>,
     enums_defined: HashSet<usize>,
-    gen_var_names: Vec<String>,
 
     tys_inv: RefCell<HashMap<TyDef<'ty>, Ty<'ty>>>,
     named_tys: HashMap<String, Named<'ty>>,
     ty_slices_inv: RefCell<HashSet<&'ty [Ty<'ty>]>>,
 
-    next_inf_var: Cell<InfVar>,
     next_opaque_id: usize,
     opaque_resolutions: HashMap<OpaqueId, Ty<'ty>>,
     opaques: Vec<OpaqueDef<'ty>>,
@@ -82,7 +83,7 @@ impl<'ty> TyReg<'ty> {
             structs_defined: Default::default(),
             enums: Vec::new(),
             enums_defined: Default::default(),
-            gen_var_names: Vec::new(),
+            next_gen_var: Cell::new(0),
             tys_inv: RefCell::new(Default::default()),
             named_tys: Default::default(),
             ty_slices_inv: RefCell::new(Default::default()),
@@ -167,7 +168,7 @@ impl<'ty> TyReg<'ty> {
     pub fn register_struct_with_existing_gen_vars(
         &mut self,
         name: &str,
-        gen_params: impl Into<Vec<GenVar>>,
+        gen_params: impl Into<Vec<GenVar<'ty>>>,
     ) -> Result<Struct, ()> {
         let struct_ = Struct(self.structs.len());
 
@@ -223,15 +224,16 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(ptr_ty)
     }
 
-    pub fn gen_var(&self, gen_var: GenVar) -> Ty<'ty> {
+    pub fn gen_var(&self, gen_var: GenVar<'ty>) -> Ty<'ty> {
         let gen_var_ty = TyDef::GenVar(gen_var);
         self.register_ty(gen_var_ty)
     }
 
-    pub fn register_gen_var(&mut self, name: &str) -> GenVar {
-        let gen_var = GenVar(self.gen_var_names.len());
-        self.gen_var_names.push(name.to_string());
-        gen_var
+    pub fn register_gen_var(&self, name: &str) -> GenVar<'ty> {
+        let idx = self.next_gen_var.get();
+        self.next_gen_var.set(idx + 1);
+        let name = self.arena.alloc_str(name);
+        GenVar(idx, name)
     }
 
     pub fn trait_self(&self, trait_: Trait) -> Ty<'ty> {
@@ -264,7 +266,7 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(inf_var)
     }
 
-    pub fn opaque(&mut self, gen_params: &[GenVar]) -> (OpaqueId, Ty<'ty>) {
+    pub fn opaque(&mut self, gen_params: &[GenVar<'ty>]) -> (OpaqueId, Ty<'ty>) {
         let id = OpaqueId(self.next_opaque_id);
         self.next_opaque_id += 1;
         let gen_args: Vec<Ty<'ty>> = gen_params.iter().map(|&gv| self.gen_var(gv)).collect();
@@ -488,7 +490,7 @@ impl<'ty> TyReg<'ty> {
         self.structs[struct_.0].fields = fields;
     }
 
-    pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef> {
+    pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef<'ty>> {
         self.enums.get(enum_.0)
     }
 
@@ -548,7 +550,7 @@ impl<'ty> TyReg<'ty> {
             GenVar(gen_var) => subst
                 .get(&gen_var)
                 .map(|&ty| self.get_string_rep_with_subst(ty, subst))
-                .unwrap_or(self.get_gen_var_name(gen_var).to_string()),
+                .unwrap_or(gen_var.name().to_string()),
             Struct { struct_, gen_args } => {
                 let struct_name = self.get_struct_name(struct_);
                 if gen_args.is_empty() {
@@ -622,10 +624,6 @@ impl<'ty> TyReg<'ty> {
         self.get_enum_def(enum_)
             .map(|ed| ed.name.clone())
             .unwrap_or_else(|| format!("<unknown enum {}>", enum_.0))
-    }
-
-    pub fn get_gen_var_name(&self, gen_param: GenVar) -> &str {
-        &self.gen_var_names[gen_param.0]
     }
 
     #[must_use]
@@ -894,7 +892,7 @@ impl<'ty> TyReg<'ty> {
         &self,
         target: Ty<'ty>,
         generic: Ty<'ty>,
-        gen_vars: &[GenVar],
+        gen_vars: &[GenVar<'ty>],
     ) -> Result<TySlice<'ty>, ()> {
         let mut instantiations = HashMap::new();
         for gen_param in gen_vars {
@@ -917,7 +915,7 @@ impl<'ty> TyReg<'ty> {
         &self,
         target: Ty<'ty>,
         generic: Ty<'ty>,
-        instantiation: &mut HashMap<GenVar, Option<Ty<'ty>>>,
+        instantiation: &mut HashMap<GenVar<'ty>, Option<Ty<'ty>>>,
     ) -> bool {
         use TyDef::*;
 

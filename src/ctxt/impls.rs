@@ -29,7 +29,7 @@ pub struct ImplInst<'impls> {
 
 #[derive(Clone)]
 pub struct ImplDef<'impls> {
-    pub gen_params: Vec<GenVar>,
+    pub gen_params: Vec<GenVar<'impls>>,
     pub ty: Ty<'impls>,
     pub mthds: Vec<Fn>,
     pub mthds_by_name: HashMap<String, Fn>,

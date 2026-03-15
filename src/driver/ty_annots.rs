@@ -128,11 +128,7 @@ impl<'arena> Driver<'_, 'arena> {
         match path_segment {
             ast::PathSegment { is_self: true, .. } => Some(res_ctxt.self_ty.expect("self type not available")),
             ast::PathSegment { ident, args: None, .. } => {
-                if let Some(&gv) = res_ctxt
-                    .gen_vars
-                    .iter()
-                    .find(|&&gv| self.ctxt.tys.get_gen_var_name(gv) == *ident)
-                {
+                if let Some(&gv) = res_ctxt.gen_vars.iter().find(|&&gv| gv.name() == *ident) {
                     let ty = self.ctxt.tys.gen_var(gv);
                     return Some(ty);
                 }

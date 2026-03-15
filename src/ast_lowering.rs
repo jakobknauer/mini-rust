@@ -97,7 +97,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
         })
     }
 
-    fn get_signature(&self) -> &fns::FnSig<'_> {
+    fn get_signature(&self) -> &fns::FnSig<'ctxt> {
         self.ctxt.fns.get_sig(self.fn_).unwrap()
     }
 

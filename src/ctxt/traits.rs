@@ -9,7 +9,7 @@ pub struct Trait(pub(in crate::ctxt) usize);
 #[derive(Clone)]
 pub struct TraitDef<'traits> {
     pub name: String,
-    pub gen_params: Vec<GenVar>,
+    pub gen_params: Vec<GenVar<'traits>>,
     pub mthds: Vec<FnSig<'traits>>,
     pub assoc_tys: Vec<String>,
 }

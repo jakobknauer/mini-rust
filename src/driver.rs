@@ -22,7 +22,7 @@ use crate::{
 
 #[derive(Copy, Clone)]
 struct ResCtxt<'a, 'ty> {
-    gen_vars: &'a [ty::GenVar],
+    gen_vars: &'a [ty::GenVar<'ty>],
     self_ty: Option<ty::Ty<'ty>>,
     constraints: &'a [ty::Constraint<'ty>],
 }
@@ -381,7 +381,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         ast_fn: ast::Fn<'arena>,
         associated_ty: Option<ty::Ty<'arena>>,
         associated_trait_inst: Option<traits::TraitInst<'arena>>,
-        env_gen_params: Vec<ty::GenVar>,
+        env_gen_params: Vec<ty::GenVar<'arena>>,
         env_constraints: Vec<ty::Constraint<'arena>>,
     ) -> Result<fns::Fn, DriverError<'arena>> {
         let gen_params: Vec<_> = ast_fn

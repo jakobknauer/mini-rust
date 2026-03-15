@@ -82,14 +82,14 @@ impl<'c, 'ctxt: 'hlr, 'hlr> super::AstLowerer<'c, 'ctxt, 'hlr> {
         let sig = self.get_signature();
         // Try to resolve to generic var
         for &gen_var in &sig.gen_params {
-            if self.ctxt.tys.get_gen_var_name(gen_var) == ident {
+            if gen_var.name() == ident {
                 // Resolve to generic var
                 return Ok(TyResolution::GenVar(gen_var));
             }
         }
         // Try to resolve to env generic var
         for &gen_var in &sig.env_gen_params {
-            if self.ctxt.tys.get_gen_var_name(gen_var) == ident {
+            if gen_var.name() == ident {
                 // Resolve to generic var
                 return Ok(TyResolution::GenVar(gen_var));
             }
@@ -125,5 +125,5 @@ impl<'c, 'ctxt: 'hlr, 'hlr> super::AstLowerer<'c, 'ctxt, 'hlr> {
 
 pub(super) enum TyResolution<'ty> {
     NamedTy(ctxt::Named<'ty>),
-    GenVar(ctxt::ty::GenVar),
+    GenVar(ctxt::ty::GenVar<'ty>),
 }
