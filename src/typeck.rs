@@ -471,7 +471,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
-        let param_tys = self.ctxt.tys.get_ty_slice(param_tys).to_vec();
+        let param_tys = param_tys.to_vec();
 
         // param_tys[0] is self; user-supplied args map to param_tys[1..]
         let n_params = param_tys.len().saturating_sub(1);
@@ -513,7 +513,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
 
-        let param_tys = self.ctxt.tys.get_ty_slice(param_tys).to_vec();
+        let param_tys = param_tys.to_vec();
 
         let n_args = args.len();
         let n_params = param_tys.len();
@@ -829,9 +829,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
             }
             match req {
                 ty::ConstraintRequirement::Trait(trait_inst) => {
-                    let gen_args: Vec<_> = self.ctxt.tys.get_ty_slice(trait_inst.gen_args).to_vec();
-                    let gen_args: Vec<_> = gen_args.iter().map(|&t| self.normalize(t)).collect();
-                    let gen_args = self.ctxt.tys.ty_slice(&gen_args);
+                    let gen_args = self.normalize_slice(trait_inst.gen_args);
                     let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
                     if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });

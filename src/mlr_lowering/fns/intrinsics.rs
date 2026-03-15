@@ -29,7 +29,7 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
 
     fn build_size_of_intrinsic(&mut self, fn_inst: mr_fns::FnInst<'ctxt>) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let gen_args = self.substitute_slice(fn_inst.gen_args);
-        let ty = self.parent.mr_ctxt.tys.get_ty_slice(gen_args)[0];
+        let ty = gen_args[0];
         let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(MlrFnLoweringError)?;
         let size = TargetData::create("").get_store_size(&iw_ty) as u32;
         let int_ty = self.parent.iw_ctxt.i32_type();
@@ -120,7 +120,7 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
         };
 
         let env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
-        let pointee_ty = self.parent.mr_ctxt.tys.get_ty_slice(env_gen_args)[0];
+        let pointee_ty = env_gen_args[0];
         let iw_pointee_ty = self.get_ty_as_basic_type_enum(pointee_ty).ok_or(MlrFnLoweringError)?;
 
         let ptr_ty = self.parent.iw_ctxt.ptr_type(AddressSpace::default());

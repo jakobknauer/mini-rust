@@ -10,7 +10,7 @@ use inkwell::{
 };
 
 use crate::{
-    ctxt::{self as mr_ctxt, fns as mr_fns, ty as mr_ty},
+    ctxt::{fns as mr_fns, ty as mr_ty},
     mlr,
 };
 
@@ -70,14 +70,6 @@ impl<'a, 'iw, 'mr, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, '
         Ok(())
     }
 
-    fn mr_ctxt(&self) -> &mr_ctxt::Ctxt<'ctxt> {
-        self.parent.mr_ctxt
-    }
-
-    fn tys(&self) -> &mr_ctxt::TyReg<'ctxt> {
-        &self.mr_ctxt().tys
-    }
-
     fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc<'mlr>) -> MlrFnLoweringResult<BasicTypeEnum<'iw>> {
         let iw_ty = self.get_ty_as_basic_type_enum(loc.1).ok_or(MlrFnLoweringError)?;
         Ok(iw_ty)
@@ -97,10 +89,9 @@ impl<'a, 'iw, 'mr, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, '
 
         let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrFnLoweringError)?;
 
-        let param_tys = self.tys().get_ty_slice(param_tys).to_vec();
         let param_tys: Vec<_> = param_tys
-            .into_iter()
-            .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError))
+            .iter()
+            .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError))
             .collect::<MlrFnLoweringResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, var_args))
@@ -123,12 +114,11 @@ impl<'a, 'iw, 'mr, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, '
             .get_ty_as_basic_metadata_type_enum(captures_ty)
             .ok_or(MlrFnLoweringError);
 
-        let param_tys = self.tys().get_ty_slice(param_tys).to_vec();
         let param_tys: Vec<_> = std::iter::once(captures_ty)
             .chain(
                 param_tys
-                    .into_iter()
-                    .map(|param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError)),
+                    .iter()
+                    .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError)),
             )
             .collect::<MlrFnLoweringResult<_>>()?;
 

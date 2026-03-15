@@ -53,10 +53,6 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     fn slice_contains_inf_var(&self, slice: ty::TySlice) -> bool {
-        self.ctxt
-            .tys
-            .get_ty_slice(slice)
-            .iter()
-            .any(|&ty| self.contains_inf_var(ty))
+        slice.iter().any(|&ty| self.contains_inf_var(ty))
     }
 }

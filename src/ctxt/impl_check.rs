@@ -12,8 +12,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         let mut trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
         // Resolve opaque and associated types to their concrete types for monomorphization
         trait_mthd_inst.impl_ty = self.normalize_ty(trait_mthd_inst.impl_ty);
-        let trait_gen_args = self.tys.get_ty_slice(trait_mthd_inst.trait_inst.gen_args).to_vec();
-        let trait_gen_args: Vec<_> = trait_gen_args.into_iter().map(|t| self.normalize_ty(t)).collect();
+        let trait_gen_args: Vec<_> = trait_mthd_inst.trait_inst.gen_args.iter().map(|&t| self.normalize_ty(t)).collect();
         let trait_gen_args = self.tys.ty_slice(&trait_gen_args);
         let trait_inst = trait_mthd_inst.trait_inst.with_gen_args(trait_gen_args).unwrap();
         trait_mthd_inst = trait_mthd_inst
@@ -50,7 +49,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
         impl_insts.into_iter().filter(move |impl_inst| {
             let impl_def = self.impls.get_impl_def(impl_inst.impl_).clone();
-            let subst = GenVarSubst::new(&impl_def.gen_params, self.tys.get_ty_slice(impl_inst.gen_args)).unwrap();
+            let subst = GenVarSubst::new(&impl_def.gen_params, impl_inst.gen_args).unwrap();
 
             let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.unwrap(), &subst);
 
@@ -133,7 +132,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                 .try_get_opaque_callable_constraint(id)
                 .map(|(param_tys, return_ty)| {
                     let opaque_def = self.tys.get_opaque_def(id);
-                    let subst = GenVarSubst::new(&opaque_def.gen_params, self.tys.get_ty_slice(gen_args)).unwrap();
+                    let subst = GenVarSubst::new(&opaque_def.gen_params, gen_args).unwrap();
 
                     let param_tys = self.tys.substitute_gen_vars_on_slice(param_tys, &subst);
                     let return_ty = self.tys.substitute_gen_vars(return_ty, &subst);
@@ -270,8 +269,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                     .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
                     .ok()?;
 
-                let gen_args_vec = self.tys.get_ty_slice(gen_args).to_vec();
-                let subst = ty::GenVarSubst::new(&impl_def.gen_params, &gen_args_vec).unwrap();
+                let subst = ty::GenVarSubst::new(&impl_def.gen_params, gen_args).unwrap();
 
                 if !self.impl_constraints_satisfied(constraints, &impl_def.constraints, &subst) {
                     return None;

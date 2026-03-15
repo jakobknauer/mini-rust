@@ -281,12 +281,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             expected_param_tys,
             expected_return_ty,
         } => {
-            let params: Vec<_> = ctxt
-                .tys
-                .get_ty_slice(*expected_param_tys)
-                .iter()
-                .map(|&p| ty(p))
-                .collect();
+            let params: Vec<_> = expected_param_tys.iter().map(|&p| ty(p)).collect();
             format!(
                 "'{}' is not callable as fn({}) -> '{}'",
                 ty(*t),

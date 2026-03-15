@@ -73,9 +73,8 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                 var_args,
             } => {
                 let param_tys = self.normalize_slice(param_tys);
-                let param_tys = self.ctxt.tys.get_ty_slice(param_tys).to_vec();
                 let return_ty = self.normalize(return_ty);
-                self.ctxt.tys.fn_(&param_tys, return_ty, var_args)
+                self.ctxt.tys.fn_(param_tys, return_ty, var_args)
             }
 
             Ref(inner) => {
@@ -114,10 +113,9 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                     return self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);
                 };
 
-                let impl_def = self.ctxt.impls.get_impl_def(impl_inst.impl_).clone();
+                let impl_def = self.ctxt.impls.get_impl_def(impl_inst.impl_);
                 let assoc_ty = impl_def.assoc_tys[&assoc_ty_idx];
-                let impl_gen_args = self.ctxt.tys.get_ty_slice(impl_inst.gen_args).to_vec();
-                let subst = ty::GenVarSubst::new(&impl_def.gen_params, &impl_gen_args).unwrap();
+                let subst = ty::GenVarSubst::new(&impl_def.gen_params, impl_inst.gen_args).unwrap();
                 let result = self.ctxt.tys.substitute_gen_vars(assoc_ty, &subst);
                 self.normalize(result)
             }
@@ -125,7 +123,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     pub(super) fn normalize_slice(&mut self, slice: ty::TySlice<'ctxt>) -> ty::TySlice<'ctxt> {
-        let mut tys = self.ctxt.tys.get_ty_slice(slice).to_vec();
+        let mut tys = slice.to_vec();
         for t in &mut tys {
             *t = self.normalize(*t);
         }

@@ -191,7 +191,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 let impl_def = self.impls.get_impl_def(impl_inst.impl_);
                 let assoc_ty = impl_def.assoc_tys[&assoc_ty_idx];
 
-                let subst = GenVarSubst::new(&impl_def.gen_params, self.tys.get_ty_slice(impl_inst.gen_args)).unwrap();
+                let subst = GenVarSubst::new(&impl_def.gen_params, impl_inst.gen_args).unwrap();
 
                 let resolved = self.tys.substitute_gen_vars(assoc_ty, &subst);
                 self.normalize_ty(resolved)
@@ -201,9 +201,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 let Some(resolved) = self.tys.get_opaque_resolution(id) else {
                     return ty;
                 };
-                let gen_params = self.tys.get_opaque_def(id).gen_params.clone();
-                let gen_args = self.tys.get_ty_slice(gen_args).to_vec();
-                let subst = GenVarSubst::new(&gen_params, &gen_args).unwrap();
+                let subst = GenVarSubst::new(&self.tys.get_opaque_def(id).gen_params, gen_args).unwrap();
                 let instantiated = self.tys.substitute_gen_vars(resolved, &subst);
                 self.normalize_ty(instantiated)
             }
@@ -212,9 +210,9 @@ impl<'ctxt> Ctxt<'ctxt> {
 
     pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst<'ctxt>) -> GenVarSubst<'ctxt> {
         let sig = self.fns.get_sig(fn_inst.fn_).unwrap();
-        let gen_param_subst = GenVarSubst::new(&sig.gen_params, self.tys.get_ty_slice(fn_inst.gen_args)).unwrap();
+        let gen_param_subst = GenVarSubst::new(&sig.gen_params, fn_inst.gen_args).unwrap();
         let env_gen_param_subst =
-            GenVarSubst::new(&sig.env_gen_params, self.tys.get_ty_slice(fn_inst.env_gen_args)).unwrap();
+            GenVarSubst::new(&sig.env_gen_params, fn_inst.env_gen_args).unwrap();
         GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 }

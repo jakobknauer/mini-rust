@@ -142,7 +142,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
         if let Some(hint) = hint
             && let Some((hint_param_tys, hint_return_ty)) = self.try_get_callable_hint_info(hint)
         {
-            let hint_param_tys = self.ctxt.tys.get_ty_slice(hint_param_tys).to_vec();
+            let hint_param_tys = hint_param_tys.to_vec();
             for (ty, hint_ty) in param_tys.iter().zip(hint_param_tys) {
                 self.unify(*ty, hint_ty);
             }

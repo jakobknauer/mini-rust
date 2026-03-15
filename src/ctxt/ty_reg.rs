@@ -115,10 +115,6 @@ impl<'ty> TyReg<'ty> {
         slice
     }
 
-    pub fn get_ty_slice(&self, slice: TySlice<'ty>) -> &[Ty<'ty>] {
-        slice
-    }
-
     fn register_named_ty(&mut self, name: &str, ty_def: TyDef<'ty>) -> Result<Ty<'ty>, ()> {
         if self.named_tys.contains_key(name) {
             Err(())
@@ -354,8 +350,7 @@ impl<'ty> TyReg<'ty> {
                     return ty;
                 };
                 let gen_params = self.opaques[id.0].gen_params.clone();
-                let gen_args: Vec<Ty<'ty>> = self.get_ty_slice(gen_args).to_vec();
-                let subst = GenVarSubst::new(&gen_params, &gen_args).unwrap();
+                let subst = GenVarSubst::new(&gen_params, gen_args).unwrap();
                 let instantiated = self.substitute_gen_vars(resolved, &subst);
                 self.resolve_opaque_in_ty(instantiated)
             }
@@ -525,7 +520,7 @@ impl<'ty> TyReg<'ty> {
                 CVoid => "c_void".to_string(),
                 CChar => "c_char".to_string(),
             },
-            Tuple(tys) => match self.get_ty_slice(tys) {
+            Tuple(tys) => match tys {
                 [] => "()".to_string(),
                 [ty] => format!("({},)", self.get_string_rep_with_subst(*ty, subst)),
                 tys => format!(
@@ -730,7 +725,7 @@ impl<'ty> TyReg<'ty> {
             .expect("struct definition should be registered");
         let field_ty = struct_def.fields[index].ty;
 
-        let subst = GenVarSubst::new(&struct_def.gen_params, self.get_ty_slice(gen_args)).unwrap();
+        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
         let instantiated_field_ty = self.substitute_gen_vars(field_ty, &subst);
 
         Ok(instantiated_field_ty)
@@ -744,7 +739,7 @@ impl<'ty> TyReg<'ty> {
         let struct_def = self
             .get_struct_def(struct_)
             .expect("struct definition should be registered");
-        let subst = GenVarSubst::new(&struct_def.gen_params, self.get_ty_slice(gen_args)).unwrap();
+        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
 
         let field_tys: Vec<Ty<'ty>> = struct_def.fields.iter().map(|field| field.ty).collect();
         let instantiated_field_tys: Vec<Ty<'ty>> = field_tys
@@ -784,7 +779,7 @@ impl<'ty> TyReg<'ty> {
 
     pub fn get_tuple_field_tys(&self, ty: Ty<'ty>) -> Result<&[Ty<'ty>], ()> {
         match ty.0 {
-            &TyDef::Tuple(tys) => Ok(self.get_ty_slice(tys)),
+            &TyDef::Tuple(tys) => Ok(tys),
             _ => Err(()),
         }
     }
