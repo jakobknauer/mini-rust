@@ -37,7 +37,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         }
     }
 
-    pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst) -> String {
+    pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst<'ctxt>) -> String {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
 
         let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
@@ -49,8 +49,12 @@ impl<'ctxt> Ctxt<'ctxt> {
                 } else {
                     format!(
                         "<{}>",
-                        assoc_trait_inst.gen_args.iter().map(|&ty| self.tys.get_string_rep(ty)).collect::<Vec<_>>()
-                        .join(", ")
+                        assoc_trait_inst
+                            .gen_args
+                            .iter()
+                            .map(|&ty| self.tys.get_string_rep(ty))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )
                 };
 
@@ -70,7 +74,11 @@ impl<'ctxt> Ctxt<'ctxt> {
         } else {
             format!(
                 "{{{}}}",
-                fn_inst.env_gen_args.iter().map(|&ty| self.tys.get_string_rep(ty)).collect::<Vec<_>>()
+                fn_inst
+                    .env_gen_args
+                    .iter()
+                    .map(|&ty| self.tys.get_string_rep(ty))
+                    .collect::<Vec<_>>()
                     .join(", ")
             )
         };
@@ -80,7 +88,11 @@ impl<'ctxt> Ctxt<'ctxt> {
         } else {
             format!(
                 "<{}>",
-                fn_inst.gen_args.iter().map(|&ty| self.tys.get_string_rep(ty)).collect::<Vec<_>>()
+                fn_inst
+                    .gen_args
+                    .iter()
+                    .map(|&ty| self.tys.get_string_rep(ty))
+                    .collect::<Vec<_>>()
                     .join(", ")
             )
         };
@@ -88,7 +100,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
     }
 
-    pub fn fn_insts_eq(&self, fn_inst1: fns::FnInst, fn_inst2: fns::FnInst) -> bool {
+    pub fn fn_insts_eq(&self, fn_inst1: fns::FnInst<'ctxt>, fn_inst2: fns::FnInst<'ctxt>) -> bool {
         fn_inst1.fn_ == fn_inst2.fn_
             && self.tys.slices_eq(fn_inst1.gen_args, fn_inst2.gen_args)
             && self.tys.slices_eq(fn_inst1.env_gen_args, fn_inst2.env_gen_args)
@@ -177,8 +189,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 assoc_ty_idx,
             } => {
                 let base_ty = self.normalize_ty(base_ty);
-                let gen_args: Vec<_> =
-                    trait_inst.gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
+                let gen_args: Vec<_> = trait_inst.gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 let gen_args = self.tys.ty_slice(&gen_args);
                 let trait_inst = self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap();
 
@@ -211,8 +222,7 @@ impl<'ctxt> Ctxt<'ctxt> {
     pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst<'ctxt>) -> GenVarSubst<'ctxt> {
         let sig = self.fns.get_sig(fn_inst.fn_).unwrap();
         let gen_param_subst = GenVarSubst::new(&sig.gen_params, fn_inst.gen_args).unwrap();
-        let env_gen_param_subst =
-            GenVarSubst::new(&sig.env_gen_params, fn_inst.env_gen_args).unwrap();
+        let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, fn_inst.env_gen_args).unwrap();
         GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 }

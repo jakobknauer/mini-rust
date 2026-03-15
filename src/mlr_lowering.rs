@@ -150,7 +150,8 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
                     .tys
                     .get_opaque_resolution(id)
                     .expect("opaque type must be resolved before MLR lowering");
-                let subst = mr_tys::GenVarSubst::new(&self.mr_ctxt.tys.get_opaque_def(id).gen_params, gen_args).unwrap();
+                let subst =
+                    mr_tys::GenVarSubst::new(&self.mr_ctxt.tys.get_opaque_def(id).gen_params, gen_args).unwrap();
                 let instantiated = self.mr_ctxt.tys.substitute_gen_vars(resolved, &subst);
                 self.get_or_define_ty(instantiated).unwrap()
             }
@@ -228,7 +229,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         self.iw_ctxt.struct_type(&iw_field_tys, false).as_any_type_enum()
     }
 
-    fn get_fn(&self, fn_inst: mr_fns::FnInst) -> Option<FunctionValue<'iw>> {
+    fn get_fn(&self, fn_inst: mr_fns::FnInst<'ctxt>) -> Option<FunctionValue<'iw>> {
         for (&fn_inst_2, &fn_value) in &self.functions {
             if self.mr_ctxt.fn_insts_eq(fn_inst, fn_inst_2) {
                 return Some(fn_value);

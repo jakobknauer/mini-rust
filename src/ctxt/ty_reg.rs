@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{
@@ -17,11 +17,11 @@ pub struct TyReg<'ty> {
     enums_defined: HashSet<usize>,
     gen_var_names: Vec<String>,
 
-    tys_inv: HashMap<TyDef<'ty>, Ty<'ty>>,
+    tys_inv: RefCell<HashMap<TyDef<'ty>, Ty<'ty>>>,
     named_tys: HashMap<String, Named<'ty>>,
-    ty_slices_inv: HashSet<&'ty [Ty<'ty>]>,
+    ty_slices_inv: RefCell<HashSet<&'ty [Ty<'ty>]>>,
 
-    next_inf_var: InfVar,
+    next_inf_var: Cell<InfVar>,
     next_opaque_id: usize,
     opaque_resolutions: HashMap<OpaqueId, Ty<'ty>>,
     opaques: Vec<OpaqueDef<'ty>>,
@@ -83,35 +83,37 @@ impl<'ty> TyReg<'ty> {
             enums: Vec::new(),
             enums_defined: Default::default(),
             gen_var_names: Vec::new(),
-            tys_inv: Default::default(),
+            tys_inv: RefCell::new(Default::default()),
             named_tys: Default::default(),
-            ty_slices_inv: Default::default(),
-            next_inf_var: Default::default(),
+            ty_slices_inv: RefCell::new(Default::default()),
+            next_inf_var: Cell::new(Default::default()),
             next_opaque_id: 0,
             opaque_resolutions: Default::default(),
             opaques: Vec::new(),
         }
     }
 
-    fn register_ty(&mut self, ty_def: TyDef<'ty>) -> Ty<'ty> {
-        if let Some(existing_ty) = self.tys_inv.get(&ty_def) {
-            return *existing_ty;
+    fn register_ty(&self, ty_def: TyDef<'ty>) -> Ty<'ty> {
+        let existing = self.tys_inv.borrow().get(&ty_def).copied();
+        if let Some(existing_ty) = existing {
+            return existing_ty;
         }
 
         let id = self.next_ty_id.get();
         self.next_ty_id.set(TyId(id.0 + 1));
         let ty_ref = self.arena.alloc(ty_def.clone());
         let ty = Ty(ty_ref, id);
-        self.tys_inv.insert(ty_def, ty);
+        self.tys_inv.borrow_mut().insert(ty_def, ty);
         ty
     }
 
-    pub fn ty_slice(&mut self, tys: &[Ty<'ty>]) -> TySlice<'ty> {
-        if let Some(&existing) = self.ty_slices_inv.get(tys) {
+    pub fn ty_slice(&self, tys: &[Ty<'ty>]) -> TySlice<'ty> {
+        let existing = self.ty_slices_inv.borrow().get(tys).copied();
+        if let Some(existing) = existing {
             return existing;
         }
         let slice = self.arena.alloc_slice_copy(tys);
-        self.ty_slices_inv.insert(slice);
+        self.ty_slices_inv.borrow_mut().insert(slice);
         slice
     }
 
@@ -133,23 +135,23 @@ impl<'ty> TyReg<'ty> {
         Ok(())
     }
 
-    pub fn primitive(&mut self, primitive: Primitive) -> Ty<'ty> {
+    pub fn primitive(&self, primitive: Primitive) -> Ty<'ty> {
         let ty_def = TyDef::Primitive(primitive);
         self.register_ty(ty_def)
     }
 
-    pub fn tuple(&mut self, tys: &[Ty<'ty>]) -> Ty<'ty> {
+    pub fn tuple(&self, tys: &[Ty<'ty>]) -> Ty<'ty> {
         let tys = self.ty_slice(tys);
         let tuple_ty = TyDef::Tuple(tys);
         self.register_ty(tuple_ty)
     }
 
-    pub fn tuple_from_ty_slice(&mut self, slice: TySlice<'ty>) -> Ty<'ty> {
+    pub fn tuple_from_ty_slice(&self, slice: TySlice<'ty>) -> Ty<'ty> {
         let tuple_ty = TyDef::Tuple(slice);
         self.register_ty(tuple_ty)
     }
 
-    pub fn unit(&mut self) -> Ty<'ty> {
+    pub fn unit(&self) -> Ty<'ty> {
         self.tuple(&[])
     }
 
@@ -201,7 +203,7 @@ impl<'ty> TyReg<'ty> {
         Ok(enum_)
     }
 
-    pub fn fn_(&mut self, param_tys: &[Ty<'ty>], return_ty: Ty<'ty>, var_args: bool) -> Ty<'ty> {
+    pub fn fn_(&self, param_tys: &[Ty<'ty>], return_ty: Ty<'ty>, var_args: bool) -> Ty<'ty> {
         let param_tys = self.ty_slice(param_tys);
         let fn_ty = TyDef::Fn {
             param_tys,
@@ -211,17 +213,17 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(fn_ty)
     }
 
-    pub fn ref_(&mut self, inner_ty: Ty<'ty>) -> Ty<'ty> {
+    pub fn ref_(&self, inner_ty: Ty<'ty>) -> Ty<'ty> {
         let ref_ty = TyDef::Ref(inner_ty);
         self.register_ty(ref_ty)
     }
 
-    pub fn ptr(&mut self, inner_ty: Ty<'ty>) -> Ty<'ty> {
+    pub fn ptr(&self, inner_ty: Ty<'ty>) -> Ty<'ty> {
         let ptr_ty = TyDef::Ptr(inner_ty);
         self.register_ty(ptr_ty)
     }
 
-    pub fn gen_var(&mut self, gen_var: GenVar) -> Ty<'ty> {
+    pub fn gen_var(&self, gen_var: GenVar) -> Ty<'ty> {
         let gen_var_ty = TyDef::GenVar(gen_var);
         self.register_ty(gen_var_ty)
     }
@@ -232,12 +234,12 @@ impl<'ty> TyReg<'ty> {
         gen_var
     }
 
-    pub fn trait_self(&mut self, trait_: Trait) -> Ty<'ty> {
+    pub fn trait_self(&self, trait_: Trait) -> Ty<'ty> {
         let trait_self = TyDef::TraitSelf(trait_);
         self.register_ty(trait_self)
     }
 
-    pub fn closure(&mut self, fn_inst: fns::FnInst<'ty>, name: impl Into<String>, captures_ty: Ty<'ty>) -> Ty<'ty> {
+    pub fn closure(&self, fn_inst: fns::FnInst<'ty>, name: impl Into<String>, captures_ty: Ty<'ty>) -> Ty<'ty> {
         let closure = TyDef::Closure {
             fn_inst,
             name: name.into(),
@@ -246,7 +248,7 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(closure)
     }
 
-    pub fn assoc_ty(&mut self, base_ty: Ty<'ty>, trait_inst: traits::TraitInst<'ty>, assoc_ty_idx: usize) -> Ty<'ty> {
+    pub fn assoc_ty(&self, base_ty: Ty<'ty>, trait_inst: traits::TraitInst<'ty>, assoc_ty_idx: usize) -> Ty<'ty> {
         let assoc_ty = TyDef::AssocTy {
             base_ty,
             trait_inst,
@@ -255,9 +257,9 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(assoc_ty)
     }
 
-    pub fn inf_var(&mut self) -> Ty<'ty> {
-        let id = self.next_inf_var;
-        self.next_inf_var.0 += 1;
+    pub fn inf_var(&self) -> Ty<'ty> {
+        let id = self.next_inf_var.get();
+        self.next_inf_var.set(InfVar(id.0 + 1));
         let inf_var = TyDef::InfVar(id);
         self.register_ty(inf_var)
     }
@@ -314,7 +316,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     #[expect(unused)]
-    pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_opaque(&self, id: OpaqueId, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
         let opaque_def = self.opaques.get(id.0).unwrap();
         if opaque_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
@@ -328,7 +330,7 @@ impl<'ty> TyReg<'ty> {
         self.inst_opaque_from_ty_slice(id, gen_args)
     }
 
-    pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_opaque_from_ty_slice(&self, id: OpaqueId, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let opaque_def = self.opaques.get(id.0).unwrap();
         if opaque_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
@@ -341,7 +343,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(TyDef::Opaque { id, gen_args }))
     }
 
-    pub fn resolve_opaque_in_ty(&mut self, ty: Ty<'ty>) -> Ty<'ty> {
+    pub fn resolve_opaque_in_ty(&self, ty: Ty<'ty>) -> Ty<'ty> {
         use TyDef::*;
 
         match *ty.0 {
@@ -349,8 +351,7 @@ impl<'ty> TyReg<'ty> {
                 let Some(resolved) = self.opaque_resolutions.get(&id).copied() else {
                     return ty;
                 };
-                let gen_params = self.opaques[id.0].gen_params.clone();
-                let subst = GenVarSubst::new(&gen_params, gen_args).unwrap();
+                let subst = GenVarSubst::new(&self.opaques[id.0].gen_params, gen_args).unwrap();
                 let instantiated = self.substitute_gen_vars(resolved, &subst);
                 self.resolve_opaque_in_ty(instantiated)
             }
@@ -404,7 +405,7 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn inst_struct(&mut self, struct_: Struct, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_struct(&self, struct_: Struct, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         if struct_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
@@ -418,11 +419,7 @@ impl<'ty> TyReg<'ty> {
         self.inst_struct_from_ty_slice(struct_, gen_args)
     }
 
-    pub fn inst_struct_from_ty_slice(
-        &mut self,
-        struct_: Struct,
-        gen_args: TySlice<'ty>,
-    ) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_struct_from_ty_slice(&self, struct_: Struct, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         if struct_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
@@ -436,7 +433,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(struct_ty))
     }
 
-    pub fn inst_enum(&mut self, enum_: Enum, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_enum(&self, enum_: Enum, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
         if enum_def.gen_params.len() != gen_args.len() {
@@ -453,7 +450,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(enum_ty))
     }
 
-    pub fn inst_enum_from_ty_slice(&mut self, enum_: Enum, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_enum_from_ty_slice(&self, enum_: Enum, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
         if enum_def.gen_params.len() != gen_args.len() {
@@ -632,7 +629,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     #[must_use]
-    pub fn substitute(&mut self, ty: Ty<'ty>, gen_vars: &GenVarSubst<'ty>, self_ty: Option<Ty<'ty>>) -> Ty<'ty> {
+    pub fn substitute(&self, ty: Ty<'ty>, gen_vars: &GenVarSubst<'ty>, self_ty: Option<Ty<'ty>>) -> Ty<'ty> {
         use TyDef::*;
 
         match *ty.0 {
@@ -698,7 +695,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn substitute_on_slice(
-        &mut self,
+        &self,
         slice: TySlice<'ty>,
         gen_vars: &GenVarSubst<'ty>,
         self_ty: Option<Ty<'ty>>,
@@ -707,15 +704,15 @@ impl<'ty> TyReg<'ty> {
         self.ty_slice(&slice)
     }
 
-    pub fn substitute_gen_vars(&mut self, ty: Ty<'ty>, subst: &GenVarSubst<'ty>) -> Ty<'ty> {
+    pub fn substitute_gen_vars(&self, ty: Ty<'ty>, subst: &GenVarSubst<'ty>) -> Ty<'ty> {
         self.substitute(ty, subst, None)
     }
 
-    pub fn substitute_gen_vars_on_slice(&mut self, slice: TySlice<'ty>, subst: &GenVarSubst<'ty>) -> TySlice<'ty> {
+    pub fn substitute_gen_vars_on_slice(&self, slice: TySlice<'ty>, subst: &GenVarSubst<'ty>) -> TySlice<'ty> {
         self.substitute_on_slice(slice, subst, None)
     }
 
-    pub fn get_struct_field_ty(&mut self, ty: Ty<'ty>, index: usize) -> Result<Ty<'ty>, NotAStruct<'ty>> {
+    pub fn get_struct_field_ty(&self, ty: Ty<'ty>, index: usize) -> Result<Ty<'ty>, NotAStruct<'ty>> {
         let &TyDef::Struct { struct_, gen_args } = ty.0 else {
             return Err(NotAStruct(ty));
         };
@@ -731,7 +728,7 @@ impl<'ty> TyReg<'ty> {
         Ok(instantiated_field_ty)
     }
 
-    pub fn get_struct_field_tys(&mut self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAStruct<'ty>> {
+    pub fn get_struct_field_tys(&self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAStruct<'ty>> {
         let &TyDef::Struct { struct_, gen_args } = ty.0 else {
             return Err(NotAStruct(ty));
         };
@@ -750,7 +747,7 @@ impl<'ty> TyReg<'ty> {
         Ok(instantiated_field_tys)
     }
 
-    pub fn get_enum_variant_ty(&mut self, ty: Ty<'ty>, variant_index: usize) -> Result<Ty<'ty>, NotAnEnum<'ty>> {
+    pub fn get_enum_variant_ty(&self, ty: Ty<'ty>, variant_index: usize) -> Result<Ty<'ty>, NotAnEnum<'ty>> {
         let &TyDef::Enum { enum_, gen_args } = ty.0 else {
             return Err(NotAnEnum(ty));
         };
@@ -763,7 +760,7 @@ impl<'ty> TyReg<'ty> {
         Ok(instantiated_variant_struct_ty)
     }
 
-    pub fn get_enum_variant_tys(&mut self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAnEnum<'ty>> {
+    pub fn get_enum_variant_tys(&self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAnEnum<'ty>> {
         let &TyDef::Enum { enum_, gen_args } = ty.0 else {
             return Err(NotAnEnum(ty));
         };
@@ -894,7 +891,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn try_find_instantiation(
-        &mut self,
+        &self,
         target: Ty<'ty>,
         generic: Ty<'ty>,
         gen_vars: &[GenVar],

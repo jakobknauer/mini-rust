@@ -12,7 +12,7 @@ use crate::{
 pub fn print_mlr<'mlr, W: Write>(
     fn_: Fn,
     mlr_fn: Option<&mlr::Fn<'mlr>>,
-    ctxt: &ctxt::Ctxt,
+    ctxt: &ctxt::Ctxt<'mlr>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
@@ -29,8 +29,8 @@ pub fn print_mlr<'mlr, W: Write>(
 struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
-    signature: Option<&'a FnSig<'a>>,
-    ctxt: &'a ctxt::Ctxt<'a>,
+    signature: Option<&'a FnSig<'mlr>>,
+    ctxt: &'a ctxt::Ctxt<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
 }
@@ -65,7 +65,12 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 } else {
                     format!(
                         "<{}>",
-                        assoc_trait_inst.gen_args.iter().map(|&ty| self.ctxt.tys.get_string_rep(ty)).collect::<Vec<_>>().join(", ")
+                        assoc_trait_inst
+                            .gen_args
+                            .iter()
+                            .map(|&ty| self.ctxt.tys.get_string_rep(ty))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )
                 };
 
@@ -138,7 +143,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         write!(self.writer, "{}", return_ty)
     }
 
-    fn print_block(&mut self, stmts: &[mlr::Stmt]) -> Result<(), std::io::Error> {
+    fn print_block(&mut self, stmts: &[mlr::Stmt<'mlr>]) -> Result<(), std::io::Error> {
         writeln!(self.writer, "{{")?;
         self.indent_level += 1;
 
@@ -151,7 +156,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         write!(self.writer, "}}")
     }
 
-    fn print_stmt(&mut self, stmt: mlr::Stmt) -> Result<(), std::io::Error> {
+    fn print_stmt(&mut self, stmt: mlr::Stmt<'mlr>) -> Result<(), std::io::Error> {
         use mlr::StmtDef::*;
 
         match *stmt {
@@ -201,7 +206,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         }
     }
 
-    fn print_val(&mut self, val: mlr::Val) -> Result<(), std::io::Error> {
+    fn print_val(&mut self, val: mlr::Val<'mlr>) -> Result<(), std::io::Error> {
         use mlr::ValDef::*;
 
         match *val {
@@ -265,7 +270,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         }
     }
 
-    fn print_place(&mut self, place: mlr::Place) -> Result<(), std::io::Error> {
+    fn print_place(&mut self, place: mlr::Place<'mlr>) -> Result<(), std::io::Error> {
         use mlr::PlaceDef::*;
 
         match *place {
@@ -298,7 +303,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         }
     }
 
-    fn print_op(&mut self, op: mlr::Op) -> Result<(), std::io::Error> {
+    fn print_op(&mut self, op: mlr::Op<'mlr>) -> Result<(), std::io::Error> {
         use mlr::Const::*;
         use mlr::OpDef::*;
 
@@ -316,7 +321,13 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 } else {
                     format!(
                         "<{}>",
-                        trait_mthd.trait_inst.gen_args.iter().map(|&ty| self.ctxt.tys.get_string_rep(ty)).collect::<Vec<_>>().join(", ")
+                        trait_mthd
+                            .trait_inst
+                            .gen_args
+                            .iter()
+                            .map(|&ty| self.ctxt.tys.get_string_rep(ty))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )
                 };
 

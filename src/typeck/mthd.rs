@@ -128,8 +128,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                 })?;
 
                 let sig = self.ctxt.fns.get_sig(fn_).unwrap();
-                let env_subst =
-                    ty::GenVarSubst::new(&sig.env_gen_params, env_gen_args).unwrap();
+                let env_subst = ty::GenVarSubst::new(&sig.env_gen_params, env_gen_args).unwrap();
                 let fn_subst =
                     ty::GenVarSubst::new(&sig.gen_params.clone(), resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(env_subst, fn_subst);

@@ -3,17 +3,18 @@ use std::collections::HashMap;
 use crate::ctxt::{fns, traits};
 
 #[derive(Clone, Copy, Debug)]
-pub struct Ty<'ty>(
-    pub &'ty TyDef<'ty>,
-    pub(in crate::ctxt) TyId,
-);
+pub struct Ty<'ty>(pub &'ty TyDef<'ty>, pub(in crate::ctxt) TyId);
 
 impl<'ty> PartialEq for Ty<'ty> {
-    fn eq(&self, other: &Self) -> bool { self.1 == other.1 }
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
 }
 impl<'ty> Eq for Ty<'ty> {}
 impl<'ty> std::hash::Hash for Ty<'ty> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.1.hash(state); }
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.1.hash(state);
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -167,4 +168,3 @@ impl<'ty> GenVarSubst<'ty> {
         GenVarSubst(pairs)
     }
 }
-

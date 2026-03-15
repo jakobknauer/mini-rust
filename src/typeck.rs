@@ -14,7 +14,6 @@ use crate::{
     hlr,
 };
 
-
 pub use err::*;
 pub use mthd::MthdResolution;
 
@@ -110,17 +109,16 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
 
         let return_ty = sig.return_ty;
 
-        let (effective_return_ty, opaque_return) =
-            if let ty::TyDef::Opaque { id, .. } = *return_ty.0 {
-                let inf_var = self.ctxt.tys.inf_var();
-                let reqs = self.ctxt.tys.get_opaque_constraints(id).to_vec();
-                for req in reqs {
-                    self.pending_obligations.push((inf_var, req));
-                }
-                (inf_var, Some((id, inf_var)))
-            } else {
-                (return_ty, None)
-            };
+        let (effective_return_ty, opaque_return) = if let ty::TyDef::Opaque { id, .. } = *return_ty.0 {
+            let inf_var = self.ctxt.tys.inf_var();
+            let reqs = self.ctxt.tys.get_opaque_constraints(id).to_vec();
+            for req in reqs {
+                self.pending_obligations.push((inf_var, req));
+            }
+            (inf_var, Some((id, inf_var)))
+        } else {
+            (return_ty, None)
+        };
 
         self.return_ty_stack.push(effective_return_ty);
         let body_ty = self.check_expr(self.fn_.body, Some(effective_return_ty))?;
@@ -862,7 +860,10 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
                     let actual_return = self.normalize(actual_return);
 
                     if param_tys.len() != actual_params.len()
-                        || param_tys.iter().zip(actual_params.iter()).any(|(&ty1, &ty2)| !self.unify(ty1, ty2))
+                        || param_tys
+                            .iter()
+                            .zip(actual_params.iter())
+                            .any(|(&ty1, &ty2)| !self.unify(ty1, ty2))
                         || !self.unify(return_ty, actual_return)
                     {
                         let param_tys = self.normalize_slice(param_tys);

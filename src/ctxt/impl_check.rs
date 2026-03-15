@@ -12,7 +12,12 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         let mut trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
         // Resolve opaque and associated types to their concrete types for monomorphization
         trait_mthd_inst.impl_ty = self.normalize_ty(trait_mthd_inst.impl_ty);
-        let trait_gen_args: Vec<_> = trait_mthd_inst.trait_inst.gen_args.iter().map(|&t| self.normalize_ty(t)).collect();
+        let trait_gen_args: Vec<_> = trait_mthd_inst
+            .trait_inst
+            .gen_args
+            .iter()
+            .map(|&t| self.normalize_ty(t))
+            .collect();
         let trait_gen_args = self.tys.ty_slice(&trait_gen_args);
         let trait_inst = trait_mthd_inst.trait_inst.with_gen_args(trait_gen_args).unwrap();
         trait_mthd_inst = trait_mthd_inst

@@ -103,8 +103,7 @@ fn check_trait_impl<'ctxt>(
     // Substitution of the generic params of the trait with the arguments of the impl.
     // E.g. if we have a trait `trait Into<T>` and an impl `impl Into<u32> for Foo`,
     // then we have to substitute `T` with `u32`.
-    let trait_gen_params_subst =
-        ty::GenVarSubst::new(&trait_def.gen_params, trait_inst.gen_args).unwrap();
+    let trait_gen_params_subst = ty::GenVarSubst::new(&trait_def.gen_params, trait_inst.gen_args).unwrap();
 
     for &mthd in &impl_def.mthds {
         let impl_mthd_sig = ctxt.fns.get_sig(mthd).unwrap().clone();
@@ -259,8 +258,8 @@ fn check_mthd_sig<'ctxt>(
 
 fn constraint_req_eq<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    a: &ty::ConstraintRequirement,
-    b: &ty::ConstraintRequirement,
+    a: &ty::ConstraintRequirement<'ctxt>,
+    b: &ty::ConstraintRequirement<'ctxt>,
 ) -> bool {
     match (a, b) {
         (ty::ConstraintRequirement::Trait(ta), ty::ConstraintRequirement::Trait(tb)) => {
@@ -275,14 +274,16 @@ fn constraint_req_eq<'ctxt>(
                 param_tys: pb,
                 return_ty: rb,
             },
-        ) => {
-            ctxt.tys.tys_eq(*ra, *rb) && ctxt.tys.slices_eq(pa, pb)
-        }
+        ) => ctxt.tys.tys_eq(*ra, *rb) && ctxt.tys.slices_eq(pa, pb),
         _ => false,
     }
 }
 
-fn constraints_subset<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, a: &[ty::Constraint], b: &[ty::Constraint]) -> bool {
+fn constraints_subset<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
+    a: &[ty::Constraint<'ctxt>],
+    b: &[ty::Constraint<'ctxt>],
+) -> bool {
     a.iter().all(|ca| {
         b.iter().any(|cb| {
             ctxt.tys.tys_eq(ca.subject, cb.subject) && constraint_req_eq(ctxt, &ca.requirement, &cb.requirement)
@@ -299,12 +300,19 @@ fn subst_constraint<'ctxt>(
     let subject = subst_normalize_ty(ctxt, c.subject, subst, self_ty);
     let requirement = match c.requirement {
         ty::ConstraintRequirement::Trait(trait_inst) => {
-            let gen_args: Vec<_> = trait_inst.gen_args.iter().map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty)).collect();
+            let gen_args: Vec<_> = trait_inst
+                .gen_args
+                .iter()
+                .map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty))
+                .collect();
             let gen_args = ctxt.tys.ty_slice(&gen_args);
             ty::ConstraintRequirement::Trait(trait_inst.with_gen_args(gen_args).unwrap())
         }
         ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
-            let param_tys: Vec<_> = param_tys.iter().map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty)).collect();
+            let param_tys: Vec<_> = param_tys
+                .iter()
+                .map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty))
+                .collect();
             let param_tys = ctxt.tys.ty_slice(&param_tys);
             let return_ty = subst_normalize_ty(ctxt, return_ty, subst, self_ty);
             ty::ConstraintRequirement::Callable { param_tys, return_ty }

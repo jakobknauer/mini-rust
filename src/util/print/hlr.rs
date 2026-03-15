@@ -2,10 +2,10 @@ use std::io::Write;
 
 use crate::{ctxt, hlr, typeck::HlrTyping};
 
-pub fn print_hlr<W: Write>(
-    hlr_fn: &hlr::Fn<'_>,
-    ctxt: &ctxt::Ctxt<'_>,
-    typing: Option<&HlrTyping<'_>>,
+pub fn print_hlr<'ctxt, W: Write>(
+    hlr_fn: &hlr::Fn<'ctxt>,
+    ctxt: &ctxt::Ctxt<'ctxt>,
+    typing: Option<&HlrTyping<'ctxt>>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = HlrPrinter {
@@ -17,17 +17,17 @@ pub fn print_hlr<W: Write>(
     printer.print_fn(hlr_fn)
 }
 
-struct HlrPrinter<'a, W: Write> {
-    ctxt: &'a ctxt::Ctxt<'a>,
-    typing: Option<&'a HlrTyping<'a>>,
+struct HlrPrinter<'ctxt, 'a, W: Write> {
+    ctxt: &'a ctxt::Ctxt<'ctxt>,
+    typing: Option<&'a HlrTyping<'ctxt>>,
     indent_level: usize,
     writer: &'a mut W,
 }
 
 const INDENT: &str = "    ";
 
-impl<'a, W: Write> HlrPrinter<'a, W> {
-    fn print_fn(&mut self, hlr_fn: &hlr::Fn<'_>) -> Result<(), std::io::Error> {
+impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
+    fn print_fn(&mut self, hlr_fn: &hlr::Fn<'ctxt>) -> Result<(), std::io::Error> {
         let sig = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap();
 
         let assoc = if let Some(assoc_ty) = sig.associated_ty {
@@ -71,12 +71,12 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
         writeln!(self.writer, "}}")
     }
 
-    fn print_expr_indented(&mut self, expr: hlr::Expr<'_>) -> Result<(), std::io::Error> {
+    fn print_expr_indented(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), std::io::Error> {
         self.indent()?;
         self.print_expr(expr)
     }
 
-    fn print_expr(&mut self, expr: hlr::Expr<'_>) -> Result<(), std::io::Error> {
+    fn print_expr(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), std::io::Error> {
         use hlr::ExprDef::*;
         match expr.0 {
             Lit(lit) => self.print_lit(lit),
@@ -306,7 +306,7 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
     }
 
     // Print an expression that should be a block (for if/loop bodies)
-    fn print_block_expr(&mut self, expr: hlr::Expr<'_>) -> Result<(), std::io::Error> {
+    fn print_block_expr(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), std::io::Error> {
         if matches!(expr.0, hlr::ExprDef::Block { .. }) {
             self.print_expr(expr)
         } else {
@@ -320,7 +320,7 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
         }
     }
 
-    fn print_stmt(&mut self, stmt: hlr::Stmt<'_>) -> Result<(), std::io::Error> {
+    fn print_stmt(&mut self, stmt: hlr::Stmt<'ctxt>) -> Result<(), std::io::Error> {
         use hlr::StmtDef::*;
         match stmt {
             Expr(expr) => {
@@ -359,7 +359,7 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
         }
     }
 
-    fn print_val(&mut self, val: &hlr::Val<'_>) -> Result<(), std::io::Error> {
+    fn print_val(&mut self, val: &hlr::Val<'ctxt>) -> Result<(), std::io::Error> {
         match val {
             hlr::Val::Var(var_id) => write!(self.writer, "{}", var_id),
             hlr::Val::Fn(fn_, gen_args) => {
@@ -387,7 +387,7 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
         }
     }
 
-    fn print_optional_gen_args(&mut self, gen_args: Option<hlr::TyAnnotSlice<'_>>) -> Result<(), std::io::Error> {
+    fn print_optional_gen_args(&mut self, gen_args: Option<hlr::TyAnnotSlice<'ctxt>>) -> Result<(), std::io::Error> {
         if let Some(args) = gen_args {
             write!(self.writer, "::<")?;
             for (i, &arg) in args.iter().enumerate() {
@@ -401,7 +401,7 @@ impl<'a, W: Write> HlrPrinter<'a, W> {
         Ok(())
     }
 
-    fn print_ty_annot(&mut self, annot: hlr::TyAnnot<'_>) -> Result<(), std::io::Error> {
+    fn print_ty_annot(&mut self, annot: hlr::TyAnnot<'ctxt>) -> Result<(), std::io::Error> {
         use hlr::TyAnnotDef::*;
         match annot {
             Struct(struct_, gen_args) => {

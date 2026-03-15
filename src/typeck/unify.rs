@@ -135,8 +135,16 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                 fn_inst_1.fn_ == fn_inst_2.fn_
                     && fn_inst_1.gen_args.len() == fn_inst_2.gen_args.len()
                     && fn_inst_1.env_gen_args.len() == fn_inst_2.env_gen_args.len()
-                    && fn_inst_1.gen_args.iter().zip(fn_inst_2.gen_args).all(|(t1, t2)| self.unify(*t1, *t2))
-                    && fn_inst_1.env_gen_args.iter().zip(fn_inst_2.env_gen_args).all(|(t1, t2)| self.unify(*t1, *t2))
+                    && fn_inst_1
+                        .gen_args
+                        .iter()
+                        .zip(fn_inst_2.gen_args)
+                        .all(|(t1, t2)| self.unify(*t1, *t2))
+                    && fn_inst_1
+                        .env_gen_args
+                        .iter()
+                        .zip(fn_inst_2.env_gen_args)
+                        .all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (
@@ -155,7 +163,11 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     && assoc_ty_idx_1 == assoc_ty_idx_2
                     && trait_inst_1.gen_args.len() == trait_inst_2.gen_args.len()
                     && self.unify(base_ty_1, base_ty_2)
-                    && trait_inst_1.gen_args.iter().zip(trait_inst_2.gen_args).all(|(t1, t2)| self.unify(*t1, *t2))
+                    && trait_inst_1
+                        .gen_args
+                        .iter()
+                        .zip(trait_inst_2.gen_args)
+                        .all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (
