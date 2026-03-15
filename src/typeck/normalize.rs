@@ -12,9 +12,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     pub(super) fn normalize(&mut self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
         use ty::TyDef::*;
 
-        let ty_def = self.ctxt.tys.get_ty_def(ty).clone();
-
-        match ty_def {
+        match *ty.0 {
             InfVar(iv) => match self.type_vars.get(&iv).copied() {
                 Some(resolved) => {
                     let normalized = self.normalize(resolved);
@@ -33,14 +31,14 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
 
             Closure {
                 fn_inst,
-                name,
+                ref name,
                 captures_ty,
             } => {
                 let captures_ty = self.normalize(captures_ty);
                 let gen_args = self.normalize_slice(fn_inst.gen_args);
                 let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
                 let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
-                self.ctxt.tys.closure(fn_inst, name, captures_ty)
+                self.ctxt.tys.closure(fn_inst, name.as_str(), captures_ty)
             }
 
             TraitSelf(_) => {

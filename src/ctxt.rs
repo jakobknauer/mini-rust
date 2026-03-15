@@ -18,7 +18,6 @@ pub use ty_reg::*;
 
 use crate::ctxt::ty::GenVarSubst;
 
-#[derive(Default)]
 pub struct Ctxt<'ctxt> {
     pub tys: TyReg<'ctxt>,
     pub fns: FnReg<'ctxt>,
@@ -28,6 +27,16 @@ pub struct Ctxt<'ctxt> {
 }
 
 impl<'ctxt> Ctxt<'ctxt> {
+    pub fn new(arena: &'ctxt bumpalo::Bump) -> Self {
+        Self {
+            tys: TyReg::new(arena),
+            fns: Default::default(),
+            impls: Default::default(),
+            traits: Default::default(),
+            language_items: Default::default(),
+        }
+    }
+
     pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst) -> String {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
 
@@ -145,9 +154,7 @@ impl<'ctxt> Ctxt<'ctxt> {
     pub fn normalize_ty(&mut self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
         use ty::TyDef::*;
 
-        let ty_def = self.tys.get_ty_def(ty);
-
-        match ty_def {
+        match ty.0 {
             Primitive(_) => ty,
             &Tuple(items) => {
                 let items: Vec<_> = iter_ty_slice!(self.tys, items, map(|ty| self.normalize_ty(ty))).collect();

@@ -75,13 +75,12 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             return true;
         }
 
-        let ty_def = self.tys.get_ty_def(ty);
-        if let &ty::TyDef::TraitSelf(trait_2) = ty_def
+        if let &ty::TyDef::TraitSelf(trait_2) = ty.0
             && trait_2 == trait_inst.trait_
         {
             return true;
         }
-        if let &ty::TyDef::Opaque { id, .. } = ty_def
+        if let &ty::TyDef::Opaque { id, .. } = ty.0
             && self.tys.opaque_satisfies_trait_inst(id, trait_inst)
         {
             return true;
@@ -102,8 +101,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             return true;
         }
 
-        let ty_def = self.tys.get_ty_def(ty);
-        if let &ty::TyDef::TraitSelf(trait_2) = ty_def
+        if let &ty::TyDef::TraitSelf(trait_2) = ty.0
             && trait_2 == trait_
         {
             return true;
@@ -121,12 +119,12 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             param_tys,
             return_ty,
             var_args,
-        } = self.tys.get_ty_def(ty)
+        } = ty.0
         {
             Some((param_tys, return_ty, var_args))
         } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraints, ty) {
             Some((param_tys, return_ty, false))
-        } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
+        } else if let &ty::TyDef::Closure { fn_inst, .. } = ty.0 {
             let signature = self.get_fn_inst_sig(fn_inst);
             let params_without_captures: Vec<_> = signature.params.iter().skip(1).map(|p| p.ty).collect();
             let return_ty = signature.return_ty;
@@ -134,7 +132,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             let params_without_captures = self.tys.ty_slice(&params_without_captures);
 
             Some((params_without_captures, return_ty, false))
-        } else if let &ty::TyDef::Opaque { id, gen_args } = self.tys.get_ty_def(ty) {
+        } else if let &ty::TyDef::Opaque { id, gen_args } = ty.0 {
             self.tys
                 .try_get_opaque_callable_constraint(id)
                 .map(|(param_tys, return_ty)| {
@@ -157,9 +155,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         base_ty: ty::Ty<'ctxt>,
         ident: &str,
     ) -> Option<ty::Ty<'ctxt>> {
-        let base_ty_def = self.tys.get_ty_def(base_ty);
-
-        if let &ty::TyDef::TraitSelf(trait_) = base_ty_def {
+        if let &ty::TyDef::TraitSelf(trait_) = base_ty.0 {
             let trait_def = self.traits.get_trait_def(trait_);
             let assoc_ty_index = trait_def.assoc_tys.iter().position(|name| name == ident)?;
             let gen_args: Vec<_> = trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();

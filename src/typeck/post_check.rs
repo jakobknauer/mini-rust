@@ -28,9 +28,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     fn contains_inf_var(&self, ty: ty::Ty) -> bool {
         use ty::TyDef::*;
 
-        let ty_def = self.ctxt.tys.get_ty_def(ty);
-
-        match ty_def {
+        match ty.0 {
             InfVar(_) => true,
             Primitive(_) | GenVar(_) | TraitSelf(_) => false,
             &Opaque { gen_args, .. } => self.slice_contains_inf_var(gen_args),

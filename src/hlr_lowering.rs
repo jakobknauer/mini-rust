@@ -526,7 +526,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
 
         let scrutinee_place = self.lower_to_place(scrutinee);
 
-        let (enum_ty, by_ref, scrutinee_place) = match self.builder.ctxt.tys.get_ty_def(scrutinee_ty) {
+        let (enum_ty, by_ref, scrutinee_place) = match scrutinee_ty.0 {
             ty::TyDef::Enum { .. } => (scrutinee_ty, false, scrutinee_place),
             &ty::TyDef::Ref(inner) => {
                 let copy_op = self.builder.insert_copy_op(scrutinee_place);
@@ -672,7 +672,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         };
 
         let closure_ty = self.typing.expr_types[&expr_id];
-        let captures_ty = match self.builder.ctxt.tys.get_ty_def(closure_ty).clone() {
+        let captures_ty = match *closure_ty.0 {
             ty::TyDef::Closure { captures_ty, .. } => captures_ty,
             _ => panic!("closure expr should have Closure type"),
         };

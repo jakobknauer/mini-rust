@@ -2,11 +2,22 @@ use std::collections::HashMap;
 
 use crate::ctxt::{fns, traits};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Ty<'ty>(
-    pub(in crate::ctxt) usize,
-    pub(in crate::ctxt) std::marker::PhantomData<&'ty ()>,
+    pub &'ty TyDef<'ty>,
+    pub(in crate::ctxt) TyId,
 );
+
+impl<'ty> PartialEq for Ty<'ty> {
+    fn eq(&self, other: &Self) -> bool { self.1 == other.1 }
+}
+impl<'ty> Eq for Ty<'ty> {}
+impl<'ty> std::hash::Hash for Ty<'ty> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.1.hash(state); }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct TyId(pub(in crate::ctxt) usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TySlice<'ty> {
@@ -42,7 +53,7 @@ pub struct InfVar(pub(in crate::ctxt) usize);
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct OpaqueId(pub(in crate::ctxt) usize);
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TyDef<'ty> {
     Primitive(Primitive),
     Tuple(TySlice<'ty>),
@@ -80,7 +91,7 @@ pub enum TyDef<'ty> {
     },
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Primitive {
     Integer32,
     Boolean,

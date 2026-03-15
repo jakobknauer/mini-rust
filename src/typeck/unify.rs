@@ -49,7 +49,7 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
     }
 
     fn resolve(&self, mut ty: ty::Ty<'ty>) -> ty::Ty<'ty> {
-        while let &ty::TyDef::InfVar(iv) = self.tys.get_ty_def(ty) {
+        while let &ty::TyDef::InfVar(iv) = ty.0 {
             let resolved = self.pending.get(&iv).or_else(|| self.committed.get(&iv));
 
             match resolved {
@@ -68,10 +68,7 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
             return true;
         }
 
-        let def1 = self.tys.get_ty_def(ty1);
-        let def2 = self.tys.get_ty_def(ty2);
-
-        match (def1, def2) {
+        match (ty1.0, ty2.0) {
             (&ty::TyDef::InfVar(iv), _) => {
                 self.pending.insert(iv, ty2);
                 true

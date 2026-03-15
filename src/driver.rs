@@ -48,7 +48,7 @@ pub fn compile(
         print_detail: &print_detail,
         output_paths,
 
-        ctxt: ctxt::Ctxt::default(),
+        ctxt: ctxt::Ctxt::new(&arena),
         ast: &ast::Ast::new(&arena),
         ast_meta: AstMeta::default(),
         hlr: &hlr::Hlr::new(&arena),

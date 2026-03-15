@@ -123,9 +123,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
             return self.types.get(&ty).cloned();
         }
 
-        let type_ = self.mr_ctxt.tys.get_ty_def(ty);
-
-        let inkwell_type = match *type_ {
+        let inkwell_type = match *ty.0 {
             Primitive(ref primitive_type) => match primitive_type {
                 Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
