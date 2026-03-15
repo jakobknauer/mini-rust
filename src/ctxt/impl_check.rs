@@ -54,11 +54,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
             let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.unwrap(), &subst);
 
-            zip_ty_slices!(
-                self.tys,
-                (inst_impl_trait_inst.gen_args, trait_inst.gen_args),
-                all(|ty1, ty2| self.tys.tys_eq(ty1, ty2))
-            )
+            self.tys.slices_eq(inst_impl_trait_inst.gen_args, trait_inst.gen_args)
         })
     }
 

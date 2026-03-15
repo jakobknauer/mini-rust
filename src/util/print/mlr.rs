@@ -5,7 +5,6 @@ use crate::{
         self,
         fns::{Fn, FnSig},
         language_items,
-        ty::iter_ty_slice,
     },
     mlr,
 };
@@ -66,13 +65,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 } else {
                     format!(
                         "<{}>",
-                        iter_ty_slice!(
-                            self.ctxt.tys,
-                            assoc_trait_inst.gen_args,
-                            map(|ty| self.ctxt.tys.get_string_rep(ty))
-                        )
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                        assoc_trait_inst.gen_args.iter().map(|&ty| self.ctxt.tys.get_string_rep(ty)).collect::<Vec<_>>().join(", ")
                     )
                 };
 
@@ -323,13 +316,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 } else {
                     format!(
                         "<{}>",
-                        iter_ty_slice!(
-                            self.ctxt.tys,
-                            trait_mthd.trait_inst.gen_args,
-                            map(|ty| self.ctxt.tys.get_string_rep(ty))
-                        )
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                        trait_mthd.trait_inst.gen_args.iter().map(|&ty| self.ctxt.tys.get_string_rep(ty)).collect::<Vec<_>>().join(", ")
                     )
                 };
 

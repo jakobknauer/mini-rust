@@ -49,12 +49,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 } else {
                     format!(
                         "<{}>",
-                        iter_ty_slice!(
-                            self.tys,
-                            assoc_trait_inst.gen_args,
-                            map(|ty| self.tys.get_string_rep(ty))
-                        )
-                        .collect::<Vec<_>>()
+                        assoc_trait_inst.gen_args.iter().map(|&ty| self.tys.get_string_rep(ty)).collect::<Vec<_>>()
                         .join(", ")
                     )
                 };
@@ -75,8 +70,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         } else {
             format!(
                 "{{{}}}",
-                iter_ty_slice!(self.tys, fn_inst.env_gen_args, map(|ty| self.tys.get_string_rep(ty)))
-                    .collect::<Vec<_>>()
+                fn_inst.env_gen_args.iter().map(|&ty| self.tys.get_string_rep(ty)).collect::<Vec<_>>()
                     .join(", ")
             )
         };
@@ -86,8 +80,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         } else {
             format!(
                 "<{}>",
-                iter_ty_slice!(self.tys, fn_inst.gen_args, map(|ty| self.tys.get_string_rep(ty)))
-                    .collect::<Vec<_>>()
+                fn_inst.gen_args.iter().map(|&ty| self.tys.get_string_rep(ty)).collect::<Vec<_>>()
                     .join(", ")
             )
         };
@@ -147,15 +140,15 @@ impl<'ctxt> Ctxt<'ctxt> {
         match ty.0 {
             Primitive(_) => ty,
             &Tuple(items) => {
-                let items: Vec<_> = iter_ty_slice!(self.tys, items, map(|ty| self.normalize_ty(ty))).collect();
+                let items: Vec<_> = items.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 self.tys.tuple(&items)
             }
             &Struct { struct_, gen_args } => {
-                let gen_args: Vec<_> = iter_ty_slice!(self.tys, gen_args, map(|ty| self.normalize_ty(ty))).collect();
+                let gen_args: Vec<_> = gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 self.tys.inst_struct(struct_, &gen_args).unwrap()
             }
             &Enum { enum_, gen_args } => {
-                let gen_args: Vec<_> = iter_ty_slice!(self.tys, gen_args, map(|ty| self.normalize_ty(ty))).collect();
+                let gen_args: Vec<_> = gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 self.tys.inst_enum(enum_, &gen_args).unwrap()
             }
             &Fn {
@@ -163,7 +156,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 return_ty,
                 var_args,
             } => {
-                let param_tys: Vec<_> = iter_ty_slice!(self.tys, param_tys, map(|ty| self.normalize_ty(ty))).collect();
+                let param_tys: Vec<_> = param_tys.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 let return_ty = self.normalize_ty(return_ty);
                 self.tys.fn_(&param_tys, return_ty, var_args)
             }
@@ -185,7 +178,7 @@ impl<'ctxt> Ctxt<'ctxt> {
             } => {
                 let base_ty = self.normalize_ty(base_ty);
                 let gen_args: Vec<_> =
-                    iter_ty_slice!(self.tys, trait_inst.gen_args, map(|ty| self.normalize_ty(ty))).collect();
+                    trait_inst.gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 let gen_args = self.tys.ty_slice(&gen_args);
                 let trait_inst = self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap();
 

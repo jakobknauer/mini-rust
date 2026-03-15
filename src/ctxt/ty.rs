@@ -168,19 +168,3 @@ impl<'ty> GenVarSubst<'ty> {
     }
 }
 
-macro_rules! iter_ty_slice {
-    ($self:expr, $tys:expr, $adapter:ident(|$a:ident| $body:expr)) => {{
-        $tys.iter().$adapter(|&$a| $body)
-    }};
-}
-
-pub(crate) use iter_ty_slice;
-
-macro_rules! zip_ty_slices {
-    // $adapter is the iterator method: all, any, try_for_each, etc.
-    ($self:expr, ($tys1:expr, $tys2:expr), $adapter:ident(|$a:ident, $b:ident| $body:expr)) => {{
-        $tys1.iter().zip($tys2.iter()).$adapter(|(&$a, &$b)| $body)
-    }};
-}
-
-pub(crate) use zip_ty_slices;
