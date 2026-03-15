@@ -2,17 +2,19 @@ use std::collections::HashMap;
 
 use crate::ctxt::{self, ty};
 
-pub enum UnificationResult {
-    Success(Vec<(ty::InfVar, ty::Ty)>),
+pub enum UnificationResult<'ty> {
+    Success(Vec<(ty::InfVar, ty::Ty<'ty>)>),
     Failure,
 }
 
-impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
-    pub(super) fn unify(&mut self, ty1: ty::Ty, ty2: ty::Ty) -> bool {
+impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
+    pub(super) fn unify(&mut self, ty1: ty::Ty<'ctxt>, ty2: ty::Ty<'ctxt>) -> bool {
         let ty1 = self.normalize(ty1);
         let ty2 = self.normalize(ty2);
-        let unify = Unify::new(&self.ctxt.tys, &self.type_vars);
-        let result = unify.run(ty1, ty2);
+        let result = {
+            let unify = Unify::new(&self.ctxt.tys, &self.type_vars);
+            unify.run(ty1, ty2)
+        };
         match result {
             UnificationResult::Success(bindings) => {
                 self.type_vars.extend(bindings);
@@ -23,14 +25,14 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     }
 }
 
-struct Unify<'ty> {
-    tys: &'ty ctxt::TyReg<'ty>,
-    committed: &'ty HashMap<ty::InfVar, ty::Ty>,
-    pending: HashMap<ty::InfVar, ty::Ty>,
+struct Unify<'borrow, 'ty> {
+    tys: &'borrow ctxt::TyReg<'ty>,
+    committed: &'borrow HashMap<ty::InfVar, ty::Ty<'ty>>,
+    pending: HashMap<ty::InfVar, ty::Ty<'ty>>,
 }
 
-impl<'ty> Unify<'ty> {
-    fn new(tys: &'ty ctxt::TyReg<'ty>, committed: &'ty HashMap<ty::InfVar, ty::Ty>) -> Self {
+impl<'borrow, 'ty> Unify<'borrow, 'ty> {
+    fn new(tys: &'borrow ctxt::TyReg<'ty>, committed: &'borrow HashMap<ty::InfVar, ty::Ty<'ty>>) -> Self {
         Unify {
             tys,
             committed,
@@ -38,7 +40,7 @@ impl<'ty> Unify<'ty> {
         }
     }
 
-    fn run(mut self, ty1: ty::Ty, ty2: ty::Ty) -> UnificationResult {
+    fn run(mut self, ty1: ty::Ty<'ty>, ty2: ty::Ty<'ty>) -> UnificationResult<'ty> {
         if self.unify(ty1, ty2) {
             UnificationResult::Success(self.pending.into_iter().collect())
         } else {
@@ -46,7 +48,7 @@ impl<'ty> Unify<'ty> {
         }
     }
 
-    fn resolve(&self, mut ty: ty::Ty) -> ty::Ty {
+    fn resolve(&self, mut ty: ty::Ty<'ty>) -> ty::Ty<'ty> {
         while let &ty::TyDef::InfVar(iv) = self.tys.get_ty_def(ty) {
             let resolved = self.pending.get(&iv).or_else(|| self.committed.get(&iv));
 
@@ -58,7 +60,7 @@ impl<'ty> Unify<'ty> {
         ty
     }
 
-    fn unify(&mut self, ty1: ty::Ty, ty2: ty::Ty) -> bool {
+    fn unify(&mut self, ty1: ty::Ty<'ty>, ty2: ty::Ty<'ty>) -> bool {
         let ty1 = self.resolve(ty1);
         let ty2 = self.resolve(ty2);
 

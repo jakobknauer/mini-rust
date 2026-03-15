@@ -5,12 +5,12 @@ use crate::{
 
 use super::{Driver, DriverError, ResCtxt};
 
-impl Driver<'_, '_, '_, '_, '_> {
+impl<'arena> Driver<'_, 'arena> {
     pub(super) fn resolve_constraint(
         &mut self,
         constraint: &ast::Constraint,
-        res_ctxt: ResCtxt,
-    ) -> Result<Vec<ty::Constraint>, DriverError> {
+        res_ctxt: ResCtxt<'_, 'arena>,
+    ) -> Result<Vec<ty::Constraint<'arena>>, DriverError<'arena>> {
         let subject = self
             .try_resolve_ast_ty_annot(constraint.subject, res_ctxt, false)
             .ok_or(DriverError::ContextBuild("Failed to resolve constraint subject type"))?;
@@ -20,10 +20,10 @@ impl Driver<'_, '_, '_, '_, '_> {
 
     fn resolve_constraint_requirement(
         &mut self,
-        subject: ty::Ty,
+        subject: ty::Ty<'arena>,
         requirement: &ast::ConstraintRequirement,
-        res_ctxt: ResCtxt,
-    ) -> Result<Vec<ty::Constraint>, DriverError> {
+        res_ctxt: ResCtxt<'_, 'arena>,
+    ) -> Result<Vec<ty::Constraint<'arena>>, DriverError<'arena>> {
         match requirement {
             ast::ConstraintRequirement::Trait {
                 trait_name,
@@ -85,11 +85,11 @@ impl Driver<'_, '_, '_, '_, '_> {
 
     fn resolve_assoc_bindings(
         &mut self,
-        subject: ty::Ty,
-        trait_inst: traits::TraitInst,
+        subject: ty::Ty<'arena>,
+        trait_inst: traits::TraitInst<'arena>,
         bindings: &[ast::AssocBinding],
-        res_ctxt: ResCtxt,
-    ) -> Result<Vec<ty::Constraint>, DriverError> {
+        res_ctxt: ResCtxt<'_, 'arena>,
+    ) -> Result<Vec<ty::Constraint<'arena>>, DriverError<'arena>> {
         let mut result = Vec::new();
 
         for binding in bindings {

@@ -102,32 +102,39 @@ impl<'ctxt> Ctxt<'ctxt> {
             )
     }
 
-    pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst) -> fns::FnSig {
+    pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnSig<'ctxt> {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
+        let name = signature.name.clone();
+        let associated_ty = signature.associated_ty;
+        let associated_trait_inst = signature.associated_trait_inst;
+        let var_args = signature.var_args;
+        let param_data: Vec<(fns::FnParamKind, ty::Ty<'ctxt>)> =
+            signature.params.iter().map(|p| (p.kind.clone(), p.ty)).collect();
+        let return_ty = signature.return_ty;
+
         let subst = self.get_subst_for_fn_inst(fn_inst);
 
-        let inst_params = signature
-            .params
-            .iter()
-            .map(|param| fns::FnParam {
-                kind: param.kind.clone(),
-                ty: self.tys.substitute_gen_vars(param.ty, &subst),
+        let inst_params = param_data
+            .into_iter()
+            .map(|(kind, ty)| fns::FnParam {
+                kind,
+                ty: self.tys.substitute_gen_vars(ty, &subst),
             })
             .collect();
 
-        let inst_return_ty = self.tys.substitute_gen_vars(signature.return_ty, &subst);
+        let inst_return_ty = self.tys.substitute_gen_vars(return_ty, &subst);
 
         fns::FnSig {
-            name: signature.name.clone(),
+            name,
             // TODO subst associated_ty?
-            associated_ty: signature.associated_ty,
+            associated_ty,
             // TODO subst associated_trait_inst?
-            associated_trait_inst: signature.associated_trait_inst,
+            associated_trait_inst,
             gen_params: Vec::new(),
             env_gen_params: Vec::new(),
             env_constraints: Vec::new(),
             params: inst_params,
-            var_args: signature.var_args,
+            var_args,
             return_ty: inst_return_ty,
             constraints: Vec::new(),
         }
@@ -135,7 +142,7 @@ impl<'ctxt> Ctxt<'ctxt> {
 
     // TODO check the relevance of this function. Is it only use to resolve associated types?
     // If so, perhaps rename, but compare to normalize() in typeck.rs
-    pub fn normalize_ty(&mut self, ty: ty::Ty) -> ty::Ty {
+    pub fn normalize_ty(&mut self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
         use ty::TyDef::*;
 
         let ty_def = self.tys.get_ty_def(ty);
@@ -213,7 +220,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         }
     }
 
-    pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst) -> GenVarSubst {
+    pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst<'ctxt>) -> GenVarSubst<'ctxt> {
         let sig = self.fns.get_sig(fn_inst.fn_).unwrap();
         let gen_param_subst = GenVarSubst::new(&sig.gen_params, self.tys.get_ty_slice(fn_inst.gen_args)).unwrap();
         let env_gen_param_subst =

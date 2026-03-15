@@ -3,14 +3,14 @@ use crate::hlr;
 
 use super::{ExprExtra, TypeckError, TypeckResult};
 
-impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     pub(super) fn check_binary_op(
         &mut self,
         expr_id: hlr::ExprId,
         left: hlr::Expr<'hlr>,
         right: hlr::Expr<'hlr>,
         operator: hlr::BinaryOperator,
-    ) -> TypeckResult<ty::Ty> {
+    ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let left_ty = self.check_expr(left, None)?;
         let left_ty = self.normalize(left_ty);
         let right_ty = self.check_expr(right, None)?;
@@ -28,10 +28,10 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
 
     fn try_check_short_circuit_op(
         &mut self,
-        left_ty: ty::Ty,
-        right_ty: ty::Ty,
+        left_ty: ty::Ty<'ctxt>,
+        right_ty: ty::Ty<'ctxt>,
         operator: hlr::BinaryOperator,
-    ) -> Option<TypeckResult<ty::Ty>> {
+    ) -> Option<TypeckResult<'ctxt, ty::Ty<'ctxt>>> {
         use hlr::BinaryOperator::*;
         if !matches!(operator, LogicalAnd | LogicalOr) {
             return None;
@@ -50,10 +50,10 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
 
     fn try_check_builtin_binary_prim_op(
         &mut self,
-        left_ty: ty::Ty,
-        right_ty: ty::Ty,
+        left_ty: ty::Ty<'ctxt>,
+        right_ty: ty::Ty<'ctxt>,
         operator: hlr::BinaryOperator,
-    ) -> Option<(language_items::BinaryPrimOp, ty::Ty)> {
+    ) -> Option<(language_items::BinaryPrimOp, ty::Ty<'ctxt>)> {
         use hlr::BinaryOperator::*;
         use language_items::BinaryPrimOp::*;
 
@@ -92,10 +92,10 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     fn check_overloaded_op(
         &mut self,
         expr_id: hlr::ExprId,
-        left_ty: ty::Ty,
-        right_ty: ty::Ty,
+        left_ty: ty::Ty<'ctxt>,
+        right_ty: ty::Ty<'ctxt>,
         operator: hlr::BinaryOperator,
-    ) -> TypeckResult<ty::Ty> {
+    ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         use hlr::BinaryOperator::*;
 
         let (trait_, mthd_name) = match operator {

@@ -10,11 +10,11 @@ use crate::ctxt::{
 #[derive(Default)]
 pub struct ImplReg<'impls> {
     _phantom: std::marker::PhantomData<&'impls ()>,
-    impls: Vec<ImplDef>,
+    impls: Vec<ImplDef<'impls>>,
 }
 
 impl<'impls> ImplReg<'impls> {
-    pub fn inst_impl(&self, impl_: Impl, gen_args: TySlice) -> Result<ImplInst, ImplInstError> {
+    pub fn inst_impl(&self, impl_: Impl, gen_args: TySlice<'impls>) -> Result<ImplInst<'impls>, ImplInstError> {
         let impl_def = self.impls.get(impl_.0).unwrap();
         if impl_def.gen_params.len() != gen_args.len {
             return Err(ImplInstError {
@@ -27,16 +27,17 @@ impl<'impls> ImplReg<'impls> {
             impl_,
             gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 
     pub fn register_impl(
         &mut self,
-        ty: Ty,
+        ty: Ty<'impls>,
         gen_params: Vec<GenVar>,
-        trait_inst: Option<TraitInst>,
-        constraints: Vec<Constraint>,
-        assoc_tys: HashMap<usize, Ty>,
+        trait_inst: Option<TraitInst<'impls>>,
+        constraints: Vec<Constraint<'impls>>,
+        assoc_tys: HashMap<usize, Ty<'impls>>,
     ) -> Impl {
         let impl_ = Impl(self.impls.len());
         let impl_def = ImplDef {
@@ -76,11 +77,11 @@ impl<'impls> ImplReg<'impls> {
             .filter(|impl_| self.get_impl_def(*impl_).trait_inst.is_none())
     }
 
-    pub fn get_impl_def(&self, impl_: Impl) -> &ImplDef {
+    pub fn get_impl_def(&self, impl_: Impl) -> &ImplDef<'impls> {
         self.impls.get(impl_.0).unwrap()
     }
 
-    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<TraitInst> {
+    pub fn get_impl_trait_inst(&self, impl_: Impl) -> Option<TraitInst<'impls>> {
         self.get_impl_def(impl_).trait_inst
     }
 }

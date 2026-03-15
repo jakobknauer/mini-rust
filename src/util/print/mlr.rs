@@ -30,7 +30,7 @@ pub fn print_mlr<'mlr, W: Write>(
 struct MlrPrinter<'a, 'mlr, W: Write> {
     fn_: Fn,
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
-    signature: Option<&'a FnSig>,
+    signature: Option<&'a FnSig<'a>>,
     ctxt: &'a ctxt::Ctxt<'a>,
     indent_level: usize,
     writer: &'a mut W,

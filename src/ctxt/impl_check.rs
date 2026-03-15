@@ -6,9 +6,9 @@ use crate::ctxt::{
 impl<'ctxt> super::Ctxt<'ctxt> {
     pub fn resolve_trait_mthd_to_fn(
         &mut self,
-        trait_mthd_inst: fns::TraitMthdInst,
-        subst: &GenVarSubst,
-    ) -> fns::FnInst {
+        trait_mthd_inst: fns::TraitMthdInst<'ctxt>,
+        subst: &GenVarSubst<'ctxt>,
+    ) -> fns::FnInst<'ctxt> {
         let mut trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
         // Resolve opaque and associated types to their concrete types for monomorphization
         trait_mthd_inst.impl_ty = self.normalize_ty(trait_mthd_inst.impl_ty);
@@ -42,10 +42,10 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
     pub(crate) fn get_impl_insts_for_ty_and_trait_inst(
         &mut self,
-        constraints: &[ty::Constraint],
-        ty: ty::Ty,
-        trait_inst: traits::TraitInst,
-    ) -> impl Iterator<Item = impls::ImplInst> {
+        constraints: &[ty::Constraint<'ctxt>],
+        ty: ty::Ty<'ctxt>,
+        trait_inst: traits::TraitInst<'ctxt>,
+    ) -> impl Iterator<Item = impls::ImplInst<'ctxt>> {
         let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, ty, trait_inst.trait_);
 
         impl_insts.into_iter().filter(move |impl_inst| {
@@ -64,9 +64,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
     pub fn ty_implements_trait_inst(
         &mut self,
-        constraints: &[ty::Constraint],
-        ty: ty::Ty,
-        trait_inst: traits::TraitInst,
+        constraints: &[ty::Constraint<'ctxt>],
+        ty: ty::Ty<'ctxt>,
+        trait_inst: traits::TraitInst<'ctxt>,
     ) -> bool {
         if self
             .tys
@@ -92,7 +92,12 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             .is_some()
     }
 
-    pub fn ty_implements_trait(&mut self, constraints: &[ty::Constraint], ty: ty::Ty, trait_: traits::Trait) -> bool {
+    pub fn ty_implements_trait(
+        &mut self,
+        constraints: &[ty::Constraint<'ctxt>],
+        ty: ty::Ty<'ctxt>,
+        trait_: traits::Trait,
+    ) -> bool {
         if self.tys.implements_trait_constraint_exists(constraints, ty, trait_) {
             return true;
         }
@@ -109,9 +114,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
     pub fn ty_is_callable(
         &mut self,
-        constraints: &[ty::Constraint],
-        ty: ty::Ty,
-    ) -> Option<(ty::TySlice, ty::Ty, bool)> {
+        constraints: &[ty::Constraint<'ctxt>],
+        ty: ty::Ty<'ctxt>,
+    ) -> Option<(ty::TySlice<'ctxt>, ty::Ty<'ctxt>, bool)> {
         if let &ty::TyDef::Fn {
             param_tys,
             return_ty,
@@ -123,11 +128,12 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure { fn_inst, .. } = self.tys.get_ty_def(ty) {
             let signature = self.get_fn_inst_sig(fn_inst);
-
             let params_without_captures: Vec<_> = signature.params.iter().skip(1).map(|p| p.ty).collect();
+            let return_ty = signature.return_ty;
+            drop(signature);
             let params_without_captures = self.tys.ty_slice(&params_without_captures);
 
-            Some((params_without_captures, signature.return_ty, false))
+            Some((params_without_captures, return_ty, false))
         } else if let &ty::TyDef::Opaque { id, gen_args } = self.tys.get_ty_def(ty) {
             self.tys
                 .try_get_opaque_callable_constraint(id)
@@ -147,10 +153,10 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
     pub(crate) fn resolve_associated_ty_completely(
         &mut self,
-        constraints: &[ty::Constraint],
-        base_ty: ty::Ty,
+        constraints: &[ty::Constraint<'ctxt>],
+        base_ty: ty::Ty<'ctxt>,
         ident: &str,
-    ) -> Option<ty::Ty> {
+    ) -> Option<ty::Ty<'ctxt>> {
         let base_ty_def = self.tys.get_ty_def(base_ty);
 
         if let &ty::TyDef::TraitSelf(trait_) = base_ty_def {
@@ -201,9 +207,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
     pub fn impl_constraints_satisfied(
         &mut self,
-        ambient_constraints: &[ty::Constraint],
-        impl_constraints: &[ty::Constraint],
-        subst: &ty::GenVarSubst,
+        ambient_constraints: &[ty::Constraint<'ctxt>],
+        impl_constraints: &[ty::Constraint<'ctxt>],
+        subst: &ty::GenVarSubst<'ctxt>,
     ) -> bool {
         let subst_constraints: Vec<_> = impl_constraints
             .iter()
@@ -214,7 +220,11 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             .all(|c| self.constraint_satisfied(ambient_constraints, c))
     }
 
-    fn constraint_satisfied(&mut self, ambient_constraints: &[ty::Constraint], constraint: &ty::Constraint) -> bool {
+    fn constraint_satisfied(
+        &mut self,
+        ambient_constraints: &[ty::Constraint<'ctxt>],
+        constraint: &ty::Constraint<'ctxt>,
+    ) -> bool {
         let subject = constraint.subject;
         match constraint.requirement {
             ty::ConstraintRequirement::Trait(trait_inst) => {
@@ -229,7 +239,11 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         }
     }
 
-    fn subst_constraint(&mut self, constraint: &ty::Constraint, subst: &ty::GenVarSubst) -> ty::Constraint {
+    fn subst_constraint(
+        &mut self,
+        constraint: &ty::Constraint<'ctxt>,
+        subst: &ty::GenVarSubst<'ctxt>,
+    ) -> ty::Constraint<'ctxt> {
         let subject = self.tys.substitute_gen_vars(constraint.subject, subst);
         let requirement = match constraint.requirement {
             ty::ConstraintRequirement::Trait(trait_inst) => {
@@ -249,10 +263,10 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
     fn get_impl_insts_for_ty_and_trait(
         &mut self,
-        constraints: &[ty::Constraint],
-        ty: ty::Ty,
+        constraints: &[ty::Constraint<'ctxt>],
+        ty: ty::Ty<'ctxt>,
         trait_: traits::Trait,
-    ) -> Vec<impls::ImplInst> {
+    ) -> Vec<impls::ImplInst<'ctxt>> {
         let candidate_impls: Vec<_> = self.impls.get_impls_for_trait(trait_).collect();
         candidate_impls
             .into_iter()
@@ -277,16 +291,20 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             .collect()
     }
 
-    fn subst_trait_inst(&mut self, trait_inst: traits::TraitInst, subst: &GenVarSubst) -> traits::TraitInst {
+    fn subst_trait_inst(
+        &mut self,
+        trait_inst: traits::TraitInst<'ctxt>,
+        subst: &GenVarSubst<'ctxt>,
+    ) -> traits::TraitInst<'ctxt> {
         let gen_args = self.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
         self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap()
     }
 
     fn subst_trait_mthd_inst(
         &mut self,
-        trait_mthd_inst: fns::TraitMthdInst,
-        subst: &GenVarSubst,
-    ) -> fns::TraitMthdInst {
+        trait_mthd_inst: fns::TraitMthdInst<'ctxt>,
+        subst: &GenVarSubst<'ctxt>,
+    ) -> fns::TraitMthdInst<'ctxt> {
         let impl_ty = self.tys.substitute_gen_vars(trait_mthd_inst.impl_ty, subst);
         let trait_inst = self.subst_trait_inst(trait_mthd_inst.trait_inst, subst);
         let gen_args = self.tys.substitute_gen_vars_on_slice(trait_mthd_inst.gen_args, subst);

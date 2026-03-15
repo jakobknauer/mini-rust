@@ -13,14 +13,14 @@ impl std::fmt::Display for Fn {
 }
 
 #[derive(Clone)]
-pub struct FnSig {
+pub struct FnSig<'fns> {
     pub name: String,
     /// The type of which the function is an associated method, if any.
     /// At the moment, this is only used for printing names.
-    pub associated_ty: Option<Ty>,
+    pub associated_ty: Option<Ty<'fns>>,
     /// The trait of which the function is an associated method, if any.
     /// At the moment, this is only used for printing names.
-    pub associated_trait_inst: Option<TraitInst>,
+    pub associated_trait_inst: Option<TraitInst<'fns>>,
     /// The generic parameters appearing in the function signature
     pub gen_params: Vec<GenVar>,
     /// Generic used in the functions' body that do not appear in the signature,
@@ -29,15 +29,15 @@ pub struct FnSig {
     pub env_gen_params: Vec<GenVar>,
     /// Constraints from the surrounding context (e.g. impl block where clause).
     /// Not compared during impl checking; only used during typechecking.
-    pub env_constraints: Vec<Constraint>,
-    pub params: Vec<FnParam>,
+    pub env_constraints: Vec<Constraint<'fns>>,
+    pub params: Vec<FnParam<'fns>>,
     pub var_args: bool,
-    pub return_ty: Ty,
-    pub constraints: Vec<Constraint>,
+    pub return_ty: Ty<'fns>,
+    pub constraints: Vec<Constraint<'fns>>,
 }
 
-impl FnSig {
-    pub fn all_constraints(&self) -> impl Iterator<Item = &Constraint> {
+impl<'fns> FnSig<'fns> {
+    pub fn all_constraints(&self) -> impl Iterator<Item = &Constraint<'fns>> {
         self.env_constraints.iter().chain(&self.constraints)
     }
 
@@ -50,9 +50,9 @@ impl FnSig {
 }
 
 #[derive(Clone)]
-pub struct FnParam {
+pub struct FnParam<'fns> {
     pub kind: FnParamKind,
-    pub ty: Ty,
+    pub ty: Ty<'fns>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -83,15 +83,20 @@ pub enum FnInstError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct FnInst {
+pub struct FnInst<'fns> {
     pub fn_: Fn,
-    pub gen_args: TySlice,
-    pub env_gen_args: TySlice,
+    pub gen_args: TySlice<'fns>,
+    pub env_gen_args: TySlice<'fns>,
     pub(in crate::ctxt) _private: (),
+    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'fns ()>,
 }
 
-impl FnInst {
-    pub fn with_gen_args(self, gen_args: TySlice, env_gen_args: TySlice) -> Result<FnInst, FnInstError> {
+impl<'fns> FnInst<'fns> {
+    pub fn with_gen_args(
+        self,
+        gen_args: TySlice<'fns>,
+        env_gen_args: TySlice<'fns>,
+    ) -> Result<FnInst<'fns>, FnInstError> {
         if gen_args.len != self.gen_args.len {
             return Err(FnInstError::GenArgCountMismatch {
                 fn_: self.fn_,
@@ -111,6 +116,7 @@ impl FnInst {
             gen_args,
             env_gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 }
@@ -144,21 +150,22 @@ pub enum TraitMthdInstError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct TraitMthdInst {
-    pub trait_inst: TraitInst,
+pub struct TraitMthdInst<'fns> {
+    pub trait_inst: TraitInst<'fns>,
     pub mthd_idx: usize,
-    pub impl_ty: Ty,
-    pub gen_args: TySlice,
+    pub impl_ty: Ty<'fns>,
+    pub gen_args: TySlice<'fns>,
     pub(in crate::ctxt) _private: (),
+    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'fns ()>,
 }
 
-impl TraitMthdInst {
+impl<'fns> TraitMthdInst<'fns> {
     pub fn with_updated(
         self,
-        impl_ty: Ty,
-        trait_inst: TraitInst,
-        gen_args: TySlice,
-    ) -> Result<TraitMthdInst, TraitMthdInstError> {
+        impl_ty: Ty<'fns>,
+        trait_inst: TraitInst<'fns>,
+        gen_args: TySlice<'fns>,
+    ) -> Result<TraitMthdInst<'fns>, TraitMthdInstError> {
         if trait_inst.trait_ != self.trait_inst.trait_ {
             return Err(TraitMthdInstError::TraitMismatch {
                 expected: self.trait_inst.trait_,
@@ -179,6 +186,7 @@ impl TraitMthdInst {
             impl_ty,
             gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 }

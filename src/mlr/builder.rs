@@ -3,14 +3,14 @@ use crate::{
     mlr,
 };
 
-pub struct MlrBuilder<'a, 'ctxt, 'mlr> {
+pub struct MlrBuilder<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> {
     pub ctxt: &'a mut ctxt::Ctxt<'ctxt>,
     pub mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: fns::Fn,
     blocks: Vec<Vec<mlr::Stmt<'mlr>>>,
 }
 
-impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
+impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
     pub fn new(ctxt: &'a mut ctxt::Ctxt<'ctxt>, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn) -> Self {
         Self {
             ctxt,
@@ -20,7 +20,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         }
     }
 
-    pub fn register_fn_call(&mut self, fn_inst: fns::FnInst) {
+    pub fn register_fn_call(&mut self, fn_inst: fns::FnInst<'ctxt>) {
         self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
     }
 
@@ -46,17 +46,17 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
             .push(stmt);
     }
 
-    pub fn insert_typed_loc(&self, ty: ty::Ty) -> mlr::Loc {
+    pub fn insert_typed_loc(&self, ty: ty::Ty<'ctxt>) -> mlr::Loc<'mlr> {
         self.mlr.insert_typed_loc(ty)
     }
 
-    pub fn alloc_loc(&mut self, ty: ty::Ty) -> mlr::Loc {
+    pub fn alloc_loc(&mut self, ty: ty::Ty<'ctxt>) -> mlr::Loc<'mlr> {
         let loc = self.mlr.insert_typed_loc(ty);
         self.insert_alloc_stmt(loc);
         loc
     }
 
-    pub fn alloc_place(&mut self, ty: ty::Ty) -> mlr::Place<'mlr> {
+    pub fn alloc_place(&mut self, ty: ty::Ty<'ctxt>) -> mlr::Place<'mlr> {
         let loc = self.alloc_loc(ty);
         self.insert_loc_place(loc)
     }
@@ -67,7 +67,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         place
     }
 
-    pub fn insert_loc_place(&self, loc: mlr::Loc) -> mlr::Place<'mlr> {
+    pub fn insert_loc_place(&self, loc: mlr::Loc<'mlr>) -> mlr::Place<'mlr> {
         self.mlr.insert_place(mlr::PlaceDef::Loc(loc), loc.1)
     }
 
@@ -75,13 +75,17 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         &self,
         base: mlr::Place<'mlr>,
         field_index: usize,
-        ty: ty::Ty,
+        ty: ty::Ty<'ctxt>,
     ) -> mlr::Place<'mlr> {
         self.mlr
             .insert_place(mlr::PlaceDef::FieldAccess { base, field_index }, ty)
     }
 
-    pub fn insert_closure_captures_place(&self, base: mlr::Place<'mlr>, captures_ty: ty::Ty) -> mlr::Place<'mlr> {
+    pub fn insert_closure_captures_place(
+        &self,
+        base: mlr::Place<'mlr>,
+        captures_ty: ty::Ty<'ctxt>,
+    ) -> mlr::Place<'mlr> {
         self.mlr.insert_place(mlr::PlaceDef::ClosureCaptures(base), captures_ty)
     }
 
@@ -94,7 +98,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         &self,
         base: mlr::Place<'mlr>,
         variant_index: usize,
-        variant_ty: ty::Ty,
+        variant_ty: ty::Ty<'ctxt>,
     ) -> mlr::Place<'mlr> {
         self.mlr
             .insert_place(mlr::PlaceDef::ProjectToVariant { base, variant_index }, variant_ty)
@@ -112,19 +116,19 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         self.mlr.insert_op(mlr::OpDef::Copy(place), place.1)
     }
 
-    pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst) -> mlr::Op<'mlr> {
+    pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst<'ctxt>) -> mlr::Op<'mlr> {
         self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
         let ty = self.fn_ty_of_fn_inst(fn_inst);
         self.mlr.insert_op(mlr::OpDef::Fn(fn_inst), ty)
     }
 
-    pub fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst) -> mlr::Op<'mlr> {
+    pub fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> mlr::Op<'mlr> {
         self.ctxt.fns.register_trait_mthd_call(self.fn_, inst);
         let ty = self.trait_mthd_fn_ty(inst);
         self.mlr.insert_op(mlr::OpDef::TraitMthd(inst), ty)
     }
 
-    pub fn insert_const_op(&self, const_: mlr::Const, ty: ty::Ty) -> mlr::Op<'mlr> {
+    pub fn insert_const_op(&self, const_: mlr::Const, ty: ty::Ty<'ctxt>) -> mlr::Op<'mlr> {
         self.mlr.insert_op(mlr::OpDef::Const(const_), ty)
     }
 
@@ -164,7 +168,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         self.mlr.insert_val(mlr::ValDef::AddrOf(place), ref_ty)
     }
 
-    pub fn insert_as_val(&self, op: mlr::Op<'mlr>, target_ty: ty::Ty) -> mlr::Val<'mlr> {
+    pub fn insert_as_val(&self, op: mlr::Op<'mlr>, target_ty: ty::Ty<'ctxt>) -> mlr::Val<'mlr> {
         self.mlr.insert_val(mlr::ValDef::As { op, target_ty }, target_ty)
     }
 
@@ -173,7 +177,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         op: language_items::BinaryPrimOp,
         lhs: mlr::Op<'mlr>,
         rhs: mlr::Op<'mlr>,
-        result_ty: ty::Ty,
+        result_ty: ty::Ty<'ctxt>,
     ) -> mlr::Val<'mlr> {
         self.mlr.insert_val(mlr::ValDef::BinaryPrim { op, lhs, rhs }, result_ty)
     }
@@ -182,7 +186,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         &self,
         op: language_items::UnaryPrimOp,
         operand: mlr::Op<'mlr>,
-        result_ty: ty::Ty,
+        result_ty: ty::Ty<'ctxt>,
     ) -> mlr::Val<'mlr> {
         self.mlr.insert_val(mlr::ValDef::UnaryPrim { op, operand }, result_ty)
     }
@@ -193,7 +197,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         self.copy_val(place)
     }
 
-    pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc) {
+    pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc<'mlr>) {
         let stmt = self.mlr.insert_stmt(mlr::StmtDef::Alloc { loc });
         self.push_stmt(stmt);
     }
@@ -203,7 +207,7 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         self.push_stmt(stmt);
     }
 
-    pub fn insert_assign_to_loc_stmt(&mut self, loc: mlr::Loc, value: mlr::Val<'mlr>) {
+    pub fn insert_assign_to_loc_stmt(&mut self, loc: mlr::Loc<'mlr>, value: mlr::Val<'mlr>) {
         let place = self.insert_loc_place(loc);
         self.insert_assign_stmt(place, value);
     }
@@ -228,15 +232,18 @@ impl<'a, 'ctxt, 'mlr> MlrBuilder<'a, 'ctxt, 'mlr> {
         self.push_stmt(stmt);
     }
 
-    fn fn_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst) -> ty::Ty {
+    fn fn_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
         let sig = self.ctxt.fns.get_sig(fn_inst.fn_).unwrap();
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, sig.return_ty, sig.var_args);
+        let return_ty = sig.return_ty;
+        let var_args = sig.var_args;
+        let _ = sig;
+        let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
         let subst = self.ctxt.get_subst_for_fn_inst(fn_inst);
         self.ctxt.tys.substitute_gen_vars(fn_ty, &subst)
     }
 
-    fn trait_mthd_fn_ty(&mut self, inst: fns::TraitMthdInst) -> ty::Ty {
+    fn trait_mthd_fn_ty(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
         let sig = self
             .ctxt
             .traits

@@ -3,15 +3,19 @@ use std::collections::HashMap;
 use crate::ctxt::{fns, traits};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Ty(pub(in crate::ctxt) usize);
+pub struct Ty<'ty>(
+    pub(in crate::ctxt) usize,
+    pub(in crate::ctxt) std::marker::PhantomData<&'ty ()>,
+);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct TySlice {
+pub struct TySlice<'ty> {
     pub offset: usize,
     pub len: usize,
+    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'ty ()>,
 }
 
-impl TySlice {
+impl<'ty> TySlice<'ty> {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -39,40 +43,40 @@ pub struct InfVar(pub(in crate::ctxt) usize);
 pub struct OpaqueId(pub(in crate::ctxt) usize);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub enum TyDef {
+pub enum TyDef<'ty> {
     Primitive(Primitive),
-    Tuple(TySlice),
+    Tuple(TySlice<'ty>),
     Struct {
         struct_: Struct,
-        gen_args: TySlice,
+        gen_args: TySlice<'ty>,
     },
     Enum {
         enum_: Enum,
-        gen_args: TySlice,
+        gen_args: TySlice<'ty>,
     },
     Fn {
-        param_tys: TySlice,
-        return_ty: Ty,
+        param_tys: TySlice<'ty>,
+        return_ty: Ty<'ty>,
         var_args: bool,
     },
-    Ref(Ty),
-    Ptr(Ty),
+    Ref(Ty<'ty>),
+    Ptr(Ty<'ty>),
     GenVar(GenVar),
     TraitSelf(traits::Trait),
     Closure {
-        fn_inst: fns::FnInst,
+        fn_inst: fns::FnInst<'ty>,
         name: String,
-        captures_ty: Ty,
+        captures_ty: Ty<'ty>,
     },
     AssocTy {
-        base_ty: Ty,
-        trait_inst: traits::TraitInst,
+        base_ty: Ty<'ty>,
+        trait_inst: traits::TraitInst<'ty>,
         assoc_ty_idx: usize,
     },
     InfVar(InfVar),
     Opaque {
         id: OpaqueId,
-        gen_args: TySlice,
+        gen_args: TySlice<'ty>,
     },
 }
 
@@ -85,16 +89,16 @@ pub enum Primitive {
 }
 
 #[derive(Clone)]
-pub struct StructDef {
+pub struct StructDef<'ty> {
     pub name: String,
     pub gen_params: Vec<GenVar>,
-    pub fields: Vec<StructField>,
+    pub fields: Vec<StructField<'ty>>,
 }
 
 #[derive(Clone)]
-pub struct StructField {
+pub struct StructField<'ty> {
     pub name: String,
-    pub ty: Ty,
+    pub ty: Ty<'ty>,
 }
 
 #[derive(Clone)]
@@ -111,32 +115,35 @@ pub struct EnumVariant {
 }
 
 #[derive(Clone)]
-pub struct OpaqueDef {
+pub struct OpaqueDef<'ty> {
     pub gen_params: Vec<GenVar>,
-    pub constraints: Vec<ConstraintRequirement>,
+    pub constraints: Vec<ConstraintRequirement<'ty>>,
 }
 
 #[derive(Clone)]
-pub struct Constraint {
-    pub subject: Ty,
-    pub requirement: ConstraintRequirement,
+pub struct Constraint<'ty> {
+    pub subject: Ty<'ty>,
+    pub requirement: ConstraintRequirement<'ty>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub enum ConstraintRequirement {
-    Trait(traits::TraitInst),
-    Callable { param_tys: TySlice, return_ty: Ty },
-    AssocTyEq(Ty),
+pub enum ConstraintRequirement<'ty> {
+    Trait(traits::TraitInst<'ty>),
+    Callable {
+        param_tys: TySlice<'ty>,
+        return_ty: Ty<'ty>,
+    },
+    AssocTyEq(Ty<'ty>),
 }
 
 #[derive(Clone)]
-pub struct GenVarSubst(HashMap<GenVar, Ty>);
+pub struct GenVarSubst<'ty>(HashMap<GenVar, Ty<'ty>>);
 
-impl GenVarSubst {
-    pub fn new<G, T>(gen_vars: G, tys: T) -> Option<GenVarSubst>
+impl<'ty> GenVarSubst<'ty> {
+    pub fn new<G, T>(gen_vars: G, tys: T) -> Option<GenVarSubst<'ty>>
     where
         G: IntoIterator<Item: std::borrow::Borrow<GenVar>, IntoIter: ExactSizeIterator>,
-        T: IntoIterator<Item: std::borrow::Borrow<Ty>, IntoIter: ExactSizeIterator>,
+        T: IntoIterator<Item: std::borrow::Borrow<Ty<'ty>>, IntoIter: ExactSizeIterator>,
     {
         use std::borrow::Borrow;
 
@@ -151,11 +158,11 @@ impl GenVarSubst {
         Some(GenVarSubst(pairs))
     }
 
-    pub fn get(&self, gen_var: GenVar) -> Option<Ty> {
+    pub fn get(&self, gen_var: GenVar) -> Option<Ty<'ty>> {
         self.0.get(&gen_var).copied()
     }
 
-    pub fn compose(self, other: GenVarSubst) -> GenVarSubst {
+    pub fn compose(self, other: GenVarSubst<'ty>) -> GenVarSubst<'ty> {
         let pairs = self.0.into_iter().chain(other.0).collect();
         GenVarSubst(pairs)
     }

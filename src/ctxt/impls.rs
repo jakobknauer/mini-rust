@@ -20,19 +20,20 @@ pub struct ImplInstError {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct ImplInst {
+pub struct ImplInst<'impls> {
     pub impl_: Impl,
-    pub gen_args: TySlice,
+    pub gen_args: TySlice<'impls>,
     pub(in crate::ctxt) _private: (),
+    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'impls ()>,
 }
 
 #[derive(Clone)]
-pub struct ImplDef {
+pub struct ImplDef<'impls> {
     pub gen_params: Vec<GenVar>,
-    pub ty: Ty,
+    pub ty: Ty<'impls>,
     pub mthds: Vec<Fn>,
     pub mthds_by_name: HashMap<String, Fn>,
-    pub trait_inst: Option<TraitInst>,
-    pub assoc_tys: HashMap<usize, Ty>,
-    pub constraints: Vec<Constraint>,
+    pub trait_inst: Option<TraitInst<'impls>>,
+    pub assoc_tys: HashMap<usize, Ty<'impls>>,
+    pub constraints: Vec<Constraint<'impls>>,
 }

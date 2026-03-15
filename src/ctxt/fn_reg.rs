@@ -8,15 +8,20 @@ use crate::ctxt::{
 #[derive(Default)]
 pub struct FnReg<'fns> {
     _phantom: std::marker::PhantomData<&'fns ()>,
-    sigs: Vec<FnSig>,
+    sigs: Vec<FnSig<'fns>>,
     fn_names: HashMap<String, Fn>,
 
-    called_fn_insts: HashMap<Fn, Vec<FnInst>>,
-    called_trait_mthd_insts: HashMap<Fn, Vec<TraitMthdInst>>,
+    called_fn_insts: HashMap<Fn, Vec<FnInst<'fns>>>,
+    called_trait_mthd_insts: HashMap<Fn, Vec<TraitMthdInst<'fns>>>,
 }
 
 impl<'fns> FnReg<'fns> {
-    pub fn inst_fn(&self, fn_: Fn, gen_args: TySlice, env_gen_args: TySlice) -> Result<FnInst, FnInstError> {
+    pub fn inst_fn(
+        &self,
+        fn_: Fn,
+        gen_args: TySlice<'fns>,
+        env_gen_args: TySlice<'fns>,
+    ) -> Result<FnInst<'fns>, FnInstError> {
         let sig = self.sigs.get(fn_.0).unwrap();
         if sig.gen_params.len() != gen_args.len {
             return Err(FnInstError::GenArgCountMismatch {
@@ -37,10 +42,11 @@ impl<'fns> FnReg<'fns> {
             gen_args,
             env_gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 
-    pub fn register_fn(&mut self, signature: FnSig, register_name: bool) -> Result<Fn, ()> {
+    pub fn register_fn(&mut self, signature: FnSig<'fns>, register_name: bool) -> Result<Fn, ()> {
         let fn_ = Fn(self.sigs.len());
 
         if register_name {
@@ -57,11 +63,11 @@ impl<'fns> FnReg<'fns> {
         Ok(fn_)
     }
 
-    pub fn get_sig(&self, fn_: Fn) -> Option<&FnSig> {
+    pub fn get_sig(&self, fn_: Fn) -> Option<&FnSig<'fns>> {
         self.sigs.get(fn_.0)
     }
 
-    pub fn get_mut_sig(&mut self, fn_: Fn) -> Option<&mut FnSig> {
+    pub fn get_mut_sig(&mut self, fn_: Fn) -> Option<&mut FnSig<'fns>> {
         self.sigs.get_mut(fn_.0)
     }
 
@@ -73,22 +79,22 @@ impl<'fns> FnReg<'fns> {
         (0..self.sigs.len()).map(Fn)
     }
 
-    pub fn register_fn_call(&mut self, caller: Fn, fn_inst: FnInst) {
+    pub fn register_fn_call(&mut self, caller: Fn, fn_inst: FnInst<'fns>) {
         self.called_fn_insts.entry(caller).or_default().push(fn_inst);
     }
 
-    pub fn register_trait_mthd_call(&mut self, caller: Fn, trait_mthd_inst: TraitMthdInst) {
+    pub fn register_trait_mthd_call(&mut self, caller: Fn, trait_mthd_inst: TraitMthdInst<'fns>) {
         self.called_trait_mthd_insts
             .entry(caller)
             .or_default()
             .push(trait_mthd_inst);
     }
 
-    pub fn get_called_fn_insts(&self, caller: Fn) -> &Vec<FnInst> {
+    pub fn get_called_fn_insts(&self, caller: Fn) -> &Vec<FnInst<'fns>> {
         self.called_fn_insts.get(&caller).unwrap()
     }
 
-    pub fn get_called_trait_mthd_insts(&self, caller: Fn) -> &Vec<TraitMthdInst> {
+    pub fn get_called_trait_mthd_insts(&self, caller: Fn) -> &Vec<TraitMthdInst<'fns>> {
         self.called_trait_mthd_insts.get(&caller).unwrap()
     }
 

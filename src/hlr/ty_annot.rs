@@ -7,7 +7,7 @@ pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
 pub enum TyAnnotDef<'hlr> {
     Struct(ty::Struct, Option<TyAnnotSlice<'hlr>>),
     Enum(ty::Enum, Option<TyAnnotSlice<'hlr>>),
-    Ty(ty::Ty),
+    Ty(ty::Ty<'hlr>),
     GenVar(ty::GenVar),
 
     AssocTy {

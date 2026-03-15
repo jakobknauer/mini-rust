@@ -7,13 +7,13 @@ use crate::ctxt::{
     ty::{self, zip_ty_slices},
 };
 
-pub struct ImplCheckError {
+pub struct ImplCheckError<'ty> {
     pub impl_: Impl,
-    pub trait_inst: TraitInst,
-    pub kind: ImplCheckErrorKind,
+    pub trait_inst: TraitInst<'ty>,
+    pub kind: ImplCheckErrorKind<'ty>,
 }
 
-pub enum ImplCheckErrorKind {
+pub enum ImplCheckErrorKind<'ty> {
     MissingMthds(Vec<String>),
     ExtraMthds(Vec<String>),
     ParamCountMismatch {
@@ -23,14 +23,14 @@ pub enum ImplCheckErrorKind {
     },
     ArgTypeMismatch {
         mthd: String,
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
         arg_idx: usize,
     },
     ReturnTypeMismatch {
         mthd: String,
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     MthdGenParamCountMismatch {
         mthd: String,
@@ -52,7 +52,7 @@ pub enum ImplCheckErrorKind {
     },
 }
 
-pub fn check_trait_impls<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ImplCheckError> {
+pub fn check_trait_impls<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ImplCheckError<'ctxt>> {
     let all_impls: Vec<_> = ctxt.impls.get_all_impls().collect();
     for impl_ in all_impls {
         let Some(trait_inst) = ctxt.impls.get_impl_trait_inst(impl_) else {
@@ -67,8 +67,8 @@ pub fn check_trait_impls<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), Impl
 fn check_trait_impl<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
     impl_: Impl,
-    trait_inst: TraitInst,
-) -> Result<(), ImplCheckError> {
+    trait_inst: TraitInst<'ctxt>,
+) -> Result<(), ImplCheckError<'ctxt>> {
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
     if trait_def.gen_params.len() != trait_inst.gen_args.len {
         return Err(ImplCheckError {
@@ -129,7 +129,11 @@ fn check_trait_impl<'ctxt>(
     Ok(())
 }
 
-fn check_mthd_names<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, impl_: Impl, trait_: Trait) -> Result<(), ImplCheckErrorKind> {
+fn check_mthd_names<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
+    impl_: Impl,
+    trait_: Trait,
+) -> Result<(), ImplCheckErrorKind<'ctxt>> {
     let impl_def = ctxt.impls.get_impl_def(impl_);
     let trait_def = ctxt.traits.get_trait_def(trait_);
 
@@ -155,11 +159,11 @@ fn check_mthd_names<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, impl_: Impl, trait_: Tr
 
 fn check_mthd_sig<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    impl_mthd_sig: &fns::FnSig,
-    trait_mthd_sig: &fns::FnSig,
-    impl_ty: ty::Ty,
-    trait_gen_params_subst: &ty::GenVarSubst,
-) -> Result<(), ImplCheckErrorKind> {
+    impl_mthd_sig: &fns::FnSig<'ctxt>,
+    trait_mthd_sig: &fns::FnSig<'ctxt>,
+    impl_ty: ty::Ty<'ctxt>,
+    trait_gen_params_subst: &ty::GenVarSubst<'ctxt>,
+) -> Result<(), ImplCheckErrorKind<'ctxt>> {
     // Compare mthd gen params
     if impl_mthd_sig.gen_params.len() != trait_mthd_sig.gen_params.len() {
         return Err(ImplCheckErrorKind::MthdGenParamCountMismatch {
@@ -197,7 +201,7 @@ fn check_mthd_sig<'ctxt>(
     }
 
     // Little helper closure to avoid code duplication
-    let do_substitutions = |ctxt: &mut ctxt::Ctxt<'_>, ty: ty::Ty| {
+    let do_substitutions = |ctxt: &mut ctxt::Ctxt<'ctxt>, ty: ty::Ty<'ctxt>| -> ty::Ty<'ctxt> {
         let ty = ctxt.tys.substitute(ty, &all_gen_params_subst, Some(impl_ty));
         ctxt.normalize_ty(ty)
     };
@@ -296,10 +300,10 @@ fn constraints_subset<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, a: &[ty::Constraint],
 
 fn subst_constraint<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    c: &ty::Constraint,
-    subst: &ty::GenVarSubst,
-    self_ty: ty::Ty,
-) -> ty::Constraint {
+    c: &ty::Constraint<'ctxt>,
+    subst: &ty::GenVarSubst<'ctxt>,
+    self_ty: ty::Ty<'ctxt>,
+) -> ty::Constraint<'ctxt> {
     let subject = subst_normalize_ty(ctxt, c.subject, subst, self_ty);
     let requirement = match c.requirement {
         ty::ConstraintRequirement::Trait(trait_inst) => {
@@ -330,10 +334,10 @@ fn subst_constraint<'ctxt>(
 
 fn subst_normalize_ty<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    ty: ty::Ty,
-    subst: &ty::GenVarSubst,
-    self_ty: ty::Ty,
-) -> ty::Ty {
+    ty: ty::Ty<'ctxt>,
+    subst: &ty::GenVarSubst<'ctxt>,
+    self_ty: ty::Ty<'ctxt>,
+) -> ty::Ty<'ctxt> {
     let ty = ctxt.tys.substitute(ty, subst, Some(self_ty));
     ctxt.normalize_ty(ty)
 }

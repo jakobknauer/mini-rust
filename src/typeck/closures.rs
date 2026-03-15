@@ -6,9 +6,9 @@ use crate::{
     typeck::{ExprExtra, TypeckError, TypeckResult},
 };
 
-struct ClosureBodySignature {
-    param_tys: Vec<ty::Ty>,
-    return_ty: ty::Ty,
+struct ClosureBodySignature<'ty> {
+    param_tys: Vec<ty::Ty<'ty>>,
+    return_ty: ty::Ty<'ty>,
 }
 
 struct ClosureNames {
@@ -16,9 +16,9 @@ struct ClosureNames {
     captures_name: String,
 }
 
-struct ClosureGenerics {
+struct ClosureGenerics<'ty> {
     env_gen_params: Vec<ty::GenVar>,
-    env_gen_args: Vec<ty::Ty>,
+    env_gen_args: Vec<ty::Ty<'ty>>,
 }
 
 struct ScopeSnapshot {
@@ -28,24 +28,34 @@ struct ScopeSnapshot {
 
 struct CapturedVars(Vec<hlr::VarId>);
 
-impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     pub(super) fn check_closure(
         &mut self,
         expr_id: hlr::ExprId,
         params: hlr::ClosureParams<'hlr>,
         return_ty: Option<hlr::TyAnnot<'hlr>>,
         body: hlr::Expr<'hlr>,
-        hint: Option<ty::Ty>,
-    ) -> TypeckResult<ty::Ty> {
+        hint: Option<ty::Ty<'ctxt>>,
+    ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let scope_snapshot = self.snapshot_scope();
         let body_signature = self.check_closure_body(params, return_ty, body, hint)?;
         let captured_vars = self.create_capture_data(scope_snapshot);
 
         let names = self.generate_closure_names();
-        let generics = self.collect_closure_generics();
+        let ClosureGenerics {
+            env_gen_params,
+            env_gen_args,
+        } = self.collect_closure_generics();
 
-        let captures_ty = self.build_closure_captures_ty(&names.captures_name, &generics, &captured_vars);
-        let fn_inst = self.build_closure_fn_inst(&names.fn_name, &generics, captures_ty, &body_signature);
+        let captures_ty =
+            self.build_closure_captures_ty(&names.captures_name, &env_gen_params, &env_gen_args, &captured_vars);
+        let fn_inst = self.build_closure_fn_inst(
+            &names.fn_name,
+            &env_gen_params,
+            &env_gen_args,
+            captures_ty,
+            &body_signature,
+        );
 
         self.typing.expr_extra.insert(
             expr_id,
@@ -74,7 +84,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         ClosureNames { fn_name, captures_name }
     }
 
-    fn collect_closure_generics(&mut self) -> ClosureGenerics {
+    fn collect_closure_generics(&mut self) -> ClosureGenerics<'ctxt> {
         let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
 
         let env_gen_params: Vec<ty::GenVar> = outer_sig
@@ -84,7 +94,9 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
             .chain(outer_sig.gen_params.iter().cloned())
             .collect();
 
-        let env_gen_args: Vec<ty::Ty> = env_gen_params.iter().map(|&gv| self.ctxt.tys.gen_var(gv)).collect();
+        let _ = outer_sig;
+
+        let env_gen_args: Vec<ty::Ty<'ctxt>> = env_gen_params.iter().map(|&gv| self.ctxt.tys.gen_var(gv)).collect();
 
         ClosureGenerics {
             env_gen_params,
@@ -92,7 +104,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    fn try_get_callable_hint_info(&mut self, hint: ty::Ty) -> Option<(ty::TySlice, ty::Ty)> {
+    fn try_get_callable_hint_info(&mut self, hint: ty::Ty<'ctxt>) -> Option<(ty::TySlice<'ctxt>, ty::Ty<'ctxt>)> {
         let normalized = self.normalize(hint);
         if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(&self.constraints, normalized) {
             return Some((param_tys, return_ty));
@@ -116,8 +128,8 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         params: hlr::ClosureParams<'hlr>,
         return_ty_annot: Option<hlr::TyAnnot<'hlr>>,
         body: hlr::Expr<'hlr>,
-        hint: Option<ty::Ty>,
-    ) -> TypeckResult<ClosureBodySignature> {
+        hint: Option<ty::Ty<'ctxt>>,
+    ) -> TypeckResult<'ctxt, ClosureBodySignature<'ctxt>> {
         let mut param_tys = Vec::new();
         for hlr::ClosureParam(var_id, annot) in params {
             let ty = self.resolve_optional_ty_annot(*annot)?;
@@ -168,31 +180,30 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
     fn build_closure_captures_ty(
         &mut self,
         struct_name: &str,
-        generics: &ClosureGenerics,
+        env_gen_params: &[ty::GenVar],
+        env_gen_args: &[ty::Ty<'ctxt>],
         captured_vars: &CapturedVars,
-    ) -> ty::Ty {
+    ) -> ty::Ty<'ctxt> {
         let captures_struct = self
             .ctxt
             .tys
-            .register_struct_with_existing_gen_vars(struct_name, generics.env_gen_params.clone())
+            .register_struct_with_existing_gen_vars(struct_name, env_gen_params.to_vec())
             .unwrap();
 
         self.created_closure_structs
             .push((captures_struct, captured_vars.0.to_vec()));
 
-        self.ctxt
-            .tys
-            .inst_struct(captures_struct, &generics.env_gen_args)
-            .unwrap()
+        self.ctxt.tys.inst_struct(captures_struct, env_gen_args).unwrap()
     }
 
     fn build_closure_fn_inst(
         &mut self,
         fn_name: &str,
-        generics: &ClosureGenerics,
-        captures_ty: ty::Ty,
-        checked: &ClosureBodySignature,
-    ) -> fns::FnInst {
+        env_gen_params: &[ty::GenVar],
+        env_gen_args: &[ty::Ty<'ctxt>],
+        captures_ty: ty::Ty<'ctxt>,
+        checked: &ClosureBodySignature<'ctxt>,
+    ) -> fns::FnInst<'ctxt> {
         let captures_param = fns::FnParam {
             kind: fns::FnParamKind::Regular("__captures".to_string()),
             ty: captures_ty,
@@ -210,7 +221,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
                 fns::FnSig {
                     name: fn_name.to_string(),
                     gen_params: vec![],
-                    env_gen_params: generics.env_gen_params.clone(),
+                    env_gen_params: env_gen_params.to_vec(),
                     env_constraints: Vec::new(),
                     params: fn_params,
                     var_args: false,
@@ -226,7 +237,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         self.created_closure_fns.push(closure_fn);
 
         let gen_args = self.ctxt.tys.ty_slice(&[]);
-        let env_gen_args = self.ctxt.tys.ty_slice(&generics.env_gen_args);
-        self.ctxt.fns.inst_fn(closure_fn, gen_args, env_gen_args).unwrap()
+        let env_gen_args_slice = self.ctxt.tys.ty_slice(env_gen_args);
+        self.ctxt.fns.inst_fn(closure_fn, gen_args, env_gen_args_slice).unwrap()
     }
 }

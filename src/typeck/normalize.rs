@@ -2,14 +2,14 @@ use crate::ctxt::{fns, ty};
 
 use super::{ExprExtra, MthdResolution};
 
-impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     pub(super) fn normalize_all(&mut self) {
         self.normalize_hlr_typing();
         self.normalize_closure_fns();
         self.normalize_closure_structs();
     }
 
-    pub(super) fn normalize(&mut self, ty: ty::Ty) -> ty::Ty {
+    pub(super) fn normalize(&mut self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
         use ty::TyDef::*;
 
         let ty_def = self.ctxt.tys.get_ty_def(ty).clone();
@@ -126,7 +126,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    pub(super) fn normalize_slice(&mut self, slice: ty::TySlice) -> ty::TySlice {
+    pub(super) fn normalize_slice(&mut self, slice: ty::TySlice<'ctxt>) -> ty::TySlice<'ctxt> {
         let mut tys = self.ctxt.tys.get_ty_slice(slice).to_vec();
         for t in &mut tys {
             *t = self.normalize(*t);
@@ -157,7 +157,7 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    fn normalize_expr_extra(&mut self, extra: ExprExtra) -> ExprExtra {
+    fn normalize_expr_extra(&mut self, extra: ExprExtra<'ctxt>) -> ExprExtra<'ctxt> {
         match extra {
             ExprExtra::Closure { fn_inst, captured_vars } => ExprExtra::Closure {
                 fn_inst: self.normalize_fn_inst(fn_inst),
@@ -170,13 +170,13 @@ impl<'a, 'ctxt, 'hlr> super::Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    fn normalize_fn_inst(&mut self, fn_inst: fns::FnInst) -> fns::FnInst {
+    fn normalize_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnInst<'ctxt> {
         let gen_args = self.normalize_slice(fn_inst.gen_args);
         let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
         fn_inst.with_gen_args(gen_args, env_gen_args).unwrap()
     }
 
-    fn normalize_mthd_resolution(&mut self, resolution: MthdResolution) -> MthdResolution {
+    fn normalize_mthd_resolution(&mut self, resolution: MthdResolution<'ctxt>) -> MthdResolution<'ctxt> {
         match resolution {
             MthdResolution::Inherent(fn_inst) => MthdResolution::Inherent(self.normalize_fn_inst(fn_inst)),
             MthdResolution::Trait(trait_mthd_inst) => {

@@ -18,19 +18,19 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum MlrLoweringError {
+pub enum MlrLoweringError<'ctxt> {
     FnLowering {
-        fn_inst: mr_fns::FnInst,
+        fn_inst: mr_fns::FnInst<'ctxt>,
         #[allow(unused)]
         error: fns::MlrFnLoweringError,
     },
 }
 
-pub fn mlr_to_llvm_ir<'ctxt, 'mlr>(
+pub fn mlr_to_llvm_ir<'ctxt: 'mlr, 'mlr: 'ctxt>(
     mr_ctxt: &mut mr_ctxt::Ctxt<'ctxt>,
     mlr_fns: Vec<mlr::Fn<'mlr>>,
-    fn_insts: Vec<mr_fns::FnInst>,
-) -> Result<String, MlrLoweringError> {
+    fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
+) -> Result<String, MlrLoweringError<'ctxt>> {
     let iw_ctxt = IwContext::create();
     let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, mlr_fns, fn_insts);
 
@@ -41,27 +41,27 @@ pub fn mlr_to_llvm_ir<'ctxt, 'mlr>(
     Ok(generator.iw_module.print_to_string().to_string())
 }
 
-struct MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
+struct MlrLowerer<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> {
     iw_ctxt: &'iw IwContext,
     iw_module: Module<'iw>,
 
     mr_ctxt: &'a mut mr_ctxt::Ctxt<'ctxt>,
     mlr_fns: HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
 
-    fn_insts: Vec<mr_fns::FnInst>,
+    fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
 
-    types: HashMap<mr_tys::Ty, AnyTypeEnum<'iw>>,
-    functions: HashMap<mr_fns::FnInst, FunctionValue<'iw>>,
-    structs: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
-    enums: Vec<(mr_tys::Ty, inkwell::types::StructType<'iw>)>,
+    types: HashMap<mr_tys::Ty<'ctxt>, AnyTypeEnum<'iw>>,
+    functions: HashMap<mr_fns::FnInst<'ctxt>, FunctionValue<'iw>>,
+    structs: Vec<(mr_tys::Ty<'ctxt>, inkwell::types::StructType<'iw>)>,
+    enums: Vec<(mr_tys::Ty<'ctxt>, inkwell::types::StructType<'iw>)>,
 }
 
-impl<'iw, 'a, 'ctxt, 'mlr> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
+impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
     fn new(
         iw_ctxt: &'iw IwContext,
         mr_ctxt: &'a mut mr_ctxt::Ctxt<'ctxt>,
         mlr_fns: Vec<mlr::Fn<'mlr>>,
-        fn_insts: Vec<mr_fns::FnInst>,
+        fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
     ) -> Self {
         let iw_module = iw_ctxt.create_module("test");
         let mlr_fns = mlr_fns.into_iter().map(|f| (f.fn_, f)).collect();
@@ -101,7 +101,7 @@ impl<'iw, 'a, 'ctxt, 'mlr> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         }
     }
 
-    fn define_functions(&mut self) -> Result<(), MlrLoweringError> {
+    fn define_functions(&mut self) -> Result<(), MlrLoweringError<'ctxt>> {
         for fn_inst in self.fn_insts.clone() {
             let Some(mlr_fn) = self.mlr_fns.get(&fn_inst.fn_).cloned() else {
                 continue;
@@ -114,7 +114,7 @@ impl<'iw, 'a, 'ctxt, 'mlr> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         Ok(())
     }
 
-    fn get_or_define_ty(&mut self, ty: mr_tys::Ty) -> Option<AnyTypeEnum<'iw>> {
+    fn get_or_define_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Primitive::*, TyDef::*};
 
         let ty = self.mr_ctxt.normalize_ty(ty);
@@ -164,15 +164,15 @@ impl<'iw, 'a, 'ctxt, 'mlr> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         Some(*self.types.entry(ty).or_insert(inkwell_type))
     }
 
-    fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty) -> Option<BasicTypeEnum<'iw>> {
+    fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<BasicTypeEnum<'iw>> {
         self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_tys::Ty) -> Option<BasicMetadataTypeEnum<'iw>> {
+    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<BasicMetadataTypeEnum<'iw>> {
         self.get_or_define_ty(ty)?.try_into().ok()
     }
 
-    fn define_struct(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
+    fn define_struct(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
         for &(ty_2, iw_type) in &self.structs {
             if self.mr_ctxt.tys.tys_eq(ty, ty_2) {
                 return iw_type.as_any_type_enum();
@@ -194,7 +194,7 @@ impl<'iw, 'a, 'ctxt, 'mlr> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         iw_struct.as_any_type_enum()
     }
 
-    fn define_enum(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
+    fn define_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
         for &(ty_2, iw_type) in &self.enums {
             if self.mr_ctxt.tys.tys_eq(ty, ty_2) {
                 return iw_type.as_any_type_enum();
@@ -223,7 +223,7 @@ impl<'iw, 'a, 'ctxt, 'mlr> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         iw_enum_struct.as_any_type_enum()
     }
 
-    fn define_tuple_ty(&mut self, ty: mr_tys::Ty) -> AnyTypeEnum<'iw> {
+    fn define_tuple_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
         let mr_field_tys = self.mr_ctxt.tys.get_tuple_field_tys(ty).unwrap().to_vec();
         let iw_field_tys: Vec<BasicTypeEnum> = mr_field_tys
             .into_iter()

@@ -3,14 +3,14 @@ use crate::{
     hlr,
 };
 
-pub type TypeckResult<T> = Result<T, TypeckError>;
+pub type TypeckResult<'ty, T> = Result<T, TypeckError<'ty>>;
 
 #[derive(Debug)]
 #[allow(unused)]
-pub enum TypeckError {
+pub enum TypeckError<'ty> {
     ReturnTypeMismatch {
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     FnGenArgCountMismatch {
         fn_: fns::Fn,
@@ -28,15 +28,15 @@ pub enum TypeckError {
         actual: usize,
     },
     UnresolvableAssocTy {
-        base: ty::Ty,
+        base: ty::Ty<'ty>,
         name: String,
     },
     MthdResolutionFailed {
-        base_ty: ty::Ty,
+        base_ty: ty::Ty<'ty>,
         mthd_name: String,
     },
     AmbiguousMthd {
-        base_ty: ty::Ty,
+        base_ty: ty::Ty<'ty>,
         mthd_name: String,
     },
     MthdGenArgCountMismatch {
@@ -45,23 +45,23 @@ pub enum TypeckError {
         actual: usize,
     },
     NamedFieldAccessOnNonStruct {
-        ty: ty::Ty,
+        ty: ty::Ty<'ty>,
     },
     IndexedFieldAccessOnNonTuple {
-        ty: ty::Ty,
+        ty: ty::Ty<'ty>,
     },
     StructFieldNotFound {
-        struct_ty: ty::Ty,
+        struct_ty: ty::Ty<'ty>,
         field: String,
     },
     StructFieldTypeMismatch {
-        struct_ty: ty::Ty,
+        struct_ty: ty::Ty<'ty>,
         field_idx: usize,
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     CalleeNotCallable {
-        ty: ty::Ty,
+        ty: ty::Ty<'ty>,
     },
     CallArgCountMismatch {
         expected: usize,
@@ -70,53 +70,53 @@ pub enum TypeckError {
     },
     CallArgTypeMismatch {
         index: usize,
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     BinaryOpTypeMismatch {
         operator: hlr::BinaryOperator,
-        left_ty: ty::Ty,
-        right_ty: ty::Ty,
+        left_ty: ty::Ty<'ty>,
+        right_ty: ty::Ty<'ty>,
     },
     ArithTraitNotImplemented {
         operator: hlr::BinaryOperator,
-        left_ty: ty::Ty,
-        right_ty: ty::Ty,
+        left_ty: ty::Ty<'ty>,
+        right_ty: ty::Ty<'ty>,
     },
     UnaryOpTypeMismatch {
         operator: hlr::UnaryOperator,
-        operand_ty: ty::Ty,
+        operand_ty: ty::Ty<'ty>,
     },
     AssignmentTargetNotAPlace,
     AssignmentTypeMismatch {
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     DereferenceOfNonRef {
-        ty: ty::Ty,
+        ty: ty::Ty<'ty>,
     },
     DereferenceOfCVoid {
-        ty: ty::Ty,
+        ty: ty::Ty<'ty>,
     },
     InvalidAsConversion {
-        op_ty: ty::Ty,
-        target_ty: ty::Ty,
+        op_ty: ty::Ty<'ty>,
+        target_ty: ty::Ty<'ty>,
     },
     IfConditionNotBoolean,
     IfBranchesTypeMismatch {
-        then_ty: ty::Ty,
-        else_ty: ty::Ty,
+        then_ty: ty::Ty<'ty>,
+        else_ty: ty::Ty<'ty>,
     },
     NonMatchableScrutinee {
-        ty: ty::Ty,
+        ty: ty::Ty<'ty>,
     },
     MatchArmWrongEnum {
-        expected: ty::Ty,
-        found: ty::Ty,
+        expected: ty::Ty<'ty>,
+        found: ty::Ty<'ty>,
     },
     MatchArmTypeMismatch {
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     TraitGenArgCountMismatch {
         trait_: traits::Trait,
@@ -124,28 +124,28 @@ pub enum TypeckError {
         actual: usize,
     },
     ReturnExprTypeMismatch {
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     LetTypeMismatch {
-        expected: ty::Ty,
-        actual: ty::Ty,
+        expected: ty::Ty<'ty>,
+        actual: ty::Ty<'ty>,
     },
     VarTypeNotSet {
         var_id: hlr::VarId,
         expr_id: hlr::ExprId,
     },
     ConstraintNotSatisfied {
-        ty: ty::Ty,
-        trait_inst: traits::TraitInst,
+        ty: ty::Ty<'ty>,
+        trait_inst: traits::TraitInst<'ty>,
     },
     CallableConstraintNotSatisfied {
-        ty: ty::Ty,
-        expected_param_tys: ty::TySlice,
-        expected_return_ty: ty::Ty,
+        ty: ty::Ty<'ty>,
+        expected_param_tys: ty::TySlice<'ty>,
+        expected_return_ty: ty::Ty<'ty>,
     },
     AssocTyEqNotSatisfied {
-        subject: ty::Ty,
-        expected: ty::Ty,
+        subject: ty::Ty<'ty>,
+        expected: ty::Ty<'ty>,
     },
 }

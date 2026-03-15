@@ -21,10 +21,10 @@ use crate::{
 };
 
 #[derive(Copy, Clone)]
-struct ResCtxt<'a> {
+struct ResCtxt<'a, 'ty> {
     gen_vars: &'a [ty::GenVar],
-    self_ty: Option<ty::Ty>,
-    constraints: &'a [ty::Constraint],
+    self_ty: Option<ty::Ty<'ty>>,
+    constraints: &'a [ty::Constraint<'ty>],
 }
 
 #[derive(Default)]
@@ -58,17 +58,17 @@ pub fn compile(
     driver.compile().map_err(|err| format_driver_error(err, &driver.ctxt))
 }
 
-struct Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
+struct Driver<'a, 'arena> {
     sources: Vec<String>,
     print_pretty: &'a dyn Fn(&str),
     print_detail: &'a dyn Fn(&str),
     output_paths: &'a OutputPaths<'a>,
 
-    ctxt: ctxt::Ctxt<'ctxt>,
-    ast: &'ast ast::Ast<'ast>,
+    ctxt: ctxt::Ctxt<'arena>,
+    ast: &'arena ast::Ast<'arena>,
     ast_meta: AstMeta,
-    hlr: &'hlr hlr::Hlr<'hlr>,
-    mlr: &'mlr mlr::Mlr<'mlr>,
+    hlr: &'arena hlr::Hlr<'arena>,
+    mlr: &'arena mlr::Mlr<'arena>,
 }
 
 #[derive(Default)]
@@ -80,8 +80,8 @@ struct AstMeta {
     impl_ids: HashMap<ast::ImplId, impls::Impl>,
 }
 
-impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
-    pub fn compile(&mut self) -> Result<(), DriverError> {
+impl<'a, 'arena> Driver<'a, 'arena> {
+    pub fn compile(&mut self) -> Result<(), DriverError<'arena>> {
         self.print_pretty("Building AST from source");
         for source in &self.sources {
             parse::parse(source, self.ast).map_err(DriverError::Parse)?;
@@ -139,7 +139,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         (self.print_detail)(msg);
     }
 
-    fn register_tys(&mut self) -> Result<(), DriverError> {
+    fn register_tys(&mut self) -> Result<(), DriverError<'arena>> {
         self.ctxt
             .tys
             .register_primitive_tys()
@@ -181,7 +181,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn define_tys(&mut self) -> Result<(), DriverError> {
+    fn define_tys(&mut self) -> Result<(), DriverError<'arena>> {
         for struct_ in self.ast.structs().iter() {
             self.set_struct_fields(self.ast_meta.struct_ids[&struct_.1], &struct_.fields)?
         }
@@ -208,7 +208,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         &mut self,
         struct_: ty::Struct,
         fields: impl IntoIterator<Item = &'b ast::StructField<'b>>,
-    ) -> Result<(), DriverError> {
+    ) -> Result<(), DriverError<'arena>> {
         let gen_params = self
             .ctxt
             .tys
@@ -242,7 +242,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_traits(&mut self) -> Result<(), DriverError> {
+    fn register_traits(&mut self) -> Result<(), DriverError<'arena>> {
         stdlib::register_add_trait(&mut self.ctxt);
         stdlib::register_sub_trait(&mut self.ctxt);
         stdlib::register_mul_trait(&mut self.ctxt);
@@ -272,7 +272,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_impls(&mut self) -> Result<(), DriverError> {
+    fn register_impls(&mut self) -> Result<(), DriverError<'arena>> {
         stdlib::register_impl_for_ptr(&mut self.ctxt)
             .map_err(|_| DriverError::ContextBuild("Failed to register stdlib pointer impl"))?;
 
@@ -284,7 +284,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_impl(&mut self, ast_impl: ast::Impl<'ast>) -> Result<impls::Impl, DriverError> {
+    fn register_impl(&mut self, ast_impl: ast::Impl<'arena>) -> Result<impls::Impl, DriverError<'arena>> {
         let gen_params: Vec<_> = ast_impl
             .gen_params
             .iter()
@@ -364,7 +364,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(impl_)
     }
 
-    fn register_free_fns(&mut self) -> Result<(), DriverError> {
+    fn register_free_fns(&mut self) -> Result<(), DriverError<'arena>> {
         stdlib::register_fns(&mut self.ctxt)
             .map_err(|_| DriverError::ContextBuild("Failed to register stdlib functions"))?;
 
@@ -378,12 +378,12 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
 
     fn register_function(
         &mut self,
-        ast_fn: ast::Fn<'ast>,
-        associated_ty: Option<ty::Ty>,
-        associated_trait_inst: Option<traits::TraitInst>,
+        ast_fn: ast::Fn<'arena>,
+        associated_ty: Option<ty::Ty<'arena>>,
+        associated_trait_inst: Option<traits::TraitInst<'arena>>,
         env_gen_params: Vec<ty::GenVar>,
-        env_constraints: Vec<ty::Constraint>,
-    ) -> Result<fns::Fn, DriverError> {
+        env_constraints: Vec<ty::Constraint<'arena>>,
+    ) -> Result<fns::Fn, DriverError<'arena>> {
         let gen_params: Vec<_> = ast_fn
             .gen_params
             .iter()
@@ -391,8 +391,8 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
             .collect();
         let all_gen_params: Vec<_> = gen_params.iter().chain(&env_gen_params).cloned().collect();
 
-        let mut all_constraints: Vec<ty::Constraint> = env_constraints.clone();
-        let mut constraints: Vec<ty::Constraint> = Vec::new();
+        let mut all_constraints: Vec<ty::Constraint<'arena>> = env_constraints.clone();
+        let mut constraints: Vec<ty::Constraint<'arena>> = Vec::new();
         for constraint in &ast_fn.constraints {
             let res_ctxt = ResCtxt {
                 gen_vars: &all_gen_params,
@@ -446,9 +446,9 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
     fn build_fn_param(
         &mut self,
         param: &ast::Param,
-        res_ctxt: ResCtxt<'_>,
+        res_ctxt: ResCtxt<'_, 'arena>,
         allow_receiver: bool,
-    ) -> Result<fns::FnParam, DriverError> {
+    ) -> Result<fns::FnParam<'arena>, DriverError<'arena>> {
         match param {
             ast::Param::Regular { name, ty } => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Regular(name.clone()),
@@ -473,7 +473,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         }
     }
 
-    fn register_trait_methods(&mut self) -> Result<(), DriverError> {
+    fn register_trait_methods(&mut self) -> Result<(), DriverError<'arena>> {
         for ast_trait in self.ast.traits().iter() {
             let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
             let self_type = self.ctxt.tys.trait_self(trait_);
@@ -540,7 +540,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn register_impl_methods(&mut self) -> Result<(), DriverError> {
+    fn register_impl_methods(&mut self) -> Result<(), DriverError<'arena>> {
         for ast_impl in self.ast.impls().iter() {
             let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
             let impl_def = self.ctxt.impls.get_impl_def(impl_);
@@ -560,7 +560,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'hlr>>, DriverError> {
+    fn ast_lowering(&self) -> Result<Vec<hlr::Fn<'arena>>, DriverError<'arena>> {
         let mut hlr_fns = Vec::new();
 
         for &ast_fn in self.ast.free_fns().iter() {
@@ -584,25 +584,30 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(hlr_fns)
     }
 
-    fn typeck(&mut self, hlr_fns: &[hlr::Fn<'hlr>]) -> Result<HashMap<fns::Fn, typeck::HlrTyping>, DriverError> {
-        hlr_fns
+    fn typeck(
+        &mut self,
+        hlr_fns: &[hlr::Fn<'arena>],
+    ) -> Result<HashMap<fns::Fn, typeck::HlrTyping<'arena>>, DriverError<'arena>> {
+        let fn_names: Vec<String> = hlr_fns
             .iter()
-            .map(|hlr_fn| {
-                let fn_name = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap().name.clone();
-                let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|error| DriverError::Typeck {
-                    fn_name: fn_name.clone(),
-                    error,
-                })?;
-                Ok((hlr_fn.fn_, typing))
-            })
-            .collect()
+            .map(|hlr_fn| self.ctxt.fns.get_fn_name(hlr_fn.fn_).to_string())
+            .collect();
+        let mut result = HashMap::new();
+        for (hlr_fn, fn_name) in hlr_fns.iter().zip(fn_names) {
+            let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|error| DriverError::Typeck {
+                fn_name: fn_name.clone(),
+                error,
+            })?;
+            result.insert(hlr_fn.fn_, typing);
+        }
+        Ok(result)
     }
 
     fn hlr_lowering(
         &mut self,
-        hlr_fns: &[hlr::Fn<'hlr>],
-        typings: &HashMap<fns::Fn, typeck::HlrTyping>,
-    ) -> Vec<mlr::Fn<'mlr>> {
+        hlr_fns: &[hlr::Fn<'arena>],
+        typings: &HashMap<fns::Fn, typeck::HlrTyping<'arena>>,
+    ) -> Vec<mlr::Fn<'arena>> {
         hlr_fns
             .iter()
             .filter_map(|hlr_fn| typings.get(&hlr_fn.fn_).map(|typing| (hlr_fn, typing)))
@@ -613,9 +618,9 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
     fn print_hlr_fns(
         &self,
         path: &Path,
-        hlr_fns: &[hlr::Fn<'hlr>],
-        typings: &HashMap<fns::Fn, typeck::HlrTyping>,
-    ) -> Result<(), DriverError> {
+        hlr_fns: &[hlr::Fn<'arena>],
+        typings: &HashMap<fns::Fn, typeck::HlrTyping<'arena>>,
+    ) -> Result<(), DriverError<'arena>> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating HLR file"))?;
         for hlr_fn in hlr_fns {
             let typing = typings.get(&hlr_fn.fn_);
@@ -625,10 +630,10 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'mlr>]) -> Result<(), DriverError> {
+    fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'arena>]) -> Result<(), DriverError<'arena>> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating MLR file"))?;
 
-        let mlr_fn_map: HashMap<fns::Fn, &mlr::Fn<'mlr>> = mlr_fns.iter().map(|f| (f.fn_, f)).collect();
+        let mlr_fn_map: HashMap<fns::Fn, &mlr::Fn<'arena>> = mlr_fns.iter().map(|f| (f.fn_, f)).collect();
         for fn_ in self.ctxt.fns.get_all_fns() {
             let mlr_fn = mlr_fn_map.get(&fn_).copied();
             print::print_mlr(fn_, mlr_fn, &self.ctxt, &mut file).map_err(|_| DriverError::Io("Error printing MLR"))?;
@@ -637,7 +642,7 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
         Ok(())
     }
 
-    fn monomorphize_functions(&mut self) -> Result<HashSet<fns::FnInst>, DriverError> {
+    fn monomorphize_functions(&mut self) -> Result<HashSet<fns::FnInst<'arena>>, DriverError<'arena>> {
         let mut open = VecDeque::new();
         let main_fn = self
             .ctxt
@@ -677,9 +682,9 @@ impl<'a, 'ctxt, 'ast, 'hlr, 'mlr> Driver<'a, 'ctxt, 'ast, 'hlr, 'mlr> {
 
     fn mlr_lowering(
         &mut self,
-        mlr_fns: Vec<mlr::Fn<'mlr>>,
-        fn_insts: HashSet<fns::FnInst>,
-    ) -> Result<String, DriverError> {
+        mlr_fns: Vec<mlr::Fn<'arena>>,
+        fn_insts: HashSet<fns::FnInst<'arena>>,
+    ) -> Result<String, DriverError<'arena>> {
         mlr_lowering::mlr_to_llvm_ir(&mut self.ctxt, mlr_fns, fn_insts.into_iter().collect())
             .map_err(DriverError::MlrLowering)
     }

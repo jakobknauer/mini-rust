@@ -5,13 +5,13 @@ use crate::{
 
 use super::{Driver, ResCtxt};
 
-impl Driver<'_, '_, '_, '_, '_> {
+impl<'arena> Driver<'_, 'arena> {
     pub(super) fn try_resolve_ast_ty_annot(
         &mut self,
         annot: ast::TyAnnot,
-        res_ctxt: ResCtxt<'_>,
+        res_ctxt: ResCtxt<'_, 'arena>,
         allow_opaque: bool,
-    ) -> Option<ty::Ty> {
+    ) -> Option<ty::Ty<'arena>> {
         use ast::TyAnnotKind::*;
 
         match annot {
@@ -35,7 +35,7 @@ impl Driver<'_, '_, '_, '_, '_> {
                 .try_resolve_ast_ty_annot(ty_annot, res_ctxt, false)
                 .map(|inner| self.ctxt.tys.ptr(inner)),
             &Fn { param_tys, return_ty } => {
-                let param_tys: Vec<ty::Ty> = param_tys
+                let param_tys: Vec<ty::Ty<'arena>> = param_tys
                     .iter()
                     .map(|&pt| self.try_resolve_ast_ty_annot(pt, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;
@@ -48,7 +48,7 @@ impl Driver<'_, '_, '_, '_, '_> {
                 Some(self.ctxt.tys.fn_(&param_tys, return_ty, false))
             }
             &Tuple(ty_annots) => {
-                let tys: Vec<ty::Ty> = ty_annots
+                let tys: Vec<ty::Ty<'arena>> = ty_annots
                     .iter()
                     .map(|ty_annot| self.try_resolve_ast_ty_annot(ty_annot, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;
@@ -123,8 +123,8 @@ impl Driver<'_, '_, '_, '_, '_> {
     pub(super) fn try_resolve_ast_path_segment_to_ty(
         &mut self,
         path_segment: &ast::PathSegment,
-        res_ctxt: ResCtxt<'_>,
-    ) -> Option<ty::Ty> {
+        res_ctxt: ResCtxt<'_, 'arena>,
+    ) -> Option<ty::Ty<'arena>> {
         match path_segment {
             ast::PathSegment { is_self: true, .. } => Some(res_ctxt.self_ty.expect("self type not available")),
             ast::PathSegment { ident, args: None, .. } => {
@@ -148,7 +148,7 @@ impl Driver<'_, '_, '_, '_, '_> {
                 args: Some(args),
                 ..
             } => {
-                let gen_args: Vec<ty::Ty> = args
+                let gen_args: Vec<ty::Ty<'arena>> = args
                     .iter()
                     .map(|arg_annot| self.try_resolve_ast_ty_annot(arg_annot, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;

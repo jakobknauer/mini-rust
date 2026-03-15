@@ -4,8 +4,8 @@ use crate::{ctxt, hlr, typeck::HlrTyping};
 
 pub fn print_hlr<W: Write>(
     hlr_fn: &hlr::Fn<'_>,
-    ctxt: &ctxt::Ctxt,
-    typing: Option<&HlrTyping>,
+    ctxt: &ctxt::Ctxt<'_>,
+    typing: Option<&HlrTyping<'_>>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = HlrPrinter {
@@ -19,7 +19,7 @@ pub fn print_hlr<W: Write>(
 
 struct HlrPrinter<'a, W: Write> {
     ctxt: &'a ctxt::Ctxt<'a>,
-    typing: Option<&'a HlrTyping>,
+    typing: Option<&'a HlrTyping<'a>>,
     indent_level: usize,
     writer: &'a mut W,
 }

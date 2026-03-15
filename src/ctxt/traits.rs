@@ -7,10 +7,10 @@ use crate::ctxt::{
 pub struct Trait(pub(in crate::ctxt) usize);
 
 #[derive(Clone)]
-pub struct TraitDef {
+pub struct TraitDef<'traits> {
     pub name: String,
     pub gen_params: Vec<GenVar>,
-    pub mthds: Vec<FnSig>,
+    pub mthds: Vec<FnSig<'traits>>,
     pub assoc_tys: Vec<String>,
 }
 
@@ -25,14 +25,15 @@ pub struct TraitInstError {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct TraitInst {
+pub struct TraitInst<'traits> {
     pub trait_: Trait,
-    pub gen_args: TySlice,
+    pub gen_args: TySlice<'traits>,
     pub(in crate::ctxt) _private: (),
+    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'traits ()>,
 }
 
-impl TraitInst {
-    pub fn with_gen_args(self, gen_args: TySlice) -> Result<TraitInst, TraitInstError> {
+impl<'traits> TraitInst<'traits> {
+    pub fn with_gen_args(self, gen_args: TySlice<'traits>) -> Result<TraitInst<'traits>, TraitInstError> {
         if gen_args.len != self.gen_args.len {
             return Err(TraitInstError {
                 trait_: self.trait_,
@@ -44,6 +45,7 @@ impl TraitInst {
             trait_: self.trait_,
             gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 }

@@ -25,13 +25,13 @@ impl<'mlr> Mlr<'mlr> {
 pub type Stmt<'mlr> = &'mlr StmtDef<'mlr>;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Val<'mlr>(pub &'mlr ValDef<'mlr>, pub Ty);
+pub struct Val<'mlr>(pub &'mlr ValDef<'mlr>, pub Ty<'mlr>);
 
 #[derive(Clone, Copy, Debug)]
-pub struct Place<'mlr>(pub &'mlr PlaceDef<'mlr>, pub Ty);
+pub struct Place<'mlr>(pub &'mlr PlaceDef<'mlr>, pub Ty<'mlr>);
 
 #[derive(Clone, Copy, Debug)]
-pub struct Op<'mlr>(pub &'mlr OpDef<'mlr>, pub Ty);
+pub struct Op<'mlr>(pub &'mlr OpDef<'mlr>, pub Ty<'mlr>);
 
 impl<'mlr> std::ops::Deref for Val<'mlr> {
     type Target = ValDef<'mlr>;
@@ -55,23 +55,23 @@ impl<'mlr> std::ops::Deref for Op<'mlr> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Loc(usize, pub Ty);
+pub struct Loc<'mlr>(usize, pub Ty<'mlr>);
 
-impl PartialEq for Loc {
+impl PartialEq for Loc<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl Eq for Loc {}
+impl Eq for Loc<'_> {}
 
-impl std::hash::Hash for Loc {
+impl std::hash::Hash for Loc<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
-impl std::fmt::Display for Loc {
+impl std::fmt::Display for Loc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "_{}", self.0)
     }
@@ -79,7 +79,7 @@ impl std::fmt::Display for Loc {
 
 #[derive(Debug)]
 pub enum StmtDef<'mlr> {
-    Alloc { loc: Loc },
+    Alloc { loc: Loc<'mlr> },
     Assign { place: Place<'mlr>, value: Val<'mlr> },
     Return { value: Val<'mlr> },
     Block(&'mlr [Stmt<'mlr>]),
@@ -98,7 +98,7 @@ pub enum ValDef<'mlr> {
     AddrOf(Place<'mlr>),
     As {
         op: Op<'mlr>,
-        target_ty: Ty,
+        target_ty: Ty<'mlr>,
     },
     BinaryPrim {
         op: BinaryPrimOp,
@@ -113,15 +113,15 @@ pub enum ValDef<'mlr> {
 
 #[derive(Debug)]
 pub enum OpDef<'mlr> {
-    Fn(FnInst),
-    TraitMthd(TraitMthdInst),
+    Fn(FnInst<'mlr>),
+    TraitMthd(TraitMthdInst<'mlr>),
     Const(Const),
     Copy(Place<'mlr>),
 }
 
 #[derive(Debug)]
 pub enum PlaceDef<'mlr> {
-    Loc(Loc),
+    Loc(Loc<'mlr>),
     FieldAccess { base: Place<'mlr>, field_index: usize },
     EnumDiscriminant { base: Place<'mlr> },
     ProjectToVariant { base: Place<'mlr>, variant_index: usize },
@@ -148,7 +148,7 @@ pub struct If<'mlr> {
 pub struct Fn<'mlr> {
     pub fn_: fns::Fn,
     pub body: Stmt<'mlr>,
-    pub param_locs: Vec<Loc>,
+    pub param_locs: Vec<Loc<'mlr>>,
 }
 
 impl<'mlr> Mlr<'mlr> {
@@ -160,19 +160,19 @@ impl<'mlr> Mlr<'mlr> {
         self.arena.alloc_slice_copy(stmts)
     }
 
-    pub fn insert_val(&self, val_def: ValDef<'mlr>, ty: Ty) -> Val<'mlr> {
+    pub fn insert_val(&self, val_def: ValDef<'mlr>, ty: Ty<'mlr>) -> Val<'mlr> {
         Val(self.arena.alloc(val_def), ty)
     }
 
-    pub fn insert_place(&self, place_def: PlaceDef<'mlr>, ty: Ty) -> Place<'mlr> {
+    pub fn insert_place(&self, place_def: PlaceDef<'mlr>, ty: Ty<'mlr>) -> Place<'mlr> {
         Place(self.arena.alloc(place_def), ty)
     }
 
-    pub fn insert_op(&self, op_def: OpDef<'mlr>, ty: Ty) -> Op<'mlr> {
+    pub fn insert_op(&self, op_def: OpDef<'mlr>, ty: Ty<'mlr>) -> Op<'mlr> {
         Op(self.arena.alloc(op_def), ty)
     }
 
-    pub fn insert_typed_loc(&self, ty: Ty) -> Loc {
+    pub fn insert_typed_loc(&self, ty: Ty<'mlr>) -> Loc<'mlr> {
         let id = self.next_loc_id.get();
         self.next_loc_id.set(id + 1);
         Loc(id, ty)

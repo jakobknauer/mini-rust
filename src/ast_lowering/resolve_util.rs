@@ -5,7 +5,7 @@ use crate::{
     hlr,
 };
 
-impl<'ctxt, 'hlr> super::AstLowerer<'ctxt, 'hlr> {
+impl<'c, 'ctxt: 'hlr, 'hlr> super::AstLowerer<'c, 'ctxt, 'hlr> {
     pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstLoweringResult<hlr::Val<'hlr>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),
@@ -78,7 +78,7 @@ impl<'ctxt, 'hlr> super::AstLowerer<'ctxt, 'hlr> {
         Ok(hlr::Val::Variant(enum_, variant_index, args))
     }
 
-    pub(super) fn resolve_ident_to_ty(&mut self, ident: &str) -> AstLoweringResult<TyResolution> {
+    pub(super) fn resolve_ident_to_ty(&self, ident: &str) -> AstLoweringResult<TyResolution<'ctxt>> {
         let sig = self.get_signature();
         // Try to resolve to generic var
         for &gen_var in &sig.gen_params {
@@ -123,7 +123,7 @@ impl<'ctxt, 'hlr> super::AstLowerer<'ctxt, 'hlr> {
     }
 }
 
-pub(super) enum TyResolution {
-    NamedTy(ctxt::Named),
+pub(super) enum TyResolution<'ty> {
+    NamedTy(ctxt::Named<'ty>),
     GenVar(ctxt::ty::GenVar),
 }

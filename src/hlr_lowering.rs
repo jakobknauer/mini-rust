@@ -11,27 +11,32 @@ use crate::{
     typeck::{ExprExtra, HlrTyping, MthdResolution},
 };
 
-pub fn hlr_to_mlr<'ctxt, 'hlr, 'mlr>(
+pub fn hlr_to_mlr<'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
     mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: &'hlr hlr::Fn<'hlr>,
-    typing: &'hlr HlrTyping,
+    typing: &'hlr HlrTyping<'ctxt>,
 ) -> Vec<mlr::Fn<'mlr>> {
     let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing);
     lowerer.lower_fn(fn_)
 }
 
-struct HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
+struct HlrLowerer<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> {
     fn_: fns::Fn,
     builder: MlrBuilder<'a, 'ctxt, 'mlr>,
-    typing: &'hlr HlrTyping,
-    var_locs: HashMap<hlr::VarId, mlr::Loc>,
+    typing: &'hlr HlrTyping<'ctxt>,
+    var_locs: HashMap<hlr::VarId, mlr::Loc<'mlr>>,
     mlr_fns: Vec<mlr::Fn<'mlr>>,
     _hlr: std::marker::PhantomData<hlr::Fn<'hlr>>,
 }
 
-impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
-    fn new(ctxt: &'a mut ctxt::Ctxt<'ctxt>, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn, typing: &'hlr HlrTyping) -> Self {
+impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
+    fn new(
+        ctxt: &'a mut ctxt::Ctxt<'ctxt>,
+        mlr: &'mlr mlr::Mlr<'mlr>,
+        fn_: fns::Fn,
+        typing: &'hlr HlrTyping<'ctxt>,
+    ) -> Self {
         Self {
             fn_,
             builder: MlrBuilder::new(ctxt, mlr, fn_),
@@ -336,7 +341,7 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         val.into()
     }
 
-    fn lower_struct_val(&mut self, struct_ty: ty::Ty, fields: hlr::StructFields<'hlr>) -> mlr::Val<'mlr> {
+    fn lower_struct_val(&mut self, struct_ty: ty::Ty<'ctxt>, fields: hlr::StructFields<'hlr>) -> mlr::Val<'mlr> {
         let struct_place = self.builder.alloc_place(struct_ty);
 
         for (field_spec, field_expr) in fields.iter() {
@@ -367,7 +372,7 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
 
     fn lower_enum_val(
         &mut self,
-        enum_ty: ty::Ty,
+        enum_ty: ty::Ty<'ctxt>,
         variant_idx: usize,
         fields: hlr::StructFields<'hlr>,
     ) -> mlr::Val<'mlr> {
@@ -433,7 +438,7 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
 
     fn lower_tuple(&mut self, exprs: hlr::ExprSlice<'hlr>) -> LoweredExpr<'mlr> {
         let exprs = exprs.to_vec();
-        let elem_tys: Vec<ty::Ty> = exprs.iter().map(|e| self.typing.expr_types[&e.1]).collect();
+        let elem_tys: Vec<ty::Ty<'ctxt>> = exprs.iter().map(|e| self.typing.expr_types[&e.1]).collect();
         let tuple_ty = self.builder.ctxt.tys.tuple(&elem_tys);
 
         let tuple_place = self.builder.alloc_place(tuple_ty);
@@ -553,11 +558,11 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
     #[allow(clippy::too_many_arguments)]
     fn lower_match_arms(
         &mut self,
-        enum_ty: ty::Ty,
+        enum_ty: ty::Ty<'ctxt>,
         by_ref: bool,
         arms: &'hlr [hlr::MatchArm<'hlr>],
         discriminant_op: mlr::Op<'mlr>,
-        i32_ty: ty::Ty,
+        i32_ty: ty::Ty<'ctxt>,
         scrutinee_place: mlr::Place<'mlr>,
         result_place: mlr::Place<'mlr>,
     ) {
@@ -612,7 +617,7 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
 
     fn lower_match_arm(
         &mut self,
-        enum_ty: ty::Ty,
+        enum_ty: ty::Ty<'ctxt>,
         by_ref: bool,
         arm: &'hlr hlr::MatchArm<'hlr>,
         scrutinee_place: mlr::Place<'mlr>,
@@ -751,7 +756,7 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         self.builder.end_and_push_block();
     }
 
-    fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution) -> (mlr::Op<'mlr>, bool) {
+    fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> (mlr::Op<'mlr>, bool) {
         match resolution {
             MthdResolution::Inherent(fn_inst) => {
                 let by_ref = self
@@ -783,7 +788,7 @@ impl<'a, 'ctxt, 'hlr, 'mlr> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         }
     }
 
-    fn lower_mthd_resolution_to_op(&mut self, resolution: &MthdResolution) -> mlr::Op<'mlr> {
+    fn lower_mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> mlr::Op<'mlr> {
         match resolution {
             MthdResolution::Inherent(fn_inst) => self.builder.insert_fn_inst_op(*fn_inst),
             MthdResolution::Trait(inst) => self.builder.insert_trait_mthd_op(*inst),

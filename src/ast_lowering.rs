@@ -9,8 +9,8 @@ use crate::{
     hlr,
 };
 
-pub fn ast_to_hlr<'ast, 'hlr>(
-    ctxt: &ctxt::Ctxt,
+pub fn ast_to_hlr<'c, 'ctxt: 'hlr, 'ast, 'hlr>(
+    ctxt: &'c ctxt::Ctxt<'ctxt>,
     fn_: fns::Fn,
     ast_body: ast::Block<'ast>,
     hlr: &'hlr hlr::Hlr<'hlr>,
@@ -19,10 +19,10 @@ pub fn ast_to_hlr<'ast, 'hlr>(
     converter.lower_function_body(ast_body)
 }
 
-struct AstLowerer<'ctxt, 'hlr> {
+struct AstLowerer<'c, 'ctxt, 'hlr> {
     fn_: fns::Fn,
 
-    ctxt: &'ctxt ctxt::Ctxt<'ctxt>,
+    ctxt: &'c ctxt::Ctxt<'ctxt>,
     hlr: &'hlr hlr::Hlr<'hlr>,
 
     scopes: VecDeque<Scope>,
@@ -37,8 +37,8 @@ pub struct AstLoweringError {
     pub msg: String,
 }
 
-impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
-    fn new(ctxt: &'ctxt ctxt::Ctxt, fn_: fns::Fn, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
+impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
+    fn new(ctxt: &'c ctxt::Ctxt<'ctxt>, fn_: fns::Fn, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             fn_,
 
@@ -53,18 +53,21 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
     }
 
     fn lower_function_body(mut self, block: ast::Block) -> AstLoweringResult<hlr::Fn<'hlr>> {
-        let signature = self.get_signature();
-        if signature.var_args {
+        let (var_args, param_kinds) = {
+            let signature = self.get_signature();
+            let param_kinds: Vec<fns::FnParamKind> = signature.params.iter().map(|p| p.kind.clone()).collect();
+            (signature.var_args, param_kinds)
+        };
+        if var_args {
             return Err(AstLoweringError {
                 msg: "Varargs functions are not supported in HLR".to_string(),
             });
         }
 
-        let params = signature.params.clone();
         let mut param_var_ids = Vec::new();
 
         self.scopes.push_back(Scope::default());
-        for fns::FnParam { kind: name, .. } in params {
+        for name in param_kinds {
             let var_id = self.hlr.var_id();
             param_var_ids.push(var_id);
 
@@ -94,7 +97,7 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
         })
     }
 
-    fn get_signature(&self) -> &fns::FnSig {
+    fn get_signature(&self) -> &fns::FnSig<'_> {
         self.ctxt.fns.get_sig(self.fn_).unwrap()
     }
 
@@ -330,8 +333,8 @@ impl<'ctxt, 'hlr, 'ast> AstLowerer<'ctxt, 'hlr> {
             return Ok(hlr::TyAnnotDef::Self_);
         }
 
-        let resolved_ty = self.resolve_ident_to_ty(&segment.ident)?;
         let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
+        let resolved_ty = self.resolve_ident_to_ty(&segment.ident)?;
 
         match (resolved_ty, args) {
             (TyResolution::GenVar(gen_var), None) => Ok(hlr::TyAnnotDef::GenVar(gen_var)),

@@ -14,8 +14,8 @@ use super::{MlrFnLowerer, MlrFnLoweringError, MlrFnLoweringResult};
 impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub(super) fn try_build_intrinsic_call(
         &mut self,
-        fn_inst: mr_fns::FnInst,
-        args: &[mlr::Op],
+        fn_inst: mr_fns::FnInst<'ctxt>,
+        args: &[mlr::Op<'mlr>],
     ) -> MlrFnLoweringResult<Option<BasicValueEnum<'iw>>> {
         let lang = &self.parent.mr_ctxt.language_items;
         if Some(fn_inst.fn_) == lang.size_of {
@@ -27,7 +27,7 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
         Ok(None)
     }
 
-    fn build_size_of_intrinsic(&mut self, fn_inst: mr_fns::FnInst) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
+    fn build_size_of_intrinsic(&mut self, fn_inst: mr_fns::FnInst<'ctxt>) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let gen_args = self.substitute_slice(fn_inst.gen_args);
         let ty = self.parent.mr_ctxt.tys.get_ty_slice(gen_args)[0];
         let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(MlrFnLoweringError)?;
@@ -39,8 +39,8 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub(super) fn build_binary_prim(
         &mut self,
         op: language_items::BinaryPrimOp,
-        lhs: mlr::Op,
-        rhs: mlr::Op,
+        lhs: mlr::Op<'mlr>,
+        rhs: mlr::Op<'mlr>,
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::BinaryPrimOp::*;
 
@@ -89,7 +89,7 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub(super) fn build_unary_prim(
         &mut self,
         op: language_items::UnaryPrimOp,
-        operand: mlr::Op,
+        operand: mlr::Op<'mlr>,
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::UnaryPrimOp::*;
         let operand = self.build_op(operand)?.into_int_value();
@@ -100,7 +100,11 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
         Ok(result.as_basic_value_enum())
     }
 
-    fn build_int_pair(&mut self, lhs: mlr::Op, rhs: mlr::Op) -> MlrFnLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
+    fn build_int_pair(
+        &mut self,
+        lhs: mlr::Op<'mlr>,
+        rhs: mlr::Op<'mlr>,
+    ) -> MlrFnLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
         let lhs = self.build_op(lhs)?.into_int_value();
         let rhs = self.build_op(rhs)?.into_int_value();
         Ok((lhs, rhs))
@@ -108,8 +112,8 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
 
     fn build_ptr_offset_intrinsic(
         &mut self,
-        fn_inst: mr_fns::FnInst,
-        args: &[mlr::Op],
+        fn_inst: mr_fns::FnInst<'ctxt>,
+        args: &[mlr::Op<'mlr>],
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let &[ptr, offset] = args else {
             return Err(MlrFnLoweringError);

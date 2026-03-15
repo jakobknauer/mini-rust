@@ -9,17 +9,17 @@ pub use crate::ctxt::traits::TraitInstError;
 #[derive(Default)]
 pub struct TraitReg<'traits> {
     _phantom: std::marker::PhantomData<&'traits ()>,
-    traits: Vec<TraitDef>,
+    traits: Vec<TraitDef<'traits>>,
 }
 
 impl<'traits> TraitReg<'traits> {
     pub fn inst_trait_mthd(
         &self,
-        trait_inst: TraitInst,
+        trait_inst: TraitInst<'traits>,
         mthd_idx: usize,
-        impl_ty: Ty,
-        gen_args: TySlice,
-    ) -> Result<TraitMthdInst, TraitMthdInstError> {
+        impl_ty: Ty<'traits>,
+        gen_args: TySlice<'traits>,
+    ) -> Result<TraitMthdInst<'traits>, TraitMthdInstError> {
         let trait_def = self.traits.get(trait_inst.trait_.0).unwrap();
         if mthd_idx >= trait_def.mthds.len() {
             return Err(TraitMthdInstError::MthdIdxOutOfRange {
@@ -42,10 +42,11 @@ impl<'traits> TraitReg<'traits> {
             impl_ty,
             gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 
-    pub fn inst_trait(&self, trait_: Trait, gen_args: TySlice) -> Result<TraitInst, TraitInstError> {
+    pub fn inst_trait(&self, trait_: Trait, gen_args: TySlice<'traits>) -> Result<TraitInst<'traits>, TraitInstError> {
         let trait_def = self.traits.get(trait_.0).unwrap();
         if trait_def.gen_params.len() != gen_args.len {
             return Err(TraitInstError {
@@ -58,6 +59,7 @@ impl<'traits> TraitReg<'traits> {
             trait_,
             gen_args,
             _private: (),
+            _phantom: std::marker::PhantomData,
         })
     }
 
@@ -72,7 +74,7 @@ impl<'traits> TraitReg<'traits> {
         trait_
     }
 
-    pub fn register_mthd(&mut self, trait_: Trait, sig: FnSig) {
+    pub fn register_mthd(&mut self, trait_: Trait, sig: FnSig<'traits>) {
         self.traits[trait_.0].mthds.push(sig);
     }
 
@@ -87,7 +89,7 @@ impl<'traits> TraitReg<'traits> {
             .map(Trait)
     }
 
-    pub fn get_trait_def(&self, trait_: Trait) -> &TraitDef {
+    pub fn get_trait_def(&self, trait_: Trait) -> &TraitDef<'traits> {
         self.traits.get(trait_.0).unwrap()
     }
 
@@ -116,7 +118,7 @@ impl<'traits> TraitReg<'traits> {
             })
     }
 
-    pub fn get_trait_mthd_sig(&self, trait_: Trait, mthd_idx: usize) -> &FnSig {
+    pub fn get_trait_mthd_sig(&self, trait_: Trait, mthd_idx: usize) -> &FnSig<'traits> {
         &self.traits[trait_.0].mthds[mthd_idx]
     }
 

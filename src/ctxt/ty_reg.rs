@@ -9,39 +9,39 @@ use crate::ctxt::{
 #[derive(Default)]
 pub struct TyReg<'ty> {
     _phantom: std::marker::PhantomData<&'ty ()>,
-    tys: Vec<TyDef>,
-    ty_slices: Vec<Ty>,
+    tys: Vec<TyDef<'ty>>,
+    ty_slices: Vec<Ty<'ty>>,
 
-    structs: Vec<StructDef>,
+    structs: Vec<StructDef<'ty>>,
     structs_defined: HashSet<usize>,
     enums: Vec<EnumDef>,
     enums_defined: HashSet<usize>,
     gen_var_names: Vec<String>,
 
-    tys_inv: HashMap<TyDef, Ty>,
-    named_tys: HashMap<String, Named>,
-    ty_slices_inv: HashMap<Vec<Ty>, TySlice>, // This is probably very inefficient
+    tys_inv: HashMap<TyDef<'ty>, Ty<'ty>>,
+    named_tys: HashMap<String, Named<'ty>>,
+    ty_slices_inv: HashMap<Vec<Ty<'ty>>, TySlice<'ty>>, // This is probably very inefficient
 
     next_inf_var: InfVar,
     next_opaque_id: usize,
-    opaque_resolutions: HashMap<OpaqueId, Ty>,
-    opaques: Vec<OpaqueDef>,
+    opaque_resolutions: HashMap<OpaqueId, Ty<'ty>>,
+    opaques: Vec<OpaqueDef<'ty>>,
 }
 
 #[derive(Clone, Copy)]
-pub enum Named {
-    Ty(Ty),
+pub enum Named<'ty> {
+    Ty(Ty<'ty>),
     Struct(Struct),
     Enum(Enum),
 }
 
 #[derive(Debug)]
-pub struct NotAStruct(#[allow(unused)] pub Ty);
+pub struct NotAStruct<'ty>(#[allow(unused)] pub Ty<'ty>);
 #[derive(Debug)]
-pub struct NotAnEnum(#[allow(unused)] pub Ty);
-pub enum NotAStructField {
-    NotAStruct(#[allow(unused)] Ty),
-    NotAFieldName(#[allow(unused)] Ty, #[allow(unused)] String),
+pub struct NotAnEnum<'ty>(#[allow(unused)] pub Ty<'ty>);
+pub enum NotAStructField<'ty> {
+    NotAStruct(#[allow(unused)] Ty<'ty>),
+    NotAFieldName(#[allow(unused)] Ty<'ty>, #[allow(unused)] String),
 }
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -75,18 +75,18 @@ pub enum TyInstError {
 pub struct NotATypeName(#[allow(unused)] pub String);
 
 impl<'ty> TyReg<'ty> {
-    fn register_ty(&mut self, ty_def: TyDef) -> Ty {
+    fn register_ty(&mut self, ty_def: TyDef<'ty>) -> Ty<'ty> {
         if let Some(existing_ty) = self.tys_inv.get(&ty_def) {
             return *existing_ty;
         }
 
-        let ty = Ty(self.tys.len());
+        let ty = Ty(self.tys.len(), std::marker::PhantomData);
         self.tys.push(ty_def.clone());
         self.tys_inv.insert(ty_def, ty);
         ty
     }
 
-    pub fn ty_slice(&mut self, tys: &[Ty]) -> TySlice {
+    pub fn ty_slice(&mut self, tys: &[Ty<'ty>]) -> TySlice<'ty> {
         if let Some(ty_slice) = self.ty_slices_inv.get(tys) {
             return *ty_slice;
         }
@@ -95,16 +95,17 @@ impl<'ty> TyReg<'ty> {
         let slice = TySlice {
             offset: self.ty_slices.len() - tys.len(),
             len: tys.len(),
+            _phantom: std::marker::PhantomData,
         };
         self.ty_slices_inv.insert(tys.to_vec(), slice);
         slice
     }
 
-    pub fn get_ty_slice(&self, slice: TySlice) -> &[Ty] {
+    pub fn get_ty_slice(&self, slice: TySlice<'ty>) -> &[Ty<'ty>] {
         &self.ty_slices[slice.offset..(slice.offset + slice.len)]
     }
 
-    fn register_named_ty(&mut self, name: &str, ty_def: TyDef) -> Result<Ty, ()> {
+    fn register_named_ty(&mut self, name: &str, ty_def: TyDef<'ty>) -> Result<Ty<'ty>, ()> {
         if self.named_tys.contains_key(name) {
             Err(())
         } else {
@@ -122,23 +123,23 @@ impl<'ty> TyReg<'ty> {
         Ok(())
     }
 
-    pub fn primitive(&mut self, primitive: Primitive) -> Ty {
+    pub fn primitive(&mut self, primitive: Primitive) -> Ty<'ty> {
         let ty_def = TyDef::Primitive(primitive);
         self.register_ty(ty_def)
     }
 
-    pub fn tuple(&mut self, tys: &[Ty]) -> Ty {
+    pub fn tuple(&mut self, tys: &[Ty<'ty>]) -> Ty<'ty> {
         let tys = self.ty_slice(tys);
         let tuple_ty = TyDef::Tuple(tys);
         self.register_ty(tuple_ty)
     }
 
-    pub fn tuple_from_ty_slice(&mut self, slice: TySlice) -> Ty {
+    pub fn tuple_from_ty_slice(&mut self, slice: TySlice<'ty>) -> Ty<'ty> {
         let tuple_ty = TyDef::Tuple(slice);
         self.register_ty(tuple_ty)
     }
 
-    pub fn unit(&mut self) -> Ty {
+    pub fn unit(&mut self) -> Ty<'ty> {
         self.tuple(&[])
     }
 
@@ -190,7 +191,7 @@ impl<'ty> TyReg<'ty> {
         Ok(enum_)
     }
 
-    pub fn fn_(&mut self, param_tys: &[Ty], return_ty: Ty, var_args: bool) -> Ty {
+    pub fn fn_(&mut self, param_tys: &[Ty<'ty>], return_ty: Ty<'ty>, var_args: bool) -> Ty<'ty> {
         let param_tys = self.ty_slice(param_tys);
         let fn_ty = TyDef::Fn {
             param_tys,
@@ -200,17 +201,17 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(fn_ty)
     }
 
-    pub fn ref_(&mut self, inner_ty: Ty) -> Ty {
+    pub fn ref_(&mut self, inner_ty: Ty<'ty>) -> Ty<'ty> {
         let ref_ty = TyDef::Ref(inner_ty);
         self.register_ty(ref_ty)
     }
 
-    pub fn ptr(&mut self, inner_ty: Ty) -> Ty {
+    pub fn ptr(&mut self, inner_ty: Ty<'ty>) -> Ty<'ty> {
         let ptr_ty = TyDef::Ptr(inner_ty);
         self.register_ty(ptr_ty)
     }
 
-    pub fn gen_var(&mut self, gen_var: GenVar) -> Ty {
+    pub fn gen_var(&mut self, gen_var: GenVar) -> Ty<'ty> {
         let gen_var_ty = TyDef::GenVar(gen_var);
         self.register_ty(gen_var_ty)
     }
@@ -221,12 +222,12 @@ impl<'ty> TyReg<'ty> {
         gen_var
     }
 
-    pub fn trait_self(&mut self, trait_: Trait) -> Ty {
+    pub fn trait_self(&mut self, trait_: Trait) -> Ty<'ty> {
         let trait_self = TyDef::TraitSelf(trait_);
         self.register_ty(trait_self)
     }
 
-    pub fn closure(&mut self, fn_inst: fns::FnInst, name: impl Into<String>, captures_ty: Ty) -> Ty {
+    pub fn closure(&mut self, fn_inst: fns::FnInst<'ty>, name: impl Into<String>, captures_ty: Ty<'ty>) -> Ty<'ty> {
         let closure = TyDef::Closure {
             fn_inst,
             name: name.into(),
@@ -235,7 +236,7 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(closure)
     }
 
-    pub fn assoc_ty(&mut self, base_ty: Ty, trait_inst: traits::TraitInst, assoc_ty_idx: usize) -> Ty {
+    pub fn assoc_ty(&mut self, base_ty: Ty<'ty>, trait_inst: traits::TraitInst<'ty>, assoc_ty_idx: usize) -> Ty<'ty> {
         let assoc_ty = TyDef::AssocTy {
             base_ty,
             trait_inst,
@@ -244,17 +245,17 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(assoc_ty)
     }
 
-    pub fn inf_var(&mut self) -> Ty {
+    pub fn inf_var(&mut self) -> Ty<'ty> {
         let id = self.next_inf_var;
         self.next_inf_var.0 += 1;
         let inf_var = TyDef::InfVar(id);
         self.register_ty(inf_var)
     }
 
-    pub fn opaque(&mut self, gen_params: &[GenVar]) -> (OpaqueId, Ty) {
+    pub fn opaque(&mut self, gen_params: &[GenVar]) -> (OpaqueId, Ty<'ty>) {
         let id = OpaqueId(self.next_opaque_id);
         self.next_opaque_id += 1;
-        let gen_args: Vec<Ty> = gen_params.iter().map(|&gv| self.gen_var(gv)).collect();
+        let gen_args: Vec<Ty<'ty>> = gen_params.iter().map(|&gv| self.gen_var(gv)).collect();
         let gen_args = self.ty_slice(&gen_args);
         let opaque_def = OpaqueDef {
             gen_params: gen_params.to_vec(),
@@ -265,30 +266,30 @@ impl<'ty> TyReg<'ty> {
         (id, ty)
     }
 
-    pub fn get_opaque_def(&self, id: OpaqueId) -> &OpaqueDef {
+    pub fn get_opaque_def(&self, id: OpaqueId) -> &OpaqueDef<'ty> {
         &self.opaques[id.0]
     }
 
-    pub fn set_opaque_resolution(&mut self, id: OpaqueId, ty: Ty) {
+    pub fn set_opaque_resolution(&mut self, id: OpaqueId, ty: Ty<'ty>) {
         self.opaque_resolutions.insert(id, ty);
     }
 
-    pub fn get_opaque_resolution(&self, id: OpaqueId) -> Option<Ty> {
+    pub fn get_opaque_resolution(&self, id: OpaqueId) -> Option<Ty<'ty>> {
         self.opaque_resolutions.get(&id).copied()
     }
 
-    pub fn add_opaque_constraint(&mut self, id: OpaqueId, req: ConstraintRequirement) {
+    pub fn add_opaque_constraint(&mut self, id: OpaqueId, req: ConstraintRequirement<'ty>) {
         self.opaques[id.0].constraints.push(req);
     }
 
-    pub fn opaque_satisfies_trait_inst(&self, id: OpaqueId, trait_inst: TraitInst) -> bool {
+    pub fn opaque_satisfies_trait_inst(&self, id: OpaqueId, trait_inst: TraitInst<'ty>) -> bool {
         self.opaques[id.0]
             .constraints
             .iter()
             .any(|r| matches!(r, ConstraintRequirement::Trait(ti) if ti.trait_ == trait_inst.trait_))
     }
 
-    pub fn try_get_opaque_callable_constraint(&self, id: OpaqueId) -> Option<(TySlice, Ty)> {
+    pub fn try_get_opaque_callable_constraint(&self, id: OpaqueId) -> Option<(TySlice<'ty>, Ty<'ty>)> {
         self.opaques[id.0].constraints.iter().find_map(|r| {
             if let &ConstraintRequirement::Callable { param_tys, return_ty } = r {
                 Some((param_tys, return_ty))
@@ -298,12 +299,12 @@ impl<'ty> TyReg<'ty> {
         })
     }
 
-    pub fn get_opaque_constraints(&self, id: OpaqueId) -> &[ConstraintRequirement] {
+    pub fn get_opaque_constraints(&self, id: OpaqueId) -> &[ConstraintRequirement<'ty>] {
         &self.opaques[id.0].constraints
     }
 
     #[expect(unused)]
-    pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
+    pub fn inst_opaque(&mut self, id: OpaqueId, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
         let opaque_def = self.opaques.get(id.0).unwrap();
         if opaque_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
@@ -317,7 +318,7 @@ impl<'ty> TyReg<'ty> {
         self.inst_opaque_from_ty_slice(id, gen_args)
     }
 
-    pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice) -> Result<Ty, TyInstError> {
+    pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let opaque_def = self.opaques.get(id.0).unwrap();
         if opaque_def.gen_params.len() != gen_args.len {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
@@ -330,7 +331,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(TyDef::Opaque { id, gen_args }))
     }
 
-    pub fn resolve_opaque_in_ty(&mut self, ty: Ty) -> Ty {
+    pub fn resolve_opaque_in_ty(&mut self, ty: Ty<'ty>) -> Ty<'ty> {
         use TyDef::*;
 
         let ty_def = self.tys.get(ty.0).unwrap().clone();
@@ -341,7 +342,7 @@ impl<'ty> TyReg<'ty> {
                     return ty;
                 };
                 let gen_params = self.opaques[id.0].gen_params.clone();
-                let gen_args: Vec<Ty> = self.get_ty_slice(gen_args).to_vec();
+                let gen_args: Vec<Ty<'ty>> = self.get_ty_slice(gen_args).to_vec();
                 let subst = GenVarSubst::new(&gen_params, &gen_args).unwrap();
                 let instantiated = self.substitute_gen_vars(resolved, &subst);
                 self.resolve_opaque_in_ty(instantiated)
@@ -416,7 +417,7 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn inst_struct(&mut self, struct_: Struct, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
+    pub fn inst_struct(&mut self, struct_: Struct, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         if struct_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
@@ -430,7 +431,11 @@ impl<'ty> TyReg<'ty> {
         self.inst_struct_from_ty_slice(struct_, gen_args)
     }
 
-    pub fn inst_struct_from_ty_slice(&mut self, struct_: Struct, gen_args: TySlice) -> Result<Ty, TyInstError> {
+    pub fn inst_struct_from_ty_slice(
+        &mut self,
+        struct_: Struct,
+        gen_args: TySlice<'ty>,
+    ) -> Result<Ty<'ty>, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
         if struct_def.gen_params.len() != gen_args.len {
             return Err(TyInstError::StructGenericArgCountMismatch {
@@ -444,7 +449,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(struct_ty))
     }
 
-    pub fn inst_enum(&mut self, enum_: Enum, gen_args: &[Ty]) -> Result<Ty, TyInstError> {
+    pub fn inst_enum(&mut self, enum_: Enum, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
         if enum_def.gen_params.len() != gen_args.len() {
@@ -461,7 +466,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(enum_ty))
     }
 
-    pub fn inst_enum_from_ty_slice(&mut self, enum_: Enum, gen_args: TySlice) -> Result<Ty, TyInstError> {
+    pub fn inst_enum_from_ty_slice(&mut self, enum_: Enum, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
         if enum_def.gen_params.len() != gen_args.len {
@@ -476,7 +481,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(enum_ty))
     }
 
-    pub fn get_ty_def(&self, id: Ty) -> &TyDef {
+    pub fn get_ty_def(&self, id: Ty<'ty>) -> &TyDef<'ty> {
         self.tys.get(id.0).unwrap()
     }
 
@@ -494,11 +499,11 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef> {
+    pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef<'ty>> {
         self.structs.get(struct_.0)
     }
 
-    pub fn define_struct_fields(&mut self, struct_: Struct, fields: Vec<StructField>) {
+    pub fn define_struct_fields(&mut self, struct_: Struct, fields: Vec<StructField<'ty>>) {
         assert!(self.structs_defined.insert(struct_.0), "struct fields already defined");
         self.structs[struct_.0].fields = fields;
     }
@@ -512,16 +517,16 @@ impl<'ty> TyReg<'ty> {
         self.enums[enum_.0].variants = variants;
     }
 
-    pub fn is_c_void_ty(&self, base_ty: Ty) -> bool {
+    pub fn is_c_void_ty(&self, base_ty: Ty<'ty>) -> bool {
         let ty_def = self.get_ty_def(base_ty);
         matches!(ty_def, TyDef::Primitive(Primitive::CVoid))
     }
 
-    pub fn get_string_rep(&self, ty: Ty) -> String {
+    pub fn get_string_rep(&self, ty: Ty<'ty>) -> String {
         self.get_string_rep_with_subst(ty, &HashMap::new())
     }
 
-    pub fn get_string_rep_with_subst(&self, ty: Ty, subst: &HashMap<GenVar, Ty>) -> String {
+    pub fn get_string_rep_with_subst(&self, ty: Ty<'ty>, subst: &HashMap<GenVar, Ty<'ty>>) -> String {
         use self::Primitive::*;
         use TyDef::*;
 
@@ -643,7 +648,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     #[must_use]
-    pub fn substitute(&mut self, ty: Ty, gen_vars: &GenVarSubst, self_ty: Option<Ty>) -> Ty {
+    pub fn substitute(&mut self, ty: Ty<'ty>, gen_vars: &GenVarSubst<'ty>, self_ty: Option<Ty<'ty>>) -> Ty<'ty> {
         use TyDef::*;
 
         let ty_def = self.tys.get(ty.0).expect("ty should be registered");
@@ -719,20 +724,25 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn substitute_on_slice(&mut self, slice: TySlice, gen_vars: &GenVarSubst, self_ty: Option<Ty>) -> TySlice {
+    pub fn substitute_on_slice(
+        &mut self,
+        slice: TySlice<'ty>,
+        gen_vars: &GenVarSubst<'ty>,
+        self_ty: Option<Ty<'ty>>,
+    ) -> TySlice<'ty> {
         let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
         self.ty_slice(&slice)
     }
 
-    pub fn substitute_gen_vars(&mut self, ty: Ty, subst: &GenVarSubst) -> Ty {
+    pub fn substitute_gen_vars(&mut self, ty: Ty<'ty>, subst: &GenVarSubst<'ty>) -> Ty<'ty> {
         self.substitute(ty, subst, None)
     }
 
-    pub fn substitute_gen_vars_on_slice(&mut self, slice: TySlice, subst: &GenVarSubst) -> TySlice {
+    pub fn substitute_gen_vars_on_slice(&mut self, slice: TySlice<'ty>, subst: &GenVarSubst<'ty>) -> TySlice<'ty> {
         self.substitute_on_slice(slice, subst, None)
     }
 
-    pub fn get_struct_field_ty(&mut self, ty: Ty, index: usize) -> Result<Ty, NotAStruct> {
+    pub fn get_struct_field_ty(&mut self, ty: Ty<'ty>, index: usize) -> Result<Ty<'ty>, NotAStruct<'ty>> {
         let ty_def = self.get_ty_def(ty);
         let &TyDef::Struct { struct_, gen_args } = ty_def else {
             return Err(NotAStruct(ty));
@@ -749,7 +759,7 @@ impl<'ty> TyReg<'ty> {
         Ok(instantiated_field_ty)
     }
 
-    pub fn get_struct_field_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAStruct> {
+    pub fn get_struct_field_tys(&mut self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAStruct<'ty>> {
         let ty_def = self.get_ty_def(ty);
         let &TyDef::Struct { struct_, gen_args } = ty_def else {
             return Err(NotAStruct(ty));
@@ -760,8 +770,8 @@ impl<'ty> TyReg<'ty> {
             .expect("struct definition should be registered");
         let subst = GenVarSubst::new(&struct_def.gen_params, self.get_ty_slice(gen_args)).unwrap();
 
-        let field_tys: Vec<Ty> = struct_def.fields.iter().map(|field| field.ty).collect();
-        let instantiated_field_tys: Vec<Ty> = field_tys
+        let field_tys: Vec<Ty<'ty>> = struct_def.fields.iter().map(|field| field.ty).collect();
+        let instantiated_field_tys: Vec<Ty<'ty>> = field_tys
             .into_iter()
             .map(|field_ty| self.substitute_gen_vars(field_ty, &subst))
             .collect();
@@ -769,7 +779,7 @@ impl<'ty> TyReg<'ty> {
         Ok(instantiated_field_tys)
     }
 
-    pub fn get_enum_variant_ty(&mut self, ty: Ty, variant_index: usize) -> Result<Ty, NotAnEnum> {
+    pub fn get_enum_variant_ty(&mut self, ty: Ty<'ty>, variant_index: usize) -> Result<Ty<'ty>, NotAnEnum<'ty>> {
         let ty_def = self.get_ty_def(ty);
         let &TyDef::Enum { enum_, gen_args } = ty_def else {
             return Err(NotAnEnum(ty));
@@ -783,7 +793,7 @@ impl<'ty> TyReg<'ty> {
         Ok(instantiated_variant_struct_ty)
     }
 
-    pub fn get_enum_variant_tys(&mut self, ty: Ty) -> Result<Vec<Ty>, NotAnEnum> {
+    pub fn get_enum_variant_tys(&mut self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAnEnum<'ty>> {
         let ty_def = self.get_ty_def(ty);
         let &TyDef::Enum { enum_, gen_args } = ty_def else {
             return Err(NotAnEnum(ty));
@@ -791,14 +801,14 @@ impl<'ty> TyReg<'ty> {
 
         let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
         let base_variant_structs: Vec<Struct> = enum_def.variants.iter().map(|variant| variant.struct_).collect();
-        let instantiated_variant_struct_tys: Vec<Ty> = base_variant_structs
+        let instantiated_variant_struct_tys: Vec<Ty<'ty>> = base_variant_structs
             .into_iter()
             .map(|variant_ty| self.inst_struct_from_ty_slice(variant_ty, gen_args).unwrap())
             .collect();
         Ok(instantiated_variant_struct_tys)
     }
 
-    pub fn get_tuple_field_tys(&self, ty: Ty) -> Result<&[Ty], ()> {
+    pub fn get_tuple_field_tys(&self, ty: Ty<'ty>) -> Result<&[Ty<'ty>], ()> {
         let ty_def = self.get_ty_def(ty);
         match ty_def {
             &TyDef::Tuple(tys) => Ok(self.get_ty_slice(tys)),
@@ -806,7 +816,11 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn get_struct_field_index_by_name(&self, struct_ty: Ty, field_name: &str) -> Result<usize, NotAStructField> {
+    pub fn get_struct_field_index_by_name(
+        &self,
+        struct_ty: Ty<'ty>,
+        field_name: &str,
+    ) -> Result<usize, NotAStructField<'ty>> {
         let ty_def = self.get_ty_def(struct_ty);
         let &TyDef::Struct { struct_, .. } = ty_def else {
             return Err(NotAStructField::NotAStruct(struct_ty));
@@ -822,7 +836,7 @@ impl<'ty> TyReg<'ty> {
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
     }
 
-    pub fn tys_eq(&self, ty1: Ty, ty2: Ty) -> bool {
+    pub fn tys_eq(&self, ty1: Ty<'ty>, ty2: Ty<'ty>) -> bool {
         use TyDef::*;
 
         if ty1 == ty2 {
@@ -945,14 +959,19 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn try_find_instantiation(&mut self, target: Ty, generic: Ty, gen_vars: &[GenVar]) -> Result<TySlice, ()> {
+    pub fn try_find_instantiation(
+        &mut self,
+        target: Ty<'ty>,
+        generic: Ty<'ty>,
+        gen_vars: &[GenVar],
+    ) -> Result<TySlice<'ty>, ()> {
         let mut instantiations = HashMap::new();
         for gen_param in gen_vars {
             instantiations.insert(*gen_param, None);
         }
 
         if self.try_find_instantiation_internal(target, generic, &mut instantiations) {
-            let inst: Vec<_> = gen_vars
+            let inst: Vec<Ty<'ty>> = gen_vars
                 .iter()
                 .map(|gen_var| instantiations[gen_var])
                 .collect::<Option<_>>()
@@ -965,9 +984,9 @@ impl<'ty> TyReg<'ty> {
 
     fn try_find_instantiation_internal(
         &self,
-        target: Ty,
-        generic: Ty,
-        instantiation: &mut HashMap<GenVar, Option<Ty>>,
+        target: Ty<'ty>,
+        generic: Ty<'ty>,
+        instantiation: &mut HashMap<GenVar, Option<Ty<'ty>>>,
     ) -> bool {
         use TyDef::*;
 
@@ -1127,10 +1146,10 @@ impl<'ty> TyReg<'ty> {
 
     pub fn get_trait_inst_constraint(
         &self,
-        constraints: &[Constraint],
-        subject: Ty,
+        constraints: &[Constraint<'ty>],
+        subject: Ty<'ty>,
         trait_: Trait,
-    ) -> Option<TraitInst> {
+    ) -> Option<TraitInst<'ty>> {
         constraints.iter().find_map(|c| {
             if c.subject != subject {
                 return None;
@@ -1142,7 +1161,12 @@ impl<'ty> TyReg<'ty> {
         })
     }
 
-    pub fn implements_trait_constraint_exists(&self, constraints: &[Constraint], subject: Ty, trait_: Trait) -> bool {
+    pub fn implements_trait_constraint_exists(
+        &self,
+        constraints: &[Constraint<'ty>],
+        subject: Ty<'ty>,
+        trait_: Trait,
+    ) -> bool {
         constraints.iter().any(|c| {
             c.subject == subject
                 && matches!(c.requirement,
@@ -1152,9 +1176,9 @@ impl<'ty> TyReg<'ty> {
 
     pub fn implements_trait_inst_constraint_exists(
         &self,
-        constraints: &[Constraint],
-        subject: Ty,
-        trait_inst: TraitInst,
+        constraints: &[Constraint<'ty>],
+        subject: Ty<'ty>,
+        trait_inst: TraitInst<'ty>,
     ) -> bool {
         constraints.iter().any(|c| {
             if c.subject != subject {
@@ -1176,7 +1200,11 @@ impl<'ty> TyReg<'ty> {
         })
     }
 
-    pub fn try_get_callable_constraint(&self, constraints: &[Constraint], subject: Ty) -> Option<(TySlice, Ty)> {
+    pub fn try_get_callable_constraint(
+        &self,
+        constraints: &[Constraint<'ty>],
+        subject: Ty<'ty>,
+    ) -> Option<(TySlice<'ty>, Ty<'ty>)> {
         constraints.iter().find_map(|c| {
             if c.subject == subject {
                 if let &ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
@@ -1190,7 +1218,7 @@ impl<'ty> TyReg<'ty> {
         })
     }
 
-    pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named, NotATypeName> {
+    pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named<'ty>, NotATypeName> {
         self.named_tys.get(ty_name).ok_or(NotATypeName(ty_name.to_string()))
     }
 }
