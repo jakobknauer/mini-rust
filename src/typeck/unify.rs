@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ctxt::{self, ty};
+use crate::ctxt::ty;
 
 pub enum UnificationResult<'ty> {
     Success(Vec<(ty::InfVar, ty::Ty<'ty>)>),
@@ -12,7 +12,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
         let ty1 = self.normalize(ty1);
         let ty2 = self.normalize(ty2);
         let result = {
-            let unify = Unify::new(&self.ctxt.tys, &self.type_vars);
+            let unify = Unify::new(&self.type_vars);
             unify.run(ty1, ty2)
         };
         match result {
@@ -26,15 +26,13 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
 }
 
 struct Unify<'borrow, 'ty> {
-    tys: &'borrow ctxt::TyReg<'ty>,
     committed: &'borrow HashMap<ty::InfVar, ty::Ty<'ty>>,
     pending: HashMap<ty::InfVar, ty::Ty<'ty>>,
 }
 
 impl<'borrow, 'ty> Unify<'borrow, 'ty> {
-    fn new(tys: &'borrow ctxt::TyReg<'ty>, committed: &'borrow HashMap<ty::InfVar, ty::Ty<'ty>>) -> Self {
+    fn new(committed: &'borrow HashMap<ty::InfVar, ty::Ty<'ty>>) -> Self {
         Unify {
-            tys,
             committed,
             pending: HashMap::new(),
         }
@@ -90,12 +88,9 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     var_args: var_args_2,
                 },
             ) => {
-                if param_tys_1.len != param_tys_2.len || var_args_1 != var_args_2 {
-                    return false;
-                }
-                let param_tys_1 = self.tys.get_ty_slice(param_tys_1);
-                let param_tys_2 = self.tys.get_ty_slice(param_tys_2);
-                param_tys_1.iter().zip(param_tys_2).all(|(t1, t2)| self.unify(*t1, *t2))
+                param_tys_1.len() == param_tys_2.len()
+                    && var_args_1 == var_args_2
+                    && param_tys_1.iter().zip(param_tys_2).all(|(t1, t2)| self.unify(*t1, *t2))
                     && self.unify(return_ty_1, return_ty_2)
             }
 
@@ -112,12 +107,9 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     gen_args: gen_args_2,
                 },
             ) => {
-                if struct_1 != struct_2 || gen_args_1.len != gen_args_2.len {
-                    return false;
-                }
-                let gen_args_1 = self.tys.get_ty_slice(gen_args_1);
-                let gen_args_2 = self.tys.get_ty_slice(gen_args_2);
-                gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
+                struct_1 == struct_2
+                    && gen_args_1.len() == gen_args_2.len()
+                    && gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (
@@ -130,39 +122,21 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     gen_args: gen_args_2,
                 },
             ) => {
-                if enum_1 != enum_2 || gen_args_1.len != gen_args_2.len {
-                    return false;
-                }
-                let gen_args_1 = self.tys.get_ty_slice(gen_args_1);
-                let gen_args_2 = self.tys.get_ty_slice(gen_args_2);
-                gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
+                enum_1 == enum_2
+                    && gen_args_1.len() == gen_args_2.len()
+                    && gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (&ty::TyDef::Tuple(tys_1), &ty::TyDef::Tuple(tys_2)) => {
-                if tys_1.len != tys_2.len {
-                    return false;
-                }
-                let tys_1 = self.tys.get_ty_slice(tys_1);
-                let tys_2 = self.tys.get_ty_slice(tys_2);
-                tys_1.iter().zip(tys_2).all(|(t1, t2)| self.unify(*t1, *t2))
+                tys_1.len() == tys_2.len() && tys_1.iter().zip(tys_2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (&ty::TyDef::Closure { fn_inst: fn_inst_1, .. }, &ty::TyDef::Closure { fn_inst: fn_inst_2, .. }) => {
-                if fn_inst_1.fn_ != fn_inst_2.fn_
-                    || fn_inst_1.gen_args.len != fn_inst_2.gen_args.len
-                    || fn_inst_1.env_gen_args.len != fn_inst_2.env_gen_args.len
-                {
-                    return false;
-                }
-                let gen_args_1 = self.tys.get_ty_slice(fn_inst_1.gen_args);
-                let gen_args_2 = self.tys.get_ty_slice(fn_inst_2.gen_args);
-                let env_gen_args_1 = self.tys.get_ty_slice(fn_inst_1.env_gen_args);
-                let env_gen_args_2 = self.tys.get_ty_slice(fn_inst_2.env_gen_args);
-                gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
-                    && env_gen_args_1
-                        .iter()
-                        .zip(env_gen_args_2)
-                        .all(|(t1, t2)| self.unify(*t1, *t2))
+                fn_inst_1.fn_ == fn_inst_2.fn_
+                    && fn_inst_1.gen_args.len() == fn_inst_2.gen_args.len()
+                    && fn_inst_1.env_gen_args.len() == fn_inst_2.env_gen_args.len()
+                    && fn_inst_1.gen_args.iter().zip(fn_inst_2.gen_args).all(|(t1, t2)| self.unify(*t1, *t2))
+                    && fn_inst_1.env_gen_args.iter().zip(fn_inst_2.env_gen_args).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (
@@ -177,16 +151,11 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     assoc_ty_idx: assoc_ty_idx_2,
                 },
             ) => {
-                if trait_inst_1.trait_ != trait_inst_2.trait_
-                    || assoc_ty_idx_1 != assoc_ty_idx_2
-                    || trait_inst_1.gen_args.len != trait_inst_2.gen_args.len
-                {
-                    return false;
-                }
-                let gen_args_1 = self.tys.get_ty_slice(trait_inst_1.gen_args);
-                let gen_args_2 = self.tys.get_ty_slice(trait_inst_2.gen_args);
-                self.unify(base_ty_1, base_ty_2)
-                    && gen_args_1.iter().zip(gen_args_2).all(|(t1, t2)| self.unify(*t1, *t2))
+                trait_inst_1.trait_ == trait_inst_2.trait_
+                    && assoc_ty_idx_1 == assoc_ty_idx_2
+                    && trait_inst_1.gen_args.len() == trait_inst_2.gen_args.len()
+                    && self.unify(base_ty_1, base_ty_2)
+                    && trait_inst_1.gen_args.iter().zip(trait_inst_2.gen_args).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             (
@@ -199,12 +168,9 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     gen_args: gen_args2,
                 },
             ) => {
-                if id1 != id2 || gen_args1.len != gen_args2.len {
-                    return false;
-                }
-                let gen_args1 = self.tys.get_ty_slice(gen_args1);
-                let gen_args2 = self.tys.get_ty_slice(gen_args2);
-                gen_args1.iter().zip(gen_args2).all(|(t1, t2)| self.unify(*t1, *t2))
+                id1 == id2
+                    && gen_args1.len() == gen_args2.len()
+                    && gen_args1.iter().zip(gen_args2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
             _ => false,

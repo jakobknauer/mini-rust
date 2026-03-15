@@ -23,18 +23,18 @@ impl<'fns> FnReg<'fns> {
         env_gen_args: TySlice<'fns>,
     ) -> Result<FnInst<'fns>, FnInstError> {
         let sig = self.sigs.get(fn_.0).unwrap();
-        if sig.gen_params.len() != gen_args.len {
+        if sig.gen_params.len() != gen_args.len() {
             return Err(FnInstError::GenArgCountMismatch {
                 fn_,
                 expected: sig.gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
-        if sig.env_gen_params.len() != env_gen_args.len {
+        if sig.env_gen_params.len() != env_gen_args.len() {
             return Err(FnInstError::EnvGenArgCountMismatch {
                 fn_,
                 expected: sig.env_gen_params.len(),
-                actual: env_gen_args.len,
+                actual: env_gen_args.len(),
             });
         }
         Ok(FnInst {

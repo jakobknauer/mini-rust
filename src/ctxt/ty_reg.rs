@@ -10,7 +10,6 @@ use crate::ctxt::{
 pub struct TyReg<'ty> {
     arena: &'ty bumpalo::Bump,
     next_ty_id: Cell<TyId>,
-    ty_slices: Vec<Ty<'ty>>,
 
     structs: Vec<StructDef<'ty>>,
     structs_defined: HashSet<usize>,
@@ -20,7 +19,7 @@ pub struct TyReg<'ty> {
 
     tys_inv: HashMap<TyDef<'ty>, Ty<'ty>>,
     named_tys: HashMap<String, Named<'ty>>,
-    ty_slices_inv: HashMap<Vec<Ty<'ty>>, TySlice<'ty>>, // This is probably very inefficient
+    ty_slices_inv: HashSet<&'ty [Ty<'ty>]>,
 
     next_inf_var: InfVar,
     next_opaque_id: usize,
@@ -79,7 +78,6 @@ impl<'ty> TyReg<'ty> {
         Self {
             arena,
             next_ty_id: Cell::new(TyId(0)),
-            ty_slices: Vec::new(),
             structs: Vec::new(),
             structs_defined: Default::default(),
             enums: Vec::new(),
@@ -109,22 +107,16 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn ty_slice(&mut self, tys: &[Ty<'ty>]) -> TySlice<'ty> {
-        if let Some(ty_slice) = self.ty_slices_inv.get(tys) {
-            return *ty_slice;
+        if let Some(&existing) = self.ty_slices_inv.get(tys) {
+            return existing;
         }
-
-        self.ty_slices.extend_from_slice(tys);
-        let slice = TySlice {
-            offset: self.ty_slices.len() - tys.len(),
-            len: tys.len(),
-            _phantom: std::marker::PhantomData,
-        };
-        self.ty_slices_inv.insert(tys.to_vec(), slice);
+        let slice = self.arena.alloc_slice_copy(tys);
+        self.ty_slices_inv.insert(slice);
         slice
     }
 
     pub fn get_ty_slice(&self, slice: TySlice<'ty>) -> &[Ty<'ty>] {
-        &self.ty_slices[slice.offset..(slice.offset + slice.len)]
+        slice
     }
 
     fn register_named_ty(&mut self, name: &str, ty_def: TyDef<'ty>) -> Result<Ty<'ty>, ()> {
@@ -342,11 +334,11 @@ impl<'ty> TyReg<'ty> {
 
     pub fn inst_opaque_from_ty_slice(&mut self, id: OpaqueId, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let opaque_def = self.opaques.get(id.0).unwrap();
-        if opaque_def.gen_params.len() != gen_args.len {
+        if opaque_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
                 opaque: id,
                 expected: opaque_def.gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
 
@@ -377,30 +369,15 @@ impl<'ty> TyReg<'ty> {
                 self.ptr(inner)
             }
             Tuple(items) => {
-                let items: Vec<_> = (0..items.len)
-                    .map(|i| {
-                        let t = self.ty_slices[items.offset + i];
-                        self.resolve_opaque_in_ty(t)
-                    })
-                    .collect();
+                let items: Vec<_> = items.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
                 self.tuple(&items)
             }
             Struct { struct_, gen_args } => {
-                let gen_args: Vec<_> = (0..gen_args.len)
-                    .map(|i| {
-                        let t = self.ty_slices[gen_args.offset + i];
-                        self.resolve_opaque_in_ty(t)
-                    })
-                    .collect();
+                let gen_args: Vec<_> = gen_args.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
                 self.inst_struct(struct_, &gen_args).unwrap()
             }
             Enum { enum_, gen_args } => {
-                let gen_args: Vec<_> = (0..gen_args.len)
-                    .map(|i| {
-                        let t = self.ty_slices[gen_args.offset + i];
-                        self.resolve_opaque_in_ty(t)
-                    })
-                    .collect();
+                let gen_args: Vec<_> = gen_args.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
             Fn {
@@ -408,12 +385,7 @@ impl<'ty> TyReg<'ty> {
                 return_ty,
                 var_args,
             } => {
-                let param_tys: Vec<_> = (0..param_tys.len)
-                    .map(|i| {
-                        let t = self.ty_slices[param_tys.offset + i];
-                        self.resolve_opaque_in_ty(t)
-                    })
-                    .collect();
+                let param_tys: Vec<_> = param_tys.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
                 let return_ty = self.resolve_opaque_in_ty(return_ty);
                 self.fn_(&param_tys, return_ty, var_args)
             }
@@ -457,11 +429,11 @@ impl<'ty> TyReg<'ty> {
         gen_args: TySlice<'ty>,
     ) -> Result<Ty<'ty>, TyInstError> {
         let struct_def = self.structs.get(struct_.0).unwrap();
-        if struct_def.gen_params.len() != gen_args.len {
+        if struct_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
                 struct_,
                 expected: struct_def.gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
 
@@ -489,18 +461,17 @@ impl<'ty> TyReg<'ty> {
     pub fn inst_enum_from_ty_slice(&mut self, enum_: Enum, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
-        if enum_def.gen_params.len() != gen_args.len {
+        if enum_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::EnumGenericArgCountMismatch {
                 enum_,
                 expected: enum_def.gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
 
         let enum_ty = TyDef::Enum { enum_, gen_args };
         Ok(self.register_ty(enum_ty))
     }
-
 
     pub fn get_struct_by_name(&self, name: &str) -> Option<Struct> {
         match self.named_tys.get(name) {
@@ -547,13 +518,7 @@ impl<'ty> TyReg<'ty> {
         use self::Primitive::*;
         use TyDef::*;
 
-        if ty.1.0 >= self.next_ty_id.get().0 {
-            return format!("<unknown type id {}>", ty.1.0).to_string();
-        }
-
-        let ty_def = ty.0;
-
-        match *ty_def {
+        match *ty.0 {
             Primitive(primitive) => match primitive {
                 Integer32 => "i32".to_string(),
                 Boolean => "bool".to_string(),
@@ -576,8 +541,10 @@ impl<'ty> TyReg<'ty> {
                 return_ty,
                 var_args,
             } => {
-                let mut param_names: Vec<_> =
-                    iter_ty_slice!(self, param_tys, map(|pt| self.get_string_rep_with_subst(pt, subst))).collect();
+                let mut param_names: Vec<_> = param_tys
+                    .iter()
+                    .map(|&pt| self.get_string_rep_with_subst(pt, subst))
+                    .collect();
                 if var_args {
                     param_names.push("...".to_string());
                 }
@@ -595,7 +562,9 @@ impl<'ty> TyReg<'ty> {
                 if gen_args.is_empty() {
                     return struct_name;
                 }
-                let gen_arg_names = iter_ty_slice!(self, gen_args, map(|ga| self.get_string_rep_with_subst(ga, subst)))
+                let gen_arg_names = gen_args
+                    .iter()
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", struct_name, gen_arg_names)
@@ -605,7 +574,9 @@ impl<'ty> TyReg<'ty> {
                 if gen_args.is_empty() {
                     return enum_name;
                 }
-                let gen_arg_names = iter_ty_slice!(self, gen_args, map(|ga| self.get_string_rep_with_subst(ga, subst)))
+                let gen_arg_names = gen_args
+                    .iter()
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}<{}>", enum_name, gen_arg_names)
@@ -617,13 +588,12 @@ impl<'ty> TyReg<'ty> {
                 trait_inst,
                 assoc_ty_idx,
             } => {
-                let trait_arg_names = iter_ty_slice!(
-                    self,
-                    trait_inst.gen_args,
-                    map(|ga| self.get_string_rep_with_subst(ga, subst))
-                )
-                .collect::<Vec<_>>()
-                .join(", ");
+                let trait_arg_names = trait_inst
+                    .gen_args
+                    .iter()
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
                 // TODO move this method to ctxt so the trait name can be printed
 
@@ -640,7 +610,9 @@ impl<'ty> TyReg<'ty> {
                 if gen_args.is_empty() {
                     return format!("impl({})", id.0);
                 }
-                let gen_arg_names = iter_ty_slice!(self, gen_args, map(|ga| self.get_string_rep_with_subst(ga, subst)))
+                let gen_arg_names = gen_args
+                    .iter()
+                    .map(|&ga| self.get_string_rep_with_subst(ga, subst))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("impl({})<{}>", id.0, gen_arg_names)
@@ -673,23 +645,17 @@ impl<'ty> TyReg<'ty> {
             GenVar(gen_var) => gen_vars.get(gen_var).unwrap_or(ty),
             TraitSelf(_) => self_ty.unwrap_or(ty), // TODO: check actual trait
             Opaque { id, gen_args } => {
-                let new_gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ga| self.substitute(ga, gen_vars, self_ty))).collect();
-                let new_gen_args = self.ty_slice(&new_gen_args);
-                self.register_ty(TyDef::Opaque {
-                    id,
-                    gen_args: new_gen_args,
-                })
+                let gen_args = self.substitute_on_slice(gen_args, gen_vars, self_ty);
+                self.register_ty(TyDef::Opaque { id, gen_args })
             }
             Fn {
                 param_tys,
                 return_ty,
                 var_args,
             } => {
-                let param_tys: Vec<_> =
-                    iter_ty_slice!(self, param_tys, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
+                let param_tys = self.substitute_on_slice(param_tys, gen_vars, self_ty);
                 let return_ty = self.substitute(return_ty, gen_vars, self_ty);
-                self.fn_(&param_tys, return_ty, var_args)
+                self.fn_(param_tys, return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
@@ -700,14 +666,12 @@ impl<'ty> TyReg<'ty> {
                 self.ptr(new_inner_ty)
             }
             Struct { struct_, gen_args } => {
-                let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
-                self.inst_struct(struct_, &gen_args).unwrap()
+                let gen_args = self.substitute_on_slice(gen_args, gen_vars, self_ty);
+                self.inst_struct(struct_, gen_args).unwrap()
             }
             Enum { enum_, gen_args } => {
-                let gen_args: Vec<_> =
-                    iter_ty_slice!(self, gen_args, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
-                self.inst_enum(enum_, &gen_args).unwrap()
+                let gen_args = self.substitute_on_slice(gen_args, gen_vars, self_ty);
+                self.inst_enum(enum_, gen_args).unwrap()
             }
             Closure {
                 fn_inst,
@@ -722,9 +686,8 @@ impl<'ty> TyReg<'ty> {
                 self.closure(fn_inst, name, captures_ty)
             }
             Tuple(items) => {
-                let items: Vec<_> =
-                    iter_ty_slice!(self, items, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
-                self.tuple(&items)
+                let items = self.substitute_on_slice(items, gen_vars, self_ty);
+                self.tuple(items)
             }
             AssocTy {
                 base_ty,
@@ -745,7 +708,7 @@ impl<'ty> TyReg<'ty> {
         gen_vars: &GenVarSubst<'ty>,
         self_ty: Option<Ty<'ty>>,
     ) -> TySlice<'ty> {
-        let slice: Vec<_> = iter_ty_slice!(self, slice, map(|ty| self.substitute(ty, gen_vars, self_ty))).collect();
+        let slice: Vec<_> = slice.iter().map(|&ty| self.substitute(ty, gen_vars, self_ty)).collect();
         self.ty_slice(&slice)
     }
 
@@ -758,8 +721,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn get_struct_field_ty(&mut self, ty: Ty<'ty>, index: usize) -> Result<Ty<'ty>, NotAStruct<'ty>> {
-        let ty_def = ty.0;
-        let &TyDef::Struct { struct_, gen_args } = ty_def else {
+        let &TyDef::Struct { struct_, gen_args } = ty.0 else {
             return Err(NotAStruct(ty));
         };
 
@@ -775,8 +737,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn get_struct_field_tys(&mut self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAStruct<'ty>> {
-        let ty_def = ty.0;
-        let &TyDef::Struct { struct_, gen_args } = ty_def else {
+        let &TyDef::Struct { struct_, gen_args } = ty.0 else {
             return Err(NotAStruct(ty));
         };
 
@@ -795,8 +756,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn get_enum_variant_ty(&mut self, ty: Ty<'ty>, variant_index: usize) -> Result<Ty<'ty>, NotAnEnum<'ty>> {
-        let ty_def = ty.0;
-        let &TyDef::Enum { enum_, gen_args } = ty_def else {
+        let &TyDef::Enum { enum_, gen_args } = ty.0 else {
             return Err(NotAnEnum(ty));
         };
 
@@ -809,8 +769,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn get_enum_variant_tys(&mut self, ty: Ty<'ty>) -> Result<Vec<Ty<'ty>>, NotAnEnum<'ty>> {
-        let ty_def = ty.0;
-        let &TyDef::Enum { enum_, gen_args } = ty_def else {
+        let &TyDef::Enum { enum_, gen_args } = ty.0 else {
             return Err(NotAnEnum(ty));
         };
 
@@ -824,8 +783,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn get_tuple_field_tys(&self, ty: Ty<'ty>) -> Result<&[Ty<'ty>], ()> {
-        let ty_def = ty.0;
-        match ty_def {
+        match ty.0 {
             &TyDef::Tuple(tys) => Ok(self.get_ty_slice(tys)),
             _ => Err(()),
         }
@@ -836,8 +794,7 @@ impl<'ty> TyReg<'ty> {
         struct_ty: Ty<'ty>,
         field_name: &str,
     ) -> Result<usize, NotAStructField<'ty>> {
-        let ty_def = struct_ty.0;
-        let &TyDef::Struct { struct_, .. } = ty_def else {
+        let &TyDef::Struct { struct_, .. } = struct_ty.0 else {
             return Err(NotAStructField::NotAStruct(struct_ty));
         };
 
@@ -849,6 +806,10 @@ impl<'ty> TyReg<'ty> {
             .iter()
             .position(|field| field.name == field_name)
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
+    }
+
+    pub fn slices_eq(&self, s1: TySlice<'ty>, s2: TySlice<'ty>) -> bool {
+        s1.len() == s2.len() && s1.iter().zip(s2.iter()).all(|(&ty1, &ty2)| self.tys_eq(ty1, ty2))
     }
 
     pub fn tys_eq(&self, ty1: Ty<'ty>, ty2: Ty<'ty>) -> bool {
@@ -870,12 +831,7 @@ impl<'ty> TyReg<'ty> {
                     return_ty: ret2,
                     var_args: var_args2,
                 },
-            ) => {
-                params1.len == params2.len
-                    && zip_ty_slices!(self, (params1, params2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-                    && self.tys_eq(ret1, ret2)
-                    && var_args1 == var_args2
-            }
+            ) => self.slices_eq(params1, params2) && self.tys_eq(ret1, ret2) && var_args1 == var_args2,
 
             (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.tys_eq(inner1, inner2),
 
@@ -888,11 +844,7 @@ impl<'ty> TyReg<'ty> {
                     struct_: struct2,
                     gen_args: gen_args2,
                 },
-            ) => {
-                struct1 == struct2
-                    && gen_args1.len == gen_args2.len
-                    && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-            }
+            ) => struct1 == struct2 && self.slices_eq(gen_args1, gen_args2),
 
             (
                 &Enum {
@@ -903,32 +855,15 @@ impl<'ty> TyReg<'ty> {
                     enum_: enum2,
                     gen_args: gen_args2,
                 },
-            ) => {
-                enum1 == enum2
-                    && gen_args1.len == gen_args2.len
-                    && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-            }
+            ) => enum1 == enum2 && self.slices_eq(gen_args1, gen_args2),
 
             (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
                 fn_inst1.fn_ == fn_inst2.fn_
-                    && fn_inst1.gen_args.len == fn_inst2.gen_args.len
-                    && zip_ty_slices!(
-                        self,
-                        (fn_inst1.gen_args, fn_inst2.gen_args),
-                        all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                    )
-                    && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
-                    && zip_ty_slices!(
-                        self,
-                        (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
-                        all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                    )
+                    && self.slices_eq(fn_inst1.gen_args, fn_inst2.gen_args)
+                    && self.slices_eq(fn_inst1.env_gen_args, fn_inst2.env_gen_args)
             }
 
-            (&Tuple(items1), &Tuple(items2)) => {
-                items1.len == items2.len
-                    && zip_ty_slices!(self, (items1, items2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-            }
+            (&Tuple(items1), &Tuple(items2)) => self.slices_eq(items1, items2),
 
             (
                 &Opaque {
@@ -939,11 +874,7 @@ impl<'ty> TyReg<'ty> {
                     id: id2,
                     gen_args: gen_args2,
                 },
-            ) => {
-                id1 == id2
-                    && gen_args1.len == gen_args2.len
-                    && zip_ty_slices!(self, (gen_args1, gen_args2), all(|ty1, ty2| self.tys_eq(ty1, ty2)))
-            }
+            ) => id1 == id2 && self.slices_eq(gen_args1, gen_args2),
 
             (
                 AssocTy {
@@ -959,11 +890,7 @@ impl<'ty> TyReg<'ty> {
             ) => {
                 base_ty1 == base_ty2
                     && trait_inst1.trait_ == trait_inst2.trait_
-                    && zip_ty_slices!(
-                        self,
-                        (trait_inst1.gen_args, trait_inst2.gen_args),
-                        all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                    )
+                    && self.slices_eq(trait_inst1.gen_args, trait_inst2.gen_args)
                     && assoc_ty_idx1 == assoc_ty_idx2
             }
 
@@ -1033,12 +960,11 @@ impl<'ty> TyReg<'ty> {
                     var_args: var_args2,
                 },
             ) => {
-                params1.len == params2.len
-                    && zip_ty_slices!(
-                        self,
-                        (params1, params2),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                params1.len() == params2.len()
+                    && params1
+                        .iter()
+                        .zip(params2.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
                     && self.try_find_instantiation_internal(ret1, ret2, instantiation)
                     && var_args1 == var_args2
             }
@@ -1058,12 +984,11 @@ impl<'ty> TyReg<'ty> {
                 },
             ) => {
                 struct1 == struct2
-                    && gen_args1.len == gen_args2.len
-                    && zip_ty_slices!(
-                        self,
-                        (gen_args1, gen_args2),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                    && gen_args1.len() == gen_args2.len()
+                    && gen_args1
+                        .iter()
+                        .zip(gen_args2.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
             }
 
             (
@@ -1077,37 +1002,35 @@ impl<'ty> TyReg<'ty> {
                 },
             ) => {
                 enum1 == enum2
-                    && gen_args1.len == gen_args2.len
-                    && zip_ty_slices!(
-                        self,
-                        (gen_args1, gen_args2),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                    && gen_args1.len() == gen_args2.len()
+                    && gen_args1
+                        .iter()
+                        .zip(gen_args2.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
             }
 
             (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
                 fn_inst1.fn_ == fn_inst2.fn_
-                    && fn_inst1.gen_args.len == fn_inst2.gen_args.len
-                    && zip_ty_slices!(
-                        self,
-                        (fn_inst1.gen_args, fn_inst2.gen_args),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
-                    && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
-                    && zip_ty_slices!(
-                        self,
-                        (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                    && fn_inst1.gen_args.len() == fn_inst2.gen_args.len()
+                    && fn_inst1
+                        .gen_args
+                        .iter()
+                        .zip(fn_inst2.gen_args.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
+                    && fn_inst1.env_gen_args.len() == fn_inst2.env_gen_args.len()
+                    && fn_inst1
+                        .env_gen_args
+                        .iter()
+                        .zip(fn_inst2.env_gen_args.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
             }
 
             (&Tuple(items1), &Tuple(items2)) => {
-                items1.len == items2.len
-                    && zip_ty_slices!(
-                        self,
-                        (items1, items2),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                items1.len() == items2.len()
+                    && items1
+                        .iter()
+                        .zip(items2.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
             }
 
             (
@@ -1124,12 +1047,12 @@ impl<'ty> TyReg<'ty> {
             ) => {
                 self.try_find_instantiation_internal(base_ty1, base_ty2, instantiation)
                     && trait_inst1.trait_ == trait_inst2.trait_
-                    && trait_inst1.gen_args.len == trait_inst2.gen_args.len
-                    && zip_ty_slices!(
-                        self,
-                        (trait_inst1.gen_args, trait_inst2.gen_args),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                    && trait_inst1.gen_args.len() == trait_inst2.gen_args.len()
+                    && trait_inst1
+                        .gen_args
+                        .iter()
+                        .zip(trait_inst2.gen_args.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
                     && assoc_ty_idx1 == assoc_ty_idx2
             }
 
@@ -1144,12 +1067,11 @@ impl<'ty> TyReg<'ty> {
                 },
             ) => {
                 id1 == id2
-                    && gen_args1.len == gen_args2.len
-                    && zip_ty_slices!(
-                        self,
-                        (gen_args1, gen_args2),
-                        all(|ty1, ty2| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    )
+                    && gen_args1.len() == gen_args2.len()
+                    && gen_args1
+                        .iter()
+                        .zip(gen_args2.iter())
+                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
             }
 
             (_, _) => false,
@@ -1200,12 +1122,7 @@ impl<'ty> TyReg<'ty> {
             match &c.requirement {
                 ConstraintRequirement::Trait(trait_inst_2) => {
                     trait_inst.trait_ == trait_inst_2.trait_
-                        && trait_inst.gen_args.len == trait_inst_2.gen_args.len
-                        && zip_ty_slices!(
-                            self,
-                            (trait_inst.gen_args, trait_inst_2.gen_args),
-                            all(|ty1, ty2| self.tys_eq(ty1, ty2))
-                        )
+                        && self.slices_eq(trait_inst.gen_args, trait_inst_2.gen_args)
                 }
                 _ => false,
             }

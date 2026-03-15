@@ -97,18 +97,18 @@ impl<'fns> FnInst<'fns> {
         gen_args: TySlice<'fns>,
         env_gen_args: TySlice<'fns>,
     ) -> Result<FnInst<'fns>, FnInstError> {
-        if gen_args.len != self.gen_args.len {
+        if gen_args.len() != self.gen_args.len() {
             return Err(FnInstError::GenArgCountMismatch {
                 fn_: self.fn_,
-                expected: self.gen_args.len,
-                actual: gen_args.len,
+                expected: self.gen_args.len(),
+                actual: gen_args.len(),
             });
         }
-        if env_gen_args.len != self.env_gen_args.len {
+        if env_gen_args.len() != self.env_gen_args.len() {
             return Err(FnInstError::EnvGenArgCountMismatch {
                 fn_: self.fn_,
-                expected: self.env_gen_args.len,
-                actual: env_gen_args.len,
+                expected: self.env_gen_args.len(),
+                actual: env_gen_args.len(),
             });
         }
         Ok(FnInst {
@@ -172,12 +172,12 @@ impl<'fns> TraitMthdInst<'fns> {
                 actual: trait_inst.trait_,
             });
         }
-        if gen_args.len != self.gen_args.len {
+        if gen_args.len() != self.gen_args.len() {
             return Err(TraitMthdInstError::GenArgCountMismatch {
                 trait_: self.trait_inst.trait_,
                 mthd_idx: self.mthd_idx,
-                expected: self.gen_args.len,
-                actual: gen_args.len,
+                expected: self.gen_args.len(),
+                actual: gen_args.len(),
             });
         }
         Ok(TraitMthdInst {

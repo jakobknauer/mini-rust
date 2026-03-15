@@ -14,7 +14,6 @@ use crate::{
     hlr,
 };
 
-use crate::ctxt::ty::zip_ty_slices;
 
 pub use err::*;
 pub use mthd::MthdResolution;
@@ -864,12 +863,8 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
                     let actual_params = self.normalize_slice(actual_params);
                     let actual_return = self.normalize(actual_return);
 
-                    if param_tys.len != actual_params.len
-                        || zip_ty_slices!(
-                            self.ctxt.tys,
-                            (param_tys, actual_params),
-                            any(|ty1, ty2| !self.unify(ty1, ty2))
-                        )
+                    if param_tys.len() != actual_params.len()
+                        || param_tys.iter().zip(actual_params.iter()).any(|(&ty1, &ty2)| !self.unify(ty1, ty2))
                         || !self.unify(return_ty, actual_return)
                     {
                         let param_tys = self.normalize_slice(param_tys);

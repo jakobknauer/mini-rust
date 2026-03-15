@@ -19,18 +19,7 @@ impl<'ty> std::hash::Hash for Ty<'ty> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct TyId(pub(in crate::ctxt) usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct TySlice<'ty> {
-    pub offset: usize,
-    pub len: usize,
-    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'ty ()>,
-}
-
-impl<'ty> TySlice<'ty> {
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-}
+pub type TySlice<'ty> = &'ty [Ty<'ty>];
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Struct(pub(in crate::ctxt) usize);
@@ -181,11 +170,7 @@ impl<'ty> GenVarSubst<'ty> {
 
 macro_rules! iter_ty_slice {
     ($self:expr, $tys:expr, $adapter:ident(|$a:ident| $body:expr)) => {{
-        let len = $tys.len;
-        (0..len).$adapter(|idx| {
-            let $a = ($self.get_ty_slice($tys))[idx];
-            $body
-        })
+        $tys.iter().$adapter(|&$a| $body)
     }};
 }
 
@@ -194,12 +179,7 @@ pub(crate) use iter_ty_slice;
 macro_rules! zip_ty_slices {
     // $adapter is the iterator method: all, any, try_for_each, etc.
     ($self:expr, ($tys1:expr, $tys2:expr), $adapter:ident(|$a:ident, $b:ident| $body:expr)) => {{
-        let len = $tys1.len;
-        (0..len).$adapter(|idx| {
-            let $a = ($self.get_ty_slice($tys1))[idx];
-            let $b = ($self.get_ty_slice($tys2))[idx];
-            $body
-        })
+        $tys1.iter().zip($tys2.iter()).$adapter(|(&$a, &$b)| $body)
     }};
 }
 

@@ -28,12 +28,12 @@ impl<'traits> TraitReg<'traits> {
                 actual: mthd_idx,
             });
         }
-        if trait_def.mthds[mthd_idx].gen_params.len() != gen_args.len {
+        if trait_def.mthds[mthd_idx].gen_params.len() != gen_args.len() {
             return Err(TraitMthdInstError::GenArgCountMismatch {
                 trait_: trait_inst.trait_,
                 mthd_idx,
                 expected: trait_def.mthds[mthd_idx].gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
         Ok(TraitMthdInst {
@@ -48,11 +48,11 @@ impl<'traits> TraitReg<'traits> {
 
     pub fn inst_trait(&self, trait_: Trait, gen_args: TySlice<'traits>) -> Result<TraitInst<'traits>, TraitInstError> {
         let trait_def = self.traits.get(trait_.0).unwrap();
-        if trait_def.gen_params.len() != gen_args.len {
+        if trait_def.gen_params.len() != gen_args.len() {
             return Err(TraitInstError {
                 trait_,
                 expected: trait_def.gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
         Ok(TraitInst {

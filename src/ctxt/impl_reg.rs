@@ -16,11 +16,11 @@ pub struct ImplReg<'impls> {
 impl<'impls> ImplReg<'impls> {
     pub fn inst_impl(&self, impl_: Impl, gen_args: TySlice<'impls>) -> Result<ImplInst<'impls>, ImplInstError> {
         let impl_def = self.impls.get(impl_.0).unwrap();
-        if impl_def.gen_params.len() != gen_args.len {
+        if impl_def.gen_params.len() != gen_args.len() {
             return Err(ImplInstError {
                 impl_,
                 expected: impl_def.gen_params.len(),
-                actual: gen_args.len,
+                actual: gen_args.len(),
             });
         }
         Ok(ImplInst {

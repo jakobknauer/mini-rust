@@ -4,7 +4,7 @@ use crate::ctxt::{
     self, fns,
     impls::Impl,
     traits::{Trait, TraitInst},
-    ty::{self, zip_ty_slices},
+    ty,
 };
 
 pub struct ImplCheckError<'ty> {
@@ -70,12 +70,12 @@ fn check_trait_impl<'ctxt>(
     trait_inst: TraitInst<'ctxt>,
 ) -> Result<(), ImplCheckError<'ctxt>> {
     let trait_def = ctxt.traits.get_trait_def(trait_inst.trait_);
-    if trait_def.gen_params.len() != trait_inst.gen_args.len {
+    if trait_def.gen_params.len() != trait_inst.gen_args.len() {
         return Err(ImplCheckError {
             impl_,
             trait_inst,
             kind: ImplCheckErrorKind::ImplGenParamCountMismatch {
-                actual: trait_inst.gen_args.len,
+                actual: trait_inst.gen_args.len(),
                 expected: trait_def.gen_params.len(),
             },
         });
@@ -264,13 +264,7 @@ fn constraint_req_eq<'ctxt>(
 ) -> bool {
     match (a, b) {
         (ty::ConstraintRequirement::Trait(ta), ty::ConstraintRequirement::Trait(tb)) => {
-            ta.trait_ == tb.trait_
-                && ta.gen_args.len == tb.gen_args.len
-                && zip_ty_slices!(
-                    ctxt.tys,
-                    (ta.gen_args, tb.gen_args),
-                    all(|t1, t2| ctxt.tys.tys_eq(t1, t2))
-                )
+            ta.trait_ == tb.trait_ && ctxt.tys.slices_eq(ta.gen_args, tb.gen_args)
         }
         (
             ty::ConstraintRequirement::Callable {
@@ -282,9 +276,7 @@ fn constraint_req_eq<'ctxt>(
                 return_ty: rb,
             },
         ) => {
-            ctxt.tys.tys_eq(*ra, *rb)
-                && pa.len == pb.len
-                && zip_ty_slices!(ctxt.tys, (*pa, *pb), all(|t1, t2| ctxt.tys.tys_eq(t1, t2)))
+            ctxt.tys.tys_eq(*ra, *rb) && ctxt.tys.slices_eq(pa, pb)
         }
         _ => false,
     }

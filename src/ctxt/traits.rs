@@ -34,11 +34,11 @@ pub struct TraitInst<'traits> {
 
 impl<'traits> TraitInst<'traits> {
     pub fn with_gen_args(self, gen_args: TySlice<'traits>) -> Result<TraitInst<'traits>, TraitInstError> {
-        if gen_args.len != self.gen_args.len {
+        if gen_args.len() != self.gen_args.len() {
             return Err(TraitInstError {
                 trait_: self.trait_,
-                expected: self.gen_args.len,
-                actual: gen_args.len,
+                expected: self.gen_args.len(),
+                actual: gen_args.len(),
             });
         }
         Ok(TraitInst {

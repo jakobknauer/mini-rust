@@ -97,18 +97,8 @@ impl<'ctxt> Ctxt<'ctxt> {
 
     pub fn fn_insts_eq(&self, fn_inst1: fns::FnInst, fn_inst2: fns::FnInst) -> bool {
         fn_inst1.fn_ == fn_inst2.fn_
-            && fn_inst1.gen_args.len == fn_inst2.gen_args.len
-            && zip_ty_slices!(
-                self.tys,
-                (fn_inst1.gen_args, fn_inst2.gen_args),
-                all(|ty1, ty2| self.tys.tys_eq(ty1, ty2))
-            )
-            && fn_inst1.env_gen_args.len == fn_inst2.env_gen_args.len
-            && zip_ty_slices!(
-                self.tys,
-                (fn_inst1.env_gen_args, fn_inst2.env_gen_args),
-                all(|ty1, ty2| self.tys.tys_eq(ty1, ty2))
-            )
+            && self.tys.slices_eq(fn_inst1.gen_args, fn_inst2.gen_args)
+            && self.tys.slices_eq(fn_inst1.env_gen_args, fn_inst2.env_gen_args)
     }
 
     pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnSig<'ctxt> {
