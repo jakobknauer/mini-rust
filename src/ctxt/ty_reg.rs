@@ -732,96 +732,6 @@ impl<'ty> TyReg<'ty> {
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
     }
 
-    pub fn slices_eq(&self, s1: TySlice<'ty>, s2: TySlice<'ty>) -> bool {
-        s1.len() == s2.len() && s1.iter().zip(s2.iter()).all(|(&ty1, &ty2)| self.tys_eq(ty1, ty2))
-    }
-
-    pub fn tys_eq(&self, ty1: Ty<'ty>, ty2: Ty<'ty>) -> bool {
-        use TyDef::*;
-
-        if ty1 == ty2 {
-            return true;
-        }
-
-        match (ty1.0, ty2.0) {
-            (
-                &Fn {
-                    param_tys: params1,
-                    return_ty: ret1,
-                    var_args: var_args1,
-                },
-                &Fn {
-                    param_tys: params2,
-                    return_ty: ret2,
-                    var_args: var_args2,
-                },
-            ) => self.slices_eq(params1, params2) && self.tys_eq(ret1, ret2) && var_args1 == var_args2,
-
-            (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => self.tys_eq(inner1, inner2),
-
-            (
-                &Struct {
-                    struct_: struct1,
-                    gen_args: gen_args1,
-                },
-                &Struct {
-                    struct_: struct2,
-                    gen_args: gen_args2,
-                },
-            ) => struct1 == struct2 && self.slices_eq(gen_args1, gen_args2),
-
-            (
-                &Enum {
-                    enum_: enum1,
-                    gen_args: gen_args1,
-                },
-                &Enum {
-                    enum_: enum2,
-                    gen_args: gen_args2,
-                },
-            ) => enum1 == enum2 && self.slices_eq(gen_args1, gen_args2),
-
-            (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
-                fn_inst1.fn_ == fn_inst2.fn_
-                    && self.slices_eq(fn_inst1.gen_args, fn_inst2.gen_args)
-                    && self.slices_eq(fn_inst1.env_gen_args, fn_inst2.env_gen_args)
-            }
-
-            (&Tuple(items1), &Tuple(items2)) => self.slices_eq(items1, items2),
-
-            (
-                &Opaque {
-                    opaque: opaque1,
-                    gen_args: gen_args1,
-                },
-                &Opaque {
-                    opaque: opaque2,
-                    gen_args: gen_args2,
-                },
-            ) => opaque1 == opaque2 && self.slices_eq(gen_args1, gen_args2),
-
-            (
-                AssocTy {
-                    base_ty: base_ty1,
-                    trait_inst: trait_inst1,
-                    assoc_ty_idx: assoc_ty_idx1,
-                },
-                AssocTy {
-                    base_ty: base_ty2,
-                    trait_inst: trait_inst2,
-                    assoc_ty_idx: assoc_ty_idx2,
-                },
-            ) => {
-                base_ty1 == base_ty2
-                    && trait_inst1.trait_ == trait_inst2.trait_
-                    && self.slices_eq(trait_inst1.gen_args, trait_inst2.gen_args)
-                    && assoc_ty_idx1 == assoc_ty_idx2
-            }
-
-            _ => false,
-        }
-    }
-
     pub fn try_find_instantiation(
         &self,
         target: Ty<'ty>,
@@ -859,7 +769,7 @@ impl<'ty> TyReg<'ty> {
         {
             let substitute = instantiation.get(&gen_var).unwrap();
             if let Some(substitute) = substitute {
-                return self.tys_eq(*substitute, target);
+                return *substitute == target;
             } else {
                 instantiation.insert(gen_var, Some(target));
                 return true;
@@ -1045,8 +955,7 @@ impl<'ty> TyReg<'ty> {
 
             match &c.requirement {
                 ConstraintRequirement::Trait(trait_inst_2) => {
-                    trait_inst.trait_ == trait_inst_2.trait_
-                        && self.slices_eq(trait_inst.gen_args, trait_inst_2.gen_args)
+                    trait_inst.trait_ == trait_inst_2.trait_ && trait_inst.gen_args == trait_inst_2.gen_args
                 }
                 _ => false,
             }

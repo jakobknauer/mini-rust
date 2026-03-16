@@ -215,7 +215,7 @@ fn check_mthd_sig<'ctxt>(
         let subst_expected = do_substitutions(ctxt, expected.ty);
 
         let actual_ty = ctxt.normalize_ty(actual.ty);
-        if !ctxt.tys.tys_eq(subst_expected, actual_ty) {
+        if subst_expected != actual_ty {
             return Err(ImplCheckErrorKind::ArgTypeMismatch {
                 mthd: impl_mthd_sig.name.to_string(),
                 arg_idx: idx,
@@ -228,7 +228,7 @@ fn check_mthd_sig<'ctxt>(
     // Compare return type
     let subst_return_ty = do_substitutions(ctxt, trait_mthd_sig.return_ty);
     let actual_return_ty = ctxt.normalize_ty(impl_mthd_sig.return_ty);
-    if !ctxt.tys.tys_eq(subst_return_ty, actual_return_ty) {
+    if subst_return_ty != actual_return_ty {
         return Err(ImplCheckErrorKind::ReturnTypeMismatch {
             mthd: impl_mthd_sig.name.to_string(),
             expected: subst_return_ty,
@@ -244,51 +244,17 @@ fn check_mthd_sig<'ctxt>(
         .collect();
     let impl_constraints = impl_mthd_sig.constraints.clone();
 
-    let constraints_equal = constraints_subset(ctxt, &subst_trait_constraints, &impl_constraints)
-        && constraints_subset(ctxt, &impl_constraints, &subst_trait_constraints);
-
-    if !constraints_equal {
+    #[allow(clippy::mutable_key_type)]
+    let trait_set: HashSet<_> = subst_trait_constraints.iter().collect();
+    #[allow(clippy::mutable_key_type)]
+    let impl_set: HashSet<_> = impl_constraints.iter().collect();
+    if trait_set != impl_set {
         return Err(ImplCheckErrorKind::ConstraintMismatch {
             mthd: impl_mthd_sig.name.to_string(),
         });
     }
 
     Ok(())
-}
-
-fn constraint_req_eq<'ctxt>(
-    ctxt: &mut ctxt::Ctxt<'ctxt>,
-    a: &ty::ConstraintRequirement<'ctxt>,
-    b: &ty::ConstraintRequirement<'ctxt>,
-) -> bool {
-    match (a, b) {
-        (ty::ConstraintRequirement::Trait(ta), ty::ConstraintRequirement::Trait(tb)) => {
-            ta.trait_ == tb.trait_ && ctxt.tys.slices_eq(ta.gen_args, tb.gen_args)
-        }
-        (
-            ty::ConstraintRequirement::Callable {
-                param_tys: pa,
-                return_ty: ra,
-            },
-            ty::ConstraintRequirement::Callable {
-                param_tys: pb,
-                return_ty: rb,
-            },
-        ) => ctxt.tys.tys_eq(*ra, *rb) && ctxt.tys.slices_eq(pa, pb),
-        _ => false,
-    }
-}
-
-fn constraints_subset<'ctxt>(
-    ctxt: &mut ctxt::Ctxt<'ctxt>,
-    a: &[ty::Constraint<'ctxt>],
-    b: &[ty::Constraint<'ctxt>],
-) -> bool {
-    a.iter().all(|ca| {
-        b.iter().any(|cb| {
-            ctxt.tys.tys_eq(ca.subject, cb.subject) && constraint_req_eq(ctxt, &ca.requirement, &cb.requirement)
-        })
-    })
 }
 
 fn subst_constraint<'ctxt>(

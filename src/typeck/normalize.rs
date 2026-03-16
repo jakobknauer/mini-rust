@@ -99,7 +99,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                 let current = self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);
                 for c in &self.constraints {
                     if let ty::ConstraintRequirement::AssocTyEq(eq_ty) = c.requirement
-                        && self.ctxt.tys.tys_eq(c.subject, current)
+                        && c.subject == current
                     {
                         return self.normalize(eq_ty);
                     }

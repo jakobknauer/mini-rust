@@ -832,7 +832,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
                 ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
                     let subject = self.normalize(subject);
                     let eq_ty = self.normalize(eq_ty);
-                    if !self.ctxt.tys.tys_eq(subject, eq_ty) {
+                    if subject != eq_ty {
                         return Err(TypeckError::AssocTyEqNotSatisfied {
                             subject,
                             expected: eq_ty,

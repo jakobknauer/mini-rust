@@ -224,13 +224,13 @@ impl<'ty> GenVarSubst<'ty> {
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct InfVar(pub(in crate::ctxt) usize);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Constraint<'ty> {
     pub subject: Ty<'ty>,
     pub requirement: ConstraintRequirement<'ty>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ConstraintRequirement<'ty> {
     Trait(traits::TraitInst<'ty>),
     Callable {

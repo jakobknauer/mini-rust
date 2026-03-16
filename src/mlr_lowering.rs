@@ -170,7 +170,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
 
     fn define_struct(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
         for &(ty_2, iw_type) in &self.structs {
-            if self.mr_ctxt.tys.tys_eq(ty, ty_2) {
+            if ty == ty_2 {
                 return iw_type.as_any_type_enum();
             }
         }
@@ -192,7 +192,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
 
     fn define_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
         for &(ty_2, iw_type) in &self.enums {
-            if self.mr_ctxt.tys.tys_eq(ty, ty_2) {
+            if ty == ty_2 {
                 return iw_type.as_any_type_enum();
             }
         }
@@ -230,7 +230,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
 
     fn get_fn(&self, fn_inst: mr_fns::FnInst<'ctxt>) -> Option<FunctionValue<'iw>> {
         for (&fn_inst_2, &fn_value) in &self.functions {
-            if self.mr_ctxt.fn_insts_eq(fn_inst, fn_inst_2) {
+            if fn_inst == fn_inst_2 {
                 return Some(fn_value);
             }
         }

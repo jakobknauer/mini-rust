@@ -58,7 +58,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
             let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.unwrap(), &subst);
 
-            self.tys.slices_eq(inst_impl_trait_inst.gen_args, trait_inst.gen_args)
+            inst_impl_trait_inst.gen_args == trait_inst.gen_args
         })
     }
 
@@ -232,7 +232,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
                 let subject = self.normalize_ty(subject);
                 let eq_ty = self.normalize_ty(eq_ty);
-                self.tys.tys_eq(subject, eq_ty)
+                subject == eq_ty
             }
         }
     }

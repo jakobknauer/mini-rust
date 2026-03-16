@@ -100,12 +100,6 @@ impl<'ctxt> Ctxt<'ctxt> {
         format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
     }
 
-    pub fn fn_insts_eq(&self, fn_inst1: fns::FnInst<'ctxt>, fn_inst2: fns::FnInst<'ctxt>) -> bool {
-        fn_inst1.fn_ == fn_inst2.fn_
-            && self.tys.slices_eq(fn_inst1.gen_args, fn_inst2.gen_args)
-            && self.tys.slices_eq(fn_inst1.env_gen_args, fn_inst2.env_gen_args)
-    }
-
     pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnSig<'ctxt> {
         let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
         let name = signature.name.clone();
