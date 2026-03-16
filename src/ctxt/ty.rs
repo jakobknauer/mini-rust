@@ -23,43 +23,6 @@ pub struct TyId(pub(in crate::ctxt) usize);
 
 pub type TySlice<'ty> = &'ty [Ty<'ty>];
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
-pub struct StructId(pub(in crate::ctxt) usize);
-
-pub type Struct<'ty> = &'ty StructDef<'ty>;
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
-pub struct EnumId(pub(in crate::ctxt) usize);
-
-pub type Enum<'ty> = &'ty EnumDef<'ty>;
-
-#[derive(Clone, Copy, Debug)]
-pub struct GenVar<'ty>(pub(in crate::ctxt) usize, pub(in crate::ctxt) &'ty str);
-
-impl<'ty> GenVar<'ty> {
-    pub fn name(self) -> &'ty str {
-        self.1
-    }
-}
-
-impl PartialEq for GenVar<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-impl Eq for GenVar<'_> {}
-impl std::hash::Hash for GenVar<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
-pub struct InfVar(pub(in crate::ctxt) usize);
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct OpaqueId(pub(in crate::ctxt) usize);
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TyDef<'ty> {
     Primitive(Primitive),
@@ -106,6 +69,11 @@ pub enum Primitive {
     CChar,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct StructId(pub(in crate::ctxt) usize);
+
+pub type Struct<'ty> = &'ty StructDef<'ty>;
+
 #[derive(Debug)]
 pub struct StructDef<'ty> {
     pub name: String,
@@ -137,6 +105,11 @@ pub struct StructField<'ty> {
     pub name: String,
     pub ty: Ty<'ty>,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct EnumId(pub(in crate::ctxt) usize);
+
+pub type Enum<'ty> = &'ty EnumDef<'ty>;
 
 #[derive(Debug)]
 pub struct EnumDef<'ty> {
@@ -170,26 +143,34 @@ pub struct EnumVariant<'ty> {
     pub struct_: Struct<'ty>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct OpaqueId(pub(in crate::ctxt) usize);
+
 #[derive(Clone)]
 pub struct OpaqueDef<'ty> {
     pub gen_params: Vec<GenVar<'ty>>,
     pub constraints: Vec<ConstraintRequirement<'ty>>,
 }
 
-#[derive(Clone)]
-pub struct Constraint<'ty> {
-    pub subject: Ty<'ty>,
-    pub requirement: ConstraintRequirement<'ty>,
+#[derive(Clone, Copy, Debug)]
+pub struct GenVar<'ty>(pub(in crate::ctxt) usize, pub(in crate::ctxt) &'ty str);
+
+impl<'ty> GenVar<'ty> {
+    pub fn name(self) -> &'ty str {
+        self.1
+    }
 }
 
-#[derive(Clone, PartialEq, Eq)]
-pub enum ConstraintRequirement<'ty> {
-    Trait(traits::TraitInst<'ty>),
-    Callable {
-        param_tys: TySlice<'ty>,
-        return_ty: Ty<'ty>,
-    },
-    AssocTyEq(Ty<'ty>),
+impl PartialEq for GenVar<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for GenVar<'_> {}
+impl std::hash::Hash for GenVar<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
 }
 
 #[derive(Clone)]
@@ -222,4 +203,23 @@ impl<'ty> GenVarSubst<'ty> {
         let pairs = self.0.into_iter().chain(other.0).collect();
         GenVarSubst(pairs)
     }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
+pub struct InfVar(pub(in crate::ctxt) usize);
+
+#[derive(Clone)]
+pub struct Constraint<'ty> {
+    pub subject: Ty<'ty>,
+    pub requirement: ConstraintRequirement<'ty>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum ConstraintRequirement<'ty> {
+    Trait(traits::TraitInst<'ty>),
+    Callable {
+        param_tys: TySlice<'ty>,
+        return_ty: Ty<'ty>,
+    },
+    AssocTyEq(Ty<'ty>),
 }
