@@ -120,7 +120,7 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn register_primitive_tys(&mut self) -> Result<(), ()> {
+    pub fn register_primitive_tys(&self) -> Result<(), ()> {
         self.register_named_ty("i32", TyDef::Primitive(Primitive::Integer32))?;
         self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?;
         self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?;
