@@ -949,16 +949,7 @@ impl<'ty> TyReg<'ty> {
         trait_inst: TraitInst<'ty>,
     ) -> bool {
         constraints.iter().any(|c| {
-            if c.subject != subject {
-                return false;
-            }
-
-            match &c.requirement {
-                ConstraintRequirement::Trait(trait_inst_2) => {
-                    trait_inst.trait_ == trait_inst_2.trait_ && trait_inst.gen_args == trait_inst_2.gen_args
-                }
-                _ => false,
-            }
+            c.subject == subject && matches!(&c.requirement, ConstraintRequirement::Trait(ti) if *ti == trait_inst)
         })
     }
 
