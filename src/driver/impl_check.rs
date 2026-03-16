@@ -106,14 +106,14 @@ fn check_trait_impl<'ctxt>(
     let trait_gen_params_subst = ty::GenVarSubst::new(&trait_def.gen_params, trait_inst.gen_args).unwrap();
 
     for &mthd in &impl_def.mthds {
-        let impl_mthd_sig = ctxt.fns.get_sig(mthd).unwrap().clone();
+        let impl_mthd_sig = ctxt.fns.get_sig(mthd);
 
         let mthd_name = ctxt.fns.get_fn_name(mthd);
         let trait_mthd_sig = trait_def.mthds.iter().find(|m| m.name == mthd_name).unwrap();
 
         check_mthd_sig(
             ctxt,
-            &impl_mthd_sig,
+            impl_mthd_sig,
             trait_mthd_sig,
             impl_def.ty,
             &trait_gen_params_subst,

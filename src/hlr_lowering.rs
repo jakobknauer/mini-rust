@@ -59,7 +59,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         captured_vars: Option<&[hlr::VarId]>,
         body: hlr::Expr<'hlr>,
     ) -> mlr::Fn<'mlr> {
-        let sig = self.builder.ctxt.fns.get_sig(self.fn_).unwrap().clone();
+        let sig = self.builder.ctxt.fns.get_sig(self.fn_);
         let mut param_locs = Vec::new();
 
         // For closures, the first sig param is the captures struct (no VarId binding)
@@ -764,7 +764,6 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
                     .ctxt
                     .fns
                     .get_sig(fn_inst.fn_)
-                    .unwrap()
                     .params
                     .first()
                     .map(|p| p.kind == fns::FnParamKind::SelfByRef)

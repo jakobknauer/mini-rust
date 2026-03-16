@@ -575,14 +575,14 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         &mut self,
         hlr_fns: &[hlr::Fn<'arena>],
     ) -> Result<HashMap<fns::Fn, typeck::HlrTyping<'arena>>, DriverError<'arena>> {
-        let fn_names: Vec<String> = hlr_fns
+        let fn_names: Vec<&str> = hlr_fns
             .iter()
-            .map(|hlr_fn| self.ctxt.fns.get_fn_name(hlr_fn.fn_).to_string())
+            .map(|hlr_fn| self.ctxt.fns.get_fn_name(hlr_fn.fn_))
             .collect();
         let mut result = HashMap::new();
         for (hlr_fn, fn_name) in hlr_fns.iter().zip(fn_names) {
             let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|error| DriverError::Typeck {
-                fn_name: fn_name.clone(),
+                fn_name: fn_name.to_string(),
                 error,
             })?;
             result.insert(hlr_fn.fn_, typing);
@@ -649,14 +649,19 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
             let subst = self.ctxt.get_subst_for_fn_inst(current);
 
-            let fn_insts = self.ctxt.fns.get_called_fn_insts(current.fn_).iter().map(|fn_inst| {
-                let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.gen_args, &subst);
-                let new_env_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.env_gen_args, &subst);
-                fn_inst.with_gen_args(new_gen_args, new_env_gen_args).unwrap()
-            });
+            let fn_insts = self
+                .ctxt
+                .fns
+                .get_called_fn_insts(current.fn_)
+                .into_iter()
+                .map(|fn_inst| {
+                    let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.gen_args, &subst);
+                    let new_env_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.env_gen_args, &subst);
+                    fn_inst.with_gen_args(new_gen_args, new_env_gen_args).unwrap()
+                });
             open.extend(fn_insts);
 
-            let called_trait_mthd_insts = self.ctxt.fns.get_called_trait_mthd_insts(current.fn_).to_vec();
+            let called_trait_mthd_insts = self.ctxt.fns.get_called_trait_mthd_insts(current.fn_);
             let trait_fn_insts = called_trait_mthd_insts
                 .into_iter()
                 .map(|trait_mthd_inst| self.ctxt.resolve_trait_mthd_to_fn(trait_mthd_inst, &subst));

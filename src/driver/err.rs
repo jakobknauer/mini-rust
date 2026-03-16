@@ -109,7 +109,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
 
     let ty = |t| ctxt.tys.get_string_rep(t);
     let trait_ = |t| ctxt.traits.get_trait_name(t).to_string();
-    let _fn_ = |f| ctxt.fns.get_fn_name(f).to_string();
+    let _fn_ = |f| ctxt.fns.get_fn_name(f);
     let struct_ = |s: ty::Struct<'_>| s.name.clone();
     let enum_ = |e: ty::Enum<'_>| e.name.clone();
 

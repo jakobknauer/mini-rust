@@ -11,7 +11,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
         }
 
         for &fn_ in &self.created_closure_fns {
-            let sig = self.ctxt.fns.get_sig(fn_).unwrap();
+            let sig = self.ctxt.fns.get_sig(fn_);
             debug_assert!(!self.contains_inf_var(sig.return_ty));
             for param in &sig.params {
                 debug_assert!(!self.contains_inf_var(param.ty));

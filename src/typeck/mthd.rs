@@ -62,7 +62,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                 {
                     return None;
                 }
-                let has_receiver = self.ctxt.fns.get_sig(mthd_fn).unwrap().has_receiver();
+                let has_receiver = self.ctxt.fns.get_sig(mthd_fn).has_receiver();
                 (!require_receiver || has_receiver).then_some((mthd_fn, env_gen_args))
             })
             .collect();
@@ -118,7 +118,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     ) -> TypeckResult<'ctxt, MthdResolution<'ctxt>> {
         match found {
             FoundMthd::Inherent { fn_, env_gen_args } => {
-                let n_gen_params = self.ctxt.fns.get_sig(fn_).unwrap().gen_params.len();
+                let n_gen_params = self.ctxt.fns.get_sig(fn_).gen_params.len();
                 let resolved_gen_args = self.resolve_optional_gen_args(gen_args, n_gen_params, |actual| {
                     TypeckError::MthdGenArgCountMismatch {
                         mthd_name: mthd_name.to_string(),
@@ -127,7 +127,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                     }
                 })?;
 
-                let sig = self.ctxt.fns.get_sig(fn_).unwrap();
+                let sig = self.ctxt.fns.get_sig(fn_);
                 let env_subst = ty::GenVarSubst::new(&sig.env_gen_params, env_gen_args).unwrap();
                 let fn_subst =
                     ty::GenVarSubst::new(&sig.gen_params.clone(), resolved_gen_args.iter().copied()).unwrap();
@@ -177,7 +177,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     fn fn_ty_of_inherent_resolution(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let sig = self.ctxt.fns.get_sig(fn_inst.fn_).unwrap();
+        let sig = self.ctxt.fns.get_sig(fn_inst.fn_);
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
         let return_ty = sig.return_ty;
         let var_args = sig.var_args;

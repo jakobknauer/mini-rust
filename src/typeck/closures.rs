@@ -77,7 +77,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     fn generate_closure_names(&mut self) -> ClosureNames {
-        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
+        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_);
         let fn_name = format!("<closure:{}:{}>", outer_sig.name, self.closure_counter);
         let captures_name = format!("<Captures:{}:{}>", outer_sig.name, self.closure_counter);
         self.closure_counter += 1;
@@ -85,7 +85,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     fn collect_closure_generics(&mut self) -> ClosureGenerics<'ctxt> {
-        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
+        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_);
 
         let env_gen_params: Vec<ty::GenVar> = outer_sig
             .env_gen_params

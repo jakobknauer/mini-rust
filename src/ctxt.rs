@@ -30,7 +30,7 @@ impl<'ctxt> Ctxt<'ctxt> {
     pub fn new(arena: &'ctxt bumpalo::Bump) -> Self {
         Self {
             tys: TyReg::new(arena),
-            fns: Default::default(),
+            fns: FnReg::new(arena),
             impls: Default::default(),
             traits: Default::default(),
             language_items: Default::default(),
@@ -38,7 +38,7 @@ impl<'ctxt> Ctxt<'ctxt> {
     }
 
     pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst<'ctxt>) -> String {
-        let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
+        let signature = self.fns.get_sig(fn_inst.fn_);
 
         let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
             let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
@@ -101,7 +101,7 @@ impl<'ctxt> Ctxt<'ctxt> {
     }
 
     pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnSig<'ctxt> {
-        let signature = self.fns.get_sig(fn_inst.fn_).unwrap();
+        let signature = self.fns.get_sig(fn_inst.fn_);
         let name = signature.name.clone();
         let associated_ty = signature.associated_ty;
         let associated_trait_inst = signature.associated_trait_inst;
@@ -215,7 +215,7 @@ impl<'ctxt> Ctxt<'ctxt> {
     }
 
     pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst<'ctxt>) -> GenVarSubst<'ctxt> {
-        let sig = self.fns.get_sig(fn_inst.fn_).unwrap();
+        let sig = self.fns.get_sig(fn_inst.fn_);
         let gen_param_subst = GenVarSubst::new(&sig.gen_params, fn_inst.gen_args).unwrap();
         let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, fn_inst.env_gen_args).unwrap();
         GenVarSubst::compose(env_gen_param_subst, gen_param_subst)

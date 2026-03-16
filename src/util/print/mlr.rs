@@ -16,7 +16,6 @@ pub fn print_mlr<'mlr, W: Write>(
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
-        fn_,
         mlr_fn,
         signature: ctxt.fns.get_sig(fn_),
         ctxt,
@@ -27,9 +26,8 @@ pub fn print_mlr<'mlr, W: Write>(
 }
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
-    fn_: Fn,
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
-    signature: Option<&'a FnSig<'mlr>>,
+    signature: &'mlr FnSig<'mlr>,
     ctxt: &'a ctxt::Ctxt<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
@@ -50,9 +48,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
     }
 
     fn print_signature(&mut self) -> Result<(), std::io::Error> {
-        let Some(signature) = self.signature else {
-            return write!(self.writer, "<signature for fn id {}>", self.fn_);
-        };
+        let signature = self.signature;
 
         // Print signature similar to printing of fn_inst in src/ctxt.rs
 

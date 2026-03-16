@@ -191,7 +191,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     fn resolve_self_ty_annot(&mut self) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let self_ty = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap().associated_ty;
+        let self_ty = self.ctxt.fns.get_sig(self.fn_.fn_).associated_ty;
         Ok(self_ty.expect("Self type not available in this context"))
     }
 }

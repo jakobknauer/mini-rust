@@ -28,7 +28,7 @@ const INDENT: &str = "    ";
 
 impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
     fn print_fn(&mut self, hlr_fn: &hlr::Fn<'ctxt>) -> Result<(), std::io::Error> {
-        let sig = self.ctxt.fns.get_sig(hlr_fn.fn_).unwrap();
+        let sig = self.ctxt.fns.get_sig(hlr_fn.fn_);
 
         let assoc = if let Some(assoc_ty) = sig.associated_ty {
             let ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
@@ -359,7 +359,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
         match val {
             hlr::Val::Var(var_id) => write!(self.writer, "{}", var_id),
             hlr::Val::Fn(fn_, gen_args) => {
-                let name = &self.ctxt.fns.get_sig(*fn_).unwrap().name;
+                let name = &self.ctxt.fns.get_sig(*fn_).name;
                 write!(self.writer, "{}", name)?;
                 self.print_optional_gen_args(*gen_args)
             }

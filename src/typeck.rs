@@ -48,7 +48,7 @@ where
     'ctxt: 'a + 'hlr,
     'hlr: 'ctxt,
 {
-    let constraints: Vec<_> = ctxt.fns.get_sig(fn_.fn_).unwrap().all_constraints().cloned().collect();
+    let constraints: Vec<_> = ctxt.fns.get_sig(fn_.fn_).all_constraints().cloned().collect();
     let typeck: Typeck<'_, '_, 'ctxt, 'hlr> = Typeck {
         ctxt,
         fn_,
@@ -101,7 +101,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     fn check_body(&mut self) -> TypeckResult<'ctxt, Option<(ty::Opaque<'ctxt>, ty::Ty<'ctxt>)>> {
-        let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
+        let sig = self.ctxt.fns.get_sig(self.fn_.fn_);
 
         for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
             self.typing.var_types.insert(*param_var_id, param.ty);
@@ -221,7 +221,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
         fn_: fns::Fn,
         args: Option<hlr::TyAnnotSlice<'hlr>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let gen_arg_count = self.ctxt.fns.get_sig(fn_).unwrap().gen_params.len();
+        let gen_arg_count = self.ctxt.fns.get_sig(fn_).gen_params.len();
 
         let gen_args =
             self.resolve_optional_gen_args(args, gen_arg_count, |actual| TypeckError::FnGenArgCountMismatch {
@@ -230,7 +230,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
                 actual,
             })?;
 
-        let signature = self.ctxt.fns.get_sig(fn_).unwrap();
+        let signature = self.ctxt.fns.get_sig(fn_);
         let gen_params = signature.gen_params.clone();
         let subst = ty::GenVarSubst::new(&gen_params, gen_args.clone()).unwrap();
         let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
@@ -772,7 +772,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
     }
 
     pub(super) fn add_constraint_obligations(&mut self, fn_: fns::Fn, subst: &ty::GenVarSubst<'ctxt>) {
-        let constraints = self.ctxt.fns.get_sig(fn_).unwrap().constraints.clone();
+        let constraints = self.ctxt.fns.get_sig(fn_).constraints.clone();
         self.push_constraint_obligations(&constraints, subst, None);
     }
 

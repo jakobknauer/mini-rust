@@ -98,7 +98,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
     }
 
     fn get_signature(&self) -> &fns::FnSig<'ctxt> {
-        self.ctxt.fns.get_sig(self.fn_).unwrap()
+        self.ctxt.fns.get_sig(self.fn_)
     }
 
     fn start_new_block(&mut self) {

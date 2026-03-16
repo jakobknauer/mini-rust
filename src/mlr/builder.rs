@@ -147,14 +147,7 @@ impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
     }
 
     pub fn insert_call_val(&mut self, callable: mlr::Op<'mlr>, args: Vec<mlr::Op<'mlr>>) -> mlr::Val<'mlr> {
-        let constraints: Vec<_> = self
-            .ctxt
-            .fns
-            .get_sig(self.fn_)
-            .unwrap()
-            .all_constraints()
-            .cloned()
-            .collect();
+        let constraints: Vec<_> = self.ctxt.fns.get_sig(self.fn_).all_constraints().cloned().collect();
         let return_ty = self
             .ctxt
             .ty_is_callable(&constraints, callable.1)
@@ -233,7 +226,7 @@ impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
     }
 
     fn fn_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let sig = self.ctxt.fns.get_sig(fn_inst.fn_).unwrap();
+        let sig = self.ctxt.fns.get_sig(fn_inst.fn_);
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
         let return_ty = sig.return_ty;
         let var_args = sig.var_args;

@@ -46,7 +46,6 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
                     .ctxt
                     .fns
                     .get_sig(self.fn_.fn_)
-                    .unwrap()
                     .associated_ty
                     .expect("TraitSelf in a function with no associated type");
                 self.normalize(self_ty)
@@ -188,20 +187,12 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     fn normalize_closure_fns(&mut self) {
         let fns = self.created_closure_fns.clone();
         for fn_ in fns {
-            let sig = self.ctxt.fns.get_sig(fn_).unwrap();
+            let sig = self.ctxt.fns.get_sig(fn_);
 
-            let return_ty = sig.return_ty;
-            let param_tys: Vec<ty::Ty> = sig.params.iter().map(|p| p.ty).collect();
+            let return_ty = self.normalize(sig.return_ty);
+            let param_tys: Vec<ty::Ty> = sig.params.iter().map(|p| self.normalize(p.ty)).collect();
 
-            let return_ty = self.normalize(return_ty);
-            let param_tys: Vec<ty::Ty> = param_tys.into_iter().map(|ty| self.normalize(ty)).collect();
-
-            let sig = self.ctxt.fns.get_mut_sig(fn_).unwrap();
-
-            sig.return_ty = return_ty;
-            for (param, ty) in sig.params.iter_mut().zip(param_tys) {
-                param.ty = ty;
-            }
+            self.ctxt.fns.update_sig_types(fn_, return_ty, &param_tys);
         }
     }
 
