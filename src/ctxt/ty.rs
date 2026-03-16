@@ -56,7 +56,7 @@ pub enum TyDef<'ty> {
     },
     InfVar(InfVar),
     Opaque {
-        id: OpaqueId,
+        opaque: Opaque<'ty>,
         gen_args: TySlice<'ty>,
     },
 }
@@ -146,10 +146,26 @@ pub struct EnumVariant<'ty> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct OpaqueId(pub(in crate::ctxt) usize);
 
-#[derive(Clone)]
+pub type Opaque<'ty> = &'ty OpaqueDef<'ty>;
+
+#[derive(Debug)]
 pub struct OpaqueDef<'ty> {
     pub gen_params: Vec<GenVar<'ty>>,
     pub constraints: Vec<ConstraintRequirement<'ty>>,
+    pub(in crate::ctxt) resolution: OnceCell<Ty<'ty>>,
+    pub(in crate::ctxt) id: OpaqueId,
+}
+
+impl PartialEq for OpaqueDef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for OpaqueDef<'_> {}
+impl std::hash::Hash for OpaqueDef<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -214,7 +230,7 @@ pub struct Constraint<'ty> {
     pub requirement: ConstraintRequirement<'ty>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ConstraintRequirement<'ty> {
     Trait(traits::TraitInst<'ty>),
     Callable {

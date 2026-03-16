@@ -172,15 +172,15 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
 
             (
                 &ty::TyDef::Opaque {
-                    id: id1,
+                    opaque: opaque1,
                     gen_args: gen_args1,
                 },
                 &ty::TyDef::Opaque {
-                    id: id2,
+                    opaque: opaque2,
                     gen_args: gen_args2,
                 },
             ) => {
-                id1 == id2
+                opaque1 == opaque2
                     && gen_args1.len() == gen_args2.len()
                     && gen_args1.iter().zip(gen_args2).all(|(t1, t2)| self.unify(*t1, *t2))
             }

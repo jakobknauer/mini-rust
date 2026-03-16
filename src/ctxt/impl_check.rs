@@ -80,8 +80,11 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         {
             return true;
         }
-        if let &ty::TyDef::Opaque { id, .. } = ty.0
-            && self.tys.opaque_satisfies_trait_inst(id, trait_inst)
+        if let &ty::TyDef::Opaque { opaque, .. } = ty.0
+            && opaque
+                .constraints
+                .iter()
+                .any(|r| matches!(r, ty::ConstraintRequirement::Trait(ti) if ti.trait_ == trait_inst.trait_))
         {
             return true;
         }
@@ -132,18 +135,17 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             let params_without_captures = self.tys.ty_slice(&params_without_captures);
 
             Some((params_without_captures, return_ty, false))
-        } else if let &ty::TyDef::Opaque { id, gen_args } = ty.0 {
-            self.tys
-                .try_get_opaque_callable_constraint(id)
-                .map(|(param_tys, return_ty)| {
-                    let opaque_def = self.tys.get_opaque_def(id);
-                    let subst = GenVarSubst::new(&opaque_def.gen_params, gen_args).unwrap();
-
+        } else if let &ty::TyDef::Opaque { opaque, gen_args } = ty.0 {
+            opaque.constraints.iter().find_map(|r| {
+                if let &ty::ConstraintRequirement::Callable { param_tys, return_ty } = r {
+                    let subst = GenVarSubst::new(&opaque.gen_params, gen_args).unwrap();
                     let param_tys = self.tys.substitute_gen_vars_on_slice(param_tys, &subst);
                     let return_ty = self.tys.substitute_gen_vars(return_ty, &subst);
-
-                    (param_tys, return_ty, false)
-                })
+                    Some((param_tys, return_ty, false))
+                } else {
+                    None
+                }
+            })
         } else {
             None
         }

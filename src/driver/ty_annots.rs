@@ -83,8 +83,7 @@ impl<'arena> Driver<'_, 'arena> {
                 if !allow_opaque {
                     return None;
                 }
-                let (id, opaque_ty) = self.ctxt.tys.opaque(res_ctxt.gen_vars);
-                match req {
+                let constraint = match req {
                     ast::ConstraintRequirement::Trait {
                         trait_name, trait_args, ..
                     } => {
@@ -95,9 +94,7 @@ impl<'arena> Driver<'_, 'arena> {
                             .collect::<Option<_>>()?;
                         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
                         let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
-                        self.ctxt
-                            .tys
-                            .add_opaque_constraint(id, ty::ConstraintRequirement::Trait(trait_inst));
+                        ty::ConstraintRequirement::Trait(trait_inst)
                     }
                     ast::ConstraintRequirement::Callable { params, return_ty } => {
                         let param_tys: Vec<_> = params
@@ -109,11 +106,10 @@ impl<'arena> Driver<'_, 'arena> {
                             Some(rt) => self.try_resolve_ast_ty_annot(rt, res_ctxt, false)?,
                             None => self.ctxt.tys.unit(),
                         };
-                        self.ctxt
-                            .tys
-                            .add_opaque_constraint(id, ty::ConstraintRequirement::Callable { param_tys, return_ty });
+                        ty::ConstraintRequirement::Callable { param_tys, return_ty }
                     }
-                }
+                };
+                let (_, opaque_ty) = self.ctxt.tys.opaque(res_ctxt.gen_vars, vec![constraint]);
                 Some(opaque_ty)
             }
             Wildcard => panic!("wildcard type annotation not supported at this position"),

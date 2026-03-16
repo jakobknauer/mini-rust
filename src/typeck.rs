@@ -90,9 +90,9 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
         self.check_pending_obligations()?;
         self.normalize_all();
 
-        if let Some((opaque_id, inf_var_ty)) = opaque_return {
+        if let Some((opaque, inf_var_ty)) = opaque_return {
             let concrete_ty = self.normalize(inf_var_ty);
-            self.ctxt.tys.set_opaque_resolution(opaque_id, concrete_ty);
+            self.ctxt.tys.set_opaque_resolution(opaque, concrete_ty);
         }
 
         self.post_check();
@@ -100,7 +100,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
         Ok(self.typing)
     }
 
-    fn check_body(&mut self) -> TypeckResult<'ctxt, Option<(ty::OpaqueId, ty::Ty<'ctxt>)>> {
+    fn check_body(&mut self) -> TypeckResult<'ctxt, Option<(ty::Opaque<'ctxt>, ty::Ty<'ctxt>)>> {
         let sig = self.ctxt.fns.get_sig(self.fn_.fn_).unwrap();
 
         for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
@@ -109,13 +109,12 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
 
         let return_ty = sig.return_ty;
 
-        let (effective_return_ty, opaque_return) = if let ty::TyDef::Opaque { id, .. } = *return_ty.0 {
+        let (effective_return_ty, opaque_return) = if let ty::TyDef::Opaque { opaque, .. } = *return_ty.0 {
             let inf_var = self.ctxt.tys.inf_var();
-            let reqs = self.ctxt.tys.get_opaque_constraints(id).to_vec();
-            for req in reqs {
+            for req in opaque.constraints.iter().cloned() {
                 self.pending_obligations.push((inf_var, req));
             }
-            (inf_var, Some((id, inf_var)))
+            (inf_var, Some((opaque, inf_var)))
         } else {
             (return_ty, None)
         };

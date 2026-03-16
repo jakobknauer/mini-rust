@@ -209,11 +209,11 @@ impl<'ctxt> Ctxt<'ctxt> {
                 self.normalize_ty(resolved)
             }
             InfVar(_) => unreachable!(),
-            &Opaque { id, gen_args } => {
-                let Some(resolved) = self.tys.get_opaque_resolution(id) else {
+            &Opaque { opaque, gen_args } => {
+                let Some(resolved) = self.tys.get_opaque_resolution(opaque) else {
                     return ty;
                 };
-                let subst = GenVarSubst::new(&self.tys.get_opaque_def(id).gen_params, gen_args).unwrap();
+                let subst = GenVarSubst::new(&opaque.gen_params, gen_args).unwrap();
                 let instantiated = self.tys.substitute_gen_vars(resolved, &subst);
                 self.normalize_ty(instantiated)
             }
