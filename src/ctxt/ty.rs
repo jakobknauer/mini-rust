@@ -1,3 +1,4 @@
+use std::cell::OnceCell;
 use std::collections::HashMap;
 
 use crate::ctxt::{fns, traits};
@@ -22,8 +23,10 @@ pub struct TyId(pub(in crate::ctxt) usize);
 
 pub type TySlice<'ty> = &'ty [Ty<'ty>];
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Struct(pub(in crate::ctxt) usize);
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct StructId(pub(in crate::ctxt) usize);
+
+pub type Struct<'ty> = &'ty StructDef<'ty>;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Enum(pub(in crate::ctxt) usize);
@@ -66,7 +69,7 @@ pub enum TyDef<'ty> {
     Primitive(Primitive),
     Tuple(TySlice<'ty>),
     Struct {
-        struct_: Struct,
+        struct_: Struct<'ty>,
         gen_args: TySlice<'ty>,
     },
     Enum {
@@ -107,14 +110,33 @@ pub enum Primitive {
     CChar,
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct StructDef<'ty> {
     pub name: String,
     pub gen_params: Vec<GenVar<'ty>>,
-    pub fields: Vec<StructField<'ty>>,
+    pub(in crate::ctxt) fields: OnceCell<&'ty [StructField<'ty>]>,
+    pub(in crate::ctxt) id: StructId,
 }
 
-#[derive(Clone)]
+impl<'ty> StructDef<'ty> {
+    pub fn get_fields(&self) -> &[StructField<'ty>] {
+        self.fields.get().copied().expect("struct fields not yet defined")
+    }
+}
+
+impl PartialEq for StructDef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for StructDef<'_> {}
+impl std::hash::Hash for StructDef<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct StructField<'ty> {
     pub name: String,
     pub ty: Ty<'ty>,
@@ -124,13 +146,13 @@ pub struct StructField<'ty> {
 pub struct EnumDef<'ty> {
     pub name: String,
     pub gen_params: Vec<GenVar<'ty>>,
-    pub variants: Vec<EnumVariant>,
+    pub variants: Vec<EnumVariant<'ty>>,
 }
 
 #[derive(Clone)]
-pub struct EnumVariant {
+pub struct EnumVariant<'ty> {
     pub name: String,
-    pub struct_: Struct,
+    pub struct_: Struct<'ty>,
 }
 
 #[derive(Clone)]

@@ -43,6 +43,7 @@ impl<'a, 'iw, 'mr, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, '
         mlr_fn: mlr::Fn<'mlr>,
     ) -> Self {
         let builder = parent.iw_ctxt.create_builder();
+        #[allow(clippy::mutable_key_type)]
         let locs = HashMap::new();
         let iw_fn = parent.get_fn(fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();

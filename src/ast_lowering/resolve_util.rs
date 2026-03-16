@@ -5,7 +5,7 @@ use crate::{
     hlr,
 };
 
-impl<'c, 'ctxt: 'hlr, 'hlr> super::AstLowerer<'c, 'ctxt, 'hlr> {
+impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
     pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstLoweringResult<hlr::Val<'hlr>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),
@@ -100,7 +100,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr> super::AstLowerer<'c, 'ctxt, 'hlr> {
             msg: format!("Unknown type name in type annotation: {}", ident),
         })?;
 
-        Ok(TyResolution::NamedTy(*named_ty))
+        Ok(TyResolution::NamedTy(named_ty))
     }
 
     pub(super) fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Val<'hlr>> {

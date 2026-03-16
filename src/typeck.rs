@@ -78,7 +78,7 @@ struct Typeck<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr> {
     var_uses: Vec<hlr::VarId>,
 
     created_closure_fns: Vec<fns::Fn>,
-    created_closure_structs: Vec<(ty::Struct, Vec<hlr::VarId>)>,
+    created_closure_structs: Vec<(ty::Struct<'ctxt>, Vec<hlr::VarId>)>,
 
     pending_obligations: Vec<(ty::Ty<'ctxt>, ty::ConstraintRequirement<'ctxt>)>,
 }
@@ -395,15 +395,15 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let (return_ty, fields_ty) = match constructor {
             hlr::Val::Struct(struct_, gen_args) => {
-                let n_gen_params = self.ctxt.tys.get_struct_def(*struct_).unwrap().gen_params.len();
+                let n_gen_params = struct_.gen_params.len();
                 let gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
                     TypeckError::StructGenArgCountMismatch {
-                        struct_: *struct_,
+                        struct_,
                         expected: n_gen_params,
                         actual,
                     }
                 })?;
-                let ty = self.ctxt.tys.inst_struct(*struct_, &gen_args).unwrap();
+                let ty = self.ctxt.tys.inst_struct(struct_, &gen_args).unwrap();
                 (ty, ty)
             }
             hlr::Val::Variant(enum_, variant_idx, gen_args) => {

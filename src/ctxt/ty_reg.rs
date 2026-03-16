@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{
@@ -14,13 +14,12 @@ pub struct TyReg<'ty> {
     next_gen_var: Cell<usize>,
     next_inf_var: Cell<InfVar>,
 
-    structs: Vec<StructDef<'ty>>,
-    structs_defined: HashSet<usize>,
+    next_struct_id: Cell<StructId>,
     enums: Vec<EnumDef<'ty>>,
     enums_defined: HashSet<usize>,
 
     tys_inv: RefCell<HashMap<TyDef<'ty>, Ty<'ty>>>,
-    named_tys: HashMap<String, Named<'ty>>,
+    named_tys: RefCell<HashMap<String, Named<'ty>>>,
     ty_slices_inv: RefCell<HashSet<&'ty [Ty<'ty>]>>,
 
     next_opaque_id: usize,
@@ -31,7 +30,7 @@ pub struct TyReg<'ty> {
 #[derive(Clone, Copy)]
 pub enum Named<'ty> {
     Ty(Ty<'ty>),
-    Struct(Struct),
+    Struct(Struct<'ty>),
     Enum(Enum),
 }
 
@@ -45,10 +44,10 @@ pub enum NotAStructField<'ty> {
 }
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
-pub enum TyInstError {
+pub enum TyInstError<'ty> {
     StructGenericArgCountMismatch {
         #[allow(unused)]
-        struct_: Struct,
+        struct_: Struct<'ty>,
         #[allow(unused)]
         expected: usize,
         #[allow(unused)]
@@ -79,8 +78,7 @@ impl<'ty> TyReg<'ty> {
         Self {
             arena,
             next_ty_id: Cell::new(TyId(0)),
-            structs: Vec::new(),
-            structs_defined: Default::default(),
+            next_struct_id: Cell::new(StructId(0)),
             enums: Vec::new(),
             enums_defined: Default::default(),
             next_gen_var: Cell::new(0),
@@ -118,12 +116,12 @@ impl<'ty> TyReg<'ty> {
         slice
     }
 
-    fn register_named_ty(&mut self, name: &str, ty_def: TyDef<'ty>) -> Result<Ty<'ty>, ()> {
-        if self.named_tys.contains_key(name) {
+    fn register_named_ty(&self, name: &str, ty_def: TyDef<'ty>) -> Result<Ty<'ty>, ()> {
+        if self.named_tys.borrow().contains_key(name) {
             Err(())
         } else {
             let ty = self.register_ty(ty_def);
-            self.named_tys.insert(name.to_string(), Named::Ty(ty));
+            self.named_tys.borrow_mut().insert(name.to_string(), Named::Ty(ty));
             Ok(ty)
         }
     }
@@ -156,7 +154,7 @@ impl<'ty> TyReg<'ty> {
         self.tuple(&[])
     }
 
-    pub fn register_struct(&mut self, name: &str, gen_param_names: &[String]) -> Result<Struct, ()> {
+    pub fn register_struct(&self, name: &str, gen_param_names: &[String]) -> Result<Struct<'ty>, ()> {
         let gen_params: Vec<_> = gen_param_names
             .iter()
             .map(|gp_name| self.register_gen_var(gp_name))
@@ -166,20 +164,27 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn register_struct_with_existing_gen_vars(
-        &mut self,
+        &self,
         name: &str,
         gen_params: impl Into<Vec<GenVar<'ty>>>,
-    ) -> Result<Struct, ()> {
-        let struct_ = Struct(self.structs.len());
+    ) -> Result<Struct<'ty>, ()> {
+        if self.named_tys.borrow().contains_key(name) {
+            return Err(());
+        }
 
-        let struct_def = StructDef {
+        let id = self.next_struct_id.get();
+        self.next_struct_id.set(StructId(id.0 + 1));
+
+        let struct_ = self.arena.alloc(StructDef {
             name: name.to_string(),
             gen_params: gen_params.into(),
-            fields: vec![],
-        };
-        self.structs.push(struct_def);
+            fields: OnceCell::new(),
+            id,
+        });
 
-        self.named_tys.insert(name.to_string(), Named::Struct(struct_));
+        self.named_tys
+            .borrow_mut()
+            .insert(name.to_string(), Named::Struct(struct_));
 
         Ok(struct_)
     }
@@ -199,7 +204,7 @@ impl<'ty> TyReg<'ty> {
         };
         self.enums.push(enum_def);
 
-        self.named_tys.insert(name.to_string(), Named::Enum(enum_));
+        self.named_tys.borrow_mut().insert(name.to_string(), Named::Enum(enum_));
 
         Ok(enum_)
     }
@@ -318,7 +323,7 @@ impl<'ty> TyReg<'ty> {
     }
 
     #[expect(unused)]
-    pub fn inst_opaque(&self, id: OpaqueId, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_opaque(&self, id: OpaqueId, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError<'_>> {
         let opaque_def = self.opaques.get(id.0).unwrap();
         if opaque_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
@@ -332,7 +337,7 @@ impl<'ty> TyReg<'ty> {
         self.inst_opaque_from_ty_slice(id, gen_args)
     }
 
-    pub fn inst_opaque_from_ty_slice(&self, id: OpaqueId, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_opaque_from_ty_slice(&self, id: OpaqueId, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError<'_>> {
         let opaque_def = self.opaques.get(id.0).unwrap();
         if opaque_def.gen_params.len() != gen_args.len() {
             return Err(TyInstError::OpaqueGenericArgCountMismatch {
@@ -407,12 +412,11 @@ impl<'ty> TyReg<'ty> {
         }
     }
 
-    pub fn inst_struct(&self, struct_: Struct, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
-        let struct_def = self.structs.get(struct_.0).unwrap();
-        if struct_def.gen_params.len() != gen_args.len() {
+    pub fn inst_struct(&self, struct_: Struct<'ty>, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError<'ty>> {
+        if struct_.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
                 struct_,
-                expected: struct_def.gen_params.len(),
+                expected: struct_.gen_params.len(),
                 actual: gen_args.len(),
             });
         }
@@ -421,12 +425,15 @@ impl<'ty> TyReg<'ty> {
         self.inst_struct_from_ty_slice(struct_, gen_args)
     }
 
-    pub fn inst_struct_from_ty_slice(&self, struct_: Struct, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
-        let struct_def = self.structs.get(struct_.0).unwrap();
-        if struct_def.gen_params.len() != gen_args.len() {
+    pub fn inst_struct_from_ty_slice(
+        &self,
+        struct_: Struct<'ty>,
+        gen_args: TySlice<'ty>,
+    ) -> Result<Ty<'ty>, TyInstError<'ty>> {
+        if struct_.gen_params.len() != gen_args.len() {
             return Err(TyInstError::StructGenericArgCountMismatch {
                 struct_,
-                expected: struct_def.gen_params.len(),
+                expected: struct_.gen_params.len(),
                 actual: gen_args.len(),
             });
         }
@@ -435,7 +442,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(struct_ty))
     }
 
-    pub fn inst_enum(&self, enum_: Enum, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_enum(&self, enum_: Enum, gen_args: &[Ty<'ty>]) -> Result<Ty<'ty>, TyInstError<'_>> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
         if enum_def.gen_params.len() != gen_args.len() {
@@ -452,7 +459,7 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(enum_ty))
     }
 
-    pub fn inst_enum_from_ty_slice(&self, enum_: Enum, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError> {
+    pub fn inst_enum_from_ty_slice(&self, enum_: Enum, gen_args: TySlice<'ty>) -> Result<Ty<'ty>, TyInstError<'_>> {
         let enum_def = self.enums.get(enum_.0).unwrap();
 
         if enum_def.gen_params.len() != gen_args.len() {
@@ -467,34 +474,30 @@ impl<'ty> TyReg<'ty> {
         Ok(self.register_ty(enum_ty))
     }
 
-    pub fn get_struct_by_name(&self, name: &str) -> Option<Struct> {
-        match self.named_tys.get(name) {
-            Some(&Named::Struct(struct_)) => Some(struct_),
+    pub fn get_struct_by_name(&self, name: &str) -> Option<Struct<'ty>> {
+        match self.named_tys.borrow().get(name).copied() {
+            Some(Named::Struct(struct_)) => Some(struct_),
             _ => None,
         }
     }
 
     pub fn get_enum_by_name(&self, name: &str) -> Option<Enum> {
-        match self.named_tys.get(name) {
-            Some(&Named::Enum(enum_)) => Some(enum_),
+        match self.named_tys.borrow().get(name).copied() {
+            Some(Named::Enum(enum_)) => Some(enum_),
             _ => None,
         }
     }
 
-    pub fn get_struct_def(&self, struct_: Struct) -> Option<&StructDef<'ty>> {
-        self.structs.get(struct_.0)
-    }
-
-    pub fn define_struct_fields(&mut self, struct_: Struct, fields: Vec<StructField<'ty>>) {
-        assert!(self.structs_defined.insert(struct_.0), "struct fields already defined");
-        self.structs[struct_.0].fields = fields;
+    pub fn define_struct_fields(&self, struct_: Struct<'ty>, fields: Vec<StructField<'ty>>) {
+        let fields = self.arena.alloc_slice_clone(&fields);
+        struct_.fields.set(fields).expect("struct fields already defined");
     }
 
     pub fn get_enum_def(&self, enum_: Enum) -> Option<&EnumDef<'ty>> {
         self.enums.get(enum_.0)
     }
 
-    pub fn define_enum_variants(&mut self, enum_: Enum, variants: Vec<EnumVariant>) {
+    pub fn define_enum_variants(&mut self, enum_: Enum, variants: Vec<EnumVariant<'ty>>) {
         assert!(self.enums_defined.insert(enum_.0), "enum variants already defined");
         self.enums[enum_.0].variants = variants;
     }
@@ -552,9 +555,9 @@ impl<'ty> TyReg<'ty> {
                 .map(|&ty| self.get_string_rep_with_subst(ty, subst))
                 .unwrap_or(gen_var.name().to_string()),
             Struct { struct_, gen_args } => {
-                let struct_name = self.get_struct_name(struct_);
+                let struct_name = &struct_.name;
                 if gen_args.is_empty() {
-                    return struct_name;
+                    return struct_name.clone();
                 }
                 let gen_arg_names = gen_args
                     .iter()
@@ -612,12 +615,6 @@ impl<'ty> TyReg<'ty> {
                 format!("impl({})<{}>", id.0, gen_arg_names)
             }
         }
-    }
-
-    pub fn get_struct_name(&self, struct_: Struct) -> String {
-        self.get_struct_def(struct_)
-            .map(|sd| sd.name.clone())
-            .unwrap_or_else(|| format!("<unknown struct {}>", struct_.0))
     }
 
     pub fn get_enum_name(&self, enum_: Enum) -> String {
@@ -715,13 +712,9 @@ impl<'ty> TyReg<'ty> {
             return Err(NotAStruct(ty));
         };
 
-        let struct_def = self
-            .get_struct_def(struct_)
-            .expect("struct definition should be registered");
-        let field_ty = struct_def.fields[index].ty;
-
-        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
-        let instantiated_field_ty = self.substitute_gen_vars(field_ty, &subst);
+        let fields = struct_.get_fields();
+        let subst = GenVarSubst::new(&struct_.gen_params, gen_args).unwrap();
+        let instantiated_field_ty = self.substitute_gen_vars(fields[index].ty, &subst);
 
         Ok(instantiated_field_ty)
     }
@@ -731,15 +724,11 @@ impl<'ty> TyReg<'ty> {
             return Err(NotAStruct(ty));
         };
 
-        let struct_def = self
-            .get_struct_def(struct_)
-            .expect("struct definition should be registered");
-        let subst = GenVarSubst::new(&struct_def.gen_params, gen_args).unwrap();
-
-        let field_tys: Vec<Ty<'ty>> = struct_def.fields.iter().map(|field| field.ty).collect();
-        let instantiated_field_tys: Vec<Ty<'ty>> = field_tys
-            .into_iter()
-            .map(|field_ty| self.substitute_gen_vars(field_ty, &subst))
+        let fields = struct_.get_fields();
+        let subst = GenVarSubst::new(&struct_.gen_params, gen_args).unwrap();
+        let instantiated_field_tys = fields
+            .iter()
+            .map(|field| self.substitute_gen_vars(field.ty, &subst))
             .collect();
 
         Ok(instantiated_field_tys)
@@ -764,7 +753,7 @@ impl<'ty> TyReg<'ty> {
         };
 
         let enum_def = self.get_enum_def(enum_).expect("enum definition should be registered");
-        let base_variant_structs: Vec<Struct> = enum_def.variants.iter().map(|variant| variant.struct_).collect();
+        let base_variant_structs: Vec<Struct<'ty>> = enum_def.variants.iter().map(|variant| variant.struct_).collect();
         let instantiated_variant_struct_tys: Vec<Ty<'ty>> = base_variant_structs
             .into_iter()
             .map(|variant_ty| self.inst_struct_from_ty_slice(variant_ty, gen_args).unwrap())
@@ -788,11 +777,8 @@ impl<'ty> TyReg<'ty> {
             return Err(NotAStructField::NotAStruct(struct_ty));
         };
 
-        let struct_def = self
-            .get_struct_def(struct_)
-            .expect("struct definition should be registered");
-        struct_def
-            .fields
+        let fields = struct_.get_fields();
+        fields
             .iter()
             .position(|field| field.name == field_name)
             .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
@@ -1137,7 +1123,11 @@ impl<'ty> TyReg<'ty> {
         })
     }
 
-    pub fn get_ty_by_name(&self, ty_name: &str) -> Result<&Named<'ty>, NotATypeName> {
-        self.named_tys.get(ty_name).ok_or(NotATypeName(ty_name.to_string()))
+    pub fn get_ty_by_name(&self, ty_name: &str) -> Result<Named<'ty>, NotATypeName> {
+        self.named_tys
+            .borrow()
+            .get(ty_name)
+            .copied()
+            .ok_or(NotATypeName(ty_name.to_string()))
     }
 }

@@ -364,7 +364,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.print_optional_gen_args(*gen_args)
             }
             hlr::Val::Struct(struct_, gen_args) => {
-                let name = self.ctxt.tys.get_struct_name(*struct_);
+                let name = &struct_.name;
                 write!(self.writer, "{}", name)?;
                 self.print_optional_gen_args(*gen_args)
             }
@@ -401,7 +401,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
         use hlr::TyAnnotDef::*;
         match annot {
             Struct(struct_, gen_args) => {
-                let name = self.ctxt.tys.get_struct_name(*struct_);
+                let name = &struct_.name;
                 write!(self.writer, "{}", name)?;
                 if let Some(args) = gen_args {
                     write!(self.writer, "<")?;

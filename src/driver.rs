@@ -66,15 +66,15 @@ struct Driver<'a, 'arena> {
 
     ctxt: ctxt::Ctxt<'arena>,
     ast: &'arena ast::Ast<'arena>,
-    ast_meta: AstMeta,
+    ast_meta: AstMeta<'arena>,
     hlr: &'arena hlr::Hlr<'arena>,
     mlr: &'arena mlr::Mlr<'arena>,
 }
 
 #[derive(Default)]
-struct AstMeta {
+struct AstMeta<'ty> {
     fn_ids: HashMap<ast::FnId, fns::Fn>,
-    struct_ids: HashMap<ast::StructId, ty::Struct>,
+    struct_ids: HashMap<ast::StructId, ty::Struct<'ty>>,
     enum_ids: HashMap<ast::EnumId, ty::Enum>,
     trait_ids: HashMap<ast::TraitId, traits::Trait>,
     impl_ids: HashMap<ast::ImplId, impls::Impl>,
@@ -118,6 +118,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         }
 
         self.print_pretty("Monomorphizing functions");
+        #[allow(clippy::mutable_key_type)]
         let fn_insts = self.monomorphize_functions()?;
 
         self.print_pretty("Lowering MLR to LLVM IR");
@@ -206,16 +207,10 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
     fn set_struct_fields<'b>(
         &mut self,
-        struct_: ty::Struct,
+        struct_: ty::Struct<'arena>,
         fields: impl IntoIterator<Item = &'b ast::StructField<'b>>,
     ) -> Result<(), DriverError<'arena>> {
-        let gen_params = self
-            .ctxt
-            .tys
-            .get_struct_def(struct_)
-            .ok_or(DriverError::ContextBuild("Struct definition not found"))?
-            .gen_params
-            .clone();
+        let gen_params = struct_.gen_params.clone();
 
         let fields = fields
             .into_iter()
@@ -652,6 +647,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         let empty = self.ctxt.tys.ty_slice(&[]);
         open.push_back(self.ctxt.fns.inst_fn(main_fn, empty, empty).unwrap());
 
+        #[allow(clippy::mutable_key_type)]
         let mut closed = HashSet::new();
 
         while let Some(current) = open.pop_front() {
@@ -680,6 +676,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(closed)
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn mlr_lowering(
         &mut self,
         mlr_fns: Vec<mlr::Fn<'arena>>,

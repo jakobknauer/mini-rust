@@ -18,7 +18,7 @@ pub enum TypeckError<'ty> {
         actual: usize,
     },
     StructGenArgCountMismatch {
-        struct_: ty::Struct,
+        struct_: ty::Struct<'ty>,
         expected: usize,
         actual: usize,
     },

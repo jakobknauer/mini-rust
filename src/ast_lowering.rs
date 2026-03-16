@@ -9,7 +9,7 @@ use crate::{
     hlr,
 };
 
-pub fn ast_to_hlr<'c, 'ctxt: 'hlr, 'ast, 'hlr>(
+pub fn ast_to_hlr<'c, 'ctxt: 'hlr, 'hlr: 'ctxt, 'ast>(
     ctxt: &'c ctxt::Ctxt<'ctxt>,
     fn_: fns::Fn,
     ast_body: ast::Block<'ast>,
@@ -37,7 +37,7 @@ pub struct AstLoweringError {
     pub msg: String,
 }
 
-impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
+impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
     fn new(ctxt: &'c ctxt::Ctxt<'ctxt>, fn_: fns::Fn, hlr: &'hlr hlr::Hlr<'hlr>) -> Self {
         Self {
             fn_,
@@ -386,7 +386,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
                 if segment.args.is_none()
                     && let Some(struct_) = self.ctxt.tys.get_struct_by_name(&segment.ident)
                 {
-                    let is_fieldless = self.ctxt.tys.get_struct_def(struct_).unwrap().fields.is_empty();
+                    let is_fieldless = struct_.get_fields().is_empty();
                     if is_fieldless {
                         let constructor = hlr::Val::Struct(struct_, None);
                         let fields = self.hlr.struct_expr_field_slice(vec![]);
@@ -425,7 +425,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
                         self.resolve_path_segments_to_variant(ty_path, mthd)
                 {
                     let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
-                    let is_fieldless = self.ctxt.tys.get_struct_def(variant_struct).unwrap().fields.is_empty();
+                    let is_fieldless = variant_struct.get_fields().is_empty();
                     if is_fieldless {
                         let fields = self.hlr.struct_expr_field_slice(vec![]);
                         return Ok(self.hlr.expr(hlr::ExprDef::Struct { constructor, fields }));
@@ -743,13 +743,13 @@ impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
         };
 
         let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
-        let variant_struct = self.ctxt.tys.get_struct_def(variant_struct).unwrap();
 
-        if pattern.fields.len() != variant_struct.fields.len() {
+        let variant_fields = variant_struct.get_fields();
+        if pattern.fields.len() != variant_fields.len() {
             return Err(AstLoweringError {
                 msg: format!(
                     "Pattern for variant has wrong number of fields: expected {}, found {}",
-                    variant_struct.fields.len(),
+                    variant_fields.len(),
                     pattern.fields.len()
                 ),
             });
@@ -759,8 +759,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
             .fields
             .iter()
             .map(|field| {
-                let field_index = variant_struct
-                    .fields
+                let field_index = variant_fields
                     .iter()
                     .position(|f| f.name == field.field_name)
                     .ok_or_else(|| AstLoweringError {

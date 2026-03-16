@@ -133,7 +133,7 @@ impl<'arena> Driver<'_, 'arena> {
                     return Some(ty);
                 }
 
-                match *self.ctxt.tys.get_ty_by_name(ident).ok()? {
+                match self.ctxt.tys.get_ty_by_name(ident).ok()? {
                     Named::Ty(ty) => Some(ty),
                     Named::Struct(struct_) => self.ctxt.tys.inst_struct(struct_, &[]).ok(),
                     Named::Enum(enum_) => self.ctxt.tys.inst_enum(enum_, &[]).ok(),
@@ -149,7 +149,7 @@ impl<'arena> Driver<'_, 'arena> {
                     .map(|arg_annot| self.try_resolve_ast_ty_annot(arg_annot, res_ctxt, false))
                     .collect::<Option<Vec<_>>>()?;
 
-                match *self.ctxt.tys.get_ty_by_name(ident).ok()? {
+                match self.ctxt.tys.get_ty_by_name(ident).ok()? {
                     Named::Struct(struct_) => self.ctxt.tys.inst_struct(struct_, &gen_args).ok(),
                     Named::Enum(enum_) => self.ctxt.tys.inst_enum(enum_, &gen_args).ok(),
                     Named::Ty(..) => None,
