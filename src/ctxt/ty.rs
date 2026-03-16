@@ -123,6 +123,10 @@ impl<'ty> EnumDef<'ty> {
     pub fn get_variants(&self) -> &[EnumVariant<'ty>] {
         self.variants.get().copied().expect("enum variants not yet defined")
     }
+
+    pub fn get_variant(&self, idx: usize) -> &EnumVariant<'ty> {
+        &self.get_variants()[idx]
+    }
 }
 
 impl PartialEq for EnumDef<'_> {

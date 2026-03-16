@@ -369,7 +369,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.print_optional_gen_args(*gen_args)
             }
             hlr::Val::Variant(enum_, variant_idx, gen_args) => {
-                let variant_name = &enum_.get_variants()[*variant_idx].name;
+                let variant_name = &enum_.get_variant(*variant_idx).name;
                 write!(self.writer, "{}::{}", enum_.name, variant_name)?;
                 self.print_optional_gen_args(*gen_args)
             }

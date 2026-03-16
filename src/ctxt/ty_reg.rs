@@ -688,7 +688,7 @@ impl<'ty> TyReg<'ty> {
             return Err(NotAnEnum(ty));
         };
 
-        let base_variant_struct_ty = enum_.get_variants()[variant_index].struct_;
+        let base_variant_struct_ty = enum_.get_variant(variant_index).struct_;
         let instantiated_variant_struct_ty = self
             .inst_struct_from_ty_slice(base_variant_struct_ty, gen_args)
             .unwrap();
