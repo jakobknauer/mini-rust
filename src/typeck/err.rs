@@ -23,7 +23,7 @@ pub enum TypeckError<'ty> {
         actual: usize,
     },
     EnumGenArgCountMismatch {
-        enum_: ty::Enum,
+        enum_: ty::Enum<'ty>,
         expected: usize,
         actual: usize,
     },

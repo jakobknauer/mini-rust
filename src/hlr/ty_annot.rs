@@ -6,7 +6,7 @@ pub type TyAnnotSlice<'hlr> = &'hlr [TyAnnot<'hlr>];
 #[derive(Debug)]
 pub enum TyAnnotDef<'hlr> {
     Struct(ty::Struct<'hlr>, Option<TyAnnotSlice<'hlr>>),
-    Enum(ty::Enum, Option<TyAnnotSlice<'hlr>>),
+    Enum(ty::Enum<'hlr>, Option<TyAnnotSlice<'hlr>>),
     Ty(ty::Ty<'hlr>),
     GenVar(ty::GenVar<'hlr>),
 

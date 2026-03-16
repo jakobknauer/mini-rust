@@ -105,7 +105,7 @@ pub enum Val<'hlr> {
     Var(VarId),
     Fn(fns::Fn, Option<TyAnnotSlice<'hlr>>),
     Struct(ty::Struct<'hlr>, Option<TyAnnotSlice<'hlr>>),
-    Variant(ty::Enum, usize, Option<TyAnnotSlice<'hlr>>),
+    Variant(ty::Enum<'hlr>, usize, Option<TyAnnotSlice<'hlr>>),
     Mthd(TyAnnot<'hlr>, String, Option<TyAnnotSlice<'hlr>>),
 }
 

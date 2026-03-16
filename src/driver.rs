@@ -75,7 +75,7 @@ struct Driver<'a, 'arena> {
 struct AstMeta<'ty> {
     fn_ids: HashMap<ast::FnId, fns::Fn>,
     struct_ids: HashMap<ast::StructId, ty::Struct<'ty>>,
-    enum_ids: HashMap<ast::EnumId, ty::Enum>,
+    enum_ids: HashMap<ast::EnumId, ty::Enum<'ty>>,
     trait_ids: HashMap<ast::TraitId, traits::Trait>,
     impl_ids: HashMap<ast::ImplId, impls::Impl>,
 }
@@ -189,15 +189,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
         for ast_enum in self.ast.enums().iter() {
             let enum_ = self.ast_meta.enum_ids[&ast_enum.1];
-            let variants = self
-                .ctxt
-                .tys
-                .get_enum_def(enum_)
-                .ok_or(DriverError::ContextBuild("Enum definition not found"))?
-                .variants
-                .clone();
-
-            for (ast_variant, variant) in ast_enum.variants.iter().zip(variants) {
+            for (ast_variant, variant) in ast_enum.variants.iter().zip(enum_.get_variants()) {
                 self.set_struct_fields(variant.struct_, &ast_variant.fields)?;
             }
         }

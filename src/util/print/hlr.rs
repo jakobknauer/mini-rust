@@ -369,10 +369,8 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.print_optional_gen_args(*gen_args)
             }
             hlr::Val::Variant(enum_, variant_idx, gen_args) => {
-                let enum_def = self.ctxt.tys.get_enum_def(*enum_).unwrap();
-                let enum_name = &enum_def.name.clone();
-                let variant_name = &enum_def.variants[*variant_idx].name.clone();
-                write!(self.writer, "{}::{}", enum_name, variant_name)?;
+                let variant_name = &enum_.get_variants()[*variant_idx].name;
+                write!(self.writer, "{}::{}", enum_.name, variant_name)?;
                 self.print_optional_gen_args(*gen_args)
             }
             hlr::Val::Mthd(ty_annot, name, gen_args) => {
@@ -416,7 +414,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 Ok(())
             }
             Enum(enum_, gen_args) => {
-                let name = self.ctxt.tys.get_enum_name(*enum_);
+                let name = &enum_.name;
                 write!(self.writer, "{}", name)?;
                 if let Some(args) = gen_args {
                     write!(self.writer, "<")?;

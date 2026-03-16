@@ -28,14 +28,10 @@ pub struct StructId(pub(in crate::ctxt) usize);
 
 pub type Struct<'ty> = &'ty StructDef<'ty>;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Enum(pub(in crate::ctxt) usize);
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct EnumId(pub(in crate::ctxt) usize);
 
-impl std::fmt::Display for Enum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+pub type Enum<'ty> = &'ty EnumDef<'ty>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GenVar<'ty>(pub(in crate::ctxt) usize, pub(in crate::ctxt) &'ty str);
@@ -73,7 +69,7 @@ pub enum TyDef<'ty> {
         gen_args: TySlice<'ty>,
     },
     Enum {
-        enum_: Enum,
+        enum_: Enum<'ty>,
         gen_args: TySlice<'ty>,
     },
     Fn {
@@ -142,14 +138,33 @@ pub struct StructField<'ty> {
     pub ty: Ty<'ty>,
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct EnumDef<'ty> {
     pub name: String,
     pub gen_params: Vec<GenVar<'ty>>,
-    pub variants: Vec<EnumVariant<'ty>>,
+    pub(in crate::ctxt) variants: OnceCell<&'ty [EnumVariant<'ty>]>,
+    pub(in crate::ctxt) id: EnumId,
 }
 
-#[derive(Clone)]
+impl<'ty> EnumDef<'ty> {
+    pub fn get_variants(&self) -> &[EnumVariant<'ty>] {
+        self.variants.get().copied().expect("enum variants not yet defined")
+    }
+}
+
+impl PartialEq for EnumDef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for EnumDef<'_> {}
+impl std::hash::Hash for EnumDef<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct EnumVariant<'ty> {
     pub name: String,
     pub struct_: Struct<'ty>,

@@ -45,7 +45,7 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
     pub(super) fn resolve_ty_annot(&mut self, ty_annot: hlr::TyAnnot<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         match ty_annot {
             hlr::TyAnnotDef::Struct(struct_, ty_annot_defs) => self.resolve_struct_ty_annot(struct_, *ty_annot_defs),
-            hlr::TyAnnotDef::Enum(enum_, ty_annot_defs) => self.resolve_enum_ty_annot(*enum_, *ty_annot_defs),
+            hlr::TyAnnotDef::Enum(enum_, ty_annot_defs) => self.resolve_enum_ty_annot(enum_, *ty_annot_defs),
             hlr::TyAnnotDef::Ty(ty) => Ok(*ty),
             hlr::TyAnnotDef::GenVar(gen_var) => self.resolve_gen_var_ty_annot(*gen_var),
             hlr::TyAnnotDef::AssocTy { base, trait_, name } => self.resolve_assoc_ty_annot(base, *trait_, name),
@@ -83,10 +83,10 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
 
     fn resolve_enum_ty_annot(
         &mut self,
-        enum_: ty::Enum,
+        enum_: ty::Enum<'ctxt>,
         ty_annot_defs: Option<hlr::TyAnnotSlice<'hlr>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let n_expected = self.ctxt.tys.get_enum_def(enum_).unwrap().gen_params.len();
+        let n_expected = enum_.gen_params.len();
         let gen_args = self.resolve_optional_gen_args(ty_annot_defs, n_expected, |actual| {
             TypeckError::EnumGenArgCountMismatch {
                 enum_,

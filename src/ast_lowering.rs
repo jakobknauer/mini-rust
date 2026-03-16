@@ -424,7 +424,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
                     && let Ok(constructor @ hlr::Val::Variant(enum_, variant_index, _)) =
                         self.resolve_path_segments_to_variant(ty_path, mthd)
                 {
-                    let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
+                    let variant_struct = enum_.get_variants()[variant_index].struct_;
                     let is_fieldless = variant_struct.get_fields().is_empty();
                     if is_fieldless {
                         let fields = self.hlr.struct_expr_field_slice(vec![]);
@@ -742,7 +742,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
             });
         };
 
-        let variant_struct = self.ctxt.tys.get_enum_def(enum_).unwrap().variants[variant_index].struct_;
+        let variant_struct = enum_.get_variants()[variant_index].struct_;
 
         let variant_fields = variant_struct.get_fields();
         if pattern.fields.len() != variant_fields.len() {
@@ -765,7 +765,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt, 'ast> AstLowerer<'c, 'ctxt, 'hlr> {
                     .ok_or_else(|| AstLoweringError {
                         msg: format!(
                             "Unknown field '{}' in pattern for variant '{}'",
-                            field.field_name, enum_
+                            field.field_name, enum_.name
                         ),
                     })?;
 

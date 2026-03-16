@@ -407,15 +407,15 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
                 (ty, ty)
             }
             hlr::Val::Variant(enum_, variant_idx, gen_args) => {
-                let n_gen_params = self.ctxt.tys.get_enum_def(*enum_).unwrap().gen_params.len();
+                let n_gen_params = enum_.gen_params.len();
                 let gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
                     TypeckError::EnumGenArgCountMismatch {
-                        enum_: *enum_,
+                        enum_,
                         expected: n_gen_params,
                         actual,
                     }
                 })?;
-                let enum_ty = self.ctxt.tys.inst_enum(*enum_, &gen_args).unwrap();
+                let enum_ty = self.ctxt.tys.inst_enum(enum_, &gen_args).unwrap();
                 let variant_ty = self.ctxt.tys.get_enum_variant_ty(enum_ty, *variant_idx).unwrap();
                 (enum_ty, variant_ty)
             }
@@ -677,15 +677,15 @@ impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'f, 'ctxt, 'hlr> {
                 unreachable!("match arm pattern must be Val::Variant");
             };
 
-            let n_gen_params = self.ctxt.tys.get_enum_def(*arm_enum).unwrap().gen_params.len();
+            let n_gen_params = arm_enum.gen_params.len();
             let arm_gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
                 TypeckError::EnumGenArgCountMismatch {
-                    enum_: *arm_enum,
+                    enum_: arm_enum,
                     expected: n_gen_params,
                     actual,
                 }
             })?;
-            let arm_enum_ty = self.ctxt.tys.inst_enum(*arm_enum, &arm_gen_args).unwrap();
+            let arm_enum_ty = self.ctxt.tys.inst_enum(arm_enum, &arm_gen_args).unwrap();
 
             if !self.unify(arm_enum_ty, enum_ty) {
                 return Err(TypeckError::MatchArmWrongEnum {

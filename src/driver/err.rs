@@ -111,7 +111,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
     let trait_ = |t| ctxt.traits.get_trait_name(t).to_string();
     let _fn_ = |f| ctxt.fns.get_fn_name(f).to_string();
     let struct_ = |s: ty::Struct<'_>| s.name.clone();
-    let enum_ = |e| ctxt.tys.get_enum_name(e);
+    let enum_ = |e: ty::Enum<'_>| e.name.clone();
 
     match err {
         ReturnTypeMismatch { expected, actual } => format!(

@@ -63,15 +63,14 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
 
         let args = enum_seg.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
-        let enum_def = self.ctxt.tys.get_enum_def(enum_).unwrap();
-        let variant_index = enum_def
-            .variants
+        let variant_index = enum_
+            .get_variants()
             .iter()
             .position(|variant| variant.name == variant_seg.ident)
             .ok_or_else(|| AstLoweringError {
                 msg: format!(
                     "Unknown variant '{}' for enum '{}' in enum variant path",
-                    variant_seg.ident, enum_
+                    variant_seg.ident, enum_.name
                 ),
             })?;
 
