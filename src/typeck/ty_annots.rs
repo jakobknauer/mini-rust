@@ -4,7 +4,7 @@ use crate::{
     typeck::{TypeckError, TypeckResult},
 };
 
-impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn new_inf_var(&mut self) -> ty::Ty<'ctxt> {
         self.ctxt.tys.inf_var()
     }

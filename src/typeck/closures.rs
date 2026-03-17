@@ -28,7 +28,7 @@ struct ScopeSnapshot {
 
 struct CapturedVars(Vec<hlr::VarId>);
 
-impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn check_closure(
         &mut self,
         expr_id: hlr::ExprId,

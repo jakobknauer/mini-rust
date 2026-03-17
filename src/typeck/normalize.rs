@@ -2,7 +2,7 @@ use crate::ctxt::{fns, ty};
 
 use super::{ExprExtra, MthdResolution};
 
-impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn normalize_all(&mut self) {
         self.normalize_hlr_typing();
         self.normalize_closure_fns();

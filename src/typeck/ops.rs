@@ -3,7 +3,7 @@ use crate::hlr;
 
 use super::{ExprExtra, TypeckError, TypeckResult};
 
-impl<'a, 'f, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'f, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn check_binary_op(
         &mut self,
         expr_id: hlr::ExprId,
