@@ -8,8 +8,10 @@ use clap::Parser;
 #[command(version)]
 struct Cli {
     input: Vec<PathBuf>,
+
     #[arg(short, long)]
     build_dir: PathBuf,
+
     #[arg(short, long)]
     crate_: String,
 }
