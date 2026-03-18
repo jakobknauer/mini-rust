@@ -85,15 +85,14 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
 
     fn declare_functions(&mut self) {
         for fn_inst in self.fn_insts.clone() {
-            let sig = self.mr_ctxt.get_fn_inst_sig(fn_inst);
+            let (param_tys, return_ty, var_args) = self.mr_ctxt.get_fn_inst_sig(fn_inst);
 
-            let param_types: Vec<_> = sig
-                .params
+            let param_types: Vec<_> = param_tys
                 .iter()
-                .map(|param| self.get_ty_as_basic_metadata_type_enum(param.ty).unwrap())
+                .map(|&ty| self.get_ty_as_basic_metadata_type_enum(ty).unwrap())
                 .collect();
-            let return_type = self.get_ty_as_basic_type_enum(sig.return_ty).unwrap();
-            let iw_fn_type = return_type.fn_type(&param_types, sig.var_args);
+            let return_type = self.get_ty_as_basic_type_enum(return_ty).unwrap();
+            let iw_fn_type = return_type.fn_type(&param_types, var_args);
 
             let fn_name = self.mr_ctxt.get_fn_inst_name(fn_inst);
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);

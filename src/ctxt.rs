@@ -100,43 +100,18 @@ impl<'ctxt> Ctxt<'ctxt> {
         format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
     }
 
-    pub fn get_fn_inst_sig(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnSig<'ctxt> {
+    pub fn get_fn_inst_sig(&self, fn_inst: fns::FnInst<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, ty::Ty<'ctxt>, bool) {
         let signature = self.fns.get_sig(fn_inst.fn_);
-        let name = signature.name.clone();
-        let associated_ty = signature.associated_ty;
-        let associated_trait_inst = signature.associated_trait_inst;
-
-        let var_args = signature.var_args;
-        let param_data: Vec<(fns::FnParamKind, ty::Ty<'ctxt>)> =
-            signature.params.iter().map(|p| (p.kind.clone(), p.ty)).collect();
-        let return_ty = signature.return_ty;
-
         let subst = self.get_subst_for_fn_inst(fn_inst);
 
-        let inst_params = param_data
-            .into_iter()
-            .map(|(kind, ty)| fns::FnParam {
-                kind,
-                ty: self.tys.substitute_gen_vars(ty, &subst),
-            })
+        let param_tys = signature
+            .params
+            .iter()
+            .map(|p| self.tys.substitute_gen_vars(p.ty, &subst))
             .collect();
+        let return_ty = self.tys.substitute_gen_vars(signature.return_ty, &subst);
 
-        let inst_return_ty = self.tys.substitute_gen_vars(return_ty, &subst);
-
-        fns::FnSig {
-            name,
-            // TODO subst associated_ty?
-            associated_ty,
-            // TODO subst associated_trait_inst?
-            associated_trait_inst,
-            gen_params: Vec::new(),
-            env_gen_params: Vec::new(),
-            env_constraints: Vec::new(),
-            params: inst_params,
-            var_args,
-            return_ty: inst_return_ty,
-            constraints: Vec::new(),
-        }
+        (param_tys, return_ty, signature.var_args)
     }
 
     // TODO check the relevance of this function. Is it only use to resolve associated types?
