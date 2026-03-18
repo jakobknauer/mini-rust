@@ -327,10 +327,11 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                     )
                 };
 
-                let mthd_name = self
-                    .ctxt
-                    .traits
-                    .get_trait_mthd_name(trait_mthd.trait_inst.trait_, trait_mthd.mthd_idx);
+                let mthd_name = self.ctxt.traits.get_trait_mthd_name(
+                    &self.ctxt.fns,
+                    trait_mthd.trait_inst.trait_,
+                    trait_mthd.mthd_idx,
+                );
                 write!(
                     self.writer,
                     "<{} as {}{}>::{}",

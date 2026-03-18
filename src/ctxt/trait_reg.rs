@@ -1,5 +1,6 @@
 use crate::ctxt::{
-    fns::{FnSig, TraitMthdInst, TraitMthdInstError},
+    FnReg,
+    fns::{Fn, FnSig, TraitMthdInst, TraitMthdInstError},
     traits::{Trait, TraitDef, TraitInst},
     ty::{GenVar, Ty, TySlice},
 };
@@ -15,6 +16,7 @@ pub struct TraitReg<'traits> {
 impl<'traits> TraitReg<'traits> {
     pub fn inst_trait_mthd(
         &self,
+        fns: &FnReg<'traits>,
         trait_inst: TraitInst<'traits>,
         mthd_idx: usize,
         impl_ty: Ty<'traits>,
@@ -28,11 +30,13 @@ impl<'traits> TraitReg<'traits> {
                 actual: mthd_idx,
             });
         }
-        if trait_def.mthds[mthd_idx].gen_params.len() != gen_args.len() {
+        let mthd_fn = trait_def.mthds[mthd_idx];
+        let n_gen_params = fns.get_sig(mthd_fn).gen_params.len();
+        if n_gen_params != gen_args.len() {
             return Err(TraitMthdInstError::GenArgCountMismatch {
                 trait_: trait_inst.trait_,
                 mthd_idx,
-                expected: trait_def.mthds[mthd_idx].gen_params.len(),
+                expected: n_gen_params,
                 actual: gen_args.len(),
             });
         }
@@ -74,8 +78,8 @@ impl<'traits> TraitReg<'traits> {
         trait_
     }
 
-    pub fn register_mthd(&mut self, trait_: Trait, sig: FnSig<'traits>) {
-        self.traits[trait_.0].mthds.push(sig);
+    pub fn register_mthd(&mut self, trait_: Trait, fn_: Fn) {
+        self.traits[trait_.0].mthds.push(fn_);
     }
 
     pub fn register_assoc_ty(&mut self, trait_: Trait, name: &str) {
@@ -97,12 +101,26 @@ impl<'traits> TraitReg<'traits> {
         self.traits.get(trait_.0).unwrap().name.as_str()
     }
 
-    pub fn get_trait_mthd_name(&self, trait_: Trait, mthd_idx: usize) -> &str {
-        self.traits.get(trait_.0).unwrap().mthds[mthd_idx].name.as_str()
+    pub fn get_trait_mthd_fn(&self, trait_: Trait, mthd_idx: usize) -> Fn {
+        self.traits.get(trait_.0).unwrap().mthds[mthd_idx]
+    }
+
+    pub fn get_trait_mthd_sig<'a>(
+        &self,
+        fns: &'a FnReg<'traits>,
+        trait_: Trait,
+        mthd_idx: usize,
+    ) -> &'a FnSig<'traits> {
+        fns.get_sig(self.get_trait_mthd_fn(trait_, mthd_idx))
+    }
+
+    pub fn get_trait_mthd_name<'a>(&self, fns: &'a FnReg<'traits>, trait_: Trait, mthd_idx: usize) -> &'a str {
+        self.get_trait_mthd_sig(fns, trait_, mthd_idx).name.as_str()
     }
 
     pub fn get_trait_mthd_with_name(
         &self,
+        fns: &FnReg<'traits>,
         mthd_name: &str,
         must_have_receiver: bool,
     ) -> impl Iterator<Item = (Trait, usize)> {
@@ -113,21 +131,22 @@ impl<'traits> TraitReg<'traits> {
                 trait_def
                     .mthds
                     .iter()
-                    .position(|mthd| mthd.name == mthd_name && (!must_have_receiver || mthd.has_receiver()))
+                    .position(|&fn_| {
+                        let sig = fns.get_sig(fn_);
+                        sig.name == mthd_name && (!must_have_receiver || sig.has_receiver())
+                    })
                     .map(|mthd_idx| (Trait(trait_idx), mthd_idx))
             })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
-    pub fn get_trait_mthd_sig(&self, trait_: Trait, mthd_idx: usize) -> &FnSig<'traits> {
-        &self.traits[trait_.0].mthds[mthd_idx]
-    }
-
-    pub fn resolve_trait_method(&self, trait_: Trait, ident: &str) -> Option<usize> {
+    pub fn resolve_trait_method(&self, fns: &FnReg<'traits>, trait_: Trait, ident: &str) -> Option<usize> {
         self.traits
             .get(trait_.0)?
             .mthds
             .iter()
-            .position(|mthd| mthd.name == ident)
+            .position(|&fn_| fns.get_sig(fn_).name == ident)
     }
 
     pub fn get_trait_assoc_ty_with_name(&self, ident: &str) -> impl Iterator<Item = (Trait, usize)> {

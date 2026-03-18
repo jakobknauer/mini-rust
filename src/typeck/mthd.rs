@@ -86,7 +86,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         let candidates: Vec<_> = self
             .ctxt
             .traits
-            .get_trait_mthd_with_name(mthd_name, require_receiver)
+            .get_trait_mthd_with_name(&self.ctxt.fns, mthd_name, require_receiver)
             .collect();
         let candidates: Vec<_> = candidates
             .into_iter()
@@ -140,7 +140,11 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 ))
             }
             FoundMthd::Trait { trait_inst, mthd_idx } => {
-                let sig = self.ctxt.traits.get_trait_mthd_sig(trait_inst.trait_, mthd_idx).clone();
+                let sig = self
+                    .ctxt
+                    .traits
+                    .get_trait_mthd_sig(&self.ctxt.fns, trait_inst.trait_, mthd_idx)
+                    .clone();
                 let trait_gen_params = self.ctxt.traits.get_trait_def(trait_inst.trait_).gen_params.clone();
 
                 let n_mthd_gen_params = sig.gen_params.len();
@@ -162,7 +166,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 Ok(MthdResolution::Trait(
                     self.ctxt
                         .traits
-                        .inst_trait_mthd(trait_inst, mthd_idx, base_ty, mthd_gen_args)
+                        .inst_trait_mthd(&self.ctxt.fns, trait_inst, mthd_idx, base_ty, mthd_gen_args)
                         .unwrap(),
                 ))
             }
@@ -191,7 +195,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         let sig = self
             .ctxt
             .traits
-            .get_trait_mthd_sig(inst.trait_inst.trait_, inst.mthd_idx);
+            .get_trait_mthd_sig(&self.ctxt.fns, inst.trait_inst.trait_, inst.mthd_idx);
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
         let sig_gen_params = sig.gen_params.clone();
         let return_ty = sig.return_ty;

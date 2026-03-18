@@ -792,7 +792,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
                     .builder
                     .ctxt
                     .traits
-                    .get_trait_mthd_sig(inst.trait_inst.trait_, inst.mthd_idx)
+                    .get_trait_mthd_sig(&self.builder.ctxt.fns, inst.trait_inst.trait_, inst.mthd_idx)
                     .params
                     .first()
                     .map(|p| p.kind == fns::FnParamKind::SelfByRef)

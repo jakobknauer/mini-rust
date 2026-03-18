@@ -32,9 +32,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         assert_eq!(matching_impl_insts.len(), 1);
         let [impl_inst] = matching_impl_insts.try_into().unwrap();
 
-        let trait_mthd_name = self
-            .traits
-            .get_trait_mthd_name(trait_mthd_inst.trait_inst.trait_, trait_mthd_inst.mthd_idx);
+        let trait_mthd_name =
+            self.traits
+                .get_trait_mthd_name(&self.fns, trait_mthd_inst.trait_inst.trait_, trait_mthd_inst.mthd_idx);
 
         let impl_def = self.impls.get_impl_def(impl_inst.impl_);
         let fn_ = impl_def.mthds_by_name[trait_mthd_name];

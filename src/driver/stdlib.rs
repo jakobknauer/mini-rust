@@ -17,30 +17,34 @@ fn register_arith_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, trait_name: &str, m
     let trait_inst = ctxt.traits.inst_trait(trait_, gen_args).unwrap();
     let output_ty = ctxt.tys.assoc_ty(self_ty, trait_inst, 0);
 
-    ctxt.traits.register_mthd(
-        trait_,
-        fns::FnSig {
-            name: mthd_name.to_string(),
-            associated_ty: None,
-            associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[rhs_ty])).unwrap()),
-            gen_params: vec![],
-            env_gen_params: vec![rhs_var],
-            env_constraints: Vec::new(),
-            params: vec![
-                fns::FnParam {
-                    kind: fns::FnParamKind::Self_,
-                    ty: self_ty,
-                },
-                fns::FnParam {
-                    kind: fns::FnParamKind::Regular("rhs".to_string()),
-                    ty: rhs_ty,
-                },
-            ],
-            var_args: false,
-            return_ty: output_ty,
-            constraints: Vec::new(),
-        },
-    );
+    let fn_ = ctxt
+        .fns
+        .register_fn(
+            fns::FnSig {
+                name: mthd_name.to_string(),
+                associated_ty: None,
+                associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[rhs_ty])).unwrap()),
+                gen_params: vec![],
+                env_gen_params: vec![rhs_var],
+                env_constraints: Vec::new(),
+                params: vec![
+                    fns::FnParam {
+                        kind: fns::FnParamKind::Self_,
+                        ty: self_ty,
+                    },
+                    fns::FnParam {
+                        kind: fns::FnParamKind::Regular("rhs".to_string()),
+                        ty: rhs_ty,
+                    },
+                ],
+                var_args: false,
+                return_ty: output_ty,
+                constraints: Vec::new(),
+            },
+            false,
+        )
+        .unwrap();
+    ctxt.traits.register_mthd(trait_, fn_);
 
     trait_
 }

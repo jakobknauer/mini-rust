@@ -507,20 +507,27 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
 
-                let sig = fns::FnSig {
-                    name: mthd.name.clone(),
-                    associated_ty: None,
-                    associated_trait_inst: Some(trait_inst),
-                    gen_params: mthd_gen_params,
-                    env_gen_params: trait_gen_params.clone(),
-                    env_constraints: Vec::new(),
-                    params,
-                    var_args: false,
-                    return_ty,
-                    constraints,
-                };
+                let fn_ = self
+                    .ctxt
+                    .fns
+                    .register_fn(
+                        fns::FnSig {
+                            name: mthd.name.clone(),
+                            associated_ty: None,
+                            associated_trait_inst: Some(trait_inst),
+                            gen_params: mthd_gen_params,
+                            env_gen_params: trait_gen_params.clone(),
+                            env_constraints: Vec::new(),
+                            params,
+                            var_args: false,
+                            return_ty,
+                            constraints,
+                        },
+                        false,
+                    )
+                    .unwrap();
 
-                self.ctxt.traits.register_mthd(trait_, sig);
+                self.ctxt.traits.register_mthd(trait_, fn_);
             }
         }
 

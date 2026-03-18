@@ -1,5 +1,5 @@
 use crate::ctxt::{
-    fns::FnSig,
+    fns::Fn,
     ty::{GenVar, TySlice},
 };
 
@@ -10,7 +10,7 @@ pub struct Trait(pub(in crate::ctxt) usize);
 pub struct TraitDef<'traits> {
     pub name: String,
     pub gen_params: Vec<GenVar<'traits>>,
-    pub mthds: Vec<FnSig<'traits>>,
+    pub mthds: Vec<Fn>,
     pub assoc_tys: Vec<String>,
 }
 

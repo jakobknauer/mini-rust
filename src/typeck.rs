@@ -287,7 +287,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
                 let mthd_idx = self
                     .ctxt
                     .traits
-                    .resolve_trait_method(trait_, mthd_name)
+                    .resolve_trait_method(&self.ctxt.fns, trait_, mthd_name)
                     .ok_or_else(|| TypeckError::MthdResolutionFailed {
                         base_ty,
                         mthd_name: mthd_name.to_string(),

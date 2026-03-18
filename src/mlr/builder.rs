@@ -240,7 +240,7 @@ impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
         let sig = self
             .ctxt
             .traits
-            .get_trait_mthd_sig(inst.trait_inst.trait_, inst.mthd_idx);
+            .get_trait_mthd_sig(&self.ctxt.fns, inst.trait_inst.trait_, inst.mthd_idx);
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
         let sig_gen_params = sig.gen_params.clone();
         let fn_ty = self.ctxt.tys.fn_(&param_tys, sig.return_ty, sig.var_args);
