@@ -131,21 +131,7 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                 tys_1.len() == tys_2.len() && tys_1.iter().zip(tys_2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
-            (&ty::TyDef::Closure { fn_inst: fn_inst_1, .. }, &ty::TyDef::Closure { fn_inst: fn_inst_2, .. }) => {
-                fn_inst_1.fn_ == fn_inst_2.fn_
-                    && fn_inst_1.gen_args.len() == fn_inst_2.gen_args.len()
-                    && fn_inst_1.env_gen_args.len() == fn_inst_2.env_gen_args.len()
-                    && fn_inst_1
-                        .gen_args
-                        .iter()
-                        .zip(fn_inst_2.gen_args)
-                        .all(|(t1, t2)| self.unify(*t1, *t2))
-                    && fn_inst_1
-                        .env_gen_args
-                        .iter()
-                        .zip(fn_inst_2.env_gen_args)
-                        .all(|(t1, t2)| self.unify(*t1, *t2))
-            }
+            (ty::TyDef::Closure { name: name_1, .. }, ty::TyDef::Closure { name: name_2, .. }) => name_1 == name_2,
 
             (
                 &ty::TyDef::AssocTy {

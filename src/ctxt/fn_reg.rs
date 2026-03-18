@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{Fn, FnInst, FnInstError, FnSig, TraitMthdInst},
-    ty::{Ty, TySlice},
+    ty::TySlice,
 };
 
 pub struct FnReg<'fns> {
@@ -74,16 +74,6 @@ impl<'fns> FnReg<'fns> {
 
     pub fn get_sig(&self, fn_: Fn) -> &'fns FnSig<'fns> {
         self.sigs.borrow()[fn_.0]
-    }
-
-    pub fn update_sig_types(&self, fn_: Fn, return_ty: Ty<'fns>, param_tys: &[Ty<'fns>]) {
-        let old_sig = self.sigs.borrow()[fn_.0];
-        let mut new_sig = old_sig.clone();
-        new_sig.return_ty = return_ty;
-        for (param, &ty) in new_sig.params.iter_mut().zip(param_tys) {
-            param.ty = ty;
-        }
-        self.sigs.borrow_mut()[fn_.0] = self.arena.alloc(new_sig);
     }
 
     pub fn get_fn_by_name(&self, name: &str) -> Option<Fn> {

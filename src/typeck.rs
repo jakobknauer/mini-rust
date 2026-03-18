@@ -30,14 +30,8 @@ pub enum ExprExtra<'ty> {
     BinaryPrim(language_items::BinaryPrimOp),
     BinaryOpMthd(MthdResolution<'ty>),
     UnaryPrim(language_items::UnaryPrimOp),
-    FieldAccess {
-        derefs: usize,
-        index: usize,
-    },
-    Closure {
-        fn_inst: fns::FnInst<'ty>,
-        captured_vars: Vec<hlr::VarId>,
-    },
+    FieldAccess { derefs: usize, index: usize },
+    Closure { captured_vars: Vec<hlr::VarId> },
 }
 
 pub fn typeck<'a, 'ctxt, 'hlr>(
@@ -58,7 +52,6 @@ where
         closure_counter: 0,
         return_ty_stack: vec![],
         var_uses: vec![],
-        created_closure_fns: vec![],
         created_closure_structs: vec![],
         pending_obligations: vec![],
     };
@@ -77,7 +70,6 @@ struct Typeck<'a, 'ctxt: 'a + 'hlr, 'hlr> {
     return_ty_stack: Vec<ty::Ty<'ctxt>>,
     var_uses: Vec<hlr::VarId>,
 
-    created_closure_fns: Vec<fns::Fn>,
     created_closure_structs: Vec<(ty::Struct<'ctxt>, Vec<hlr::VarId>)>,
 
     pending_obligations: Vec<(ty::Ty<'ctxt>, ty::ConstraintRequirement<'ctxt>)>,
@@ -95,6 +87,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
             self.ctxt.tys.set_opaque_resolution(opaque, concrete_ty);
         }
 
+        self.create_closure_fns();
         self.post_check();
 
         Ok(self.typing)

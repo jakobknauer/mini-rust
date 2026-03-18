@@ -5,7 +5,6 @@ use super::{ExprExtra, MthdResolution};
 impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     pub(super) fn normalize_all(&mut self) {
         self.normalize_hlr_typing();
-        self.normalize_closure_fns();
         self.normalize_closure_structs();
     }
 
@@ -30,15 +29,17 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             }
 
             Closure {
-                fn_inst,
                 ref name,
                 captures_ty,
+                param_tys,
+                return_ty,
+                ..
             } => {
+                let name = name.clone();
                 let captures_ty = self.normalize(captures_ty);
-                let gen_args = self.normalize_slice(fn_inst.gen_args);
-                let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
-                let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
-                self.ctxt.tys.closure(fn_inst, name.as_str(), captures_ty)
+                let param_tys = self.normalize_slice(param_tys);
+                let return_ty = self.normalize(return_ty);
+                self.ctxt.tys.closure(name, captures_ty, param_tys, return_ty)
             }
 
             TraitSelf(_) => {
@@ -154,10 +155,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
     fn normalize_expr_extra(&mut self, extra: ExprExtra<'ctxt>) -> ExprExtra<'ctxt> {
         match extra {
-            ExprExtra::Closure { fn_inst, captured_vars } => ExprExtra::Closure {
-                fn_inst: self.normalize_fn_inst(fn_inst),
-                captured_vars,
-            },
+            ExprExtra::Closure { .. } => extra,
             ExprExtra::ValFn(fn_inst) => ExprExtra::ValFn(self.normalize_fn_inst(fn_inst)),
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::BinaryOpMthd(resolution) => ExprExtra::BinaryOpMthd(self.normalize_mthd_resolution(resolution)),
@@ -181,18 +179,6 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 let trait_inst = trait_mthd_inst.trait_inst.with_gen_args(trait_gen_args).unwrap();
                 MthdResolution::Trait(trait_mthd_inst.with_updated(impl_ty, trait_inst, gen_args).unwrap())
             }
-        }
-    }
-
-    fn normalize_closure_fns(&mut self) {
-        let fns = self.created_closure_fns.clone();
-        for fn_ in fns {
-            let sig = self.ctxt.fns.get_sig(fn_);
-
-            let return_ty = self.normalize(sig.return_ty);
-            let param_tys: Vec<ty::Ty> = sig.params.iter().map(|p| self.normalize(p.ty)).collect();
-
-            self.ctxt.fns.update_sig_types(fn_, return_ty, &param_tys);
         }
     }
 

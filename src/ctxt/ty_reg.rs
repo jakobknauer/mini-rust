@@ -2,7 +2,6 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{
-    fns,
     traits::{self, Trait, TraitInst},
     ty::*,
 };
@@ -245,11 +244,19 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(trait_self)
     }
 
-    pub fn closure(&self, fn_inst: fns::FnInst<'ty>, name: impl Into<String>, captures_ty: Ty<'ty>) -> Ty<'ty> {
+    pub fn closure(
+        &self,
+        name: impl Into<String>,
+        captures_ty: Ty<'ty>,
+        param_tys: TySlice<'ty>,
+        return_ty: Ty<'ty>,
+    ) -> Ty<'ty> {
         let closure = TyDef::Closure {
-            fn_inst,
             name: name.into(),
             captures_ty,
+            param_tys,
+            return_ty,
+            fn_: ClosureFnCell::new(),
         };
         self.register_ty(closure)
     }
@@ -355,13 +362,16 @@ impl<'ty> TyReg<'ty> {
                 self.fn_(&param_tys, return_ty, var_args)
             }
             Closure {
-                fn_inst,
                 ref name,
                 captures_ty,
+                param_tys,
+                return_ty,
+                ..
             } => {
                 let captures_ty = self.resolve_opaque_in_ty(captures_ty);
-                // Don't recurse into fn_inst for now
-                self.closure(fn_inst, name.as_str(), captures_ty)
+                let param_tys: Vec<_> = param_tys.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
+                let return_ty = self.resolve_opaque_in_ty(return_ty);
+                self.closure(name.as_str(), captures_ty, self.ty_slice(&param_tys), return_ty)
             }
             AssocTy {
                 base_ty,
@@ -610,16 +620,17 @@ impl<'ty> TyReg<'ty> {
                 self.inst_enum(enum_, gen_args).unwrap()
             }
             Closure {
-                fn_inst,
                 ref name,
                 captures_ty,
+                param_tys,
+                return_ty,
+                ..
             } => {
                 let name = name.clone();
-                let gen_args = self.substitute_on_slice(fn_inst.gen_args, gen_vars, self_ty);
-                let env_gen_args = self.substitute_on_slice(fn_inst.env_gen_args, gen_vars, self_ty);
-                let fn_inst = fn_inst.with_gen_args(gen_args, env_gen_args).unwrap();
                 let captures_ty = self.substitute(captures_ty, gen_vars, self_ty);
-                self.closure(fn_inst, name, captures_ty)
+                let param_tys = self.substitute_on_slice(param_tys, gen_vars, self_ty);
+                let return_ty = self.substitute(return_ty, gen_vars, self_ty);
+                self.closure(name, captures_ty, param_tys, return_ty)
             }
             Tuple(items) => {
                 let items = self.substitute_on_slice(items, gen_vars, self_ty);
@@ -843,21 +854,7 @@ impl<'ty> TyReg<'ty> {
                         .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
             }
 
-            (Closure { fn_inst: fn_inst1, .. }, Closure { fn_inst: fn_inst2, .. }) => {
-                fn_inst1.fn_ == fn_inst2.fn_
-                    && fn_inst1.gen_args.len() == fn_inst2.gen_args.len()
-                    && fn_inst1
-                        .gen_args
-                        .iter()
-                        .zip(fn_inst2.gen_args.iter())
-                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-                    && fn_inst1.env_gen_args.len() == fn_inst2.env_gen_args.len()
-                    && fn_inst1
-                        .env_gen_args
-                        .iter()
-                        .zip(fn_inst2.env_gen_args.iter())
-                        .all(|(&ty1, &ty2)| self.try_find_instantiation_internal(ty1, ty2, instantiation))
-            }
+            (Closure { .. }, Closure { .. }) => target == generic,
 
             (&Tuple(items1), &Tuple(items2)) => {
                 items1.len() == items2.len()

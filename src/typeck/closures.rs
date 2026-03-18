@@ -49,24 +49,90 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
         let captures_ty =
             self.build_closure_captures_ty(&names.captures_name, &env_gen_params, &env_gen_args, &captured_vars);
-        let fn_inst = self.build_closure_fn_inst(
-            &names.fn_name,
-            &env_gen_params,
-            &env_gen_args,
-            captures_ty,
-            &body_signature,
-        );
 
         self.typing.expr_extra.insert(
             expr_id,
             ExprExtra::Closure {
-                fn_inst,
                 captured_vars: captured_vars.0,
             },
         );
 
-        let closure_ty = self.ctxt.tys.closure(fn_inst, &names.fn_name, captures_ty);
+        let param_tys = self.ctxt.tys.ty_slice(&body_signature.param_tys);
+        let closure_ty = self
+            .ctxt
+            .tys
+            .closure(&names.fn_name, captures_ty, param_tys, body_signature.return_ty);
         Ok(closure_ty)
+    }
+
+    pub(super) fn create_closure_fns(&mut self) {
+        let closure_exprs: Vec<_> = self
+            .typing
+            .expr_extra
+            .iter()
+            .filter_map(|(&expr_id, extra)| {
+                if matches!(extra, ExprExtra::Closure { .. }) {
+                    Some(expr_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_);
+        let env_gen_params: Vec<ty::GenVar> = outer_sig
+            .env_gen_params
+            .iter()
+            .cloned()
+            .chain(outer_sig.gen_params.iter().cloned())
+            .collect();
+
+        for expr_id in closure_exprs {
+            let closure_ty = self.typing.expr_types[&expr_id];
+            let ty::TyDef::Closure {
+                ref name,
+                captures_ty,
+                param_tys,
+                return_ty,
+                ref fn_,
+            } = *closure_ty.0
+            else {
+                unreachable!()
+            };
+
+            let captures_param = fns::FnParam {
+                kind: fns::FnParamKind::Regular("__captures".to_string()),
+                ty: captures_ty,
+            };
+            let params: Vec<fns::FnParam> = std::iter::once(captures_param)
+                .chain(param_tys.iter().map(|&ty| fns::FnParam {
+                    kind: fns::FnParamKind::Regular("__param".to_string()),
+                    ty,
+                }))
+                .collect();
+
+            let closure_fn = self
+                .ctxt
+                .fns
+                .register_fn(
+                    fns::FnSig {
+                        name: name.clone(),
+                        gen_params: vec![],
+                        env_gen_params: env_gen_params.clone(),
+                        env_constraints: Vec::new(),
+                        params,
+                        var_args: false,
+                        return_ty,
+                        associated_ty: None,
+                        associated_trait_inst: None,
+                        constraints: self.constraints.clone(),
+                    },
+                    false,
+                )
+                .unwrap();
+
+            fn_.set(closure_fn);
+        }
     }
 
     fn snapshot_scope(&self) -> ScopeSnapshot {
@@ -93,8 +159,6 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             .cloned()
             .chain(outer_sig.gen_params.iter().cloned())
             .collect();
-
-        let _ = outer_sig;
 
         let env_gen_args: Vec<ty::Ty<'ctxt>> = env_gen_params.iter().map(|&gv| self.ctxt.tys.gen_var(gv)).collect();
 
@@ -194,50 +258,5 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             .push((captures_struct, captured_vars.0.to_vec()));
 
         self.ctxt.tys.inst_struct(captures_struct, env_gen_args).unwrap()
-    }
-
-    fn build_closure_fn_inst(
-        &mut self,
-        fn_name: &str,
-        env_gen_params: &[ty::GenVar<'ctxt>],
-        env_gen_args: &[ty::Ty<'ctxt>],
-        captures_ty: ty::Ty<'ctxt>,
-        checked: &ClosureBodySignature<'ctxt>,
-    ) -> fns::FnInst<'ctxt> {
-        let captures_param = fns::FnParam {
-            kind: fns::FnParamKind::Regular("__captures".to_string()),
-            ty: captures_ty,
-        };
-        let regular_params = checked.param_tys.iter().map(|&ty| fns::FnParam {
-            kind: fns::FnParamKind::Regular("__param".to_string()),
-            ty,
-        });
-        let fn_params: Vec<fns::FnParam> = std::iter::once(captures_param).chain(regular_params).collect();
-
-        let closure_fn = self
-            .ctxt
-            .fns
-            .register_fn(
-                fns::FnSig {
-                    name: fn_name.to_string(),
-                    gen_params: vec![],
-                    env_gen_params: env_gen_params.to_vec(),
-                    env_constraints: Vec::new(),
-                    params: fn_params,
-                    var_args: false,
-                    return_ty: checked.return_ty,
-                    associated_ty: None,
-                    associated_trait_inst: None,
-                    constraints: self.constraints.clone(),
-                },
-                false,
-            )
-            .unwrap();
-
-        self.created_closure_fns.push(closure_fn);
-
-        let gen_args = self.ctxt.tys.ty_slice(&[]);
-        let env_gen_args_slice = self.ctxt.tys.ty_slice(env_gen_args);
-        self.ctxt.fns.inst_fn(closure_fn, gen_args, env_gen_args_slice).unwrap()
     }
 }

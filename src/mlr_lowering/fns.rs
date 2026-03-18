@@ -367,9 +367,25 @@ impl<'a, 'iw, 'mr, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, '
         let callable_ty = self.substitute(callable.1);
         let callable_ty = self.parent.mr_ctxt.tys.resolve_opaque_in_ty(callable_ty);
         if let mr_ty::TyDef::Closure {
-            fn_inst, captures_ty, ..
+            ref fn_, captures_ty, ..
         } = *callable_ty.0
         {
+            let closure_fn = fn_.get().expect("closure fn not set");
+            let fn_inst = {
+                let sig = self.parent.mr_ctxt.fns.get_sig(closure_fn);
+                let env_gen_args: Vec<_> = sig
+                    .env_gen_params
+                    .iter()
+                    .map(|&gv| self.parent.mr_ctxt.tys.gen_var(gv))
+                    .collect();
+                let env_gen_args = self.parent.mr_ctxt.tys.ty_slice(&env_gen_args);
+                let gen_args = self.parent.mr_ctxt.tys.ty_slice(&[]);
+                self.parent
+                    .mr_ctxt
+                    .fns
+                    .inst_fn(closure_fn, gen_args, env_gen_args)
+                    .unwrap()
+            };
             let fn_ptr = self.build_global_function(fn_inst)?.into_pointer_value();
             let captures: BasicMetadataValueEnum<'iw> = self.build_op(callable)?.into();
 

@@ -127,14 +127,11 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             Some((param_tys, return_ty, var_args))
         } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraints, ty) {
             Some((param_tys, return_ty, false))
-        } else if let &ty::TyDef::Closure { fn_inst, .. } = ty.0 {
-            let signature = self.get_fn_inst_sig(fn_inst);
-            let params_without_captures: Vec<_> = signature.params.iter().skip(1).map(|p| p.ty).collect();
-            let return_ty = signature.return_ty;
-            drop(signature);
-            let params_without_captures = self.tys.ty_slice(&params_without_captures);
-
-            Some((params_without_captures, return_ty, false))
+        } else if let &ty::TyDef::Closure {
+            param_tys, return_ty, ..
+        } = ty.0
+        {
+            Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Opaque { opaque, gen_args } = ty.0 {
             opaque.constraints.iter().find_map(|r| {
                 if let &ty::ConstraintRequirement::Callable { param_tys, return_ty } = r {

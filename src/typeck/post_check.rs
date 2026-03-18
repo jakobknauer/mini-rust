@@ -10,14 +10,6 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             debug_assert!(!self.contains_inf_var(ty));
         }
 
-        for &fn_ in &self.created_closure_fns {
-            let sig = self.ctxt.fns.get_sig(fn_);
-            debug_assert!(!self.contains_inf_var(sig.return_ty));
-            for param in &sig.params {
-                debug_assert!(!self.contains_inf_var(param.ty));
-            }
-        }
-
         for &(struct_, _) in &self.created_closure_structs {
             for field in struct_.get_fields() {
                 debug_assert!(!self.contains_inf_var(field.ty));
@@ -40,11 +32,14 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 param_tys, return_ty, ..
             } => self.slice_contains_inf_var(param_tys) || self.contains_inf_var(return_ty),
             &Closure {
-                fn_inst, captures_ty, ..
+                captures_ty,
+                param_tys,
+                return_ty,
+                ..
             } => {
                 self.contains_inf_var(captures_ty)
-                    || self.slice_contains_inf_var(fn_inst.gen_args)
-                    || self.slice_contains_inf_var(fn_inst.env_gen_args)
+                    || self.slice_contains_inf_var(param_tys)
+                    || self.contains_inf_var(return_ty)
             }
             &AssocTy {
                 base_ty, trait_inst, ..

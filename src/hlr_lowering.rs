@@ -666,15 +666,31 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         params: hlr::ClosureParams<'hlr>,
         body: hlr::Expr<'hlr>,
     ) -> LoweredExpr<'mlr> {
-        let (fn_inst, captured_vars) = match &self.typing.expr_extra[&expr_id] {
-            ExprExtra::Closure { fn_inst, captured_vars } => (*fn_inst, captured_vars.clone()),
+        let captured_vars = match &self.typing.expr_extra[&expr_id] {
+            ExprExtra::Closure { captured_vars } => captured_vars.clone(),
             _ => panic!("expected Closure extra"),
         };
 
         let closure_ty = self.typing.expr_types[&expr_id];
-        let captures_ty = match *closure_ty.0 {
-            ty::TyDef::Closure { captures_ty, .. } => captures_ty,
+        let (captures_ty, closure_fn) = match closure_ty.0 {
+            ty::TyDef::Closure { captures_ty, fn_, .. } => (*captures_ty, fn_.get().expect("closure fn not set")),
             _ => panic!("closure expr should have Closure type"),
+        };
+
+        let fn_inst = {
+            let sig = self.builder.ctxt.fns.get_sig(closure_fn);
+            let env_gen_args: Vec<_> = sig
+                .env_gen_params
+                .iter()
+                .map(|&gv| self.builder.ctxt.tys.gen_var(gv))
+                .collect();
+            let env_gen_args = self.builder.ctxt.tys.ty_slice(&env_gen_args);
+            let gen_args = self.builder.ctxt.tys.ty_slice(&[]);
+            self.builder
+                .ctxt
+                .fns
+                .inst_fn(closure_fn, gen_args, env_gen_args)
+                .unwrap()
         };
 
         self.builder.register_fn_call(fn_inst);
@@ -695,7 +711,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
 
         let param_var_ids: Vec<_> = params.iter().map(|hlr::ClosureParam(v, _)| *v).collect();
         let (closure_mlr_fn, nested_mlr_fns) = {
-            let mut closure_lowerer = HlrLowerer::new(self.builder.ctxt, self.builder.mlr, fn_inst.fn_, self.typing);
+            let mut closure_lowerer = HlrLowerer::new(self.builder.ctxt, self.builder.mlr, closure_fn, self.typing);
             let mlr_fn = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
             let nested_mlr_fns = closure_lowerer.mlr_fns;
             (mlr_fn, nested_mlr_fns)
