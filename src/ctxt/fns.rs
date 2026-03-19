@@ -3,9 +3,13 @@ use crate::ctxt::{
     ty::{Constraint, GenVar, Ty, TySlice},
 };
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct FnId(pub(in crate::ctxt) usize);
+
 pub type Fn<'fns> = &'fns FnSig<'fns>;
 
 pub struct FnSig<'fns> {
+    pub(crate) id: FnId,
     pub name: String,
     /// The type of which the function is an associated method, if any.
     /// At the moment, this is only used for printing names.
@@ -30,7 +34,7 @@ pub struct FnSig<'fns> {
 
 impl PartialEq for FnSig<'_> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other)
+        self.id == other.id
     }
 }
 
@@ -38,7 +42,7 @@ impl Eq for FnSig<'_> {}
 
 impl std::hash::Hash for FnSig<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (self as *const Self).hash(state);
+        self.id.hash(state);
     }
 }
 

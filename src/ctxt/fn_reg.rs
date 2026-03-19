@@ -2,12 +2,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{Fn, FnInst, FnInstError, FnSig, TraitMthdInst},
+    fns::{Fn, FnId, FnInst, FnInstError, FnSig, TraitMthdInst},
     ty::TySlice,
 };
 
 pub struct FnReg<'fns> {
     arena: &'fns bumpalo::Bump,
+    next_id: RefCell<usize>,
     sigs: RefCell<Vec<Fn<'fns>>>,
     fn_names: RefCell<HashMap<String, Fn<'fns>>>,
     called_fn_insts: RefCell<HashMap<Fn<'fns>, Vec<FnInst<'fns>>>>,
@@ -18,6 +19,7 @@ impl<'fns> FnReg<'fns> {
     pub fn new(arena: &'fns bumpalo::Bump) -> Self {
         Self {
             arena,
+            next_id: RefCell::default(),
             sigs: RefCell::default(),
             fn_names: RefCell::default(),
             called_fn_insts: RefCell::default(),
@@ -52,11 +54,18 @@ impl<'fns> FnReg<'fns> {
         })
     }
 
-    pub fn register_fn(&self, signature: FnSig<'fns>, register_name: bool) -> Result<Fn<'fns>, ()> {
+    pub fn register_fn(&self, mut signature: FnSig<'fns>, register_name: bool) -> Result<Fn<'fns>, ()> {
         if register_name && self.fn_names.borrow().contains_key(&signature.name) {
             return Err(());
         }
 
+        let id = {
+            let mut next = self.next_id.borrow_mut();
+            let id = FnId(*next);
+            *next += 1;
+            id
+        };
+        signature.id = id;
         let fn_: Fn<'fns> = self.arena.alloc(signature);
 
         if register_name {

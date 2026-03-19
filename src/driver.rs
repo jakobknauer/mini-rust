@@ -81,7 +81,6 @@ struct AstMeta<'ty> {
 }
 
 impl<'a, 'arena> Driver<'a, 'arena> {
-    #[allow(clippy::mutable_key_type)]
     pub fn compile(&mut self) -> Result<(), DriverError<'arena>> {
         self.print_pretty("Building AST from source");
         for source in &self.sources {
@@ -103,6 +102,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         let hlr_fns = self.ast_lowering()?;
 
         self.print_pretty("Type checking");
+        #[allow(clippy::mutable_key_type)]
         let hlr_typings = self.typeck(&hlr_fns)?;
 
         if let Some(hlr_path) = self.output_paths.hlr {
@@ -413,6 +413,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         };
 
         let signature = fns::FnSig {
+            id: fns::FnId::default(),
             name: ast_fn.name.clone(),
             associated_ty,
             associated_trait_inst,
@@ -513,6 +514,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                     .fns
                     .register_fn(
                         fns::FnSig {
+                            id: fns::FnId::default(),
                             name: mthd.name.clone(),
                             associated_ty: None,
                             associated_trait_inst: Some(trait_inst),
@@ -579,12 +581,12 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(hlr_fns)
     }
 
-    #[allow(clippy::mutable_key_type)]
     fn typeck(
         &mut self,
         hlr_fns: &[hlr::Fn<'arena>],
     ) -> Result<HashMap<fns::Fn<'arena>, typeck::HlrTyping<'arena>>, DriverError<'arena>> {
         let fn_names: Vec<&str> = hlr_fns.iter().map(|hlr_fn| hlr_fn.fn_.name.as_str()).collect();
+        #[allow(clippy::mutable_key_type)]
         let mut result = HashMap::new();
         for (hlr_fn, fn_name) in hlr_fns.iter().zip(fn_names) {
             let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|error| DriverError::Typeck {
@@ -625,10 +627,10 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(())
     }
 
-    #[allow(clippy::mutable_key_type)]
     fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'arena>]) -> Result<(), DriverError<'arena>> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating MLR file"))?;
 
+        #[allow(clippy::mutable_key_type)]
         let mlr_fn_map: HashMap<fns::Fn, &mlr::Fn<'arena>> = mlr_fns.iter().map(|f| (f.fn_, f)).collect();
         for fn_ in self.ctxt.fns.get_all_fns() {
             let mlr_fn = mlr_fn_map.get(&fn_).copied();
