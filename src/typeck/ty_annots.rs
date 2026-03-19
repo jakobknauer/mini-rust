@@ -4,14 +4,14 @@ use crate::{
     typeck::{TypeckError, TypeckResult},
 };
 
-impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn new_inf_var(&mut self) -> ty::Ty<'ctxt> {
         self.ctxt.tys.inf_var()
     }
 
     pub(super) fn resolve_optional_gen_args(
         &mut self,
-        ty_annots: Option<hlr::TyAnnotSlice<'hlr>>,
+        ty_annots: Option<hlr::TyAnnotSlice<'ctxt>>,
         n_expected: usize,
         f: impl FnOnce(usize) -> TypeckError<'ctxt>,
     ) -> TypeckResult<'ctxt, Vec<ty::Ty<'ctxt>>> {
@@ -24,7 +24,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
     pub(super) fn resolve_optional_ty_annot(
         &mut self,
-        ty_annot: Option<hlr::TyAnnot<'hlr>>,
+        ty_annot: Option<hlr::TyAnnot<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         match ty_annot {
             Some(a) => self.resolve_ty_annot(a),
@@ -34,7 +34,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
     pub(super) fn resolve_ty_annots(
         &mut self,
-        ty_annots: hlr::TyAnnotSlice<'hlr>,
+        ty_annots: hlr::TyAnnotSlice<'ctxt>,
     ) -> TypeckResult<'ctxt, Vec<ty::Ty<'ctxt>>> {
         ty_annots
             .iter()
@@ -42,7 +42,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             .collect()
     }
 
-    pub(super) fn resolve_ty_annot(&mut self, ty_annot: hlr::TyAnnot<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    pub(super) fn resolve_ty_annot(&mut self, ty_annot: hlr::TyAnnot<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         match ty_annot {
             hlr::TyAnnotDef::Struct(struct_, ty_annot_defs) => self.resolve_struct_ty_annot(struct_, *ty_annot_defs),
             hlr::TyAnnotDef::Enum(enum_, ty_annot_defs) => self.resolve_enum_ty_annot(enum_, *ty_annot_defs),
@@ -61,7 +61,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     fn resolve_struct_ty_annot(
         &mut self,
         struct_: ty::Struct<'ctxt>,
-        ty_annot_defs: Option<hlr::TyAnnotSlice<'hlr>>,
+        ty_annot_defs: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let n_expected = struct_.gen_params.len();
         let gen_args = self.resolve_optional_gen_args(ty_annot_defs, n_expected, |actual| {
@@ -84,7 +84,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     fn resolve_enum_ty_annot(
         &mut self,
         enum_: ty::Enum<'ctxt>,
-        ty_annot_defs: Option<hlr::TyAnnotSlice<'hlr>>,
+        ty_annot_defs: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let n_expected = enum_.gen_params.len();
         let gen_args = self.resolve_optional_gen_args(ty_annot_defs, n_expected, |actual| {
@@ -110,8 +110,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
     fn resolve_assoc_ty_annot(
         &mut self,
-        base: hlr::TyAnnot<'hlr>,
-        trait_: Option<(traits::Trait, Option<hlr::TyAnnotSlice<'hlr>>)>,
+        base: hlr::TyAnnot<'ctxt>,
+        trait_: Option<(traits::Trait, Option<hlr::TyAnnotSlice<'ctxt>>)>,
         name: &str,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let base_ty = self.resolve_ty_annot(base)?;
@@ -127,10 +127,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 })?;
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
-                if !self
-                    .ctxt
-                    .ty_implements_trait_inst(&self.constraints, base_ty, trait_inst)
-                {
+                let constraints = self.constraints.clone();
+                if !self.ctxt.ty_implements_trait_inst(&constraints, base_ty, trait_inst) {
                     return Err(TypeckError::ConstraintNotSatisfied {
                         ty: base_ty,
                         trait_inst,
@@ -158,20 +156,20 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    fn resolve_ref_ty_annot(&mut self, inner: hlr::TyAnnot<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn resolve_ref_ty_annot(&mut self, inner: hlr::TyAnnot<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let inner_ty = self.resolve_ty_annot(inner)?;
         Ok(self.ctxt.tys.ref_(inner_ty))
     }
 
-    fn resolve_ptr_ty_annot(&mut self, inner: hlr::TyAnnot<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn resolve_ptr_ty_annot(&mut self, inner: hlr::TyAnnot<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let inner_ty = self.resolve_ty_annot(inner)?;
         Ok(self.ctxt.tys.ptr(inner_ty))
     }
 
     fn resolve_fn_ty_annot(
         &mut self,
-        params: hlr::TyAnnotSlice<'hlr>,
-        ret: Option<hlr::TyAnnot<'hlr>>,
+        params: hlr::TyAnnotSlice<'ctxt>,
+        ret: Option<hlr::TyAnnot<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let param_tys = self.resolve_ty_annots(params)?;
         let ret_ty = match ret {
@@ -181,7 +179,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         Ok(self.ctxt.tys.fn_(&param_tys, ret_ty, false))
     }
 
-    fn resolve_tuple_ty_annot(&mut self, elems: hlr::TyAnnotSlice<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn resolve_tuple_ty_annot(&mut self, elems: hlr::TyAnnotSlice<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let elem_tys = self.resolve_ty_annots(elems)?;
         Ok(self.ctxt.tys.tuple(&elem_tys))
     }

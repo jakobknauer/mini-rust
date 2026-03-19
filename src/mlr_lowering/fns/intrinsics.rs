@@ -11,11 +11,11 @@ use crate::{
 
 use super::{MlrFnLowerer, MlrFnLoweringError, MlrFnLoweringResult};
 
-impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
+impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     pub(super) fn try_build_intrinsic_call(
         &mut self,
         fn_inst: mr_fns::FnInst<'ctxt>,
-        args: &[mlr::Op<'mlr>],
+        args: &[mlr::Op<'ctxt>],
     ) -> MlrFnLoweringResult<Option<BasicValueEnum<'iw>>> {
         let lang = &self.parent.mr_ctxt.language_items;
         if Some(fn_inst.fn_) == lang.size_of {
@@ -39,8 +39,8 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub(super) fn build_binary_prim(
         &mut self,
         op: language_items::BinaryPrimOp,
-        lhs: mlr::Op<'mlr>,
-        rhs: mlr::Op<'mlr>,
+        lhs: mlr::Op<'ctxt>,
+        rhs: mlr::Op<'ctxt>,
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::BinaryPrimOp::*;
 
@@ -89,7 +89,7 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     pub(super) fn build_unary_prim(
         &mut self,
         op: language_items::UnaryPrimOp,
-        operand: mlr::Op<'mlr>,
+        operand: mlr::Op<'ctxt>,
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::UnaryPrimOp::*;
         let operand = self.build_op(operand)?.into_int_value();
@@ -102,8 +102,8 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
 
     fn build_int_pair(
         &mut self,
-        lhs: mlr::Op<'mlr>,
-        rhs: mlr::Op<'mlr>,
+        lhs: mlr::Op<'ctxt>,
+        rhs: mlr::Op<'ctxt>,
     ) -> MlrFnLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
         let lhs = self.build_op(lhs)?.into_int_value();
         let rhs = self.build_op(rhs)?.into_int_value();
@@ -113,7 +113,7 @@ impl<'a, 'iw, 'mr, 'ctxt, 'mlr> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, 'mlr> {
     fn build_ptr_offset_intrinsic(
         &mut self,
         fn_inst: mr_fns::FnInst<'ctxt>,
-        args: &[mlr::Op<'mlr>],
+        args: &[mlr::Op<'ctxt>],
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let &[ptr, offset] = args else {
             return Err(MlrFnLoweringError);

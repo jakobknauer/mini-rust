@@ -28,13 +28,13 @@ struct ScopeSnapshot {
 
 struct CapturedVars(Vec<hlr::VarId>);
 
-impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn check_closure(
         &mut self,
         expr_id: hlr::ExprId,
-        params: hlr::ClosureParams<'hlr>,
-        return_ty: Option<hlr::TyAnnot<'hlr>>,
-        body: hlr::Expr<'hlr>,
+        params: hlr::ClosureParams<'ctxt>,
+        return_ty: Option<hlr::TyAnnot<'ctxt>>,
+        body: hlr::Expr<'ctxt>,
         hint: Option<ty::Ty<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let scope_snapshot = self.snapshot_scope();
@@ -170,7 +170,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
     fn try_get_callable_hint_info(&mut self, hint: ty::Ty<'ctxt>) -> Option<(ty::TySlice<'ctxt>, ty::Ty<'ctxt>)> {
         let normalized = self.normalize(hint);
-        if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(&self.constraints, normalized) {
+        let constraints = self.constraints.clone();
+        if let Some((param_tys, return_ty, _)) = self.ctxt.ty_is_callable(&constraints, normalized) {
             return Some((param_tys, return_ty));
         }
         let obligations = self.pending_obligations.clone();
@@ -189,9 +190,9 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
     fn check_closure_body(
         &mut self,
-        params: hlr::ClosureParams<'hlr>,
-        return_ty_annot: Option<hlr::TyAnnot<'hlr>>,
-        body: hlr::Expr<'hlr>,
+        params: hlr::ClosureParams<'ctxt>,
+        return_ty_annot: Option<hlr::TyAnnot<'ctxt>>,
+        body: hlr::Expr<'ctxt>,
         hint: Option<ty::Ty<'ctxt>>,
     ) -> TypeckResult<'ctxt, ClosureBodySignature<'ctxt>> {
         let mut param_tys = Vec::new();

@@ -19,7 +19,7 @@ pub(super) enum FoundMthd<'ty> {
     },
 }
 
-impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn resolve_mthd(
         &mut self,
         base_ty: ty::Ty<'ctxt>,
@@ -44,6 +44,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         mthd_name: &str,
         require_receiver: bool,
     ) -> TypeckResult<'ctxt, Option<FoundMthd<'ctxt>>> {
+        let constraints = self.constraints.clone();
         let inherent_impls: Vec<_> = self.ctxt.impls.get_inherent_impls().collect();
         let candidates: Vec<_> = inherent_impls
             .into_iter()
@@ -58,7 +59,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 let subst = ty::GenVarSubst::new(&impl_def.gen_params, env_gen_args).unwrap();
                 if !self
                     .ctxt
-                    .impl_constraints_satisfied(&self.constraints, &impl_def.constraints, &subst)
+                    .impl_constraints_satisfied(&constraints, &impl_def.constraints, &subst)
                 {
                     return None;
                 }
@@ -82,6 +83,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         mthd_name: &str,
         require_receiver: bool,
     ) -> TypeckResult<'ctxt, Option<FoundMthd<'ctxt>>> {
+        let constraints = self.constraints.clone();
         let candidates: Vec<_> = self
             .ctxt
             .traits
@@ -89,7 +91,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             .collect();
         let candidates: Vec<_> = candidates
             .into_iter()
-            .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(&self.constraints, base_ty, trait_))
+            .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(&constraints, base_ty, trait_))
             .collect();
 
         match candidates.as_slice() {
@@ -113,7 +115,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         found: FoundMthd<'ctxt>,
         base_ty: ty::Ty<'ctxt>,
         mthd_name: &str,
-        gen_args: Option<hlr::TyAnnotSlice<'hlr>>,
+        gen_args: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, MthdResolution<'ctxt>> {
         match found {
             FoundMthd::Inherent { fn_, env_gen_args } => {

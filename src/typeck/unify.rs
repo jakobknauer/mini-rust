@@ -7,7 +7,7 @@ pub enum UnificationResult<'ty> {
     Failure,
 }
 
-impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn unify(&mut self, ty1: ty::Ty<'ctxt>, ty2: ty::Ty<'ctxt>) -> bool {
         let ty1 = self.normalize(ty1);
         let ty2 = self.normalize(ty2);

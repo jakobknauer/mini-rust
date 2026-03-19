@@ -9,8 +9,8 @@ use crate::{
     hlr,
 };
 
-pub fn ast_to_hlr<'c, 'ctxt, 'ast>(
-    ctxt: &'c ctxt::Ctxt<'ctxt>,
+pub fn ast_to_hlr<'a, 'ctxt, 'ast>(
+    ctxt: &'a ctxt::Ctxt<'ctxt>,
     fn_: fns::Fn<'ctxt>,
     ast_body: ast::Block<'ast>,
     hlr: &'ctxt hlr::Hlr<'ctxt>,
@@ -19,10 +19,10 @@ pub fn ast_to_hlr<'c, 'ctxt, 'ast>(
     converter.lower_function_body(ast_body)
 }
 
-struct AstLowerer<'c, 'ctxt> {
+struct AstLowerer<'a, 'ctxt> {
     fn_: fns::Fn<'ctxt>,
 
-    ctxt: &'c ctxt::Ctxt<'ctxt>,
+    ctxt: &'a ctxt::Ctxt<'ctxt>,
     hlr: &'ctxt hlr::Hlr<'ctxt>,
 
     scopes: VecDeque<Scope>,
@@ -37,8 +37,8 @@ pub struct AstLoweringError {
     pub msg: String,
 }
 
-impl<'c, 'ctxt: 'c, 'ast> AstLowerer<'c, 'ctxt> {
-    fn new(ctxt: &'c ctxt::Ctxt<'ctxt>, fn_: fns::Fn<'ctxt>, hlr: &'ctxt hlr::Hlr<'ctxt>) -> Self {
+impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
+    fn new(ctxt: &'a ctxt::Ctxt<'ctxt>, fn_: fns::Fn<'ctxt>, hlr: &'ctxt hlr::Hlr<'ctxt>) -> Self {
         Self {
             fn_,
 

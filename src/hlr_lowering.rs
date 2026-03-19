@@ -11,29 +11,28 @@ use crate::{
     typeck::{ExprExtra, HlrTyping, MthdResolution},
 };
 
-pub fn hlr_to_mlr<'ctxt: 'mlr + 'hlr, 'a, 'hlr: 'ctxt, 'mlr: 'ctxt>(
-    ctxt: &mut ctxt::Ctxt<'ctxt>,
-    mlr: &'mlr mlr::Mlr<'mlr>,
-    fn_: &'a hlr::Fn<'hlr>,
+pub fn hlr_to_mlr<'a, 'ctxt>(
+    ctxt: &'a mut ctxt::Ctxt<'ctxt>,
+    mlr: &'a mlr::Mlr<'ctxt>,
+    fn_: &'a hlr::Fn<'ctxt>,
     typing: &'a HlrTyping<'ctxt>,
-) -> Vec<mlr::Fn<'mlr>> {
+) -> Vec<mlr::Fn<'ctxt>> {
     let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing);
     lowerer.lower_fn(fn_)
 }
 
-struct HlrLowerer<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> {
+struct HlrLowerer<'a, 'ctxt> {
     fn_: fns::Fn<'ctxt>,
-    builder: MlrBuilder<'a, 'ctxt, 'mlr>,
+    builder: MlrBuilder<'a, 'ctxt>,
     typing: &'a HlrTyping<'ctxt>,
-    var_locs: HashMap<hlr::VarId, mlr::Loc<'mlr>>,
-    mlr_fns: Vec<mlr::Fn<'mlr>>,
-    _hlr: std::marker::PhantomData<hlr::Fn<'hlr>>,
+    var_locs: HashMap<hlr::VarId, mlr::Loc<'ctxt>>,
+    mlr_fns: Vec<mlr::Fn<'ctxt>>,
 }
 
-impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
+impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn new(
         ctxt: &'a mut ctxt::Ctxt<'ctxt>,
-        mlr: &'mlr mlr::Mlr<'mlr>,
+        mlr: &'a mlr::Mlr<'ctxt>,
         fn_: fns::Fn<'ctxt>,
         typing: &'a HlrTyping<'ctxt>,
     ) -> Self {
@@ -43,11 +42,10 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
             typing,
             var_locs: HashMap::new(),
             mlr_fns: Vec::new(),
-            _hlr: std::marker::PhantomData,
         }
     }
 
-    fn lower_fn<'b>(&mut self, fn_: &'b hlr::Fn<'hlr>) -> Vec<mlr::Fn<'mlr>> {
+    fn lower_fn(&mut self, fn_: &hlr::Fn<'ctxt>) -> Vec<mlr::Fn<'ctxt>> {
         let mlr_fn = self.lower_body(&fn_.param_var_ids, None, fn_.body);
         self.mlr_fns.push(mlr_fn);
         std::mem::take(&mut self.mlr_fns)
@@ -57,8 +55,8 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         &mut self,
         param_var_ids: &[hlr::VarId],
         captured_vars: Option<&[hlr::VarId]>,
-        body: hlr::Expr<'hlr>,
-    ) -> mlr::Fn<'mlr> {
+        body: hlr::Expr<'ctxt>,
+    ) -> mlr::Fn<'ctxt> {
         let mut param_locs = Vec::new();
 
         // For closures, the first sig param is the captures struct (no VarId binding)
@@ -102,7 +100,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         }
     }
 
-    fn lower_expr(&mut self, expr: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_expr(&mut self, expr: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let (expr_def, expr_id) = (expr.0, expr.1);
 
         use hlr::ExprDef::*;
@@ -129,19 +127,19 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         }
     }
 
-    fn lower_to_val(&mut self, expr: hlr::Expr<'hlr>) -> mlr::Val<'mlr> {
+    fn lower_to_val(&mut self, expr: hlr::Expr<'ctxt>) -> mlr::Val<'ctxt> {
         self.lower_expr(expr).into_val(&mut self.builder)
     }
 
-    fn lower_to_place(&mut self, expr: hlr::Expr<'hlr>) -> mlr::Place<'mlr> {
+    fn lower_to_place(&mut self, expr: hlr::Expr<'ctxt>) -> mlr::Place<'ctxt> {
         self.lower_expr(expr).into_place(&mut self.builder)
     }
 
-    fn lower_to_op(&mut self, expr: hlr::Expr<'hlr>) -> mlr::Op<'mlr> {
+    fn lower_to_op(&mut self, expr: hlr::Expr<'ctxt>) -> mlr::Op<'ctxt> {
         self.lower_expr(expr).into_op(&mut self.builder)
     }
 
-    fn lower_lit(&mut self, lit: &hlr::Lit) -> LoweredExpr<'mlr> {
+    fn lower_lit(&mut self, lit: &hlr::Lit) -> LoweredExpr<'ctxt> {
         let (const_, ty) = match lit {
             hlr::Lit::Int(n) => {
                 let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
@@ -164,7 +162,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.insert_const_op(const_, ty).into()
     }
 
-    fn lower_val(&mut self, val: &hlr::Val<'hlr>, expr_id: hlr::ExprId) -> LoweredExpr<'mlr> {
+    fn lower_val(&mut self, val: &hlr::Val<'ctxt>, expr_id: hlr::ExprId) -> LoweredExpr<'ctxt> {
         match val {
             hlr::Val::Var(var_id) => {
                 let loc = self.var_locs[var_id];
@@ -194,10 +192,10 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_binary_op(
         &mut self,
         expr_id: hlr::ExprId,
-        left: hlr::Expr<'hlr>,
-        right: hlr::Expr<'hlr>,
+        left: hlr::Expr<'ctxt>,
+        right: hlr::Expr<'ctxt>,
         operator: hlr::BinaryOperator,
-    ) -> LoweredExpr<'mlr> {
+    ) -> LoweredExpr<'ctxt> {
         let val = match operator {
             hlr::BinaryOperator::LogicalAnd => self.lower_logical_and(left, right),
             hlr::BinaryOperator::LogicalOr => self.lower_logical_or(left, right),
@@ -221,7 +219,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         val.into()
     }
 
-    fn lower_logical_and(&mut self, left: hlr::Expr<'hlr>, right: hlr::Expr<'hlr>) -> mlr::Val<'mlr> {
+    fn lower_logical_and(&mut self, left: hlr::Expr<'ctxt>, right: hlr::Expr<'ctxt>) -> mlr::Val<'ctxt> {
         let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
         let result_place = self.builder.alloc_place(bool_ty);
 
@@ -243,7 +241,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.copy_val(result_place)
     }
 
-    fn lower_logical_or(&mut self, left: hlr::Expr<'hlr>, right: hlr::Expr<'hlr>) -> mlr::Val<'mlr> {
+    fn lower_logical_or(&mut self, left: hlr::Expr<'ctxt>, right: hlr::Expr<'ctxt>) -> mlr::Val<'ctxt> {
         let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
         let result_place = self.builder.alloc_place(bool_ty);
 
@@ -268,9 +266,9 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_unary_op(
         &mut self,
         expr_id: hlr::ExprId,
-        operand: hlr::Expr<'hlr>,
+        operand: hlr::Expr<'ctxt>,
         _operator: hlr::UnaryOperator,
-    ) -> LoweredExpr<'mlr> {
+    ) -> LoweredExpr<'ctxt> {
         let prim = match self.typing.expr_extra[&expr_id] {
             ExprExtra::UnaryPrim(p) => p,
             _ => panic!("expected UnaryPrim extra"),
@@ -280,7 +278,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.insert_unary_prim_val(prim, operand_op, result_ty).into()
     }
 
-    fn lower_call(&mut self, callee: hlr::Expr<'hlr>, args: hlr::ExprSlice<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_call(&mut self, callee: hlr::Expr<'ctxt>, args: hlr::ExprSlice<'ctxt>) -> LoweredExpr<'ctxt> {
         let callee_op = self.lower_to_op(callee);
         let mut call_args = Vec::new();
         for &arg in args {
@@ -292,9 +290,9 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_mthd_call(
         &mut self,
         expr_id: hlr::ExprId,
-        receiver: hlr::Expr<'hlr>,
-        args: hlr::ExprSlice<'hlr>,
-    ) -> LoweredExpr<'mlr> {
+        receiver: hlr::Expr<'ctxt>,
+        args: hlr::ExprSlice<'ctxt>,
+    ) -> LoweredExpr<'ctxt> {
         let resolution = match &self.typing.expr_extra[&expr_id] {
             ExprExtra::ValMthd(r) => r.clone(),
             _ => panic!("expected ValMthd extra for MthdCall"),
@@ -317,7 +315,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.insert_call_val(callee_op, call_args).into()
     }
 
-    fn lower_qualified_mthd(&mut self, expr_id: hlr::ExprId) -> LoweredExpr<'mlr> {
+    fn lower_qualified_mthd(&mut self, expr_id: hlr::ExprId) -> LoweredExpr<'ctxt> {
         let resolution = match &self.typing.expr_extra[&expr_id] {
             ExprExtra::ValMthd(r) => r.clone(),
             _ => panic!("expected ValMthd extra for QualifiedMthd"),
@@ -328,9 +326,9 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_struct_expr(
         &mut self,
         expr_id: hlr::ExprId,
-        constructor: &hlr::Val<'hlr>,
-        fields: hlr::StructFields<'hlr>,
-    ) -> LoweredExpr<'mlr> {
+        constructor: &hlr::Val<'ctxt>,
+        fields: hlr::StructFields<'ctxt>,
+    ) -> LoweredExpr<'ctxt> {
         let expr_ty = self.typing.expr_types[&expr_id];
         let val = match constructor {
             hlr::Val::Struct(..) => self.lower_struct_val(expr_ty, fields),
@@ -340,7 +338,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         val.into()
     }
 
-    fn lower_struct_val(&mut self, struct_ty: ty::Ty<'ctxt>, fields: hlr::StructFields<'hlr>) -> mlr::Val<'mlr> {
+    fn lower_struct_val(&mut self, struct_ty: ty::Ty<'ctxt>, fields: hlr::StructFields<'ctxt>) -> mlr::Val<'ctxt> {
         let struct_place = self.builder.alloc_place(struct_ty);
 
         for (field_spec, field_expr) in fields.iter() {
@@ -373,8 +371,8 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         &mut self,
         enum_ty: ty::Ty<'ctxt>,
         variant_idx: usize,
-        fields: hlr::StructFields<'hlr>,
-    ) -> mlr::Val<'mlr> {
+        fields: hlr::StructFields<'ctxt>,
+    ) -> mlr::Val<'ctxt> {
         let enum_place = self.builder.alloc_place(enum_ty);
 
         let discriminant_place = self.builder.insert_enum_discriminant_place(enum_place);
@@ -416,7 +414,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.copy_val(enum_place)
     }
 
-    fn lower_field_access(&mut self, expr_id: hlr::ExprId, base: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_field_access(&mut self, expr_id: hlr::ExprId, base: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let (derefs, field_index) = match self.typing.expr_extra[&expr_id] {
             ExprExtra::FieldAccess { derefs, index } => (derefs, index),
             _ => panic!("expected FieldAccess extra"),
@@ -435,7 +433,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
             .into()
     }
 
-    fn lower_tuple(&mut self, exprs: hlr::ExprSlice<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_tuple(&mut self, exprs: hlr::ExprSlice<'ctxt>) -> LoweredExpr<'ctxt> {
         let exprs = exprs.to_vec();
         let elem_tys: Vec<ty::Ty<'ctxt>> = exprs.iter().map(|e| self.typing.expr_types[&e.1]).collect();
         let tuple_ty = self.builder.ctxt.tys.tuple(&elem_tys);
@@ -452,24 +450,24 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.copy_val(tuple_place).into()
     }
 
-    fn lower_assign(&mut self, target: hlr::Expr<'hlr>, value: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_assign(&mut self, target: hlr::Expr<'ctxt>, value: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let target_place = self.lower_to_place(target);
         let value_val = self.lower_to_val(value);
         self.builder.insert_assign_stmt(target_place, value_val);
         self.builder.insert_unit_val().into()
     }
 
-    fn lower_deref(&mut self, inner: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_deref(&mut self, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let op = self.lower_to_op(inner);
         self.builder.insert_deref_place(op).into()
     }
 
-    fn lower_addr_of(&mut self, inner: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_addr_of(&mut self, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let place = self.lower_to_place(inner);
         self.builder.insert_addr_of_val(place).into()
     }
 
-    fn lower_as(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_as(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let op = self.lower_to_op(inner);
         let target_ty = self.typing.expr_types[&expr_id];
         self.builder.insert_as_val(op, target_ty).into()
@@ -478,10 +476,10 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_if(
         &mut self,
         expr_id: hlr::ExprId,
-        cond: hlr::Expr<'hlr>,
-        then: hlr::Expr<'hlr>,
-        else_: Option<hlr::Expr<'hlr>>,
-    ) -> LoweredExpr<'mlr> {
+        cond: hlr::Expr<'ctxt>,
+        then: hlr::Expr<'ctxt>,
+        else_: Option<hlr::Expr<'ctxt>>,
+    ) -> LoweredExpr<'ctxt> {
         let result_ty = self.typing.expr_types[&expr_id];
 
         let cond_op = self.lower_to_op(cond);
@@ -506,7 +504,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.copy_val(result_place).into()
     }
 
-    fn lower_loop(&mut self, body: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_loop(&mut self, body: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         self.builder.start_block();
         self.lower_to_val(body);
         let body_block = self.builder.end_block();
@@ -517,9 +515,9 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_match(
         &mut self,
         expr_id: hlr::ExprId,
-        scrutinee: hlr::Expr<'hlr>,
-        arms: &'hlr [hlr::MatchArm<'hlr>],
-    ) -> LoweredExpr<'mlr> {
+        scrutinee: hlr::Expr<'ctxt>,
+        arms: &'ctxt [hlr::MatchArm<'ctxt>],
+    ) -> LoweredExpr<'ctxt> {
         let result_ty = self.typing.expr_types[&expr_id];
         let scrutinee_ty = self.typing.expr_types[&scrutinee.1];
 
@@ -559,11 +557,11 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         &mut self,
         enum_ty: ty::Ty<'ctxt>,
         by_ref: bool,
-        arms: &'hlr [hlr::MatchArm<'hlr>],
-        discriminant_op: mlr::Op<'mlr>,
+        arms: &'ctxt [hlr::MatchArm<'ctxt>],
+        discriminant_op: mlr::Op<'ctxt>,
         i32_ty: ty::Ty<'ctxt>,
-        scrutinee_place: mlr::Place<'mlr>,
-        result_place: mlr::Place<'mlr>,
+        scrutinee_place: mlr::Place<'ctxt>,
+        result_place: mlr::Place<'ctxt>,
     ) {
         match arms {
             [] => panic!("match must have at least one arm"),
@@ -618,9 +616,9 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         &mut self,
         enum_ty: ty::Ty<'ctxt>,
         by_ref: bool,
-        arm: &'hlr hlr::MatchArm<'hlr>,
-        scrutinee_place: mlr::Place<'mlr>,
-    ) -> mlr::Val<'mlr> {
+        arm: &'ctxt hlr::MatchArm<'ctxt>,
+        scrutinee_place: mlr::Place<'ctxt>,
+    ) -> mlr::Val<'ctxt> {
         let hlr::Val::Variant(_, variant_idx, _) = &arm.pattern.variant else {
             panic!("match arm pattern must be Val::Variant")
         };
@@ -662,9 +660,9 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
     fn lower_closure(
         &mut self,
         expr_id: hlr::ExprId,
-        params: hlr::ClosureParams<'hlr>,
-        body: hlr::Expr<'hlr>,
-    ) -> LoweredExpr<'mlr> {
+        params: hlr::ClosureParams<'ctxt>,
+        body: hlr::Expr<'ctxt>,
+    ) -> LoweredExpr<'ctxt> {
         let captured_vars = match &self.typing.expr_extra[&expr_id] {
             ExprExtra::Closure { captured_vars } => captured_vars.clone(),
             _ => panic!("expected Closure extra"),
@@ -720,14 +718,14 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.copy_val(closure_place).into()
     }
 
-    fn lower_block(&mut self, stmts: hlr::StmtSlice<'hlr>, trailing: hlr::Expr<'hlr>) -> LoweredExpr<'mlr> {
+    fn lower_block(&mut self, stmts: hlr::StmtSlice<'ctxt>, trailing: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         for stmt in stmts {
             self.lower_stmt(stmt);
         }
         self.lower_to_val(trailing).into()
     }
 
-    fn lower_stmt(&mut self, stmt: hlr::Stmt<'hlr>) {
+    fn lower_stmt(&mut self, stmt: hlr::Stmt<'ctxt>) {
         match stmt {
             hlr::StmtDef::Expr(expr) => {
                 self.builder.start_block();
@@ -747,7 +745,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         }
     }
 
-    fn lower_let_stmt(&mut self, var: hlr::VarId, init: hlr::Expr<'hlr>) {
+    fn lower_let_stmt(&mut self, var: hlr::VarId, init: hlr::Expr<'ctxt>) {
         let var_ty = self.typing.var_types[&var];
 
         let loc = self.builder.alloc_loc(var_ty);
@@ -760,7 +758,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.var_locs.insert(var, loc);
     }
 
-    fn lower_return_stmt(&mut self, expr: Option<hlr::Expr<'hlr>>) {
+    fn lower_return_stmt(&mut self, expr: Option<hlr::Expr<'ctxt>>) {
         self.builder.start_block();
         let return_val = match expr {
             Some(e) => self.lower_to_val(e),
@@ -770,7 +768,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         self.builder.end_and_push_block();
     }
 
-    fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> (mlr::Op<'mlr>, bool) {
+    fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> (mlr::Op<'ctxt>, bool) {
         match resolution {
             MthdResolution::Inherent(fn_inst) => {
                 let by_ref = fn_inst
@@ -798,7 +796,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr
         }
     }
 
-    fn lower_mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> mlr::Op<'mlr> {
+    fn lower_mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> mlr::Op<'ctxt> {
         match resolution {
             MthdResolution::Inherent(fn_inst) => self.builder.insert_fn_inst_op(*fn_inst),
             MthdResolution::Trait(inst) => self.builder.insert_trait_mthd_op(*inst),

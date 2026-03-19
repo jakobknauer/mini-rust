@@ -34,19 +34,14 @@ pub enum ExprExtra<'ty> {
     Closure { captured_vars: Vec<hlr::VarId> },
 }
 
-pub fn typeck<'a, 'ctxt, 'hlr>(
+pub fn typeck<'a, 'ctxt: 'a>(
     ctxt: &'a mut ctxt::Ctxt<'ctxt>,
-    fn_: &'a hlr::Fn<'hlr>,
-) -> TypeckResult<'ctxt, HlrTyping<'ctxt>>
-where
-    'ctxt: 'a + 'hlr,
-    'hlr: 'ctxt,
-{
-    let constraints: Vec<_> = fn_.fn_.all_constraints().cloned().collect();
-    let typeck: Typeck<'_, 'ctxt, 'hlr> = Typeck {
+    fn_: &'a hlr::Fn<'ctxt>,
+) -> TypeckResult<'ctxt, HlrTyping<'ctxt>> {
+    let typeck = Typeck {
         ctxt,
         fn_,
-        constraints,
+        constraints: fn_.fn_.all_constraints().cloned().collect(),
         type_vars: HashMap::new(),
         typing: Default::default(),
         closure_counter: 0,
@@ -59,9 +54,9 @@ where
     typeck.check()
 }
 
-struct Typeck<'a, 'ctxt: 'a + 'hlr, 'hlr> {
+struct Typeck<'a, 'ctxt: 'a> {
     ctxt: &'a mut ctxt::Ctxt<'ctxt>,
-    fn_: &'a hlr::Fn<'hlr>,
+    fn_: &'a hlr::Fn<'ctxt>,
     constraints: Vec<ty::Constraint<'ctxt>>,
 
     type_vars: HashMap<ty::InfVar, ty::Ty<'ctxt>>,
@@ -75,7 +70,7 @@ struct Typeck<'a, 'ctxt: 'a + 'hlr, 'hlr> {
     pending_obligations: Vec<(ty::Ty<'ctxt>, ty::ConstraintRequirement<'ctxt>)>,
 }
 
-impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check(mut self) -> TypeckResult<'ctxt, HlrTyping<'ctxt>> {
         let opaque_return = self.check_body()?;
         self.normalize_all();
@@ -123,7 +118,11 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    fn check_expr(&mut self, expr: hlr::Expr<'hlr>, hint: Option<ty::Ty<'ctxt>>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_expr(
+        &mut self,
+        expr: hlr::Expr<'ctxt>,
+        hint: Option<ty::Ty<'ctxt>>,
+    ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let ty = match expr.0 {
             hlr::ExprDef::Lit(lit) => self.check_lit(lit),
             hlr::ExprDef::Val(val) => self.check_val(expr.1, val),
@@ -166,7 +165,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn check_stmt(&mut self, stmt: hlr::Stmt<'hlr>) -> TypeckResult<'ctxt, ()> {
+    fn check_stmt(&mut self, stmt: hlr::Stmt<'ctxt>) -> TypeckResult<'ctxt, ()> {
         match stmt {
             hlr::StmtDef::Expr(expr) => self.check_expr(*expr, None).map(|_| ()),
             hlr::StmtDef::Let { var, ty, init } => self.check_let_stmt(*var, *ty, *init),
@@ -189,7 +188,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(ty)
     }
 
-    fn check_val(&mut self, expr_id: hlr::ExprId, val: &hlr::Val<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_val(&mut self, expr_id: hlr::ExprId, val: &hlr::Val<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         match val {
             &hlr::Val::Var(var_id) => {
                 self.var_uses.push(var_id);
@@ -210,7 +209,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         &mut self,
         expr_id: hlr::ExprId,
         fn_: fns::Fn<'ctxt>,
-        args: Option<hlr::TyAnnotSlice<'hlr>>,
+        args: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let gen_arg_count = fn_.gen_params.len();
 
@@ -244,9 +243,9 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_mthd(
         &mut self,
         expr_id: hlr::ExprId,
-        base_ty: hlr::TyAnnot<'hlr>,
+        base_ty: hlr::TyAnnot<'ctxt>,
         mthd_name: &str,
-        gen_args: Option<hlr::TyAnnotSlice<'hlr>>,
+        gen_args: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let base_ty = self.resolve_ty_annot(base_ty)?;
         let found = self.resolve_mthd(base_ty, mthd_name, false)?;
@@ -259,11 +258,11 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_qualified_mthd(
         &mut self,
         expr_id: hlr::ExprId,
-        ty: hlr::TyAnnot<'hlr>,
+        ty: hlr::TyAnnot<'ctxt>,
         trait_: Option<traits::Trait>,
-        trait_args: Option<hlr::TyAnnotSlice<'hlr>>,
+        trait_args: Option<hlr::TyAnnotSlice<'ctxt>>,
         mthd_name: &str,
-        args: Option<hlr::TyAnnotSlice<'hlr>>,
+        args: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let base_ty = self.resolve_ty_annot(ty)?;
 
@@ -303,7 +302,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_unary_op(
         &mut self,
         expr_id: hlr::ExprId,
-        operand: hlr::Expr<'hlr>,
+        operand: hlr::Expr<'ctxt>,
         operator: hlr::UnaryOperator,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let operand_ty = self.check_expr(operand, None)?;
@@ -327,7 +326,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_field_access(
         &mut self,
         expr_id: hlr::ExprId,
-        base: hlr::Expr<'hlr>,
+        base: hlr::Expr<'ctxt>,
         field: &hlr::FieldSpec,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let base_ty = self.check_expr(base, None)?;
@@ -379,8 +378,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
 
     fn check_struct_expr(
         &mut self,
-        constructor: &hlr::Val<'hlr>,
-        fields: hlr::StructFields<'hlr>,
+        constructor: &hlr::Val<'ctxt>,
+        fields: hlr::StructFields<'ctxt>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let (return_ty, fields_ty) = match constructor {
             hlr::Val::Struct(struct_, gen_args) => {
@@ -442,10 +441,10 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_mthd_call(
         &mut self,
         expr_id: hlr::ExprId,
-        receiver: hlr::Expr<'hlr>,
+        receiver: hlr::Expr<'ctxt>,
         mthd_name: &str,
-        gen_args: Option<hlr::TyAnnotSlice<'hlr>>,
-        args: hlr::ExprSlice<'hlr>,
+        gen_args: Option<hlr::TyAnnotSlice<'ctxt>>,
+        args: hlr::ExprSlice<'ctxt>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let receiver_ty = self.check_expr(receiver, None)?;
         let receiver_ty = self.normalize(receiver_ty);
@@ -455,7 +454,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints.clone(), fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
 
@@ -489,13 +488,14 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
 
     fn check_call(
         &mut self,
-        callee: hlr::Expr<'hlr>,
-        args: hlr::ExprSlice<'hlr>,
+        callee: hlr::Expr<'ctxt>,
+        args: hlr::ExprSlice<'ctxt>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let callee_ty = self.check_expr(callee, None)?;
         let callee_ty = self.normalize(callee_ty);
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, callee_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints.clone(), callee_ty)
+        else {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
 
@@ -526,7 +526,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(return_ty)
     }
 
-    fn check_tuple_expr(&mut self, exprs: hlr::ExprSlice<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_tuple_expr(&mut self, exprs: hlr::ExprSlice<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_tys: Vec<_> = exprs
             .iter()
             .map(|expr| self.check_expr(*expr, None))
@@ -536,7 +536,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(tuple_ty)
     }
 
-    fn check_expr_is_place(&self, expr: hlr::Expr<'hlr>) -> TypeckResult<'ctxt, ()> {
+    fn check_expr_is_place(&self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ()> {
         match expr.0 {
             hlr::ExprDef::Val(hlr::Val::Var(_)) | hlr::ExprDef::Deref(_) | hlr::ExprDef::FieldAccess { .. } => Ok(()),
             _ => Err(TypeckError::AssignmentTargetNotAPlace),
@@ -545,8 +545,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
 
     fn check_assignment(
         &mut self,
-        target: hlr::Expr<'hlr>,
-        value: hlr::Expr<'hlr>,
+        target: hlr::Expr<'ctxt>,
+        value: hlr::Expr<'ctxt>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         self.check_expr_is_place(target)?;
 
@@ -561,7 +561,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(self.ctxt.tys.unit())
     }
 
-    fn check_deref(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_deref(&mut self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_ty = self.check_expr(expr, None)?;
         let expr_ty = self.normalize(expr_ty);
 
@@ -577,12 +577,16 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    fn check_addr_of(&mut self, expr: hlr::Expr<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_addr_of(&mut self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_ty = self.check_expr(expr, None)?;
         Ok(self.ctxt.tys.ref_(expr_ty))
     }
 
-    fn check_as(&mut self, expr: hlr::Expr<'hlr>, target_ty: hlr::TyAnnot<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_as(
+        &mut self,
+        expr: hlr::Expr<'ctxt>,
+        target_ty: hlr::TyAnnot<'ctxt>,
+    ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_ty = self.check_expr(expr, None)?;
         let expr_ty = self.normalize(expr_ty);
 
@@ -610,9 +614,9 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
 
     fn check_if(
         &mut self,
-        cond: hlr::Expr<'hlr>,
-        then: hlr::Expr<'hlr>,
-        else_: Option<hlr::Expr<'hlr>>,
+        cond: hlr::Expr<'ctxt>,
+        then: hlr::Expr<'ctxt>,
+        else_: Option<hlr::Expr<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let cond_ty = self.check_expr(cond, None)?;
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
@@ -634,15 +638,15 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(then_ty)
     }
 
-    fn check_loop(&mut self, body: hlr::Expr<'hlr>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+    fn check_loop(&mut self, body: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         self.check_expr(body, None)?;
         Ok(self.ctxt.tys.unit())
     }
 
     fn check_match(
         &mut self,
-        scrutinee: hlr::Expr<'hlr>,
-        arms: &[hlr::MatchArm<'hlr>],
+        scrutinee: hlr::Expr<'ctxt>,
+        arms: &[hlr::MatchArm<'ctxt>],
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let scrutinee_ty = self.check_expr(scrutinee, None)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
@@ -714,8 +718,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
 
     fn check_block(
         &mut self,
-        stmts: hlr::StmtSlice<'hlr>,
-        trailing: hlr::Expr<'hlr>,
+        stmts: hlr::StmtSlice<'ctxt>,
+        trailing: hlr::Expr<'ctxt>,
         hint: Option<ty::Ty<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         for stmt in stmts {
@@ -727,8 +731,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_let_stmt(
         &mut self,
         var: hlr::VarId,
-        ty: Option<hlr::TyAnnot<'hlr>>,
-        init: hlr::Expr<'hlr>,
+        ty: Option<hlr::TyAnnot<'ctxt>>,
+        init: hlr::Expr<'ctxt>,
     ) -> TypeckResult<'ctxt, ()> {
         let annot_ty = ty.map(|ty| self.resolve_ty_annot(ty)).transpose()?;
         let init_ty = self.check_expr(init, annot_ty)?;
@@ -746,7 +750,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         Ok(())
     }
 
-    fn check_return_stmt(&mut self, expr: Option<hlr::Expr<'hlr>>) -> TypeckResult<'ctxt, ()> {
+    fn check_return_stmt(&mut self, expr: Option<hlr::Expr<'ctxt>>) -> TypeckResult<'ctxt, ()> {
         let expected = *self.return_ty_stack.last().unwrap();
 
         let actual = expr
@@ -814,7 +818,10 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
                 ty::ConstraintRequirement::Trait(trait_inst) => {
                     let gen_args = self.normalize_slice(trait_inst.gen_args);
                     let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
-                    if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
+                    if !self
+                        .ctxt
+                        .ty_implements_trait_inst(&self.constraints.clone(), ty, trait_inst)
+                    {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
                     }
                 }
@@ -832,7 +839,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
                     let param_tys = self.normalize_slice(param_tys);
                     let return_ty = self.normalize(return_ty);
 
-                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(&self.constraints, ty)
+                    let Some((actual_params, actual_return, _)) =
+                        self.ctxt.ty_is_callable(&self.constraints.clone(), ty)
                     else {
                         return Err(TypeckError::CallableConstraintNotSatisfied {
                             ty,

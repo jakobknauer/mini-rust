@@ -26,9 +26,9 @@ pub enum MlrLoweringError<'ctxt> {
     },
 }
 
-pub fn mlr_to_llvm_ir<'ctxt: 'mlr, 'mlr: 'ctxt>(
+pub fn mlr_to_llvm_ir<'ctxt>(
     mr_ctxt: &mut mr_ctxt::Ctxt<'ctxt>,
-    mlr_fns: Vec<mlr::Fn<'mlr>>,
+    mlr_fns: Vec<mlr::Fn<'ctxt>>,
     fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
 ) -> Result<String, MlrLoweringError<'ctxt>> {
     let iw_ctxt = IwContext::create();
@@ -41,12 +41,12 @@ pub fn mlr_to_llvm_ir<'ctxt: 'mlr, 'mlr: 'ctxt>(
     Ok(generator.iw_module.print_to_string().to_string())
 }
 
-struct MlrLowerer<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> {
+struct MlrLowerer<'iw, 'a, 'ctxt> {
     iw_ctxt: &'iw IwContext,
     iw_module: Module<'iw>,
 
     mr_ctxt: &'a mut mr_ctxt::Ctxt<'ctxt>,
-    mlr_fns: HashMap<mr_fns::Fn<'ctxt>, mlr::Fn<'mlr>>,
+    mlr_fns: HashMap<mr_fns::Fn<'ctxt>, mlr::Fn<'ctxt>>,
 
     fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
 
@@ -56,11 +56,11 @@ struct MlrLowerer<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> {
     enums: Vec<(mr_tys::Ty<'ctxt>, inkwell::types::StructType<'iw>)>,
 }
 
-impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
+impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
     fn new(
         iw_ctxt: &'iw IwContext,
         mr_ctxt: &'a mut mr_ctxt::Ctxt<'ctxt>,
-        mlr_fns: Vec<mlr::Fn<'mlr>>,
+        mlr_fns: Vec<mlr::Fn<'ctxt>>,
         fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
     ) -> Self {
         let iw_module = iw_ctxt.create_module("test");

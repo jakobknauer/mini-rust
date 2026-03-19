@@ -3,12 +3,12 @@ use crate::hlr;
 
 use super::{ExprExtra, TypeckError, TypeckResult};
 
-impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
+impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn check_binary_op(
         &mut self,
         expr_id: hlr::ExprId,
-        left: hlr::Expr<'hlr>,
-        right: hlr::Expr<'hlr>,
+        left: hlr::Expr<'ctxt>,
+        right: hlr::Expr<'ctxt>,
         operator: hlr::BinaryOperator,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let left_ty = self.check_expr(left, None)?;
