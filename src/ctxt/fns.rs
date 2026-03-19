@@ -3,16 +3,8 @@ use crate::ctxt::{
     ty::{Constraint, GenVar, Ty, TySlice},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Fn(pub(in crate::ctxt) usize);
+pub type Fn<'fns> = &'fns FnSig<'fns>;
 
-impl std::fmt::Display for Fn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone)]
 pub struct FnSig<'fns> {
     pub name: String,
     /// The type of which the function is an associated method, if any.
@@ -34,6 +26,26 @@ pub struct FnSig<'fns> {
     pub var_args: bool,
     pub return_ty: Ty<'fns>,
     pub constraints: Vec<Constraint<'fns>>,
+}
+
+impl PartialEq for FnSig<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Eq for FnSig<'_> {}
+
+impl std::hash::Hash for FnSig<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (self as *const Self).hash(state);
+    }
+}
+
+impl std::fmt::Debug for FnSig<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FnSig({})", self.name)
+    }
 }
 
 impl<'fns> FnSig<'fns> {
@@ -66,15 +78,11 @@ pub enum FnParamKind {
 pub enum FnInstError {
     GenArgCountMismatch {
         #[allow(unused)]
-        fn_: Fn,
-        #[allow(unused)]
         expected: usize,
         #[allow(unused)]
         actual: usize,
     },
     EnvGenArgCountMismatch {
-        #[allow(unused)]
-        fn_: Fn,
         #[allow(unused)]
         expected: usize,
         #[allow(unused)]
@@ -84,7 +92,7 @@ pub enum FnInstError {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct FnInst<'fns> {
-    pub fn_: Fn,
+    pub fn_: Fn<'fns>,
     pub gen_args: TySlice<'fns>,
     pub env_gen_args: TySlice<'fns>,
     pub(in crate::ctxt) _private: (),
@@ -99,14 +107,12 @@ impl<'fns> FnInst<'fns> {
     ) -> Result<FnInst<'fns>, FnInstError> {
         if gen_args.len() != self.gen_args.len() {
             return Err(FnInstError::GenArgCountMismatch {
-                fn_: self.fn_,
                 expected: self.gen_args.len(),
                 actual: gen_args.len(),
             });
         }
         if env_gen_args.len() != self.env_gen_args.len() {
             return Err(FnInstError::EnvGenArgCountMismatch {
-                fn_: self.fn_,
                 expected: self.env_gen_args.len(),
                 actual: env_gen_args.len(),
             });

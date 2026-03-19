@@ -73,7 +73,7 @@ struct Driver<'a, 'arena> {
 
 #[derive(Default)]
 struct AstMeta<'ty> {
-    fn_ids: HashMap<ast::FnId, fns::Fn>,
+    fn_ids: HashMap<ast::FnId, fns::Fn<'ty>>,
     struct_ids: HashMap<ast::StructId, ty::Struct<'ty>>,
     enum_ids: HashMap<ast::EnumId, ty::Enum<'ty>>,
     trait_ids: HashMap<ast::TraitId, traits::Trait>,
@@ -81,6 +81,7 @@ struct AstMeta<'ty> {
 }
 
 impl<'a, 'arena> Driver<'a, 'arena> {
+    #[allow(clippy::mutable_key_type)]
     pub fn compile(&mut self) -> Result<(), DriverError<'arena>> {
         self.print_pretty("Building AST from source");
         for source in &self.sources {
@@ -370,7 +371,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         associated_trait_inst: Option<traits::TraitInst<'arena>>,
         env_gen_params: Vec<ty::GenVar<'arena>>,
         env_constraints: Vec<ty::Constraint<'arena>>,
-    ) -> Result<fns::Fn, DriverError<'arena>> {
+    ) -> Result<fns::Fn<'arena>, DriverError<'arena>> {
         let gen_params: Vec<_> = ast_fn
             .gen_params
             .iter()
@@ -578,14 +579,12 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(hlr_fns)
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn typeck(
         &mut self,
         hlr_fns: &[hlr::Fn<'arena>],
-    ) -> Result<HashMap<fns::Fn, typeck::HlrTyping<'arena>>, DriverError<'arena>> {
-        let fn_names: Vec<&str> = hlr_fns
-            .iter()
-            .map(|hlr_fn| self.ctxt.fns.get_fn_name(hlr_fn.fn_))
-            .collect();
+    ) -> Result<HashMap<fns::Fn<'arena>, typeck::HlrTyping<'arena>>, DriverError<'arena>> {
+        let fn_names: Vec<&str> = hlr_fns.iter().map(|hlr_fn| hlr_fn.fn_.name.as_str()).collect();
         let mut result = HashMap::new();
         for (hlr_fn, fn_name) in hlr_fns.iter().zip(fn_names) {
             let typing = typeck::typeck(&mut self.ctxt, hlr_fn).map_err(|error| DriverError::Typeck {
@@ -597,10 +596,11 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(result)
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn hlr_lowering(
         &mut self,
         hlr_fns: &[hlr::Fn<'arena>],
-        typings: &HashMap<fns::Fn, typeck::HlrTyping<'arena>>,
+        typings: &HashMap<fns::Fn<'arena>, typeck::HlrTyping<'arena>>,
     ) -> Vec<mlr::Fn<'arena>> {
         hlr_fns
             .iter()
@@ -609,11 +609,12 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             .collect()
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn print_hlr_fns(
         &self,
         path: &Path,
         hlr_fns: &[hlr::Fn<'arena>],
-        typings: &HashMap<fns::Fn, typeck::HlrTyping<'arena>>,
+        typings: &HashMap<fns::Fn<'arena>, typeck::HlrTyping<'arena>>,
     ) -> Result<(), DriverError<'arena>> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating HLR file"))?;
         for hlr_fn in hlr_fns {
@@ -624,6 +625,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(())
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'arena>]) -> Result<(), DriverError<'arena>> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating MLR file"))?;
 

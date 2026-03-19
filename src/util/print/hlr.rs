@@ -28,11 +28,9 @@ const INDENT: &str = "    ";
 
 impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
     fn print_fn(&mut self, hlr_fn: &hlr::Fn<'ctxt>) -> Result<(), std::io::Error> {
-        let sig = self.ctxt.fns.get_sig(hlr_fn.fn_);
-
-        let assoc = if let Some(assoc_ty) = sig.associated_ty {
+        let assoc = if let Some(assoc_ty) = hlr_fn.fn_.associated_ty {
             let ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
-            if let Some(trait_inst) = &sig.associated_trait_inst {
+            if let Some(trait_inst) = &hlr_fn.fn_.associated_trait_inst {
                 let trait_name = self.ctxt.traits.get_trait_name(trait_inst.trait_);
                 format!("<{} as {}>::", ty_name, trait_name)
             } else {
@@ -42,22 +40,22 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             String::new()
         };
 
-        let gen_params = if sig.gen_params.is_empty() {
+        let gen_params = if hlr_fn.fn_.gen_params.is_empty() {
             String::new()
         } else {
-            let names: Vec<_> = sig.gen_params.iter().map(|&gv| gv.name().to_string()).collect();
+            let names: Vec<_> = hlr_fn.fn_.gen_params.iter().map(|&gv| gv.name().to_string()).collect();
             format!("<{}>", names.join(", "))
         };
 
-        write!(self.writer, "{}{}{}(", assoc, sig.name, gen_params)?;
-        for (i, (param, &var_id)) in sig.params.iter().zip(&hlr_fn.param_var_ids).enumerate() {
+        write!(self.writer, "{}{}{}(", assoc, hlr_fn.fn_.name, gen_params)?;
+        for (i, (param, &var_id)) in hlr_fn.fn_.params.iter().zip(&hlr_fn.param_var_ids).enumerate() {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
             let ty_name = self.ctxt.tys.get_string_rep(param.ty);
             write!(self.writer, "{}: {}", var_id, ty_name)?;
         }
-        let return_ty = self.ctxt.tys.get_string_rep(sig.return_ty);
+        let return_ty = self.ctxt.tys.get_string_rep(hlr_fn.fn_.return_ty);
         writeln!(self.writer, ") -> {} {{", return_ty)?;
 
         self.indent_level += 1;
@@ -359,8 +357,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
         match val {
             hlr::Val::Var(var_id) => write!(self.writer, "{}", var_id),
             hlr::Val::Fn(fn_, gen_args) => {
-                let name = &self.ctxt.fns.get_sig(*fn_).name;
-                write!(self.writer, "{}", name)?;
+                write!(self.writer, "{}", fn_.name)?;
                 self.print_optional_gen_args(*gen_args)
             }
             hlr::Val::Struct(struct_, gen_args) => {

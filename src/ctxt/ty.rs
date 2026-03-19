@@ -3,37 +3,37 @@ use std::collections::HashMap;
 
 use crate::ctxt::{fns, traits};
 
-pub struct ClosureFnCell(OnceCell<fns::Fn>);
+pub struct ClosureFnCell<'fns>(OnceCell<fns::Fn<'fns>>);
 
-impl ClosureFnCell {
+impl<'fns> ClosureFnCell<'fns> {
     pub(in crate::ctxt) fn new() -> Self {
         ClosureFnCell(OnceCell::new())
     }
 
-    pub fn set(&self, fn_: fns::Fn) {
+    pub fn set(&self, fn_: fns::Fn<'fns>) {
         self.0.set(fn_).expect("closure fn already set");
     }
 
-    pub fn get(&self) -> Option<fns::Fn> {
+    pub fn get(&self) -> Option<fns::Fn<'fns>> {
         self.0.get().copied()
     }
 }
 
-impl PartialEq for ClosureFnCell {
+impl PartialEq for ClosureFnCell<'_> {
     fn eq(&self, _: &Self) -> bool {
         true
     }
 }
-impl Eq for ClosureFnCell {}
-impl std::hash::Hash for ClosureFnCell {
+impl Eq for ClosureFnCell<'_> {}
+impl std::hash::Hash for ClosureFnCell<'_> {
     fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
 }
-impl Clone for ClosureFnCell {
+impl<'fns> Clone for ClosureFnCell<'fns> {
     fn clone(&self) -> Self {
         ClosureFnCell(self.0.clone())
     }
 }
-impl std::fmt::Debug for ClosureFnCell {
+impl std::fmt::Debug for ClosureFnCell<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ClosureFnCell({:?})", self.0.get())
     }
@@ -85,7 +85,7 @@ pub enum TyDef<'ty> {
         captures_ty: Ty<'ty>,
         param_tys: TySlice<'ty>,
         return_ty: Ty<'ty>,
-        fn_: ClosureFnCell,
+        fn_: ClosureFnCell<'ty>,
     },
     AssocTy {
         base_ty: Ty<'ty>,

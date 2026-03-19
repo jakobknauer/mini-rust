@@ -31,8 +31,8 @@ pub struct ImplInst<'impls> {
 pub struct ImplDef<'impls> {
     pub gen_params: Vec<GenVar<'impls>>,
     pub ty: Ty<'impls>,
-    pub mthds: Vec<Fn>,
-    pub mthds_by_name: HashMap<String, Fn>,
+    pub mthds: Vec<Fn<'impls>>,
+    pub mthds_by_name: HashMap<String, Fn<'impls>>,
     pub trait_inst: Option<TraitInst<'impls>>,
     pub assoc_tys: HashMap<usize, Ty<'impls>>,
     pub constraints: Vec<Constraint<'impls>>,

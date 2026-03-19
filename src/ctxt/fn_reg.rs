@@ -8,10 +8,10 @@ use crate::ctxt::{
 
 pub struct FnReg<'fns> {
     arena: &'fns bumpalo::Bump,
-    sigs: RefCell<Vec<&'fns FnSig<'fns>>>,
-    fn_names: RefCell<HashMap<String, Fn>>,
-    called_fn_insts: RefCell<HashMap<Fn, Vec<FnInst<'fns>>>>,
-    called_trait_mthd_insts: RefCell<HashMap<Fn, Vec<TraitMthdInst<'fns>>>>,
+    sigs: RefCell<Vec<Fn<'fns>>>,
+    fn_names: RefCell<HashMap<String, Fn<'fns>>>,
+    called_fn_insts: RefCell<HashMap<Fn<'fns>, Vec<FnInst<'fns>>>>,
+    called_trait_mthd_insts: RefCell<HashMap<Fn<'fns>, Vec<TraitMthdInst<'fns>>>>,
 }
 
 impl<'fns> FnReg<'fns> {
@@ -27,22 +27,19 @@ impl<'fns> FnReg<'fns> {
 
     pub fn inst_fn(
         &self,
-        fn_: Fn,
+        fn_: Fn<'fns>,
         gen_args: TySlice<'fns>,
         env_gen_args: TySlice<'fns>,
     ) -> Result<FnInst<'fns>, FnInstError> {
-        let sig = self.get_sig(fn_);
-        if sig.gen_params.len() != gen_args.len() {
+        if fn_.gen_params.len() != gen_args.len() {
             return Err(FnInstError::GenArgCountMismatch {
-                fn_,
-                expected: sig.gen_params.len(),
+                expected: fn_.gen_params.len(),
                 actual: gen_args.len(),
             });
         }
-        if sig.env_gen_params.len() != env_gen_args.len() {
+        if fn_.env_gen_params.len() != env_gen_args.len() {
             return Err(FnInstError::EnvGenArgCountMismatch {
-                fn_,
-                expected: sig.env_gen_params.len(),
+                expected: fn_.env_gen_params.len(),
                 actual: env_gen_args.len(),
             });
         }
@@ -55,36 +52,33 @@ impl<'fns> FnReg<'fns> {
         })
     }
 
-    pub fn register_fn(&self, signature: FnSig<'fns>, register_name: bool) -> Result<Fn, ()> {
-        let fn_ = Fn(self.sigs.borrow().len());
+    pub fn register_fn(&self, signature: FnSig<'fns>, register_name: bool) -> Result<Fn<'fns>, ()> {
+        if register_name && self.fn_names.borrow().contains_key(&signature.name) {
+            return Err(());
+        }
+
+        let fn_: Fn<'fns> = self.arena.alloc(signature);
 
         if register_name {
-            if self.fn_names.borrow().contains_key(&signature.name) {
-                return Err(());
-            }
-            self.fn_names.borrow_mut().insert(signature.name.to_string(), fn_);
+            self.fn_names.borrow_mut().insert(fn_.name.to_string(), fn_);
         }
 
         self.called_fn_insts.borrow_mut().insert(fn_, Vec::new());
         self.called_trait_mthd_insts.borrow_mut().insert(fn_, Vec::new());
-        self.sigs.borrow_mut().push(self.arena.alloc(signature));
+        self.sigs.borrow_mut().push(fn_);
 
         Ok(fn_)
     }
 
-    pub fn get_sig(&self, fn_: Fn) -> &'fns FnSig<'fns> {
-        self.sigs.borrow()[fn_.0]
+    pub fn get_fn_by_name(&self, name: &str) -> Option<Fn<'fns>> {
+        self.fn_names.borrow().get(name).copied()
     }
 
-    pub fn get_fn_by_name(&self, name: &str) -> Option<Fn> {
-        self.fn_names.borrow().get(name).cloned()
+    pub fn get_all_fns(&self) -> impl Iterator<Item = Fn<'fns>> {
+        self.sigs.borrow().clone().into_iter()
     }
 
-    pub fn get_all_fns(&self) -> impl Iterator<Item = Fn> {
-        (0..self.sigs.borrow().len()).map(Fn)
-    }
-
-    pub fn register_fn_call(&self, caller: Fn, fn_inst: FnInst<'fns>) {
+    pub fn register_fn_call(&self, caller: Fn<'fns>, fn_inst: FnInst<'fns>) {
         self.called_fn_insts
             .borrow_mut()
             .entry(caller)
@@ -92,7 +86,7 @@ impl<'fns> FnReg<'fns> {
             .push(fn_inst);
     }
 
-    pub fn register_trait_mthd_call(&self, caller: Fn, trait_mthd_inst: TraitMthdInst<'fns>) {
+    pub fn register_trait_mthd_call(&self, caller: Fn<'fns>, trait_mthd_inst: TraitMthdInst<'fns>) {
         self.called_trait_mthd_insts
             .borrow_mut()
             .entry(caller)
@@ -100,19 +94,15 @@ impl<'fns> FnReg<'fns> {
             .push(trait_mthd_inst);
     }
 
-    pub fn get_called_fn_insts(&self, caller: Fn) -> Vec<FnInst<'fns>> {
+    pub fn get_called_fn_insts(&self, caller: Fn<'fns>) -> Vec<FnInst<'fns>> {
         self.called_fn_insts.borrow().get(&caller).cloned().unwrap_or_default()
     }
 
-    pub fn get_called_trait_mthd_insts(&self, caller: Fn) -> Vec<TraitMthdInst<'fns>> {
+    pub fn get_called_trait_mthd_insts(&self, caller: Fn<'fns>) -> Vec<TraitMthdInst<'fns>> {
         self.called_trait_mthd_insts
             .borrow()
             .get(&caller)
             .cloned()
             .unwrap_or_default()
-    }
-
-    pub fn get_fn_name(&self, fn_: Fn) -> &'fns str {
-        self.get_sig(fn_).name.as_str()
     }
 }

@@ -372,8 +372,7 @@ impl<'a, 'iw, 'mr, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrFnLowerer<'a, 'iw, 'mr, 'ctxt, '
         {
             let closure_fn = fn_.get().expect("closure fn not set");
             let fn_inst = {
-                let sig = self.parent.mr_ctxt.fns.get_sig(closure_fn);
-                let env_gen_args: Vec<_> = sig
+                let env_gen_args: Vec<_> = closure_fn
                     .env_gen_params
                     .iter()
                     .map(|&gv| self.parent.mr_ctxt.tys.gen_var(gv))

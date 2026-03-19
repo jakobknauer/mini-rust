@@ -79,12 +79,13 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
             })
             .collect();
 
-        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_);
-        let env_gen_params: Vec<ty::GenVar> = outer_sig
+        let env_gen_params: Vec<ty::GenVar> = self
+            .fn_
+            .fn_
             .env_gen_params
             .iter()
             .cloned()
-            .chain(outer_sig.gen_params.iter().cloned())
+            .chain(self.fn_.fn_.gen_params.iter().cloned())
             .collect();
 
         for expr_id in closure_exprs {
@@ -143,21 +144,20 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     }
 
     fn generate_closure_names(&mut self) -> ClosureNames {
-        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_);
-        let fn_name = format!("<closure:{}:{}>", outer_sig.name, self.closure_counter);
-        let captures_name = format!("<Captures:{}:{}>", outer_sig.name, self.closure_counter);
+        let fn_name = format!("<closure:{}:{}>", self.fn_.fn_.name, self.closure_counter);
+        let captures_name = format!("<Captures:{}:{}>", self.fn_.fn_.name, self.closure_counter);
         self.closure_counter += 1;
         ClosureNames { fn_name, captures_name }
     }
 
     fn collect_closure_generics(&mut self) -> ClosureGenerics<'ctxt> {
-        let outer_sig = self.ctxt.fns.get_sig(self.fn_.fn_);
-
-        let env_gen_params: Vec<ty::GenVar> = outer_sig
+        let env_gen_params: Vec<ty::GenVar> = self
+            .fn_
+            .fn_
             .env_gen_params
             .iter()
             .cloned()
-            .chain(outer_sig.gen_params.iter().cloned())
+            .chain(self.fn_.fn_.gen_params.iter().cloned())
             .collect();
 
         let env_gen_args: Vec<ty::Ty<'ctxt>> = env_gen_params.iter().map(|&gv| self.ctxt.tys.gen_var(gv)).collect();

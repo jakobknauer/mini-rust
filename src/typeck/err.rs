@@ -13,7 +13,7 @@ pub enum TypeckError<'ty> {
         actual: ty::Ty<'ty>,
     },
     FnGenArgCountMismatch {
-        fn_: fns::Fn,
+        fn_: fns::Fn<'ty>,
         expected: usize,
         actual: usize,
     },

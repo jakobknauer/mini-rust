@@ -53,7 +53,7 @@ impl<'impls> ImplReg<'impls> {
         impl_
     }
 
-    pub fn register_mthd(&mut self, impl_: Impl, mthd: Fn, name: &str) {
+    pub fn register_mthd(&mut self, impl_: Impl, mthd: Fn<'impls>, name: &str) {
         let impl_ = self.impls.get_mut(impl_.0).unwrap();
         impl_.mthds.push(mthd);
         impl_.mthds_by_name.insert(name.to_string(), mthd);

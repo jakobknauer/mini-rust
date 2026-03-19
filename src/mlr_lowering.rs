@@ -46,7 +46,7 @@ struct MlrLowerer<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> {
     iw_module: Module<'iw>,
 
     mr_ctxt: &'a mut mr_ctxt::Ctxt<'ctxt>,
-    mlr_fns: HashMap<mr_fns::Fn, mlr::Fn<'mlr>>,
+    mlr_fns: HashMap<mr_fns::Fn<'ctxt>, mlr::Fn<'mlr>>,
 
     fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
 
@@ -64,6 +64,7 @@ impl<'iw, 'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrLowerer<'iw, 'a, 'ctxt, 'mlr> {
         fn_insts: Vec<mr_fns::FnInst<'ctxt>>,
     ) -> Self {
         let iw_module = iw_ctxt.create_module("test");
+        #[allow(clippy::mutable_key_type)]
         let mlr_fns = mlr_fns.into_iter().map(|f| (f.fn_, f)).collect();
         MlrLowerer {
             iw_ctxt,

@@ -6,12 +6,12 @@ use crate::{
 pub struct MlrBuilder<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> {
     pub ctxt: &'a mut ctxt::Ctxt<'ctxt>,
     pub mlr: &'mlr mlr::Mlr<'mlr>,
-    fn_: fns::Fn,
+    fn_: fns::Fn<'ctxt>,
     blocks: Vec<Vec<mlr::Stmt<'mlr>>>,
 }
 
 impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
-    pub fn new(ctxt: &'a mut ctxt::Ctxt<'ctxt>, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn) -> Self {
+    pub fn new(ctxt: &'a mut ctxt::Ctxt<'ctxt>, mlr: &'mlr mlr::Mlr<'mlr>, fn_: fns::Fn<'ctxt>) -> Self {
         Self {
             ctxt,
             mlr,
@@ -147,7 +147,7 @@ impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
     }
 
     pub fn insert_call_val(&mut self, callable: mlr::Op<'mlr>, args: Vec<mlr::Op<'mlr>>) -> mlr::Val<'mlr> {
-        let constraints: Vec<_> = self.ctxt.fns.get_sig(self.fn_).all_constraints().cloned().collect();
+        let constraints: Vec<_> = self.fn_.all_constraints().cloned().collect();
         let return_ty = self
             .ctxt
             .ty_is_callable(&constraints, callable.1)
@@ -226,11 +226,10 @@ impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
     }
 
     fn fn_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let sig = self.ctxt.fns.get_sig(fn_inst.fn_);
-        let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
-        let return_ty = sig.return_ty;
-        let var_args = sig.var_args;
-        let _ = sig;
+        let param_tys: Vec<_> = fn_inst.fn_.params.iter().map(|p| p.ty).collect();
+        let return_ty = fn_inst.fn_.return_ty;
+        let var_args = fn_inst.fn_.var_args;
+        let _ = fn_inst.fn_;
         let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
         let subst = self.ctxt.get_subst_for_fn_inst(fn_inst);
         self.ctxt.tys.substitute_gen_vars(fn_ty, &subst)
@@ -240,7 +239,7 @@ impl<'a, 'ctxt: 'mlr, 'mlr: 'ctxt> MlrBuilder<'a, 'ctxt, 'mlr> {
         let sig = self
             .ctxt
             .traits
-            .get_trait_mthd_sig(&self.ctxt.fns, inst.trait_inst.trait_, inst.mthd_idx);
+            .get_trait_mthd_fn(inst.trait_inst.trait_, inst.mthd_idx);
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
         let sig_gen_params = sig.gen_params.clone();
         let fn_ty = self.ctxt.tys.fn_(&param_tys, sig.return_ty, sig.var_args);

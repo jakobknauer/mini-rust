@@ -28,7 +28,7 @@ impl<'hlr> Hlr<'hlr> {
 }
 
 pub struct Fn<'hlr> {
-    pub fn_: fns::Fn,
+    pub fn_: fns::Fn<'hlr>,
     pub body: Expr<'hlr>,
     pub param_var_ids: Vec<VarId>,
 }

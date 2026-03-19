@@ -11,7 +11,7 @@ use crate::{
     typeck::{ExprExtra, HlrTyping, MthdResolution},
 };
 
-pub fn hlr_to_mlr<'ctxt: 'mlr + 'hlr, 'a, 'hlr, 'mlr: 'ctxt>(
+pub fn hlr_to_mlr<'ctxt: 'mlr + 'hlr, 'a, 'hlr: 'ctxt, 'mlr: 'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
     mlr: &'mlr mlr::Mlr<'mlr>,
     fn_: &'a hlr::Fn<'hlr>,
@@ -22,7 +22,7 @@ pub fn hlr_to_mlr<'ctxt: 'mlr + 'hlr, 'a, 'hlr, 'mlr: 'ctxt>(
 }
 
 struct HlrLowerer<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> {
-    fn_: fns::Fn,
+    fn_: fns::Fn<'ctxt>,
     builder: MlrBuilder<'a, 'ctxt, 'mlr>,
     typing: &'a HlrTyping<'ctxt>,
     var_locs: HashMap<hlr::VarId, mlr::Loc<'mlr>>,
@@ -30,11 +30,11 @@ struct HlrLowerer<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> {
     _hlr: std::marker::PhantomData<hlr::Fn<'hlr>>,
 }
 
-impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
+impl<'a, 'ctxt: 'mlr, 'hlr: 'ctxt, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
     fn new(
         ctxt: &'a mut ctxt::Ctxt<'ctxt>,
         mlr: &'mlr mlr::Mlr<'mlr>,
-        fn_: fns::Fn,
+        fn_: fns::Fn<'ctxt>,
         typing: &'a HlrTyping<'ctxt>,
     ) -> Self {
         Self {
@@ -59,16 +59,15 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         captured_vars: Option<&[hlr::VarId]>,
         body: hlr::Expr<'hlr>,
     ) -> mlr::Fn<'mlr> {
-        let sig = self.builder.ctxt.fns.get_sig(self.fn_);
         let mut param_locs = Vec::new();
 
         // For closures, the first sig param is the captures struct (no VarId binding)
         let regular_params = if captured_vars.is_some() {
-            let captures_loc = self.builder.insert_typed_loc(sig.params[0].ty);
+            let captures_loc = self.builder.insert_typed_loc(self.fn_.params[0].ty);
             param_locs.push(captures_loc);
-            &sig.params[1..]
+            &self.fn_.params[1..]
         } else {
-            &sig.params[..]
+            &self.fn_.params[..]
         };
         for (param, &var_id) in regular_params.iter().zip(param_var_ids) {
             let loc = self.builder.insert_typed_loc(param.ty);
@@ -80,7 +79,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
 
         // Extract captured vars from the captures struct into individual locals
         if let Some(captured_vars) = captured_vars {
-            let captures_ty = sig.params[0].ty;
+            let captures_ty = self.fn_.params[0].ty;
             let captures_place = self.builder.insert_loc_place(param_locs[0]);
             for (i, &var_id) in captured_vars.iter().enumerate() {
                 let field_ty = self.builder.ctxt.tys.get_struct_field_ty(captures_ty, i).unwrap();
@@ -678,8 +677,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
         };
 
         let fn_inst = {
-            let sig = self.builder.ctxt.fns.get_sig(closure_fn);
-            let env_gen_args: Vec<_> = sig
+            let env_gen_args: Vec<_> = closure_fn
                 .env_gen_params
                 .iter()
                 .map(|&gv| self.builder.ctxt.tys.gen_var(gv))
@@ -775,11 +773,8 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
     fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> (mlr::Op<'mlr>, bool) {
         match resolution {
             MthdResolution::Inherent(fn_inst) => {
-                let by_ref = self
-                    .builder
-                    .ctxt
-                    .fns
-                    .get_sig(fn_inst.fn_)
+                let by_ref = fn_inst
+                    .fn_
                     .params
                     .first()
                     .map(|p| p.kind == fns::FnParamKind::SelfByRef)
@@ -792,7 +787,7 @@ impl<'a, 'ctxt: 'mlr, 'hlr, 'mlr: 'ctxt> HlrLowerer<'a, 'ctxt, 'hlr, 'mlr> {
                     .builder
                     .ctxt
                     .traits
-                    .get_trait_mthd_sig(&self.builder.ctxt.fns, inst.trait_inst.trait_, inst.mthd_idx)
+                    .get_trait_mthd_fn(inst.trait_inst.trait_, inst.mthd_idx)
                     .params
                     .first()
                     .map(|p| p.kind == fns::FnParamKind::SelfByRef)

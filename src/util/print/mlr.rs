@@ -1,23 +1,19 @@
 use std::io::Write;
 
 use crate::{
-    ctxt::{
-        self,
-        fns::{Fn, FnSig},
-        language_items,
-    },
+    ctxt::{self, fns::Fn, language_items},
     mlr,
 };
 
 pub fn print_mlr<'mlr, W: Write>(
-    fn_: Fn,
+    fn_: Fn<'mlr>,
     mlr_fn: Option<&mlr::Fn<'mlr>>,
     ctxt: &ctxt::Ctxt<'mlr>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         mlr_fn,
-        signature: ctxt.fns.get_sig(fn_),
+        signature: fn_,
         ctxt,
         indent_level: 0,
         writer,
@@ -27,7 +23,7 @@ pub fn print_mlr<'mlr, W: Write>(
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
-    signature: &'mlr FnSig<'mlr>,
+    signature: Fn<'mlr>,
     ctxt: &'a ctxt::Ctxt<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
@@ -327,11 +323,10 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                     )
                 };
 
-                let mthd_name = self.ctxt.traits.get_trait_mthd_name(
-                    &self.ctxt.fns,
-                    trait_mthd.trait_inst.trait_,
-                    trait_mthd.mthd_idx,
-                );
+                let mthd_name = self
+                    .ctxt
+                    .traits
+                    .get_trait_mthd_name(trait_mthd.trait_inst.trait_, trait_mthd.mthd_idx);
                 write!(
                     self.writer,
                     "<{} as {}{}>::{}",

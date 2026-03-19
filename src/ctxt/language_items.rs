@@ -1,9 +1,9 @@
 use crate::ctxt::{fns::Fn, traits::Trait};
 
 #[derive(Default)]
-pub struct LanguageItems {
-    pub size_of: Option<Fn>,
-    pub ptr_offset: Option<Fn>,
+pub struct LanguageItems<'fns> {
+    pub size_of: Option<Fn<'fns>>,
+    pub ptr_offset: Option<Fn<'fns>>,
     pub add_trait: Option<Trait>,
     pub sub_trait: Option<Trait>,
     pub mul_trait: Option<Trait>,

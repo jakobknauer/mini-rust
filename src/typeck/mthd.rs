@@ -10,7 +10,7 @@ pub enum MthdResolution<'ty> {
 
 pub(super) enum FoundMthd<'ty> {
     Inherent {
-        fn_: fns::Fn,
+        fn_: fns::Fn<'ty>,
         env_gen_args: ty::TySlice<'ty>,
     },
     Trait {
@@ -62,8 +62,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 {
                     return None;
                 }
-                let has_receiver = self.ctxt.fns.get_sig(mthd_fn).has_receiver();
-                (!require_receiver || has_receiver).then_some((mthd_fn, env_gen_args))
+                (!require_receiver || mthd_fn.has_receiver()).then_some((mthd_fn, env_gen_args))
             })
             .collect();
 
@@ -86,7 +85,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         let candidates: Vec<_> = self
             .ctxt
             .traits
-            .get_trait_mthd_with_name(&self.ctxt.fns, mthd_name, require_receiver)
+            .get_trait_mthd_with_name(mthd_name, require_receiver)
             .collect();
         let candidates: Vec<_> = candidates
             .into_iter()
@@ -118,7 +117,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     ) -> TypeckResult<'ctxt, MthdResolution<'ctxt>> {
         match found {
             FoundMthd::Inherent { fn_, env_gen_args } => {
-                let n_gen_params = self.ctxt.fns.get_sig(fn_).gen_params.len();
+                let n_gen_params = fn_.gen_params.len();
                 let resolved_gen_args = self.resolve_optional_gen_args(gen_args, n_gen_params, |actual| {
                     TypeckError::MthdGenArgCountMismatch {
                         mthd_name: mthd_name.to_string(),
@@ -127,10 +126,9 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                     }
                 })?;
 
-                let sig = self.ctxt.fns.get_sig(fn_);
-                let env_subst = ty::GenVarSubst::new(&sig.env_gen_params, env_gen_args).unwrap();
+                let env_subst = ty::GenVarSubst::new(&fn_.env_gen_params, env_gen_args).unwrap();
                 let fn_subst =
-                    ty::GenVarSubst::new(&sig.gen_params.clone(), resolved_gen_args.iter().copied()).unwrap();
+                    ty::GenVarSubst::new(&fn_.gen_params.clone(), resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(env_subst, fn_subst);
                 self.add_constraint_obligations(fn_, &full_subst);
 
@@ -140,11 +138,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 ))
             }
             FoundMthd::Trait { trait_inst, mthd_idx } => {
-                let sig = self
-                    .ctxt
-                    .traits
-                    .get_trait_mthd_sig(&self.ctxt.fns, trait_inst.trait_, mthd_idx)
-                    .clone();
+                let sig = self.ctxt.traits.get_trait_mthd_fn(trait_inst.trait_, mthd_idx);
                 let trait_gen_params = self.ctxt.traits.get_trait_def(trait_inst.trait_).gen_params.clone();
 
                 let n_mthd_gen_params = sig.gen_params.len();
@@ -166,7 +160,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
                 Ok(MthdResolution::Trait(
                     self.ctxt
                         .traits
-                        .inst_trait_mthd(&self.ctxt.fns, trait_inst, mthd_idx, base_ty, mthd_gen_args)
+                        .inst_trait_mthd(trait_inst, mthd_idx, base_ty, mthd_gen_args)
                         .unwrap(),
                 ))
             }
@@ -181,11 +175,10 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
     }
 
     fn fn_ty_of_inherent_resolution(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let sig = self.ctxt.fns.get_sig(fn_inst.fn_);
-        let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
-        let return_ty = sig.return_ty;
-        let var_args = sig.var_args;
-        let _ = sig;
+        let param_tys: Vec<_> = fn_inst.fn_.params.iter().map(|p| p.ty).collect();
+        let return_ty = fn_inst.fn_.return_ty;
+        let var_args = fn_inst.fn_.var_args;
+        let _ = fn_inst.fn_;
         let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
         let subst = self.ctxt.get_subst_for_fn_inst(fn_inst);
         self.ctxt.tys.substitute_gen_vars(fn_ty, &subst)
@@ -195,7 +188,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
         let sig = self
             .ctxt
             .traits
-            .get_trait_mthd_sig(&self.ctxt.fns, inst.trait_inst.trait_, inst.mthd_idx);
+            .get_trait_mthd_fn(inst.trait_inst.trait_, inst.mthd_idx);
         let param_tys: Vec<_> = sig.params.iter().map(|p| p.ty).collect();
         let sig_gen_params = sig.gen_params.clone();
         let return_ty = sig.return_ty;

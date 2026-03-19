@@ -44,9 +44,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> super::Typeck<'a, 'ctxt, 'hlr> {
 
             TraitSelf(_) => {
                 let self_ty = self
-                    .ctxt
-                    .fns
-                    .get_sig(self.fn_.fn_)
+                    .fn_
+                    .fn_
                     .associated_ty
                     .expect("TraitSelf in a function with no associated type");
                 self.normalize(self_ty)

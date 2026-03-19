@@ -146,7 +146,7 @@ pub struct If<'mlr> {
 
 #[derive(Debug, Clone)]
 pub struct Fn<'mlr> {
-    pub fn_: fns::Fn,
+    pub fn_: fns::Fn<'mlr>,
     pub body: Stmt<'mlr>,
     pub param_locs: Vec<Loc<'mlr>>,
 }

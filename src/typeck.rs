@@ -42,7 +42,7 @@ where
     'ctxt: 'a + 'hlr,
     'hlr: 'ctxt,
 {
-    let constraints: Vec<_> = ctxt.fns.get_sig(fn_.fn_).all_constraints().cloned().collect();
+    let constraints: Vec<_> = fn_.fn_.all_constraints().cloned().collect();
     let typeck: Typeck<'_, 'ctxt, 'hlr> = Typeck {
         ctxt,
         fn_,
@@ -94,13 +94,11 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     }
 
     fn check_body(&mut self) -> TypeckResult<'ctxt, Option<(ty::Opaque<'ctxt>, ty::Ty<'ctxt>)>> {
-        let sig = self.ctxt.fns.get_sig(self.fn_.fn_);
-
-        for (param, param_var_id) in sig.params.iter().zip(&self.fn_.param_var_ids) {
+        for (param, param_var_id) in self.fn_.fn_.params.iter().zip(&self.fn_.param_var_ids) {
             self.typing.var_types.insert(*param_var_id, param.ty);
         }
 
-        let return_ty = sig.return_ty;
+        let return_ty = self.fn_.fn_.return_ty;
 
         let (effective_return_ty, opaque_return) = if let ty::TyDef::Opaque { opaque, .. } = *return_ty.0 {
             let inf_var = self.ctxt.tys.inf_var();
@@ -211,10 +209,10 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
     fn check_fn(
         &mut self,
         expr_id: hlr::ExprId,
-        fn_: fns::Fn,
+        fn_: fns::Fn<'ctxt>,
         args: Option<hlr::TyAnnotSlice<'hlr>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let gen_arg_count = self.ctxt.fns.get_sig(fn_).gen_params.len();
+        let gen_arg_count = fn_.gen_params.len();
 
         let gen_args =
             self.resolve_optional_gen_args(args, gen_arg_count, |actual| TypeckError::FnGenArgCountMismatch {
@@ -223,12 +221,11 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
                 actual,
             })?;
 
-        let signature = self.ctxt.fns.get_sig(fn_);
-        let gen_params = signature.gen_params.clone();
+        let gen_params = fn_.gen_params.clone();
         let subst = ty::GenVarSubst::new(&gen_params, gen_args.clone()).unwrap();
-        let param_tys: Vec<_> = signature.params.iter().map(|param| param.ty).collect();
-        let return_ty = signature.return_ty;
-        let var_args = signature.var_args;
+        let param_tys: Vec<_> = fn_.params.iter().map(|param| param.ty).collect();
+        let return_ty = fn_.return_ty;
+        let var_args = fn_.var_args;
 
         self.add_constraint_obligations(fn_, &subst);
 
@@ -287,7 +284,7 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
                 let mthd_idx = self
                     .ctxt
                     .traits
-                    .resolve_trait_method(&self.ctxt.fns, trait_, mthd_name)
+                    .resolve_trait_method(trait_, mthd_name)
                     .ok_or_else(|| TypeckError::MthdResolutionFailed {
                         base_ty,
                         mthd_name: mthd_name.to_string(),
@@ -764,9 +761,8 @@ impl<'a, 'ctxt: 'a + 'hlr, 'hlr: 'ctxt> Typeck<'a, 'ctxt, 'hlr> {
         }
     }
 
-    pub(super) fn add_constraint_obligations(&mut self, fn_: fns::Fn, subst: &ty::GenVarSubst<'ctxt>) {
-        let constraints = self.ctxt.fns.get_sig(fn_).constraints.clone();
-        self.push_constraint_obligations(&constraints, subst, None);
+    pub(super) fn add_constraint_obligations(&mut self, fn_: fns::Fn<'ctxt>, subst: &ty::GenVarSubst<'ctxt>) {
+        self.push_constraint_obligations(&fn_.constraints, subst, None);
     }
 
     pub(super) fn add_trait_mthd_constraint_obligations(

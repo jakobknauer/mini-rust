@@ -1,12 +1,11 @@
 use crate::{
     ast,
     ast_lowering::{AstLoweringError, AstLoweringResult},
-    ctxt::{self, fns},
-    hlr,
+    ctxt, hlr,
 };
 
-impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
-    pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstLoweringResult<hlr::Val<'hlr>> {
+impl<'c, 'ctxt: 'c> super::AstLowerer<'c, 'ctxt> {
+    pub(super) fn resolve_path_to_constructor(&mut self, ty_path: &ast::Path) -> AstLoweringResult<hlr::Val<'ctxt>> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),
             [enum_seg, variant_seg] => self.resolve_path_segments_to_variant(enum_seg, variant_seg),
@@ -16,7 +15,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
         }
     }
 
-    fn resolve_path_segment_to_struct(&mut self, segment: &ast::PathSegment) -> AstLoweringResult<hlr::Val<'hlr>> {
+    fn resolve_path_segment_to_struct(&mut self, segment: &ast::PathSegment) -> AstLoweringResult<hlr::Val<'ctxt>> {
         if segment.is_self {
             return Err(AstLoweringError {
                 msg: "Invalid use of 'Self' as struct literal constructor".to_string(),
@@ -40,7 +39,7 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
         &mut self,
         enum_seg: &ast::PathSegment,
         variant_seg: &ast::PathSegment,
-    ) -> AstLoweringResult<hlr::Val<'hlr>> {
+    ) -> AstLoweringResult<hlr::Val<'ctxt>> {
         if enum_seg.is_self || variant_seg.is_self {
             return Err(AstLoweringError {
                 msg: "Invalid use of 'Self' in enum variant path".to_string(),
@@ -78,16 +77,15 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
     }
 
     pub(super) fn resolve_ident_to_ty(&self, ident: &str) -> AstLoweringResult<TyResolution<'ctxt>> {
-        let sig = self.get_signature();
         // Try to resolve to generic var
-        for &gen_var in &sig.gen_params {
+        for &gen_var in &self.fn_.gen_params {
             if gen_var.name() == ident {
                 // Resolve to generic var
                 return Ok(TyResolution::GenVar(gen_var));
             }
         }
         // Try to resolve to env generic var
-        for &gen_var in &sig.env_gen_params {
+        for &gen_var in &self.fn_.env_gen_params {
             if gen_var.name() == ident {
                 // Resolve to generic var
                 return Ok(TyResolution::GenVar(gen_var));
@@ -102,10 +100,11 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
         Ok(TyResolution::NamedTy(named_ty))
     }
 
-    pub(super) fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Val<'hlr>> {
+    pub(super) fn resolve_ident_to_val_def(&mut self, name: &str) -> Option<hlr::Val<'ctxt>> {
+        let fn_ = self.ctxt.fns.get_fn_by_name(name);
         self.resolve_ident_to_var(name)
             .map(hlr::Val::Var)
-            .or_else(|| self.resolve_ident_to_fn(name).map(|fn_| hlr::Val::Fn(fn_, None)))
+            .or_else(|| fn_.map(|fn_| hlr::Val::Fn(fn_, None)))
     }
 
     pub(super) fn resolve_ident_to_var(&mut self, name: &str) -> Option<hlr::VarId> {
@@ -115,10 +114,6 @@ impl<'c, 'ctxt: 'hlr, 'hlr: 'ctxt> super::AstLowerer<'c, 'ctxt, 'hlr> {
             .filter_map(|scope| scope.bindings.get(name))
             .next()
             .cloned()
-    }
-
-    pub(super) fn resolve_ident_to_fn(&mut self, name: &str) -> Option<fns::Fn> {
-        self.ctxt.fns.get_fn_by_name(name)
     }
 }
 

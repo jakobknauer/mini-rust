@@ -23,7 +23,7 @@ pub struct Ctxt<'ctxt> {
     pub fns: FnReg<'ctxt>,
     pub impls: ImplReg<'ctxt>,
     pub traits: TraitReg<'ctxt>,
-    pub language_items: language_items::LanguageItems,
+    pub language_items: language_items::LanguageItems<'ctxt>,
 }
 
 impl<'ctxt> Ctxt<'ctxt> {
@@ -38,11 +38,9 @@ impl<'ctxt> Ctxt<'ctxt> {
     }
 
     pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst<'ctxt>) -> String {
-        let signature = self.fns.get_sig(fn_inst.fn_);
-
-        let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
+        let assoc_ty = if let Some(assoc_ty) = fn_inst.fn_.associated_ty {
             let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
-            if let Some(assoc_trait_inst) = &signature.associated_trait_inst {
+            if let Some(assoc_trait_inst) = &fn_inst.fn_.associated_trait_inst {
                 let assoc_trait_name = self.traits.get_trait_name(assoc_trait_inst.trait_);
                 let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
                     "".to_string()
@@ -97,21 +95,21 @@ impl<'ctxt> Ctxt<'ctxt> {
             )
         };
 
-        format!("{}{}{}{}", assoc_ty, signature.name, env_gen_args, gen_args)
+        format!("{}{}{}{}", assoc_ty, fn_inst.fn_.name, env_gen_args, gen_args)
     }
 
     pub fn get_fn_inst_sig(&self, fn_inst: fns::FnInst<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, ty::Ty<'ctxt>, bool) {
-        let signature = self.fns.get_sig(fn_inst.fn_);
         let subst = self.get_subst_for_fn_inst(fn_inst);
 
-        let param_tys = signature
+        let param_tys = fn_inst
+            .fn_
             .params
             .iter()
             .map(|p| self.tys.substitute_gen_vars(p.ty, &subst))
             .collect();
-        let return_ty = self.tys.substitute_gen_vars(signature.return_ty, &subst);
+        let return_ty = self.tys.substitute_gen_vars(fn_inst.fn_.return_ty, &subst);
 
-        (param_tys, return_ty, signature.var_args)
+        (param_tys, return_ty, fn_inst.fn_.var_args)
     }
 
     // TODO check the relevance of this function. Is it only use to resolve associated types?
@@ -190,9 +188,8 @@ impl<'ctxt> Ctxt<'ctxt> {
     }
 
     pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst<'ctxt>) -> GenVarSubst<'ctxt> {
-        let sig = self.fns.get_sig(fn_inst.fn_);
-        let gen_param_subst = GenVarSubst::new(&sig.gen_params, fn_inst.gen_args).unwrap();
-        let env_gen_param_subst = GenVarSubst::new(&sig.env_gen_params, fn_inst.env_gen_args).unwrap();
+        let gen_param_subst = GenVarSubst::new(&fn_inst.fn_.gen_params, fn_inst.gen_args).unwrap();
+        let env_gen_param_subst = GenVarSubst::new(&fn_inst.fn_.env_gen_params, fn_inst.env_gen_args).unwrap();
         GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 }
