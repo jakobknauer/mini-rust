@@ -9,7 +9,6 @@ use crate::ctxt::{
 pub struct FnReg<'fns> {
     arena: &'fns bumpalo::Bump,
     next_id: RefCell<usize>,
-    decls: RefCell<Vec<Fn<'fns>>>,
     fn_names: RefCell<HashMap<String, Fn<'fns>>>,
     called_fn_insts: RefCell<HashMap<Fn<'fns>, Vec<FnInst<'fns>>>>,
     called_trait_mthd_insts: RefCell<HashMap<Fn<'fns>, Vec<TraitMthdInst<'fns>>>>,
@@ -20,7 +19,6 @@ impl<'fns> FnReg<'fns> {
         Self {
             arena,
             next_id: RefCell::default(),
-            decls: RefCell::default(),
             fn_names: RefCell::default(),
             called_fn_insts: RefCell::default(),
             called_trait_mthd_insts: RefCell::default(),
@@ -74,17 +72,12 @@ impl<'fns> FnReg<'fns> {
 
         self.called_fn_insts.borrow_mut().insert(fn_, Vec::new());
         self.called_trait_mthd_insts.borrow_mut().insert(fn_, Vec::new());
-        self.decls.borrow_mut().push(fn_);
 
         Ok(fn_)
     }
 
     pub fn get_fn_by_name(&self, name: &str) -> Option<Fn<'fns>> {
         self.fn_names.borrow().get(name).copied()
-    }
-
-    pub fn get_all_fns(&self) -> impl Iterator<Item = Fn<'fns>> {
-        self.decls.borrow().clone().into_iter()
     }
 
     pub fn register_fn_call(&self, caller: Fn<'fns>, fn_inst: FnInst<'fns>) {

@@ -630,11 +630,9 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     fn print_mlr_fns(&self, path: &Path, mlr_fns: &[mlr::Fn<'arena>]) -> Result<(), DriverError<'arena>> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating MLR file"))?;
 
-        #[allow(clippy::mutable_key_type)]
-        let mlr_fn_map: HashMap<fns::Fn, &mlr::Fn<'arena>> = mlr_fns.iter().map(|f| (f.fn_, f)).collect();
-        for fn_ in self.ctxt.fns.get_all_fns() {
-            let mlr_fn = mlr_fn_map.get(&fn_).copied();
-            print::print_mlr(fn_, mlr_fn, &self.ctxt, &mut file).map_err(|_| DriverError::Io("Error printing MLR"))?;
+        for mlr_fn in mlr_fns {
+            print::print_mlr(mlr_fn.fn_, Some(mlr_fn), &self.ctxt, &mut file)
+                .map_err(|_| DriverError::Io("Error printing MLR"))?;
         }
 
         Ok(())
