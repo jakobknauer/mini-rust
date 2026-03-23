@@ -116,7 +116,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 .ctxt
                 .fns
                 .register_fn(
-                    fns::FnSig {
+                    fns::FnDecl {
                         id: fns::FnId::default(),
                         name: name.clone(),
                         gen_params: vec![],

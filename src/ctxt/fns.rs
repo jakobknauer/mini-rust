@@ -6,9 +6,9 @@ use crate::ctxt::{
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct FnId(pub(in crate::ctxt) usize);
 
-pub type Fn<'fns> = &'fns FnSig<'fns>;
+pub type Fn<'fns> = &'fns FnDecl<'fns>;
 
-pub struct FnSig<'fns> {
+pub struct FnDecl<'fns> {
     pub(crate) id: FnId,
     pub name: String,
     /// The type of which the function is an associated method, if any.
@@ -32,27 +32,27 @@ pub struct FnSig<'fns> {
     pub constraints: Vec<Constraint<'fns>>,
 }
 
-impl PartialEq for FnSig<'_> {
+impl PartialEq for FnDecl<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for FnSig<'_> {}
+impl Eq for FnDecl<'_> {}
 
-impl std::hash::Hash for FnSig<'_> {
+impl std::hash::Hash for FnDecl<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
 }
 
-impl std::fmt::Debug for FnSig<'_> {
+impl std::fmt::Debug for FnDecl<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FnSig({})", self.name)
+        write!(f, "FnDecl({})", self.name)
     }
 }
 
-impl<'fns> FnSig<'fns> {
+impl<'fns> FnDecl<'fns> {
     pub fn all_constraints(&self) -> impl Iterator<Item = &Constraint<'fns>> {
         self.env_constraints.iter().chain(&self.constraints)
     }

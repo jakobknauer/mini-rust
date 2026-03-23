@@ -98,7 +98,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         format!("{}{}{}{}", assoc_ty, fn_inst.fn_.name, env_gen_args, gen_args)
     }
 
-    pub fn get_fn_inst_sig(&self, fn_inst: fns::FnInst<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, ty::Ty<'ctxt>, bool) {
+    pub fn get_fn_inst_decl(&self, fn_inst: fns::FnInst<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, ty::Ty<'ctxt>, bool) {
         let subst = self.get_subst_for_fn_inst(fn_inst);
 
         let param_tys = fn_inst

@@ -20,7 +20,7 @@ fn register_arith_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, trait_name: &str, m
     let fn_ = ctxt
         .fns
         .register_fn(
-            fns::FnSig {
+            fns::FnDecl {
                 id: fns::FnId::default(),
                 name: mthd_name.to_string(),
                 associated_ty: None,
@@ -80,7 +80,7 @@ pub fn register_rem_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
 
 fn register_size_of<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ()> {
     let fn_ = ctxt.fns.register_fn(
-        fns::FnSig {
+        fns::FnDecl {
             id: fns::FnId::default(),
             name: "size_of".to_string(),
             associated_ty: None,
@@ -109,7 +109,7 @@ pub fn register_impl_for_ptr<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), 
         .impls
         .register_impl(ptr_ty, vec![var], None, Vec::new(), HashMap::new());
     let fn_ = ctxt.fns.register_fn(
-        fns::FnSig {
+        fns::FnDecl {
             id: fns::FnId::default(),
             name: "offset".to_string(),
             associated_ty: Some(ptr_ty),

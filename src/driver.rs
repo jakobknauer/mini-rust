@@ -412,7 +412,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             None => self.ctxt.tys.unit(),
         };
 
-        let signature = fns::FnSig {
+        let decl = fns::FnDecl {
             id: fns::FnId::default(),
             name: ast_fn.name.clone(),
             associated_ty,
@@ -428,7 +428,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
         self.ctxt
             .fns
-            .register_fn(signature, associated_ty.is_none())
+            .register_fn(decl, associated_ty.is_none())
             .map_err(|_| DriverError::ContextBuild("Failed to register function"))
     }
 
@@ -513,7 +513,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                     .ctxt
                     .fns
                     .register_fn(
-                        fns::FnSig {
+                        fns::FnDecl {
                             id: fns::FnId::default(),
                             name: mthd.name.clone(),
                             associated_ty: None,

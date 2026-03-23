@@ -2,14 +2,14 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::ctxt::{
-    fns::{Fn, FnId, FnInst, FnInstError, FnSig, TraitMthdInst},
+    fns::{Fn, FnDecl, FnId, FnInst, FnInstError, TraitMthdInst},
     ty::TySlice,
 };
 
 pub struct FnReg<'fns> {
     arena: &'fns bumpalo::Bump,
     next_id: RefCell<usize>,
-    sigs: RefCell<Vec<Fn<'fns>>>,
+    decls: RefCell<Vec<Fn<'fns>>>,
     fn_names: RefCell<HashMap<String, Fn<'fns>>>,
     called_fn_insts: RefCell<HashMap<Fn<'fns>, Vec<FnInst<'fns>>>>,
     called_trait_mthd_insts: RefCell<HashMap<Fn<'fns>, Vec<TraitMthdInst<'fns>>>>,
@@ -20,7 +20,7 @@ impl<'fns> FnReg<'fns> {
         Self {
             arena,
             next_id: RefCell::default(),
-            sigs: RefCell::default(),
+            decls: RefCell::default(),
             fn_names: RefCell::default(),
             called_fn_insts: RefCell::default(),
             called_trait_mthd_insts: RefCell::default(),
@@ -54,8 +54,8 @@ impl<'fns> FnReg<'fns> {
         })
     }
 
-    pub fn register_fn(&self, mut signature: FnSig<'fns>, register_name: bool) -> Result<Fn<'fns>, ()> {
-        if register_name && self.fn_names.borrow().contains_key(&signature.name) {
+    pub fn register_fn(&self, mut decl: FnDecl<'fns>, register_name: bool) -> Result<Fn<'fns>, ()> {
+        if register_name && self.fn_names.borrow().contains_key(&decl.name) {
             return Err(());
         }
 
@@ -65,8 +65,8 @@ impl<'fns> FnReg<'fns> {
             *next += 1;
             id
         };
-        signature.id = id;
-        let fn_: Fn<'fns> = self.arena.alloc(signature);
+        decl.id = id;
+        let fn_: Fn<'fns> = self.arena.alloc(decl);
 
         if register_name {
             self.fn_names.borrow_mut().insert(fn_.name.to_string(), fn_);
@@ -74,7 +74,7 @@ impl<'fns> FnReg<'fns> {
 
         self.called_fn_insts.borrow_mut().insert(fn_, Vec::new());
         self.called_trait_mthd_insts.borrow_mut().insert(fn_, Vec::new());
-        self.sigs.borrow_mut().push(fn_);
+        self.decls.borrow_mut().push(fn_);
 
         Ok(fn_)
     }
@@ -84,7 +84,7 @@ impl<'fns> FnReg<'fns> {
     }
 
     pub fn get_all_fns(&self) -> impl Iterator<Item = Fn<'fns>> {
-        self.sigs.borrow().clone().into_iter()
+        self.decls.borrow().clone().into_iter()
     }
 
     pub fn register_fn_call(&self, caller: Fn<'fns>, fn_inst: FnInst<'fns>) {

@@ -13,7 +13,7 @@ pub fn print_mlr<'mlr, W: Write>(
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         mlr_fn,
-        signature: fn_,
+        decl: fn_,
         ctxt,
         indent_level: 0,
         writer,
@@ -23,7 +23,7 @@ pub fn print_mlr<'mlr, W: Write>(
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
-    signature: Fn<'mlr>,
+    decl: Fn<'mlr>,
     ctxt: &'a ctxt::Ctxt<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
@@ -44,13 +44,9 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
     }
 
     fn print_signature(&mut self) -> Result<(), std::io::Error> {
-        let signature = self.signature;
-
-        // Print signature similar to printing of fn_inst in src/ctxt.rs
-
-        let assoc_ty = if let Some(assoc_ty) = signature.associated_ty {
+        let assoc_ty = if let Some(assoc_ty) = self.decl.associated_ty {
             let assoc_ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
-            if let Some(assoc_trait_inst) = &signature.associated_trait_inst {
+            if let Some(assoc_trait_inst) = &self.decl.associated_trait_inst {
                 let assoc_trait_name = self.ctxt.traits.get_trait_name(assoc_trait_inst.trait_);
                 let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
                     "".to_string()
@@ -77,12 +73,12 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             "".to_string()
         };
 
-        let env_gen_args = if signature.env_gen_params.is_empty() {
+        let env_gen_args = if self.decl.env_gen_params.is_empty() {
             "".to_string()
         } else {
             format!(
                 "{{{}}}",
-                signature
+                self.decl
                     .env_gen_params
                     .iter()
                     .map(|&gv| gv.name())
@@ -91,12 +87,12 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             )
         };
 
-        let gen_args = if signature.gen_params.is_empty() {
+        let gen_args = if self.decl.gen_params.is_empty() {
             "".to_string()
         } else {
             format!(
                 "<{}>",
-                signature
+                self.decl
                     .gen_params
                     .iter()
                     .map(|&gv| gv.name())
@@ -108,12 +104,12 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         write!(
             self.writer,
             "fn {}{}{}{}",
-            assoc_ty, signature.name, env_gen_args, gen_args
+            assoc_ty, self.decl.name, env_gen_args, gen_args
         )?;
 
         write!(self.writer, "(")?;
         if let Some(mlr_fn) = self.mlr_fn {
-            for (i, (param, param_loc)) in signature.params.iter().zip(&mlr_fn.param_locs).enumerate() {
+            for (i, (param, param_loc)) in self.decl.params.iter().zip(&mlr_fn.param_locs).enumerate() {
                 if i > 0 {
                     write!(self.writer, ", ")?;
                 }
@@ -121,7 +117,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 write!(self.writer, "{}: {}", param_loc, param_ty)?;
             }
         } else {
-            for (i, param) in signature.params.iter().enumerate() {
+            for (i, param) in self.decl.params.iter().enumerate() {
                 if i > 0 {
                     write!(self.writer, ", ")?;
                 }
@@ -131,7 +127,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         }
         write!(self.writer, ") -> ")?;
 
-        let return_ty = self.ctxt.tys.get_string_rep(signature.return_ty);
+        let return_ty = self.ctxt.tys.get_string_rep(self.decl.return_ty);
         write!(self.writer, "{}", return_ty)
     }
 

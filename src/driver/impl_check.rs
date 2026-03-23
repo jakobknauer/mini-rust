@@ -106,9 +106,9 @@ fn check_trait_impl<'ctxt>(
     let trait_gen_params_subst = ty::GenVarSubst::new(&trait_def.gen_params, trait_inst.gen_args).unwrap();
 
     for &mthd in &impl_def.mthds {
-        let trait_mthd_sig = trait_def.mthds.iter().find(|m| m.name == mthd.name).unwrap();
+        let trait_mthd_decl = trait_def.mthds.iter().find(|m| m.name == mthd.name).unwrap();
 
-        check_mthd_sig(ctxt, mthd, trait_mthd_sig, impl_def.ty, &trait_gen_params_subst).map_err(|kind| {
+        check_mthd_decl(ctxt, mthd, trait_mthd_decl, impl_def.ty, &trait_gen_params_subst).map_err(|kind| {
             ImplCheckError {
                 impl_,
                 trait_inst,
@@ -148,46 +148,46 @@ fn check_mthd_names<'ctxt>(
     Ok(())
 }
 
-fn check_mthd_sig<'ctxt>(
+fn check_mthd_decl<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    impl_mthd_sig: &fns::FnSig<'ctxt>,
-    trait_mthd_sig: &fns::FnSig<'ctxt>,
+    impl_mthd_decl: &fns::FnDecl<'ctxt>,
+    trait_mthd_decl: &fns::FnDecl<'ctxt>,
     impl_ty: ty::Ty<'ctxt>,
     trait_gen_params_subst: &ty::GenVarSubst<'ctxt>,
 ) -> Result<(), ImplCheckErrorKind<'ctxt>> {
     // Compare mthd gen params
-    if impl_mthd_sig.gen_params.len() != trait_mthd_sig.gen_params.len() {
+    if impl_mthd_decl.gen_params.len() != trait_mthd_decl.gen_params.len() {
         return Err(ImplCheckErrorKind::MthdGenParamCountMismatch {
-            mthd: impl_mthd_sig.name.to_string(),
-            expected: trait_mthd_sig.gen_params.len(),
-            actual: impl_mthd_sig.gen_params.len(),
+            mthd: impl_mthd_decl.name.to_string(),
+            expected: trait_mthd_decl.gen_params.len(),
+            actual: impl_mthd_decl.gen_params.len(),
         });
     }
 
     // Substitution of the generic params of the trait method with the generic params of the impl.
     // This is necessary because the generic params of the impl are different from those of the
     // trait (even if they have the same name).
-    let impl_gen_vars = impl_mthd_sig.gen_params.iter().map(|&gp| ctxt.tys.gen_var(gp));
-    let mthd_gen_params_subst = ty::GenVarSubst::new(&trait_mthd_sig.gen_params, impl_gen_vars).unwrap();
+    let impl_gen_vars = impl_mthd_decl.gen_params.iter().map(|&gp| ctxt.tys.gen_var(gp));
+    let mthd_gen_params_subst = ty::GenVarSubst::new(&trait_mthd_decl.gen_params, impl_gen_vars).unwrap();
 
     // Concat with the substitutions for the concrete trait instantiation of the impl
     let all_gen_params_subst = ty::GenVarSubst::compose(trait_gen_params_subst.clone(), mthd_gen_params_subst);
 
     // Compare receiver
-    if impl_mthd_sig.has_receiver() != trait_mthd_sig.has_receiver() {
+    if impl_mthd_decl.has_receiver() != trait_mthd_decl.has_receiver() {
         return Err(ImplCheckErrorKind::ReceiverMismatch {
-            mthd: impl_mthd_sig.name.to_string(),
-            expected: trait_mthd_sig.has_receiver(),
-            actual: impl_mthd_sig.has_receiver(),
+            mthd: impl_mthd_decl.name.to_string(),
+            expected: trait_mthd_decl.has_receiver(),
+            actual: impl_mthd_decl.has_receiver(),
         });
     }
 
     // Compare param count
-    if impl_mthd_sig.params.len() != trait_mthd_sig.params.len() {
+    if impl_mthd_decl.params.len() != trait_mthd_decl.params.len() {
         return Err(ImplCheckErrorKind::ParamCountMismatch {
-            mthd: impl_mthd_sig.name.to_string(),
-            expected: trait_mthd_sig.params.len(),
-            actual: impl_mthd_sig.params.len(),
+            mthd: impl_mthd_decl.name.to_string(),
+            expected: trait_mthd_decl.params.len(),
+            actual: impl_mthd_decl.params.len(),
         });
     }
 
@@ -198,10 +198,10 @@ fn check_mthd_sig<'ctxt>(
     };
 
     // Compare params
-    for (idx, (expected, actual)) in trait_mthd_sig
+    for (idx, (expected, actual)) in trait_mthd_decl
         .params
         .iter()
-        .zip(impl_mthd_sig.params.iter())
+        .zip(impl_mthd_decl.params.iter())
         .enumerate()
     {
         let subst_expected = do_substitutions(ctxt, expected.ty);
@@ -209,7 +209,7 @@ fn check_mthd_sig<'ctxt>(
         let actual_ty = ctxt.normalize_ty(actual.ty);
         if subst_expected != actual_ty {
             return Err(ImplCheckErrorKind::ArgTypeMismatch {
-                mthd: impl_mthd_sig.name.to_string(),
+                mthd: impl_mthd_decl.name.to_string(),
                 arg_idx: idx,
                 expected: subst_expected,
                 actual: actual_ty,
@@ -218,23 +218,23 @@ fn check_mthd_sig<'ctxt>(
     }
 
     // Compare return type
-    let subst_return_ty = do_substitutions(ctxt, trait_mthd_sig.return_ty);
-    let actual_return_ty = ctxt.normalize_ty(impl_mthd_sig.return_ty);
+    let subst_return_ty = do_substitutions(ctxt, trait_mthd_decl.return_ty);
+    let actual_return_ty = ctxt.normalize_ty(impl_mthd_decl.return_ty);
     if subst_return_ty != actual_return_ty {
         return Err(ImplCheckErrorKind::ReturnTypeMismatch {
-            mthd: impl_mthd_sig.name.to_string(),
+            mthd: impl_mthd_decl.name.to_string(),
             expected: subst_return_ty,
             actual: actual_return_ty,
         });
     }
 
     // Compare constraints
-    let subst_trait_constraints: Vec<_> = trait_mthd_sig
+    let subst_trait_constraints: Vec<_> = trait_mthd_decl
         .constraints
         .iter()
         .map(|c| subst_constraint(ctxt, c, &all_gen_params_subst, impl_ty))
         .collect();
-    let impl_constraints = impl_mthd_sig.constraints.clone();
+    let impl_constraints = impl_mthd_decl.constraints.clone();
 
     #[allow(clippy::mutable_key_type)]
     let trait_set: HashSet<_> = subst_trait_constraints.iter().collect();
@@ -242,7 +242,7 @@ fn check_mthd_sig<'ctxt>(
     let impl_set: HashSet<_> = impl_constraints.iter().collect();
     if trait_set != impl_set {
         return Err(ImplCheckErrorKind::ConstraintMismatch {
-            mthd: impl_mthd_sig.name.to_string(),
+            mthd: impl_mthd_decl.name.to_string(),
         });
     }
 
