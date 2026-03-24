@@ -177,12 +177,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
         let obligations = self.pending_obligations.clone();
         obligations.iter().find_map(|(ty, req)| {
-            if self.normalize(*ty) == normalized {
-                if let &ty::ConstraintRequirement::Callable { param_tys, return_ty } = req {
-                    Some((param_tys, return_ty))
-                } else {
-                    None
-                }
+            if self.normalize(*ty) == normalized
+                && let &ty::ConstraintRequirement::Callable { param_tys, return_ty } = req
+            {
+                Some((param_tys, return_ty))
             } else {
                 None
             }
@@ -215,8 +213,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             self.unify(return_ty, hint_return_ty);
         }
 
-        let stack_entry = return_ty;
-        self.return_ty_stack.push(stack_entry);
+        self.return_ty_stack.push(return_ty);
         let body_ty = self.check_expr(body, Some(return_ty));
         self.return_ty_stack.pop();
         let body_ty = body_ty?;

@@ -24,6 +24,7 @@ impl<'traits> TraitReg<'traits> {
     }
 
     // TODO must this be a method?
+    // Also check that trait_inst.trait and mthd.trait coincide
     pub fn inst_trait_mthd(
         &self,
         trait_inst: TraitInst<'traits>,
@@ -45,7 +46,6 @@ impl<'traits> TraitReg<'traits> {
             impl_ty,
             gen_args,
             _private: (),
-            _phantom: std::marker::PhantomData,
         })
     }
 

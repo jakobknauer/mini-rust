@@ -3,10 +3,10 @@ use crate::ctxt::{
     ty::{Constraint, GenVar, Ty, TySlice},
 };
 
+pub type Fn<'fns> = &'fns FnDecl<'fns>;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct FnId(pub(in crate::ctxt) usize);
-
-pub type Fn<'fns> = &'fns FnDecl<'fns>;
 
 pub struct FnDecl<'fns> {
     pub(crate) id: FnId,
@@ -100,7 +100,6 @@ pub struct FnInst<'fns> {
     pub gen_args: TySlice<'fns>,
     pub env_gen_args: TySlice<'fns>,
     pub(in crate::ctxt) _private: (),
-    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'fns ()>,
 }
 
 impl<'fns> FnInst<'fns> {
@@ -126,25 +125,20 @@ impl<'fns> FnInst<'fns> {
             gen_args,
             env_gen_args,
             _private: (),
-            _phantom: std::marker::PhantomData,
         })
     }
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub enum TraitMthdInstError<'fns> {
     GenArgCountMismatch {
-        #[allow(unused)]
         mthd: TraitMthd<'fns>,
-        #[allow(unused)]
         expected: usize,
-        #[allow(unused)]
         actual: usize,
     },
     TraitMismatch {
-        #[allow(unused)]
         expected: Trait<'fns>,
-        #[allow(unused)]
         actual: Trait<'fns>,
     },
 }
@@ -156,7 +150,6 @@ pub struct TraitMthdInst<'fns> {
     pub impl_ty: Ty<'fns>,
     pub gen_args: TySlice<'fns>,
     pub(in crate::ctxt) _private: (),
-    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'fns ()>,
 }
 
 impl<'fns> TraitMthdInst<'fns> {
@@ -185,7 +178,6 @@ impl<'fns> TraitMthdInst<'fns> {
             impl_ty,
             gen_args,
             _private: (),
-            _phantom: std::marker::PhantomData,
         })
     }
 }

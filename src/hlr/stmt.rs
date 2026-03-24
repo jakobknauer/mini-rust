@@ -7,13 +7,11 @@ pub type StmtSlice<'hlr> = &'hlr [Stmt<'hlr>];
 #[derive(Debug)]
 pub enum StmtDef<'hlr> {
     Expr(Expr<'hlr>),
-
     Let {
         var: VarId,
         ty: Option<TyAnnot<'hlr>>,
         init: Expr<'hlr>,
     },
-
     Break,
     Return(Option<Expr<'hlr>>),
 }

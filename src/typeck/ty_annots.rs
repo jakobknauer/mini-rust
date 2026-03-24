@@ -127,8 +127,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 })?;
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
-                let constraints = self.constraints.clone();
-                if !self.ctxt.ty_implements_trait_inst(&constraints, base_ty, trait_inst) {
+                if !self
+                    .ctxt
+                    .ty_implements_trait_inst(&self.constraints, base_ty, trait_inst)
+                {
                     return Err(TypeckError::ConstraintNotSatisfied {
                         ty: base_ty,
                         trait_inst,

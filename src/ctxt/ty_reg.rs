@@ -38,29 +38,21 @@ pub enum NotAStructField<'ty> {
 }
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
+#[allow(unused)]
 pub enum TyInstError<'ty> {
     StructGenericArgCountMismatch {
-        #[allow(unused)]
         struct_: Struct<'ty>,
-        #[allow(unused)]
         expected: usize,
-        #[allow(unused)]
         actual: usize,
     },
     EnumGenericArgCountMismatch {
-        #[allow(unused)]
         enum_: Enum<'ty>,
-        #[allow(unused)]
         expected: usize,
-        #[allow(unused)]
         actual: usize,
     },
     OpaqueGenericArgCountMismatch {
-        #[allow(unused)]
         opaque: Opaque<'ty>,
-        #[allow(unused)]
         expected: usize,
-        #[allow(unused)]
         actual: usize,
     },
 }
@@ -473,10 +465,13 @@ impl<'ty> TyReg<'ty> {
         matches!(ty_def, TyDef::Primitive(Primitive::CVoid))
     }
 
+    // TODO does this need to be a method?
     pub fn get_string_rep(&self, ty: Ty<'ty>) -> String {
         self.get_string_rep_with_subst(ty, &HashMap::new())
     }
 
+    // TODO Why do we need this at all?
+    // TODO does this need to be a method?
     pub fn get_string_rep_with_subst(&self, ty: Ty<'ty>, subst: &HashMap<GenVar, Ty<'ty>>) -> String {
         use self::Primitive::*;
         use TyDef::*;

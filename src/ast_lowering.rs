@@ -53,24 +53,20 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     }
 
     fn lower_function_body(mut self, block: ast::Block) -> AstLoweringResult<hlr::Fn<'ctxt>> {
-        let (var_args, param_kinds) = {
-            let param_kinds: Vec<fns::FnParamKind> = self.fn_.params.iter().map(|p| p.kind.clone()).collect();
-            (self.fn_.var_args, param_kinds)
-        };
-        if var_args {
+        if self.fn_.var_args {
             return Err(AstLoweringError {
                 msg: "Varargs functions are not supported in HLR".to_string(),
             });
         }
 
+        self.scopes.push_back(Scope::default());
         let mut param_var_ids = Vec::new();
 
-        self.scopes.push_back(Scope::default());
-        for name in param_kinds {
+        for param in &self.fn_.params {
             let var_id = self.hlr.var_id();
             param_var_ids.push(var_id);
 
-            match name {
+            match &param.kind {
                 fns::FnParamKind::Regular(name) => {
                     self.scopes
                         .back_mut()
@@ -475,7 +471,6 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 ),
             });
         };
-        let mthd_name = segment.ident.clone();
 
         let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
@@ -483,7 +478,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             ty,
             trait_,
             trait_args,
-            mthd_name,
+            mthd_name: segment.ident.clone(),
             args,
         };
         Ok(self.hlr.expr(expr))

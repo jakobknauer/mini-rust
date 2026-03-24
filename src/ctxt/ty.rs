@@ -3,42 +3,6 @@ use std::collections::HashMap;
 
 use crate::ctxt::{fns, traits};
 
-pub struct ClosureFnCell<'fns>(OnceCell<fns::Fn<'fns>>);
-
-impl<'fns> ClosureFnCell<'fns> {
-    pub(in crate::ctxt) fn new() -> Self {
-        ClosureFnCell(OnceCell::new())
-    }
-
-    pub fn set(&self, fn_: fns::Fn<'fns>) {
-        self.0.set(fn_).expect("closure fn already set");
-    }
-
-    pub fn get(&self) -> Option<fns::Fn<'fns>> {
-        self.0.get().copied()
-    }
-}
-
-impl PartialEq for ClosureFnCell<'_> {
-    fn eq(&self, _: &Self) -> bool {
-        true
-    }
-}
-impl Eq for ClosureFnCell<'_> {}
-impl std::hash::Hash for ClosureFnCell<'_> {
-    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
-}
-impl<'fns> Clone for ClosureFnCell<'fns> {
-    fn clone(&self) -> Self {
-        ClosureFnCell(self.0.clone())
-    }
-}
-impl std::fmt::Debug for ClosureFnCell<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClosureFnCell({:?})", self.0.get())
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct Ty<'ty>(pub &'ty TyDef<'ty>, pub(in crate::ctxt) TyId);
 
@@ -54,10 +18,10 @@ impl<'ty> std::hash::Hash for Ty<'ty> {
     }
 }
 
+pub type TySlice<'ty> = &'ty [Ty<'ty>];
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct TyId(pub(in crate::ctxt) usize);
-
-pub type TySlice<'ty> = &'ty [Ty<'ty>];
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TyDef<'ty> {
@@ -280,4 +244,40 @@ pub enum ConstraintRequirement<'ty> {
         return_ty: Ty<'ty>,
     },
     AssocTyEq(Ty<'ty>),
+}
+
+pub struct ClosureFnCell<'fns>(OnceCell<fns::Fn<'fns>>);
+
+impl<'fns> ClosureFnCell<'fns> {
+    pub(in crate::ctxt) fn new() -> Self {
+        ClosureFnCell(OnceCell::new())
+    }
+
+    pub fn set(&self, fn_: fns::Fn<'fns>) {
+        self.0.set(fn_).expect("closure fn already set");
+    }
+
+    pub fn get(&self) -> Option<fns::Fn<'fns>> {
+        self.0.get().copied()
+    }
+}
+
+impl PartialEq for ClosureFnCell<'_> {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for ClosureFnCell<'_> {}
+impl std::hash::Hash for ClosureFnCell<'_> {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+impl<'fns> Clone for ClosureFnCell<'fns> {
+    fn clone(&self) -> Self {
+        ClosureFnCell(self.0.clone())
+    }
+}
+impl std::fmt::Debug for ClosureFnCell<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClosureFnCell({:?})", self.0.get())
+    }
 }

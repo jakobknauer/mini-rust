@@ -44,7 +44,6 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         mthd_name: &str,
         require_receiver: bool,
     ) -> TypeckResult<'ctxt, Option<FoundMthd<'ctxt>>> {
-        let constraints = self.constraints.clone();
         let inherent_impls: Vec<_> = self.ctxt.impls.get_inherent_impls().collect();
         let candidates: Vec<_> = inherent_impls
             .into_iter()
@@ -59,7 +58,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 let subst = ty::GenVarSubst::new(&impl_def.gen_params, env_gen_args).unwrap();
                 if !self
                     .ctxt
-                    .impl_constraints_satisfied(&constraints, &impl_def.constraints, &subst)
+                    .impl_constraints_satisfied(&self.constraints, &impl_def.constraints, &subst)
                 {
                     return None;
                 }
@@ -83,7 +82,6 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         mthd_name: &str,
         require_receiver: bool,
     ) -> TypeckResult<'ctxt, Option<FoundMthd<'ctxt>>> {
-        let constraints = self.constraints.clone();
         let candidates: Vec<_> = self
             .ctxt
             .traits
@@ -91,7 +89,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .collect();
         let candidates: Vec<_> = candidates
             .into_iter()
-            .filter(|mthd| self.ctxt.ty_implements_trait(&constraints, base_ty, mthd.trait_))
+            .filter(|mthd| self.ctxt.ty_implements_trait(&self.constraints, base_ty, mthd.trait_))
             .collect();
 
         match candidates.as_slice() {
@@ -154,7 +152,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 let mthd_subst = ty::GenVarSubst::new(&decl.gen_params, resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(trait_subst, mthd_subst);
 
-                self.add_trait_mthd_constraint_obligations(&decl.constraints.clone(), &full_subst, base_ty);
+                self.add_trait_mthd_constraint_obligations(&decl.constraints, &full_subst, base_ty);
 
                 let mthd_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
                 Ok(MthdResolution::Trait(
@@ -185,17 +183,15 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     }
 
     fn fn_ty_of_trait_mthd_resolution(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let decl = inst.mthd.fn_;
-        let param_tys: Vec<_> = decl.params.iter().map(|p| p.ty).collect();
-        let decl_gen_params = decl.gen_params.clone();
-        let return_ty = decl.return_ty;
-        let var_args = decl.var_args;
-
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
+        let param_tys: Vec<_> = inst.mthd.fn_.params.iter().map(|p| p.ty).collect();
+        let fn_ty = self
+            .ctxt
+            .tys
+            .fn_(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
 
         let trait_gen_var_subst =
             ty::GenVarSubst::new(&inst.trait_inst.trait_.gen_params, inst.trait_inst.gen_args).unwrap();
-        let gen_var_subst = ty::GenVarSubst::new(&decl_gen_params, inst.gen_args).unwrap();
+        let gen_var_subst = ty::GenVarSubst::new(&inst.mthd.fn_.gen_params, inst.gen_args).unwrap();
         let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
 
         self.ctxt.tys.substitute(fn_ty, &all_gen_var_subst, Some(inst.impl_ty))

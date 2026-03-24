@@ -207,8 +207,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                     self.builder.insert_binary_prim_val(*prim, lhs, rhs, result_ty)
                 }
                 ExprExtra::BinaryOpMthd(resolution) => {
-                    let resolution = resolution.clone();
-                    let callee_op = self.lower_mthd_resolution_to_op(&resolution);
+                    let callee_op = self.lower_mthd_resolution_to_op(resolution);
                     let left_op = self.lower_to_op(left);
                     let right_op = self.lower_to_op(right);
                     self.builder.insert_call_val(callee_op, vec![left_op, right_op])

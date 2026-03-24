@@ -236,13 +236,14 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
     }
 
     fn trait_mthd_fn_ty(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let decl = inst.mthd.fn_;
-        let param_tys: Vec<_> = decl.params.iter().map(|p| p.ty).collect();
-        let decl_gen_params = decl.gen_params.clone();
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, decl.return_ty, decl.var_args);
+        let param_tys: Vec<_> = inst.mthd.fn_.params.iter().map(|p| p.ty).collect();
+        let fn_ty = self
+            .ctxt
+            .tys
+            .fn_(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
 
         let trait_subst = ty::GenVarSubst::new(&inst.trait_inst.trait_.gen_params, inst.trait_inst.gen_args).unwrap();
-        let mthd_subst = ty::GenVarSubst::new(&decl_gen_params, inst.gen_args).unwrap();
+        let mthd_subst = ty::GenVarSubst::new(&inst.mthd.fn_.gen_params, inst.gen_args).unwrap();
         let all_subst = ty::GenVarSubst::compose(trait_subst, mthd_subst);
 
         self.ctxt.tys.substitute(fn_ty, &all_subst, Some(inst.impl_ty))

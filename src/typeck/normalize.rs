@@ -95,9 +95,8 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 let trait_gen_args = self.normalize_slice(trait_inst.gen_args);
                 let trait_inst = trait_inst.with_gen_args(trait_gen_args).unwrap();
 
-                let constraints = self.constraints.clone();
                 let current = self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);
-                for c in &constraints {
+                for c in &self.constraints {
                     if let ty::ConstraintRequirement::AssocTyEq(eq_ty) = c.requirement
                         && c.subject == current
                     {
@@ -107,7 +106,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
 
                 let impl_insts: Vec<_> = self
                     .ctxt
-                    .get_impl_insts_for_ty_and_trait_inst(&constraints, base_ty, trait_inst)
+                    .get_impl_insts_for_ty_and_trait_inst(&self.constraints, base_ty, trait_inst)
                     .collect();
                 let [impl_inst] = &impl_insts[..] else {
                     return self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);

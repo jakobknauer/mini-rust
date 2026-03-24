@@ -24,7 +24,6 @@ pub struct ImplInst<'impls> {
     pub impl_: Impl,
     pub gen_args: TySlice<'impls>,
     pub(in crate::ctxt) _private: (),
-    pub(in crate::ctxt) _phantom: std::marker::PhantomData<&'impls ()>,
 }
 
 #[derive(Clone)]

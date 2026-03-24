@@ -9,7 +9,6 @@ use crate::ctxt::{
 
 #[derive(Default)]
 pub struct ImplReg<'impls> {
-    _phantom: std::marker::PhantomData<&'impls ()>,
     impls: Vec<ImplDef<'impls>>,
 }
 
@@ -27,7 +26,6 @@ impl<'impls> ImplReg<'impls> {
             impl_,
             gen_args,
             _private: (),
-            _phantom: std::marker::PhantomData,
         })
     }
 

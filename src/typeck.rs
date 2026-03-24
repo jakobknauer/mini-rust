@@ -220,15 +220,11 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 actual,
             })?;
 
-        let gen_params = fn_.gen_params.clone();
-        let subst = ty::GenVarSubst::new(&gen_params, gen_args.clone()).unwrap();
+        let subst = ty::GenVarSubst::new(&fn_.gen_params, gen_args.clone()).unwrap();
         let param_tys: Vec<_> = fn_.params.iter().map(|param| param.ty).collect();
-        let return_ty = fn_.return_ty;
-        let var_args = fn_.var_args;
-
         self.add_constraint_obligations(fn_, &subst);
 
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
+        let fn_ty = self.ctxt.tys.fn_(&param_tys, fn_.return_ty, fn_.var_args);
 
         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
         let empty = self.ctxt.tys.ty_slice(&[]);
@@ -454,7 +450,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints.clone(), fn_ty) else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
             unreachable!("method resolution always produces a callable type");
         };
 
@@ -494,8 +490,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let callee_ty = self.check_expr(callee, None)?;
         let callee_ty = self.normalize(callee_ty);
 
-        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints.clone(), callee_ty)
-        else {
+        let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, callee_ty) else {
             return Err(TypeckError::CalleeNotCallable { ty: callee_ty });
         };
 
@@ -818,10 +813,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 ty::ConstraintRequirement::Trait(trait_inst) => {
                     let gen_args = self.normalize_slice(trait_inst.gen_args);
                     let trait_inst = trait_inst.with_gen_args(gen_args).unwrap();
-                    if !self
-                        .ctxt
-                        .ty_implements_trait_inst(&self.constraints.clone(), ty, trait_inst)
-                    {
+                    if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
                         return Err(TypeckError::ConstraintNotSatisfied { ty, trait_inst });
                     }
                 }
@@ -839,8 +831,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     let param_tys = self.normalize_slice(param_tys);
                     let return_ty = self.normalize(return_ty);
 
-                    let Some((actual_params, actual_return, _)) =
-                        self.ctxt.ty_is_callable(&self.constraints.clone(), ty)
+                    let Some((actual_params, actual_return, _)) = self.ctxt.ty_is_callable(&self.constraints, ty)
                     else {
                         return Err(TypeckError::CallableConstraintNotSatisfied {
                             ty,

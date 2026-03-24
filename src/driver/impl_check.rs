@@ -7,13 +7,13 @@ use crate::ctxt::{
     ty,
 };
 
-pub struct ImplCheckError<'ty> {
+pub struct ImplCheckError<'ctxt> {
     pub impl_: Impl,
-    pub trait_inst: TraitInst<'ty>,
-    pub kind: ImplCheckErrorKind<'ty>,
+    pub trait_inst: TraitInst<'ctxt>,
+    pub kind: ImplCheckErrorKind<'ctxt>,
 }
 
-pub enum ImplCheckErrorKind<'ty> {
+pub enum ImplCheckErrorKind<'ctxt> {
     MissingMthds(Vec<String>),
     ExtraMthds(Vec<String>),
     ParamCountMismatch {
@@ -23,14 +23,14 @@ pub enum ImplCheckErrorKind<'ty> {
     },
     ArgTypeMismatch {
         mthd: String,
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
         arg_idx: usize,
     },
     ReturnTypeMismatch {
         mthd: String,
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     MthdGenParamCountMismatch {
         mthd: String,

@@ -25,6 +25,7 @@ impl<'fns> FnReg<'fns> {
         }
     }
 
+    // TODO does this need to be a method?
     pub fn inst_fn(
         &self,
         fn_: Fn<'fns>,
@@ -48,10 +49,10 @@ impl<'fns> FnReg<'fns> {
             gen_args,
             env_gen_args,
             _private: (),
-            _phantom: std::marker::PhantomData,
         })
     }
 
+    // TODO create the FnDecl inside the function?
     pub fn register_fn(&self, mut decl: FnDecl<'fns>, register_name: bool) -> Result<Fn<'fns>, ()> {
         if register_name && self.fn_names.borrow().contains_key(&decl.name) {
             return Err(());

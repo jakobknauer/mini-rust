@@ -203,8 +203,6 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         struct_: ty::Struct<'arena>,
         fields: impl IntoIterator<Item = &'b ast::StructField<'b>>,
     ) -> Result<(), DriverError<'arena>> {
-        let gen_params = struct_.gen_params.clone();
-
         let fields = fields
             .into_iter()
             .map(|field| {
@@ -214,7 +212,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                         .try_resolve_ast_ty_annot(
                             field.ty,
                             ResCtxt {
-                                gen_vars: &gen_params,
+                                gen_vars: &struct_.gen_params,
                                 self_ty: None,
                                 constraints: &[],
                             },
