@@ -45,6 +45,7 @@ pub struct TraitInstError<'traits> {
 pub struct TraitInst<'traits> {
     pub trait_: Trait<'traits>,
     pub gen_args: TySlice<'traits>,
+    pub(in crate::ctxt) _private: (),
 }
 
 pub struct TraitMthdDef<'traits> {
@@ -84,6 +85,7 @@ impl<'traits> TraitInst<'traits> {
         Ok(TraitInst {
             trait_: self.trait_,
             gen_args,
+            _private: (),
         })
     }
 }

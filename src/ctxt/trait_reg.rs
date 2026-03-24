@@ -62,7 +62,11 @@ impl<'traits> TraitReg<'traits> {
                 actual: gen_args.len(),
             });
         }
-        Ok(TraitInst { trait_, gen_args })
+        Ok(TraitInst {
+            trait_,
+            gen_args,
+            _private: (),
+        })
     }
 
     pub fn register_trait(
