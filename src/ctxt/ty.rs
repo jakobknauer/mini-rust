@@ -79,7 +79,7 @@ pub enum TyDef<'ty> {
     Ref(Ty<'ty>),
     Ptr(Ty<'ty>),
     GenVar(GenVar<'ty>),
-    TraitSelf(traits::Trait),
+    TraitSelf(traits::Trait<'ty>),
     Closure {
         name: String,
         captures_ty: Ty<'ty>,

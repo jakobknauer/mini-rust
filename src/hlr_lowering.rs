@@ -781,11 +781,9 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 (op, by_ref)
             }
             MthdResolution::Trait(inst) => {
-                let by_ref = self
-                    .builder
-                    .ctxt
-                    .traits
-                    .get_trait_mthd_fn(inst.trait_inst.trait_, inst.mthd_idx)
+                let by_ref = inst
+                    .mthd
+                    .fn_
                     .params
                     .first()
                     .map(|p| p.kind == fns::FnParamKind::SelfByRef)

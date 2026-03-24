@@ -4,13 +4,13 @@ use crate::ctxt::{fns::Fn, traits::Trait};
 pub struct LanguageItems<'fns> {
     pub size_of: Option<Fn<'fns>>,
     pub ptr_offset: Option<Fn<'fns>>,
-    pub add_trait: Option<Trait>,
-    pub sub_trait: Option<Trait>,
-    pub mul_trait: Option<Trait>,
-    pub div_trait: Option<Trait>,
-    pub bit_or_trait: Option<Trait>,
-    pub bit_and_trait: Option<Trait>,
-    pub rem_trait: Option<Trait>,
+    pub add_trait: Option<Trait<'fns>>,
+    pub sub_trait: Option<Trait<'fns>>,
+    pub mul_trait: Option<Trait<'fns>>,
+    pub div_trait: Option<Trait<'fns>>,
+    pub bit_or_trait: Option<Trait<'fns>>,
+    pub bit_and_trait: Option<Trait<'fns>>,
+    pub rem_trait: Option<Trait<'fns>>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

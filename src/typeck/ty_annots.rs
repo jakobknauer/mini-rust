@@ -111,13 +111,13 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     fn resolve_assoc_ty_annot(
         &mut self,
         base: hlr::TyAnnot<'ctxt>,
-        trait_: Option<(traits::Trait, Option<hlr::TyAnnotSlice<'ctxt>>)>,
+        trait_: Option<(traits::Trait<'ctxt>, Option<hlr::TyAnnotSlice<'ctxt>>)>,
         name: &str,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let base_ty = self.resolve_ty_annot(base)?;
         match trait_ {
             Some((trait_, gen_arg_annots)) => {
-                let n_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+                let n_gen_params = trait_.gen_params.len();
                 let gen_args = self.resolve_optional_gen_args(gen_arg_annots, n_gen_params, |actual| {
                     TypeckError::TraitGenArgCountMismatch {
                         trait_,
@@ -147,7 +147,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                             base: base_ty,
                             name: name.to_string(),
                         })?;
-                let n_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+                let n_gen_params = trait_.gen_params.len();
                 let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();

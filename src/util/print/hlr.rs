@@ -31,8 +31,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
         let assoc = if let Some(assoc_ty) = hlr_fn.fn_.associated_ty {
             let ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
             if let Some(trait_inst) = &hlr_fn.fn_.associated_trait_inst {
-                let trait_name = self.ctxt.traits.get_trait_name(trait_inst.trait_);
-                format!("<{} as {}>::", ty_name, trait_name)
+                format!("<{} as {}>::", ty_name, trait_inst.trait_.name)
             } else {
                 format!("{}::", ty_name)
             }
@@ -270,8 +269,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 write!(self.writer, "<")?;
                 self.print_ty_annot(ty)?;
                 if let Some(trait_) = trait_ {
-                    let trait_name = self.ctxt.traits.get_trait_name(*trait_);
-                    write!(self.writer, " as {}", trait_name)?;
+                    write!(self.writer, " as {}", trait_.name)?;
                     if let Some(args) = trait_args {
                         write!(self.writer, "<")?;
                         for (i, &arg) in args.iter().enumerate() {
@@ -431,7 +429,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 write!(self.writer, "<")?;
                 self.print_ty_annot(base)?;
                 if let Some((trait_, gen_args)) = trait_ {
-                    write!(self.writer, " as {}", self.ctxt.traits.get_trait_name(*trait_))?;
+                    write!(self.writer, " as {}", trait_.name)?;
                     if let Some(args) = gen_args {
                         write!(self.writer, "<")?;
                         for (i, arg) in args.iter().enumerate() {

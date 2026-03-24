@@ -125,10 +125,8 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         self.pending_obligations
             .push((left_ty, ty::ConstraintRequirement::Trait(trait_inst)));
 
-        let found = super::mthd::FoundMthd::Trait {
-            trait_inst,
-            mthd_idx: 0,
-        };
+        let mthd = self.ctxt.traits.resolve_trait_method(trait_, mthd_name).unwrap();
+        let found = super::mthd::FoundMthd::Trait { trait_inst, mthd };
         let resolution = self.instantiate_mthd(found, left_ty, mthd_name, None)?;
         self.typing
             .expr_extra

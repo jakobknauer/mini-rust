@@ -6,10 +6,15 @@ pub fn register_fns<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ()> {
     register_size_of(ctxt)
 }
 
-fn register_arith_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>, trait_name: &str, mthd_name: &str) -> traits::Trait {
+fn register_arith_trait<'ctxt>(
+    ctxt: &mut ctxt::Ctxt<'ctxt>,
+    trait_name: &str,
+    mthd_name: &str,
+) -> traits::Trait<'ctxt> {
     let rhs_var = ctxt.tys.register_gen_var("Rhs");
-    let trait_ = ctxt.traits.register_trait(trait_name, vec![rhs_var]);
-    ctxt.traits.register_assoc_ty(trait_, "Output");
+    let trait_ = ctxt
+        .traits
+        .register_trait(trait_name, vec![rhs_var], vec!["Output".to_string()]);
 
     let self_ty = ctxt.tys.trait_self(trait_);
     let rhs_ty = ctxt.tys.gen_var(rhs_var);

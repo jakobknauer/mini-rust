@@ -114,7 +114,7 @@ pub enum ValDef<'mlr> {
 #[derive(Debug)]
 pub enum OpDef<'mlr> {
     Fn(FnInst<'mlr>),
-    TraitMthd(TraitMthdInst<'mlr>),
+    TraitMthdCall(TraitMthdInst<'mlr>),
     Const(Const),
     Copy(Place<'mlr>),
 }

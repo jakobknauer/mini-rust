@@ -32,9 +32,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         assert_eq!(matching_impl_insts.len(), 1);
         let [impl_inst] = matching_impl_insts.try_into().unwrap();
 
-        let trait_mthd_name = self
-            .traits
-            .get_trait_mthd_name(trait_mthd_inst.trait_inst.trait_, trait_mthd_inst.mthd_idx);
+        let trait_mthd_name = trait_mthd_inst.mthd.fn_.name.as_str();
 
         let impl_def = self.impls.get_impl_def(impl_inst.impl_);
         let fn_ = impl_def.mthds_by_name[trait_mthd_name];
@@ -155,9 +153,8 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         ident: &str,
     ) -> Option<ty::Ty<'ctxt>> {
         if let &ty::TyDef::TraitSelf(trait_) = base_ty.0 {
-            let trait_def = self.traits.get_trait_def(trait_);
-            let assoc_ty_index = trait_def.assoc_tys.iter().position(|name| name == ident)?;
-            let gen_args: Vec<_> = trait_def.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
+            let assoc_ty_index = trait_.assoc_tys.iter().position(|name| name == ident)?;
+            let gen_args: Vec<_> = trait_.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
             let gen_args = self.tys.ty_slice(&gen_args);
             let default_trait_inst = self.traits.inst_trait(trait_, gen_args).unwrap();
             let ty = self.tys.assoc_ty(base_ty, default_trait_inst, assoc_ty_index);
@@ -173,21 +170,15 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         match &candidate_assoc_tys[..] {
             [] => None,
             [(trait_, assoc_ty_idx)] => {
-                let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, base_ty, *trait_);
+                let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, base_ty, trait_);
 
                 let [impl_inst] = &impl_insts[..] else {
-                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraints, base_ty, *trait_) {
+                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraints, base_ty, trait_) {
                         return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                     }
-                    let gen_args: Vec<_> = self
-                        .traits
-                        .get_trait_def(*trait_)
-                        .gen_params
-                        .iter()
-                        .map(|gp| self.tys.gen_var(*gp))
-                        .collect();
+                    let gen_args: Vec<_> = trait_.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
                     let gen_args = self.tys.ty_slice(&gen_args);
-                    let trait_inst = self.traits.inst_trait(*trait_, gen_args).unwrap();
+                    let trait_inst = self.traits.inst_trait(trait_, gen_args).unwrap();
                     return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
 

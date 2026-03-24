@@ -47,7 +47,6 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         let assoc_ty = if let Some(assoc_ty) = self.decl.associated_ty {
             let assoc_ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
             if let Some(assoc_trait_inst) = &self.decl.associated_trait_inst {
-                let assoc_trait_name = self.ctxt.traits.get_trait_name(assoc_trait_inst.trait_);
                 let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
                     "".to_string()
                 } else {
@@ -64,7 +63,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
 
                 format!(
                     "<{} as {}{}>::",
-                    assoc_ty_name, assoc_trait_name, assoc_trait_gen_params
+                    assoc_ty_name, &assoc_trait_inst.trait_.name, assoc_trait_gen_params
                 )
             } else {
                 format!("{}::", assoc_ty_name)
@@ -300,9 +299,8 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
                 write!(self.writer, "fn {}", fn_name)
             }
-            TraitMthd(trait_mthd) => {
+            TraitMthdCall(trait_mthd) => {
                 let base_ty_name = self.ctxt.tys.get_string_rep(trait_mthd.impl_ty);
-                let trait_name = self.ctxt.traits.get_trait_name(trait_mthd.trait_inst.trait_);
 
                 let trait_gen_args = if trait_mthd.trait_inst.gen_args.is_empty() {
                     "".to_string()
@@ -319,14 +317,11 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                     )
                 };
 
-                let mthd_name = self
-                    .ctxt
-                    .traits
-                    .get_trait_mthd_name(trait_mthd.trait_inst.trait_, trait_mthd.mthd_idx);
+                let mthd_name = trait_mthd.mthd.fn_.name.as_str();
                 write!(
                     self.writer,
                     "<{} as {}{}>::{}",
-                    base_ty_name, trait_name, trait_gen_args, mthd_name
+                    base_ty_name, trait_mthd.trait_inst.trait_.name, trait_gen_args, mthd_name
                 )
             }
             Const(ref constant) => match *constant {

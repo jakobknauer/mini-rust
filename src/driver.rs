@@ -76,7 +76,7 @@ struct AstMeta<'ty> {
     fn_ids: HashMap<ast::FnId, fns::Fn<'ty>>,
     struct_ids: HashMap<ast::StructId, ty::Struct<'ty>>,
     enum_ids: HashMap<ast::EnumId, ty::Enum<'ty>>,
-    trait_ids: HashMap<ast::TraitId, traits::Trait>,
+    trait_ids: HashMap<ast::TraitId, traits::Trait<'ty>>,
     impl_ids: HashMap<ast::ImplId, impls::Impl>,
 }
 
@@ -246,15 +246,12 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 .map(|gp| self.ctxt.tys.register_gen_var(gp))
                 .collect();
 
+            let assoc_tys = ast_trait.assoc_ty_names.to_vec();
             let trait_ = self
                 .ctxt
                 .traits
-                .register_trait(&ast_trait.name, trait_gen_params.clone());
+                .register_trait(&ast_trait.name, trait_gen_params.clone(), assoc_tys);
             self.ast_meta.trait_ids.insert(ast_trait.1, trait_);
-
-            for assoc_ty in &ast_trait.assoc_ty_names {
-                self.ctxt.traits.register_assoc_ty(trait_, assoc_ty);
-            }
         }
 
         Ok(())
@@ -466,15 +463,13 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         for ast_trait in self.ast.traits().iter() {
             let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
             let self_type = self.ctxt.tys.trait_self(trait_);
-            let trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.clone();
-
             for &mthd in ast_trait.mthds.iter() {
                 let mthd_gen_params: Vec<_> = mthd
                     .gen_params
                     .iter()
                     .map(|gp| self.ctxt.tys.register_gen_var(gp))
                     .collect();
-                let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_gen_params).cloned().collect();
+                let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_.gen_params).cloned().collect();
 
                 let mut constraints: Vec<ty::Constraint> = Vec::new();
                 for constraint in &mthd.constraints {
@@ -505,7 +500,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                     None => self.ctxt.tys.unit(),
                 };
 
-                let trait_gen_args: Vec<_> = trait_gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
+                let trait_gen_args: Vec<_> = trait_.gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
                 let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
 
@@ -519,7 +514,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                             associated_ty: None,
                             associated_trait_inst: Some(trait_inst),
                             gen_params: mthd_gen_params,
-                            env_gen_params: trait_gen_params.clone(),
+                            env_gen_params: trait_.gen_params.clone(),
                             env_constraints: Vec::new(),
                             params,
                             var_args: false,

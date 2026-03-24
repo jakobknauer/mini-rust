@@ -1,46 +1,47 @@
+use std::cell::RefCell;
+
 use crate::ctxt::{
     fns::{Fn, TraitMthdInst, TraitMthdInstError},
-    traits::{Trait, TraitDef, TraitInst},
+    traits::{Trait, TraitDef, TraitId, TraitInst, TraitMthd, TraitMthdDef},
     ty::{GenVar, Ty, TySlice},
 };
 
 pub use crate::ctxt::traits::TraitInstError;
 
-#[derive(Default)]
 pub struct TraitReg<'traits> {
-    _phantom: std::marker::PhantomData<&'traits ()>,
-    traits: Vec<TraitDef<'traits>>,
+    arena: &'traits bumpalo::Bump,
+    traits: RefCell<Vec<Trait<'traits>>>,
+    mthds: RefCell<Vec<TraitMthd<'traits>>>,
 }
 
 impl<'traits> TraitReg<'traits> {
+    pub fn new(arena: &'traits bumpalo::Bump) -> Self {
+        Self {
+            arena,
+            traits: RefCell::default(),
+            mthds: RefCell::default(),
+        }
+    }
+
+    // TODO must this be a method?
     pub fn inst_trait_mthd(
         &self,
         trait_inst: TraitInst<'traits>,
-        mthd_idx: usize,
+        mthd: TraitMthd<'traits>,
         impl_ty: Ty<'traits>,
         gen_args: TySlice<'traits>,
-    ) -> Result<TraitMthdInst<'traits>, TraitMthdInstError> {
-        let trait_def = self.traits.get(trait_inst.trait_.0).unwrap();
-        if mthd_idx >= trait_def.mthds.len() {
-            return Err(TraitMthdInstError::MthdIdxOutOfRange {
-                trait_: trait_inst.trait_,
-                mthd_count: trait_def.mthds.len(),
-                actual: mthd_idx,
-            });
-        }
-        let mthd_fn = trait_def.mthds[mthd_idx];
-        let n_gen_params = mthd_fn.gen_params.len();
+    ) -> Result<TraitMthdInst<'traits>, TraitMthdInstError<'traits>> {
+        let n_gen_params = mthd.fn_.gen_params.len();
         if n_gen_params != gen_args.len() {
             return Err(TraitMthdInstError::GenArgCountMismatch {
-                trait_: trait_inst.trait_,
-                mthd_idx,
+                mthd,
                 expected: n_gen_params,
                 actual: gen_args.len(),
             });
         }
         Ok(TraitMthdInst {
             trait_inst,
-            mthd_idx,
+            mthd,
             impl_ty,
             gen_args,
             _private: (),
@@ -48,114 +49,104 @@ impl<'traits> TraitReg<'traits> {
         })
     }
 
-    pub fn inst_trait(&self, trait_: Trait, gen_args: TySlice<'traits>) -> Result<TraitInst<'traits>, TraitInstError> {
-        let trait_def = self.traits.get(trait_.0).unwrap();
-        if trait_def.gen_params.len() != gen_args.len() {
+    // TODO must this be a method?
+    pub fn inst_trait(
+        &self,
+        trait_: Trait<'traits>,
+        gen_args: TySlice<'traits>,
+    ) -> Result<TraitInst<'traits>, TraitInstError<'traits>> {
+        if trait_.gen_params.len() != gen_args.len() {
             return Err(TraitInstError {
                 trait_,
-                expected: trait_def.gen_params.len(),
+                expected: trait_.gen_params.len(),
                 actual: gen_args.len(),
             });
         }
-        Ok(TraitInst {
-            trait_,
-            gen_args,
-            _private: (),
-            _phantom: std::marker::PhantomData,
-        })
+        Ok(TraitInst { trait_, gen_args })
     }
 
-    pub fn register_trait(&mut self, name: &str, gen_params: Vec<GenVar<'traits>>) -> Trait {
-        let trait_ = Trait(self.traits.len());
-        self.traits.push(TraitDef {
+    pub fn register_trait(
+        &self,
+        name: &str,
+        gen_params: Vec<GenVar<'traits>>,
+        assoc_tys: Vec<String>,
+    ) -> Trait<'traits> {
+        let idx = self.traits.borrow().len();
+        let trait_: Trait<'traits> = self.arena.alloc(TraitDef {
+            id: TraitId(idx),
             name: name.to_string(),
             gen_params,
-            mthds: Vec::new(),
-            assoc_tys: Vec::new(),
+            assoc_tys,
         });
+        self.traits.borrow_mut().push(trait_);
         trait_
     }
 
-    pub fn register_mthd(&mut self, trait_: Trait, fn_: Fn<'traits>) {
-        self.traits[trait_.0].mthds.push(fn_);
+    pub fn register_mthd(&self, trait_: Trait<'traits>, fn_: Fn<'traits>) -> TraitMthd<'traits> {
+        let mthd: TraitMthd<'traits> = self.arena.alloc(TraitMthdDef { trait_, fn_ });
+        self.mthds.borrow_mut().push(mthd);
+        mthd
     }
 
-    pub fn register_assoc_ty(&mut self, trait_: Trait, name: &str) {
-        self.traits[trait_.0].assoc_tys.push(name.to_string());
+    pub fn resolve_trait_name(&self, trait_name: &str) -> Option<Trait<'traits>> {
+        self.traits.borrow().iter().copied().find(|t| t.name == trait_name)
     }
 
-    pub fn resolve_trait_name(&self, trait_name: &str) -> Option<Trait> {
-        self.traits
+    pub fn get_trait_mthds(&self, trait_: Trait<'traits>) -> impl Iterator<Item = TraitMthd<'traits>> {
+        self.mthds
+            .borrow()
             .iter()
-            .position(|trait_| trait_.name == trait_name)
-            .map(Trait)
-    }
-
-    pub fn get_trait_def(&self, trait_: Trait) -> &TraitDef<'traits> {
-        self.traits.get(trait_.0).unwrap()
-    }
-
-    pub fn get_trait_name(&self, trait_: Trait) -> &str {
-        self.traits.get(trait_.0).unwrap().name.as_str()
-    }
-
-    pub fn get_trait_mthd_fn(&self, trait_: Trait, mthd_idx: usize) -> Fn<'traits> {
-        self.traits.get(trait_.0).unwrap().mthds[mthd_idx]
-    }
-
-    pub fn get_trait_mthd_name(&self, trait_: Trait, mthd_idx: usize) -> &'traits str {
-        self.get_trait_mthd_fn(trait_, mthd_idx).name.as_str()
+            .copied()
+            .filter(move |mthd| std::ptr::eq(mthd.trait_, trait_))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     pub fn get_trait_mthd_with_name(
         &self,
         mthd_name: &str,
         must_have_receiver: bool,
-    ) -> impl Iterator<Item = (Trait, usize)> {
-        self.traits
+    ) -> impl Iterator<Item = TraitMthd<'traits>> {
+        self.mthds
+            .borrow()
             .iter()
-            .enumerate()
-            .filter_map(move |(trait_idx, trait_def)| {
-                trait_def
-                    .mthds
+            .copied()
+            .filter(move |mthd| mthd.fn_.name == mthd_name && (!must_have_receiver || mthd.fn_.has_receiver()))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    pub fn resolve_trait_method(&self, trait_: Trait<'traits>, ident: &str) -> Option<TraitMthd<'traits>> {
+        self.mthds
+            .borrow()
+            .iter()
+            .copied()
+            .find(|mthd| std::ptr::eq(mthd.trait_, trait_) && mthd.fn_.name == ident)
+    }
+
+    pub fn get_trait_assoc_ty_with_name(&self, ident: &str) -> impl Iterator<Item = (Trait<'traits>, usize)> {
+        self.traits
+            .borrow()
+            .iter()
+            .copied()
+            .filter_map(move |trait_| {
+                trait_
+                    .assoc_tys
                     .iter()
-                    .position(|&fn_| fn_.name == mthd_name && (!must_have_receiver || fn_.has_receiver()))
-                    .map(|mthd_idx| (Trait(trait_idx), mthd_idx))
+                    .position(|assoc_ty| assoc_ty == ident)
+                    .map(|assoc_ty_idx| (trait_, assoc_ty_idx))
             })
             .collect::<Vec<_>>()
             .into_iter()
     }
 
-    pub fn resolve_trait_method(&self, trait_: Trait, ident: &str) -> Option<usize> {
-        self.traits
-            .get(trait_.0)?
-            .mthds
-            .iter()
-            .position(|&fn_| fn_.name == ident)
+    // TODO make this a method of Trait?
+    pub fn resolve_assoc_ty_name(&self, trait_: Trait<'traits>, name: &str) -> Option<usize> {
+        trait_.assoc_tys.iter().position(|n| n == name)
     }
 
-    pub fn get_trait_assoc_ty_with_name(&self, ident: &str) -> impl Iterator<Item = (Trait, usize)> {
-        self.traits
-            .iter()
-            .enumerate()
-            .filter_map(move |(trait_idx, trait_def)| {
-                trait_def
-                    .assoc_tys
-                    .iter()
-                    .position(|assoc_ty| assoc_ty == ident)
-                    .map(|assoc_ty_idx| (Trait(trait_idx), assoc_ty_idx))
-            })
-    }
-
-    pub fn resolve_assoc_ty_name(&self, trait_: Trait, name: &str) -> Option<usize> {
-        self.traits[trait_.0].assoc_tys.iter().position(|n| n == name)
-    }
-
-    pub fn get_trait_assoc_ty_index(&self, trait_: Trait, name: &str) -> usize {
-        self.traits[trait_.0]
-            .assoc_tys
-            .iter()
-            .position(|assoc_ty| assoc_ty == name)
-            .unwrap()
+    // TODO make this a method of Trait?
+    pub fn get_trait_assoc_ty_index(&self, trait_: Trait<'traits>, name: &str) -> usize {
+        trait_.assoc_tys.iter().position(|assoc_ty| assoc_ty == name).unwrap()
     }
 }

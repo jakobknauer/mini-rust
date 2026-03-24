@@ -15,7 +15,7 @@ pub(super) enum FoundMthd<'ty> {
     },
     Trait {
         trait_inst: traits::TraitInst<'ty>,
-        mthd_idx: usize,
+        mthd: traits::TraitMthd<'ty>,
     },
 }
 
@@ -91,17 +91,17 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .collect();
         let candidates: Vec<_> = candidates
             .into_iter()
-            .filter(|&(trait_, _)| self.ctxt.ty_implements_trait(&constraints, base_ty, trait_))
+            .filter(|mthd| self.ctxt.ty_implements_trait(&constraints, base_ty, mthd.trait_))
             .collect();
 
         match candidates.as_slice() {
             [] => Ok(None),
-            &[(trait_, mthd_idx)] => {
-                let n_trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+            &[mthd] => {
+                let n_trait_gen_params = mthd.trait_.gen_params.len();
                 let trait_gen_args: Vec<_> = (0..n_trait_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
                 let trait_gen_args_slice = self.ctxt.tys.ty_slice(&trait_gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args_slice).unwrap();
-                Ok(Some(FoundMthd::Trait { trait_inst, mthd_idx }))
+                let trait_inst = self.ctxt.traits.inst_trait(mthd.trait_, trait_gen_args_slice).unwrap();
+                Ok(Some(FoundMthd::Trait { trait_inst, mthd }))
             }
             _ => Err(TypeckError::AmbiguousMthd {
                 base_ty,
@@ -139,10 +139,8 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                     self.ctxt.fns.inst_fn(fn_, fn_gen_args, env_gen_args).unwrap(),
                 ))
             }
-            FoundMthd::Trait { trait_inst, mthd_idx } => {
-                let decl = self.ctxt.traits.get_trait_mthd_fn(trait_inst.trait_, mthd_idx);
-                let trait_gen_params = self.ctxt.traits.get_trait_def(trait_inst.trait_).gen_params.clone();
-
+            FoundMthd::Trait { trait_inst, mthd } => {
+                let decl = mthd.fn_;
                 let n_mthd_gen_params = decl.gen_params.len();
                 let resolved_gen_args = self.resolve_optional_gen_args(gen_args, n_mthd_gen_params, |actual| {
                     TypeckError::MthdGenArgCountMismatch {
@@ -152,7 +150,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                     }
                 })?;
 
-                let trait_subst = ty::GenVarSubst::new(&trait_gen_params, trait_inst.gen_args).unwrap();
+                let trait_subst = ty::GenVarSubst::new(&trait_inst.trait_.gen_params, trait_inst.gen_args).unwrap();
                 let mthd_subst = ty::GenVarSubst::new(&decl.gen_params, resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(trait_subst, mthd_subst);
 
@@ -162,7 +160,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 Ok(MthdResolution::Trait(
                     self.ctxt
                         .traits
-                        .inst_trait_mthd(trait_inst, mthd_idx, base_ty, mthd_gen_args)
+                        .inst_trait_mthd(trait_inst, mthd, base_ty, mthd_gen_args)
                         .unwrap(),
                 ))
             }
@@ -187,26 +185,16 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     }
 
     fn fn_ty_of_trait_mthd_resolution(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
-        let decl = self
-            .ctxt
-            .traits
-            .get_trait_mthd_fn(inst.trait_inst.trait_, inst.mthd_idx);
+        let decl = inst.mthd.fn_;
         let param_tys: Vec<_> = decl.params.iter().map(|p| p.ty).collect();
         let decl_gen_params = decl.gen_params.clone();
         let return_ty = decl.return_ty;
         let var_args = decl.var_args;
-        let _ = decl;
-
-        let trait_gen_params = self
-            .ctxt
-            .traits
-            .get_trait_def(inst.trait_inst.trait_)
-            .gen_params
-            .clone();
 
         let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
 
-        let trait_gen_var_subst = ty::GenVarSubst::new(&trait_gen_params, inst.trait_inst.gen_args).unwrap();
+        let trait_gen_var_subst =
+            ty::GenVarSubst::new(&inst.trait_inst.trait_.gen_params, inst.trait_inst.gen_args).unwrap();
         let gen_var_subst = ty::GenVarSubst::new(&decl_gen_params, inst.gen_args).unwrap();
         let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
 

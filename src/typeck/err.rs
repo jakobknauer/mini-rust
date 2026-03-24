@@ -119,7 +119,7 @@ pub enum TypeckError<'ty> {
         actual: ty::Ty<'ty>,
     },
     TraitGenArgCountMismatch {
-        trait_: traits::Trait,
+        trait_: traits::Trait<'ty>,
         expected: usize,
         actual: usize,
     },

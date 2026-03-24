@@ -93,7 +93,7 @@ pub enum ExprDef<'hlr> {
 
     QualifiedMthd {
         ty: TyAnnot<'hlr>,
-        trait_: Option<traits::Trait>,
+        trait_: Option<traits::Trait<'hlr>>,
         trait_args: Option<TyAnnotSlice<'hlr>>,
         mthd_name: String,
         args: Option<TyAnnotSlice<'hlr>>,

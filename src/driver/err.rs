@@ -98,7 +98,7 @@ fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>, ctxt: &ctxt::Ctxt<
 
     format!(
         "error checking implementation of trait '{}' for type '{}': {}",
-        ctxt.traits.get_trait_name(err.trait_inst.trait_),
+        err.trait_inst.trait_.name,
         ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).ty),
         desc
     )
@@ -108,7 +108,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
     use TypeckError::*;
 
     let ty = |t| ctxt.tys.get_string_rep(t);
-    let trait_ = |t| ctxt.traits.get_trait_name(t).to_string();
+    let trait_ = |t: ctxt::traits::Trait| t.name.to_string();
     let struct_ = |s: ty::Struct<'_>| s.name.clone();
     let enum_ = |e: ty::Enum<'_>| e.name.clone();
 

@@ -1,5 +1,5 @@
 use crate::ctxt::{
-    traits::{Trait, TraitInst},
+    traits::{Trait, TraitInst, TraitMthd},
     ty::{Constraint, GenVar, Ty, TySlice},
 };
 
@@ -132,20 +132,10 @@ impl<'fns> FnInst<'fns> {
 }
 
 #[derive(Debug)]
-pub enum TraitMthdInstError {
-    MthdIdxOutOfRange {
-        #[allow(unused)]
-        trait_: Trait,
-        #[allow(unused)]
-        mthd_count: usize,
-        #[allow(unused)]
-        actual: usize,
-    },
+pub enum TraitMthdInstError<'fns> {
     GenArgCountMismatch {
         #[allow(unused)]
-        trait_: Trait,
-        #[allow(unused)]
-        mthd_idx: usize,
+        mthd: TraitMthd<'fns>,
         #[allow(unused)]
         expected: usize,
         #[allow(unused)]
@@ -153,16 +143,16 @@ pub enum TraitMthdInstError {
     },
     TraitMismatch {
         #[allow(unused)]
-        expected: Trait,
+        expected: Trait<'fns>,
         #[allow(unused)]
-        actual: Trait,
+        actual: Trait<'fns>,
     },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct TraitMthdInst<'fns> {
     pub trait_inst: TraitInst<'fns>,
-    pub mthd_idx: usize,
+    pub mthd: TraitMthd<'fns>,
     pub impl_ty: Ty<'fns>,
     pub gen_args: TySlice<'fns>,
     pub(in crate::ctxt) _private: (),
@@ -175,7 +165,7 @@ impl<'fns> TraitMthdInst<'fns> {
         impl_ty: Ty<'fns>,
         trait_inst: TraitInst<'fns>,
         gen_args: TySlice<'fns>,
-    ) -> Result<TraitMthdInst<'fns>, TraitMthdInstError> {
+    ) -> Result<TraitMthdInst<'fns>, TraitMthdInstError<'fns>> {
         if trait_inst.trait_ != self.trait_inst.trait_ {
             return Err(TraitMthdInstError::TraitMismatch {
                 expected: self.trait_inst.trait_,
@@ -184,15 +174,14 @@ impl<'fns> TraitMthdInst<'fns> {
         }
         if gen_args.len() != self.gen_args.len() {
             return Err(TraitMthdInstError::GenArgCountMismatch {
-                trait_: self.trait_inst.trait_,
-                mthd_idx: self.mthd_idx,
+                mthd: self.mthd,
                 expected: self.gen_args.len(),
                 actual: gen_args.len(),
             });
         }
         Ok(TraitMthdInst {
             trait_inst,
-            mthd_idx: self.mthd_idx,
+            mthd: self.mthd,
             impl_ty,
             gen_args,
             _private: (),

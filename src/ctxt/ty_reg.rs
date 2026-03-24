@@ -239,7 +239,7 @@ impl<'ty> TyReg<'ty> {
         GenVar(idx, name)
     }
 
-    pub fn trait_self(&self, trait_: Trait) -> Ty<'ty> {
+    pub fn trait_self(&self, trait_: Trait<'ty>) -> Ty<'ty> {
         let trait_self = TyDef::TraitSelf(trait_);
         self.register_ty(trait_self)
     }
@@ -562,7 +562,7 @@ impl<'ty> TyReg<'ty> {
                 format!(
                     "<{} as Trait({})::<{}>>::{}",
                     self.get_string_rep_with_subst(base_ty, subst),
-                    trait_inst.trait_.0,
+                    trait_inst.trait_.id.0,
                     trait_arg_names,
                     assoc_ty_idx
                 )

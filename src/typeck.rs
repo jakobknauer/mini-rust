@@ -259,7 +259,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         &mut self,
         expr_id: hlr::ExprId,
         ty: hlr::TyAnnot<'ctxt>,
-        trait_: Option<traits::Trait>,
+        trait_: Option<traits::Trait<'ctxt>>,
         trait_args: Option<hlr::TyAnnotSlice<'ctxt>>,
         mthd_name: &str,
         args: Option<hlr::TyAnnotSlice<'ctxt>>,
@@ -269,7 +269,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let found = match trait_ {
             None => self.resolve_mthd(base_ty, mthd_name, false)?,
             Some(trait_) => {
-                let n_trait_gen_params = self.ctxt.traits.get_trait_def(trait_).gen_params.len();
+                let n_trait_gen_params = trait_.gen_params.len();
                 let trait_gen_args = self.resolve_optional_gen_args(trait_args, n_trait_gen_params, |actual| {
                     TypeckError::TraitGenArgCountMismatch {
                         trait_,
@@ -280,7 +280,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
                 let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
 
-                let mthd_idx = self
+                let mthd = self
                     .ctxt
                     .traits
                     .resolve_trait_method(trait_, mthd_name)
@@ -289,7 +289,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                         mthd_name: mthd_name.to_string(),
                     })?;
 
-                mthd::FoundMthd::Trait { trait_inst, mthd_idx }
+                mthd::FoundMthd::Trait { trait_inst, mthd }
             }
         };
 

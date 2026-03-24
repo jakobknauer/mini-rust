@@ -311,7 +311,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
         match *op {
             Fn(fn_inst) => self.build_global_function(fn_inst),
-            TraitMthd(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
+            TraitMthdCall(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
             Const(ref constant) => self.build_constant(constant),
             Copy(place) => {
                 let place_ptr = self.build_place(place)?;

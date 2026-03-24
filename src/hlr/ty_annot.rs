@@ -12,7 +12,7 @@ pub enum TyAnnotDef<'hlr> {
 
     AssocTy {
         base: TyAnnot<'hlr>,
-        trait_: Option<(traits::Trait, Option<TyAnnotSlice<'hlr>>)>,
+        trait_: Option<(traits::Trait<'hlr>, Option<TyAnnotSlice<'hlr>>)>,
         name: String,
     },
 
