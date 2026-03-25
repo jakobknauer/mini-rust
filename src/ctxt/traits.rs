@@ -9,7 +9,7 @@ pub type TraitMthd<'traits> = &'traits TraitMthdDef<'traits>;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct TraitId(pub(in crate::ctxt) usize);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TraitDef<'traits> {
     pub(in crate::ctxt) id: TraitId,
     pub name: String,

@@ -648,7 +648,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 continue;
             }
 
-            let subst = self.ctxt.get_subst_for_fn_inst(current);
+            let subst = current.get_subst();
 
             let fn_insts = self
                 .ctxt

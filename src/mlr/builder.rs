@@ -231,7 +231,7 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
         let var_args = fn_inst.fn_.var_args;
         let _ = fn_inst.fn_;
         let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
-        let subst = self.ctxt.get_subst_for_fn_inst(fn_inst);
+        let subst = fn_inst.get_subst();
         self.ctxt.tys.substitute_gen_vars(fn_ty, &subst)
     }
 

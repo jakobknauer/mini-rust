@@ -37,6 +37,8 @@ impl<'ctxt> Ctxt<'ctxt> {
         }
     }
 
+    /// TODO Only needs self for [`TyReg::get_string_rep`]. Once that method is refactored,
+    /// refactor this one as well.
     pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst<'ctxt>) -> String {
         let assoc_ty = if let Some(assoc_ty) = fn_inst.fn_.associated_ty {
             let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
@@ -97,15 +99,17 @@ impl<'ctxt> Ctxt<'ctxt> {
         format!("{}{}{}{}", assoc_ty, fn_inst.fn_.name, env_gen_args, gen_args)
     }
 
-    pub fn get_fn_inst_decl(&self, fn_inst: fns::FnInst<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, ty::Ty<'ctxt>, bool) {
-        let subst = self.get_subst_for_fn_inst(fn_inst);
+    pub fn get_fn_inst_sig(&self, fn_inst: fns::FnInst<'ctxt>) -> (ty::TySlice<'ctxt>, ty::Ty<'ctxt>, bool) {
+        let subst = fn_inst.get_subst();
 
-        let param_tys = fn_inst
+        let param_tys: Vec<_> = fn_inst
             .fn_
             .params
             .iter()
             .map(|p| self.tys.substitute_gen_vars(p.ty, &subst))
             .collect();
+        let param_tys = self.tys.ty_slice(&param_tys);
+
         let return_ty = self.tys.substitute_gen_vars(fn_inst.fn_.return_ty, &subst);
 
         (param_tys, return_ty, fn_inst.fn_.var_args)
@@ -113,7 +117,7 @@ impl<'ctxt> Ctxt<'ctxt> {
 
     // TODO check the relevance of this function. Is it only use to resolve associated types?
     // If so, perhaps rename, but compare to normalize() in typeck.rs
-    pub fn normalize_ty(&mut self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
+    pub fn normalize_ty(&self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
         use ty::TyDef::*;
 
         match ty.0 {
@@ -183,11 +187,5 @@ impl<'ctxt> Ctxt<'ctxt> {
                 self.normalize_ty(instantiated)
             }
         }
-    }
-
-    pub fn get_subst_for_fn_inst(&self, fn_inst: fns::FnInst<'ctxt>) -> GenVarSubst<'ctxt> {
-        let gen_param_subst = GenVarSubst::new(&fn_inst.fn_.gen_params, fn_inst.gen_args).unwrap();
-        let env_gen_param_subst = GenVarSubst::new(&fn_inst.fn_.env_gen_params, fn_inst.env_gen_args).unwrap();
-        GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
     }
 }

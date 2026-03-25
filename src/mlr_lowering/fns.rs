@@ -47,7 +47,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let locs = HashMap::new();
         let iw_fn = parent.get_fn(fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();
-        let subst = parent.mr_ctxt.get_subst_for_fn_inst(fn_inst);
+        let subst = fn_inst.get_subst();
 
         Self {
             parent,

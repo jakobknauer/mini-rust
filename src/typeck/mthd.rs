@@ -44,9 +44,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         mthd_name: &str,
         require_receiver: bool,
     ) -> TypeckResult<'ctxt, Option<FoundMthd<'ctxt>>> {
-        let inherent_impls: Vec<_> = self.ctxt.impls.get_inherent_impls().collect();
-        let candidates: Vec<_> = inherent_impls
-            .into_iter()
+        let candidates: Vec<_> = self
+            .ctxt
+            .impls
+            .get_inherent_impls()
             .filter_map(|impl_| {
                 let mthd_fn = *impl_.mthds.borrow().iter().find(|&&m| m.name == mthd_name)?;
                 let env_gen_args = self
@@ -55,13 +56,16 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                     .try_find_instantiation(base_ty, impl_.ty, &impl_.gen_params)
                     .ok()?;
                 let subst = ty::GenVarSubst::new(&impl_.gen_params, env_gen_args).unwrap();
-                if !self
-                    .ctxt
-                    .impl_constraints_satisfied(&self.constraints, &impl_.constraints, &subst)
-                {
-                    return None;
+
+                let impl_constraints_satisfied =
+                    self.ctxt
+                        .impl_constraints_satisfied(&self.constraints, &impl_.constraints, &subst);
+
+                if impl_constraints_satisfied && (!require_receiver || mthd_fn.has_receiver()) {
+                    Some((mthd_fn, env_gen_args))
+                } else {
+                    None
                 }
-                (!require_receiver || mthd_fn.has_receiver()).then_some((mthd_fn, env_gen_args))
             })
             .collect();
 
@@ -85,9 +89,6 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .ctxt
             .traits
             .get_trait_mthd_with_name(mthd_name, require_receiver)
-            .collect();
-        let candidates: Vec<_> = candidates
-            .into_iter()
             .filter(|mthd| self.ctxt.ty_implements_trait(&self.constraints, base_ty, mthd.trait_))
             .collect();
 
@@ -176,7 +177,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         let var_args = fn_inst.fn_.var_args;
         let _ = fn_inst.fn_;
         let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
-        let subst = self.ctxt.get_subst_for_fn_inst(fn_inst);
+        let subst = fn_inst.get_subst();
         self.ctxt.tys.substitute_gen_vars(fn_ty, &subst)
     }
 

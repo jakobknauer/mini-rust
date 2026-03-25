@@ -1,6 +1,6 @@
 use crate::ctxt::{
     traits::{Trait, TraitInst, TraitMthd},
-    ty::{Constraint, GenVar, Ty, TySlice},
+    ty::{self, Constraint, GenVar, Ty, TySlice},
 };
 
 pub type Fn<'fns> = &'fns FnDecl<'fns>;
@@ -65,13 +65,12 @@ impl<'fns> FnDecl<'fns> {
     }
 }
 
-#[derive(Clone)]
 pub struct FnParam<'fns> {
     pub kind: FnParamKind,
     pub ty: Ty<'fns>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum FnParamKind {
     Regular(String),
     Self_,
@@ -103,6 +102,12 @@ pub struct FnInst<'fns> {
 }
 
 impl<'fns> FnInst<'fns> {
+    pub fn get_subst(&self) -> ty::GenVarSubst<'fns> {
+        let gen_param_subst = ty::GenVarSubst::new(&self.fn_.gen_params, self.gen_args).unwrap();
+        let env_gen_param_subst = ty::GenVarSubst::new(&self.fn_.env_gen_params, self.env_gen_args).unwrap();
+        ty::GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
+    }
+
     pub fn with_gen_args(
         self,
         gen_args: TySlice<'fns>,

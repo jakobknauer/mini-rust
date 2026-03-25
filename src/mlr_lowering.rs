@@ -86,7 +86,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
 
     fn declare_functions(&mut self) {
         for fn_inst in self.fn_insts.clone() {
-            let (param_tys, return_ty, var_args) = self.mr_ctxt.get_fn_inst_decl(fn_inst);
+            let (param_tys, return_ty, var_args) = self.mr_ctxt.get_fn_inst_sig(fn_inst);
 
             let param_types: Vec<_> = param_tys
                 .iter()

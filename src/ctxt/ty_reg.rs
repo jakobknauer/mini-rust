@@ -16,7 +16,7 @@ pub struct TyReg<'ty> {
     next_enum_id: Cell<EnumId>,
     next_opaque_id: Cell<OpaqueId>,
 
-    tys_inv: RefCell<HashMap<TyDef<'ty>, Ty<'ty>>>,
+    tys_inv: RefCell<HashMap<TyDef<'ty>, Ty<'ty>>>, // TODO the value is just a reference to the key -- can this be improved somehow?
     ty_slices_inv: RefCell<HashSet<&'ty [Ty<'ty>]>>,
     named_tys: RefCell<HashMap<String, Named<'ty>>>,
 }
@@ -30,12 +30,16 @@ pub enum Named<'ty> {
 
 #[derive(Debug)]
 pub struct NotAStruct<'ty>(#[allow(unused)] pub Ty<'ty>);
+
 #[derive(Debug)]
 pub struct NotAnEnum<'ty>(#[allow(unused)] pub Ty<'ty>);
+
+#[allow(unused)]
 pub enum NotAStructField<'ty> {
-    NotAStruct(#[allow(unused)] Ty<'ty>),
-    NotAFieldName(#[allow(unused)] Ty<'ty>, #[allow(unused)] String),
+    NotAStruct(Ty<'ty>),
+    NotAFieldName(Ty<'ty>, String),
 }
+
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
 #[allow(unused)]
