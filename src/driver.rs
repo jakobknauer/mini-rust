@@ -77,7 +77,7 @@ struct AstMeta<'ty> {
     struct_ids: HashMap<ast::StructId, ty::Struct<'ty>>,
     enum_ids: HashMap<ast::EnumId, ty::Enum<'ty>>,
     trait_ids: HashMap<ast::TraitId, traits::Trait<'ty>>,
-    impl_ids: HashMap<ast::ImplId, impls::Impl>,
+    impl_ids: HashMap<ast::ImplId, impls::Impl<'ty>>,
 }
 
 impl<'a, 'arena> Driver<'a, 'arena> {
@@ -267,7 +267,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         Ok(())
     }
 
-    fn register_impl(&mut self, ast_impl: ast::Impl<'arena>) -> Result<impls::Impl, DriverError<'arena>> {
+    fn register_impl(&mut self, ast_impl: ast::Impl<'arena>) -> Result<impls::Impl<'arena>, DriverError<'arena>> {
         let gen_params: Vec<_> = ast_impl
             .gen_params
             .iter()
@@ -533,16 +533,15 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     fn register_impl_methods(&mut self) -> Result<(), DriverError<'arena>> {
         for ast_impl in self.ast.impls().iter() {
             let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
-            let impl_def = self.ctxt.impls.get_impl_def(impl_);
-            let ty = impl_def.ty;
-            let gen_params = impl_def.gen_params.clone();
-            let trait_inst = impl_def.trait_inst;
-            let impl_constraints = impl_def.constraints.clone();
+            let ty = impl_.ty;
+            let gen_params = impl_.gen_params.clone();
+            let trait_inst = impl_.trait_inst;
+            let impl_constraints = impl_.constraints.clone();
 
             for &mthd in ast_impl.mthds.iter() {
                 let fn_ =
                     self.register_function(mthd, Some(ty), trait_inst, gen_params.clone(), impl_constraints.clone())?;
-                self.ctxt.impls.register_mthd(impl_, fn_, &mthd.name);
+                self.ctxt.impls.register_mthd(impl_, fn_);
                 self.ast_meta.fn_ids.insert(mthd.1, fn_);
             }
         }

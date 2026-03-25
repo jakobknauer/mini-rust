@@ -112,9 +112,8 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                     return self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx);
                 };
 
-                let impl_def = self.ctxt.impls.get_impl_def(impl_inst.impl_);
-                let assoc_ty = impl_def.assoc_tys[&assoc_ty_idx];
-                let subst = ty::GenVarSubst::new(&impl_def.gen_params, impl_inst.gen_args).unwrap();
+                let assoc_ty = impl_inst.impl_.assoc_tys[&assoc_ty_idx];
+                let subst = ty::GenVarSubst::new(&impl_inst.impl_.gen_params, impl_inst.gen_args).unwrap();
                 let result = self.ctxt.tys.substitute_gen_vars(assoc_ty, &subst);
                 self.normalize(result)
             }

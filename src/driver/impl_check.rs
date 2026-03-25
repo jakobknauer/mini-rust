@@ -8,7 +8,7 @@ use crate::ctxt::{
 };
 
 pub struct ImplCheckError<'ctxt> {
-    pub impl_: Impl,
+    pub impl_: Impl<'ctxt>,
     pub trait_inst: TraitInst<'ctxt>,
     pub kind: ImplCheckErrorKind<'ctxt>,
 }
@@ -55,7 +55,7 @@ pub enum ImplCheckErrorKind<'ctxt> {
 pub fn check_trait_impls<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ImplCheckError<'ctxt>> {
     let all_impls: Vec<_> = ctxt.impls.get_all_impls().collect();
     for impl_ in all_impls {
-        let Some(trait_inst) = ctxt.impls.get_impl_trait_inst(impl_) else {
+        let Some(trait_inst) = impl_.trait_inst else {
             continue;
         };
         check_trait_impl(ctxt, impl_, trait_inst)?;
@@ -66,7 +66,7 @@ pub fn check_trait_impls<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), Impl
 
 fn check_trait_impl<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    impl_: Impl,
+    impl_: Impl<'ctxt>,
     trait_inst: TraitInst<'ctxt>,
 ) -> Result<(), ImplCheckError<'ctxt>> {
     if trait_inst.trait_.gen_params.len() != trait_inst.gen_args.len() {
@@ -80,9 +80,8 @@ fn check_trait_impl<'ctxt>(
         });
     }
 
-    let impl_def = ctxt.impls.get_impl_def(impl_).clone();
     for (assoc_ty_idx, assoc_ty_name) in trait_inst.trait_.assoc_tys.iter().enumerate() {
-        if !impl_def.assoc_tys.contains_key(&assoc_ty_idx) {
+        if !impl_.assoc_tys.contains_key(&assoc_ty_idx) {
             return Err(ImplCheckError {
                 impl_,
                 trait_inst,
@@ -102,10 +101,10 @@ fn check_trait_impl<'ctxt>(
     // then we have to substitute `T` with `u32`.
     let trait_gen_params_subst = ty::GenVarSubst::new(&trait_inst.trait_.gen_params, trait_inst.gen_args).unwrap();
 
-    for &mthd in &impl_def.mthds {
+    for &mthd in impl_.mthds.borrow().iter() {
         let trait_mthd = ctxt.traits.resolve_trait_method(trait_inst.trait_, &mthd.name).unwrap();
 
-        check_mthd_decl(ctxt, mthd, trait_mthd.fn_, impl_def.ty, &trait_gen_params_subst).map_err(|kind| {
+        check_mthd_decl(ctxt, mthd, trait_mthd.fn_, impl_.ty, &trait_gen_params_subst).map_err(|kind| {
             ImplCheckError {
                 impl_,
                 trait_inst,
@@ -119,17 +118,15 @@ fn check_trait_impl<'ctxt>(
 
 fn check_mthd_names<'ctxt>(
     ctxt: &mut ctxt::Ctxt<'ctxt>,
-    impl_: Impl,
+    impl_: Impl<'ctxt>,
     trait_: Trait<'ctxt>,
 ) -> Result<(), ImplCheckErrorKind<'ctxt>> {
-    let impl_def = ctxt.impls.get_impl_def(impl_);
-
     let trait_mthd_names: HashSet<&str> = ctxt
         .traits
         .get_trait_mthds(trait_)
         .map(|m| m.fn_.name.as_str())
         .collect();
-    let impl_mthd_names: HashSet<&str> = impl_def.mthds.iter().map(|&mthd| mthd.name.as_str()).collect();
+    let impl_mthd_names: HashSet<&str> = impl_.mthds.borrow().iter().map(|&mthd| mthd.name.as_str()).collect();
 
     let missing_mthds: Vec<&str> = trait_mthd_names.difference(&impl_mthd_names).cloned().collect();
     if !missing_mthds.is_empty() {
@@ -234,12 +231,10 @@ fn check_mthd_decl<'ctxt>(
         .iter()
         .map(|c| subst_constraint(ctxt, c, &all_gen_params_subst, impl_ty))
         .collect();
-    let impl_constraints = impl_mthd_decl.constraints.clone();
-
     #[allow(clippy::mutable_key_type)]
     let trait_set: HashSet<_> = subst_trait_constraints.iter().collect();
     #[allow(clippy::mutable_key_type)]
-    let impl_set: HashSet<_> = impl_constraints.iter().collect();
+    let impl_set: HashSet<_> = impl_mthd_decl.constraints.iter().collect();
     if trait_set != impl_set {
         return Err(ImplCheckErrorKind::ConstraintMismatch {
             mthd: impl_mthd_decl.name.to_string(),

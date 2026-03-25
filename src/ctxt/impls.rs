@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use crate::ctxt::{
     fns::Fn,
@@ -6,33 +6,48 @@ use crate::ctxt::{
     ty::{Constraint, GenVar, Ty, TySlice},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Impl(pub(in crate::ctxt) usize);
+pub type Impl<'impls> = &'impls ImplDef<'impls>;
 
 #[derive(Debug)]
-pub struct ImplInstError {
-    #[allow(unused)]
-    pub impl_: Impl,
-    #[allow(unused)]
+#[allow(unused)]
+pub struct ImplInstError<'impls> {
+    pub impl_: Impl<'impls>,
     pub expected: usize,
-    #[allow(unused)]
     pub actual: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ImplInst<'impls> {
-    pub impl_: Impl,
+    pub impl_: Impl<'impls>,
     pub gen_args: TySlice<'impls>,
     pub(in crate::ctxt) _private: (),
 }
 
-#[derive(Clone)]
 pub struct ImplDef<'impls> {
     pub gen_params: Vec<GenVar<'impls>>,
     pub ty: Ty<'impls>,
-    pub mthds: Vec<Fn<'impls>>,
-    pub mthds_by_name: HashMap<String, Fn<'impls>>,
+    pub mthds: RefCell<Vec<Fn<'impls>>>,
     pub trait_inst: Option<TraitInst<'impls>>,
     pub assoc_tys: HashMap<usize, Ty<'impls>>,
     pub constraints: Vec<Constraint<'impls>>,
+}
+
+impl std::fmt::Debug for ImplDef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ImplDef")
+    }
+}
+
+impl PartialEq for ImplDef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Eq for ImplDef<'_> {}
+
+impl std::hash::Hash for ImplDef<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self, state);
+    }
 }

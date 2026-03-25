@@ -34,8 +34,13 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
         let trait_mthd_name = trait_mthd_inst.mthd.fn_.name.as_str();
 
-        let impl_def = self.impls.get_impl_def(impl_inst.impl_);
-        let fn_ = impl_def.mthds_by_name[trait_mthd_name];
+        let fn_ = *impl_inst
+            .impl_
+            .mthds
+            .borrow()
+            .iter()
+            .find(|&&m| m.name == trait_mthd_name)
+            .unwrap();
 
         self.fns
             .inst_fn(fn_, trait_mthd_inst.gen_args, impl_inst.gen_args)
@@ -51,11 +56,8 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, ty, trait_inst.trait_);
 
         impl_insts.into_iter().filter(move |impl_inst| {
-            let impl_def = self.impls.get_impl_def(impl_inst.impl_).clone();
-            let subst = GenVarSubst::new(&impl_def.gen_params, impl_inst.gen_args).unwrap();
-
-            let inst_impl_trait_inst = self.subst_trait_inst(impl_def.trait_inst.unwrap(), &subst);
-
+            let subst = GenVarSubst::new(&impl_inst.impl_.gen_params, impl_inst.gen_args).unwrap();
+            let inst_impl_trait_inst = self.subst_trait_inst(impl_inst.impl_.trait_inst.unwrap(), &subst);
             inst_impl_trait_inst == trait_inst
         })
     }
@@ -96,7 +98,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         &mut self,
         constraints: &[ty::Constraint<'ctxt>],
         ty: ty::Ty<'ctxt>,
-        trait_: traits::Trait,
+        trait_: traits::Trait<'ctxt>,
     ) -> bool {
         if self.tys.implements_trait_constraint_exists(constraints, ty, trait_) {
             return true;
@@ -182,8 +184,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                     return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
 
-                let impl_def = self.impls.get_impl_def(impl_inst.impl_);
-                let assoc_ty = *impl_def.assoc_tys.get(assoc_ty_idx).unwrap();
+                let assoc_ty = *impl_inst.impl_.assoc_tys.get(assoc_ty_idx).unwrap();
 
                 Some(assoc_ty)
             }
@@ -251,22 +252,17 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         &mut self,
         constraints: &[ty::Constraint<'ctxt>],
         ty: ty::Ty<'ctxt>,
-        trait_: traits::Trait,
+        trait_: traits::Trait<'ctxt>,
     ) -> Vec<impls::ImplInst<'ctxt>> {
         let candidate_impls: Vec<_> = self.impls.get_impls_for_trait(trait_).collect();
         candidate_impls
             .into_iter()
             .filter_map(|impl_| {
-                let impl_def = self.impls.get_impl_def(impl_).clone();
+                let gen_args = self.tys.try_find_instantiation(ty, impl_.ty, &impl_.gen_params).ok()?;
 
-                let gen_args = self
-                    .tys
-                    .try_find_instantiation(ty, impl_def.ty, &impl_def.gen_params)
-                    .ok()?;
+                let subst = ty::GenVarSubst::new(&impl_.gen_params, gen_args).unwrap();
 
-                let subst = ty::GenVarSubst::new(&impl_def.gen_params, gen_args).unwrap();
-
-                if !self.impl_constraints_satisfied(constraints, &impl_def.constraints, &subst) {
+                if !self.impl_constraints_satisfied(constraints, &impl_.constraints, &subst) {
                     return None;
                 }
 

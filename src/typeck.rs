@@ -220,7 +220,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 actual,
             })?;
 
-        let subst = ty::GenVarSubst::new(&fn_.gen_params, gen_args.clone()).unwrap();
+        let subst = ty::GenVarSubst::new(&fn_.gen_params, &gen_args).unwrap();
         let param_tys: Vec<_> = fn_.params.iter().map(|param| param.ty).collect();
         self.add_constraint_obligations(fn_, &subst);
 

@@ -31,7 +31,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         Self {
             tys: TyReg::new(arena),
             fns: FnReg::new(arena),
-            impls: Default::default(),
+            impls: ImplReg::new(arena),
             traits: TraitReg::new(arena),
             language_items: Default::default(),
         }
@@ -166,10 +166,9 @@ impl<'ctxt> Ctxt<'ctxt> {
 
                 let [impl_inst] = &impl_insts[..] else { return ty };
 
-                let impl_def = self.impls.get_impl_def(impl_inst.impl_);
-                let assoc_ty = impl_def.assoc_tys[&assoc_ty_idx];
+                let assoc_ty = impl_inst.impl_.assoc_tys[&assoc_ty_idx];
 
-                let subst = GenVarSubst::new(&impl_def.gen_params, impl_inst.gen_args).unwrap();
+                let subst = GenVarSubst::new(&impl_inst.impl_.gen_params, impl_inst.gen_args).unwrap();
 
                 let resolved = self.tys.substitute_gen_vars(assoc_ty, &subst);
                 self.normalize_ty(resolved)

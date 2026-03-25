@@ -47,18 +47,17 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         let inherent_impls: Vec<_> = self.ctxt.impls.get_inherent_impls().collect();
         let candidates: Vec<_> = inherent_impls
             .into_iter()
-            .filter_map(|impl_id| {
-                let impl_def = self.ctxt.impls.get_impl_def(impl_id).clone();
-                let mthd_fn = *impl_def.mthds_by_name.get(mthd_name)?;
+            .filter_map(|impl_| {
+                let mthd_fn = *impl_.mthds.borrow().iter().find(|&&m| m.name == mthd_name)?;
                 let env_gen_args = self
                     .ctxt
                     .tys
-                    .try_find_instantiation(base_ty, impl_def.ty, &impl_def.gen_params)
+                    .try_find_instantiation(base_ty, impl_.ty, &impl_.gen_params)
                     .ok()?;
-                let subst = ty::GenVarSubst::new(&impl_def.gen_params, env_gen_args).unwrap();
+                let subst = ty::GenVarSubst::new(&impl_.gen_params, env_gen_args).unwrap();
                 if !self
                     .ctxt
-                    .impl_constraints_satisfied(&self.constraints, &impl_def.constraints, &subst)
+                    .impl_constraints_satisfied(&self.constraints, &impl_.constraints, &subst)
                 {
                     return None;
                 }
@@ -127,8 +126,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 })?;
 
                 let env_subst = ty::GenVarSubst::new(&fn_.env_gen_params, env_gen_args).unwrap();
-                let fn_subst =
-                    ty::GenVarSubst::new(&fn_.gen_params.clone(), resolved_gen_args.iter().copied()).unwrap();
+                let fn_subst = ty::GenVarSubst::new(&fn_.gen_params, resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(env_subst, fn_subst);
                 self.add_constraint_obligations(fn_, &full_subst);
 

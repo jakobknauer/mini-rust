@@ -99,7 +99,7 @@ fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>, ctxt: &ctxt::Ctxt<
     format!(
         "error checking implementation of trait '{}' for type '{}': {}",
         err.trait_inst.trait_.name,
-        ctxt.tys.get_string_rep(ctxt.impls.get_impl_def(err.impl_).ty),
+        ctxt.tys.get_string_rep(err.impl_.ty),
         desc
     )
 }

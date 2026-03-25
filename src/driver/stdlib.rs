@@ -138,7 +138,7 @@ pub fn register_impl_for_ptr<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), 
         },
         true,
     )?;
-    ctxt.impls.register_mthd(impl_, fn_, "offset");
+    ctxt.impls.register_mthd(impl_, fn_);
 
     ctxt.language_items.ptr_offset = Some(fn_);
 
