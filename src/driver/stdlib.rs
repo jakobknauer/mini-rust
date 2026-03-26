@@ -83,6 +83,43 @@ pub fn register_rem_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
     ctxt.language_items.rem_trait = Some(register_arith_trait(ctxt, "Rem", "rem"));
 }
 
+pub fn register_deref_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
+    let trait_ = ctxt.traits.register_trait("Deref", vec![], vec!["Target".to_string()]);
+
+    let self_ty = ctxt.tys.trait_self(trait_);
+    let ref_self_ty = ctxt.tys.ref_(self_ty);
+    let gen_args = ctxt.tys.ty_slice(&[]);
+    let trait_inst = ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+    let target_ty = ctxt.tys.assoc_ty(self_ty, trait_inst, 0);
+    let ref_target_ty = ctxt.tys.ref_(target_ty);
+
+    let fn_ = ctxt
+        .fns
+        .register_fn(
+            fns::FnDecl {
+                id: fns::FnId::default(),
+                name: "deref".to_string(),
+                associated_ty: None,
+                associated_trait_inst: Some(ctxt.traits.inst_trait(trait_, ctxt.tys.ty_slice(&[])).unwrap()),
+                gen_params: vec![],
+                env_gen_params: vec![],
+                env_constraints: Vec::new(),
+                params: vec![fns::FnParam {
+                    kind: fns::FnParamKind::SelfByRef,
+                    ty: ref_self_ty,
+                }],
+                var_args: false,
+                return_ty: ref_target_ty,
+                constraints: Vec::new(),
+            },
+            false,
+        )
+        .unwrap();
+    ctxt.traits.register_mthd(trait_, fn_);
+
+    ctxt.language_items.deref_trait = Some(trait_);
+}
+
 fn register_size_of<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) -> Result<(), ()> {
     let fn_ = ctxt.fns.register_fn(
         fns::FnDecl {

@@ -236,6 +236,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         stdlib::register_bit_or_trait(&mut self.ctxt);
         stdlib::register_bit_and_trait(&mut self.ctxt);
         stdlib::register_rem_trait(&mut self.ctxt);
+        stdlib::register_deref_trait(&mut self.ctxt);
 
         for ast_trait in self.ast.traits().iter() {
             let trait_gen_params: Vec<_> = ast_trait
