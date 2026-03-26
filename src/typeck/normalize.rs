@@ -1,6 +1,6 @@
 use crate::ctxt::{fns, ty};
 
-use super::{ExprExtra, MthdResolution};
+use super::{DerefStep, ExprExtra, MthdResolution};
 
 impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn normalize_all(&mut self) {
@@ -158,7 +158,17 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::BinaryOpMthd(resolution) => ExprExtra::BinaryOpMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::DerefMthd(resolution) => ExprExtra::DerefMthd(self.normalize_mthd_resolution(resolution)),
-            ExprExtra::FieldAccess { .. } | ExprExtra::BinaryPrim(_) | ExprExtra::UnaryPrim(_) => extra,
+            ExprExtra::FieldAccess { steps, index } => ExprExtra::FieldAccess {
+                steps: steps
+                    .into_iter()
+                    .map(|step| match step {
+                        DerefStep::Builtin => DerefStep::Builtin,
+                        DerefStep::Trait(r) => DerefStep::Trait(self.normalize_mthd_resolution(r)),
+                    })
+                    .collect(),
+                index,
+            },
+            ExprExtra::BinaryPrim(_) | ExprExtra::UnaryPrim(_) => extra,
         }
     }
 

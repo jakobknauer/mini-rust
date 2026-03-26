@@ -8,7 +8,7 @@ use crate::{
     ctxt::{self, fns, language_items, ty},
     hlr,
     mlr::{self, builder::MlrBuilder},
-    typeck::{ExprExtra, HlrTyping, MthdResolution},
+    typeck::{DerefStep, ExprExtra, HlrTyping, MthdResolution},
 };
 
 pub fn hlr_to_mlr<'a, 'ctxt>(
@@ -414,16 +414,28 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     }
 
     fn lower_field_access(&mut self, expr_id: hlr::ExprId, base: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
-        let (derefs, field_index) = match self.typing.expr_extra[&expr_id] {
-            ExprExtra::FieldAccess { derefs, index } => (derefs, index),
+        let (steps, field_index) = match &self.typing.expr_extra[&expr_id] {
+            ExprExtra::FieldAccess { steps, index } => (steps, *index),
             _ => panic!("expected FieldAccess extra"),
         };
 
         let mut place = self.lower_to_place(base);
 
-        for _ in 0..derefs {
-            let op = self.builder.insert_copy_op(place);
-            place = self.builder.insert_deref_place(op);
+        for step in steps {
+            place = match step {
+                DerefStep::Builtin => {
+                    let op = self.builder.insert_copy_op(place);
+                    self.builder.insert_deref_place(op)
+                }
+                DerefStep::Trait(resolution) => {
+                    let callee_op = self.lower_mthd_resolution_to_op(resolution);
+                    let ref_place = self.builder.insert_addr_of_val(place);
+                    let ref_op = LoweredExpr::from(ref_place).into_op(&mut self.builder);
+                    let call_val = self.builder.insert_call_val(callee_op, vec![ref_op]);
+                    let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
+                    self.builder.insert_deref_place(call_op)
+                }
+            };
         }
 
         let field_ty = self.typing.expr_types[&expr_id];

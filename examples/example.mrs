@@ -1,11 +1,8 @@
 fn main() -> i32 {
-    let x = 3;
-    let rx = &x;
-    let y = *rx;
-
-    let z = Box::new(x);
-    let w = *z;
-    w
+    let p = Point { x: 42, y: 7 };
+    let box_p = Box::new(&p);
+    let r = &box_p;
+    r.x
 }
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {

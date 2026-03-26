@@ -106,7 +106,7 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
 
     pub fn insert_deref_place(&self, op: mlr::Op<'ctxt>) -> mlr::Place<'ctxt> {
         let inner_ty = match op.1.0 {
-            &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => inner,
+            &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => self.ctxt.normalize_ty(inner),
             _ => panic!("deref of non-ref/ptr type"),
         };
         self.mlr.insert_place(mlr::PlaceDef::Deref(op), inner_ty)

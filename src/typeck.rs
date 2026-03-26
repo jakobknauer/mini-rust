@@ -24,6 +24,11 @@ pub struct HlrTyping<'ty> {
     pub expr_extra: HashMap<hlr::ExprId, ExprExtra<'ty>>,
 }
 
+pub enum DerefStep<'ty> {
+    Builtin,
+    Trait(MthdResolution<'ty>),
+}
+
 pub enum ExprExtra<'ty> {
     ValFn(fns::FnInst<'ty>),
     ValMthd(MthdResolution<'ty>),
@@ -31,7 +36,7 @@ pub enum ExprExtra<'ty> {
     BinaryOpMthd(MthdResolution<'ty>),
     UnaryPrim(language_items::UnaryPrimOp),
     DerefMthd(MthdResolution<'ty>),
-    FieldAccess { derefs: usize, index: usize },
+    FieldAccess { steps: Vec<DerefStep<'ty>>, index: usize },
     Closure { captured_vars: Vec<hlr::VarId> },
 }
 
@@ -328,48 +333,54 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let base_ty = self.check_expr(base, None)?;
         let mut base_ty = self.normalize(base_ty);
+        let mut steps: Vec<DerefStep<'ctxt>> = Vec::new();
 
-        let mut num_derefs = 0;
-        while let &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) = base_ty.0 {
-            base_ty = self.normalize(inner);
-            num_derefs += 1;
-        }
-
-        match field {
-            hlr::FieldSpec::Name(name) => {
-                let ty::TyDef::Struct { .. } = base_ty.0 else {
-                    return Err(TypeckError::NamedFieldAccessOnNonStruct { ty: base_ty });
-                };
-                let index = self
-                    .ctxt
-                    .tys
-                    .get_struct_field_index_by_name(base_ty, name)
-                    .map_err(|_| TypeckError::StructFieldNotFound {
-                        struct_ty: base_ty,
-                        field: name.clone(),
-                    })?;
-                self.typing.expr_extra.insert(
-                    expr_id,
-                    ExprExtra::FieldAccess {
-                        derefs: num_derefs,
-                        index,
-                    },
-                );
-                Ok(self.ctxt.tys.get_struct_field_ty(base_ty, index).unwrap())
-            }
-            hlr::FieldSpec::Index(index) => match base_ty.0 {
-                ty::TyDef::Tuple(_) => {
-                    self.typing.expr_extra.insert(
-                        expr_id,
-                        ExprExtra::FieldAccess {
-                            derefs: num_derefs,
-                            index: *index,
-                        },
-                    );
-                    Ok(self.ctxt.tys.get_tuple_field_tys(base_ty).unwrap()[*index])
+        loop {
+            let found_index = match field {
+                hlr::FieldSpec::Name(name) => {
+                    if let ty::TyDef::Struct { .. } = base_ty.0 {
+                        self.ctxt.tys.get_struct_field_index_by_name(base_ty, name).ok()
+                    } else {
+                        None
+                    }
                 }
-                _ => Err(TypeckError::IndexedFieldAccessOnNonTuple { ty: base_ty }),
-            },
+                hlr::FieldSpec::Index(index) => {
+                    if matches!(base_ty.0, ty::TyDef::Tuple(_)) {
+                        Some(*index)
+                    } else {
+                        None
+                    }
+                }
+            };
+
+            if let Some(index) = found_index {
+                self.typing
+                    .expr_extra
+                    .insert(expr_id, ExprExtra::FieldAccess { steps, index });
+                return match field {
+                    hlr::FieldSpec::Name(_) => Ok(self.ctxt.tys.get_struct_field_ty(base_ty, index).unwrap()),
+                    hlr::FieldSpec::Index(_) => Ok(self.ctxt.tys.get_tuple_field_tys(base_ty).unwrap()[index]),
+                };
+            }
+
+            match self.try_deref_step(base_ty) {
+                Some((inner_ty, step)) => {
+                    steps.push(step);
+                    base_ty = inner_ty;
+                }
+                None => {
+                    return Err(match field {
+                        hlr::FieldSpec::Name(name) => match base_ty.0 {
+                            ty::TyDef::Struct { .. } => TypeckError::StructFieldNotFound {
+                                struct_ty: base_ty,
+                                field: name.clone(),
+                            },
+                            _ => TypeckError::NamedFieldAccessOnNonStruct { ty: base_ty },
+                        },
+                        hlr::FieldSpec::Index(_) => TypeckError::IndexedFieldAccessOnNonTuple { ty: base_ty },
+                    });
+                }
+            }
         }
     }
 
@@ -557,32 +568,43 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         Ok(self.ctxt.tys.unit())
     }
 
+    fn try_deref_step(&mut self, ty: ty::Ty<'ctxt>) -> Option<(ty::Ty<'ctxt>, DerefStep<'ctxt>)> {
+        match ty.0 {
+            &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => Some((self.normalize(inner), DerefStep::Builtin)),
+            _ => {
+                let deref_trait = self.ctxt.language_items.deref_trait?;
+                let gen_args = self.ctxt.tys.ty_slice(&[]);
+                let trait_inst = self.ctxt.traits.inst_trait(deref_trait, gen_args).unwrap();
+                if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
+                    return None;
+                }
+                let target_assoc = self.ctxt.tys.assoc_ty(ty, trait_inst, 0);
+                let target_ty = self.normalize(target_assoc);
+                let mthd = self.ctxt.traits.resolve_trait_method(deref_trait, "deref").unwrap();
+                let found = mthd::FoundMthd::Trait { trait_inst, mthd };
+                let resolution = self.instantiate_mthd(found, ty, "deref", None).ok()?;
+                Some((target_ty, DerefStep::Trait(resolution)))
+            }
+        }
+    }
+
     fn check_deref(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_ty = self.check_expr(inner, None)?;
         let expr_ty = self.normalize(expr_ty);
 
-        match expr_ty.0 {
-            &ty::TyDef::Ref(base_ty) | &ty::TyDef::Ptr(base_ty) => {
-                if self.ctxt.tys.is_c_void_ty(base_ty) {
+        match self.try_deref_step(expr_ty) {
+            Some((target_ty, DerefStep::Builtin)) => {
+                if self.ctxt.tys.is_c_void_ty(target_ty) {
                     Err(TypeckError::DereferenceOfCVoid { ty: expr_ty })
                 } else {
-                    Ok(base_ty)
+                    Ok(target_ty)
                 }
             }
-            _ => {
-                let deref_trait = self.ctxt.language_items.deref_trait.unwrap();
-                let gen_args = self.ctxt.tys.ty_slice(&[]);
-                let trait_inst = self.ctxt.traits.inst_trait(deref_trait, gen_args).unwrap();
-                self.pending_obligations
-                    .push((expr_ty, ty::ConstraintRequirement::Trait(trait_inst)));
-                let mthd = self.ctxt.traits.resolve_trait_method(deref_trait, "deref").unwrap();
-                let found = mthd::FoundMthd::Trait { trait_inst, mthd };
-                let resolution = self
-                    .instantiate_mthd(found, expr_ty, "deref", None)
-                    .map_err(|_| TypeckError::DereferenceOfNonRef { ty: expr_ty })?;
+            Some((target_ty, DerefStep::Trait(resolution))) => {
                 self.typing.expr_extra.insert(expr_id, ExprExtra::DerefMthd(resolution));
-                Ok(self.ctxt.tys.assoc_ty(expr_ty, trait_inst, 0))
+                Ok(target_ty)
             }
+            None => Err(TypeckError::DereferenceOfNonRef { ty: expr_ty }),
         }
     }
 
