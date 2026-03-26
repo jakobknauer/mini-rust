@@ -5,43 +5,8 @@ fn main() -> i32 {
     r.x
 }
 
-fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {
-    |x| a * x + b
-}
-
-fn apply<A, B, F>(f: F, a: A) -> B
-where F: Fn(A) -> B
-{
-    f(a)
-}
-
-fn compose<A, B, C, F, G>(f: F, g: G) -> impl Fn(A) -> C
-where
-    F: Fn(A) -> B,
-    G: Fn(B) -> C
-{
-    |a| g(f(a))
-}
-
-fn malloc(size: i32) -> *c_void;
-fn free(alloc: *c_void);
-
 fn printf(format: *c_char, ...) -> i32;
 fn scanf(format: *c_char, ...) -> i32;
-
-fn alloc<T>() -> *T {
-    malloc(size_of::<T>()) as *T
-}
-fn alloc_n<T>(n: i32) -> *T {
-    malloc(n * size_of::<T>()) as *T
-}
-fn delete<T>(ref: *T) {
-    free(ref as *c_void)
-}
-
-fn double(x: i32) -> i32 {
-    x * 2
-}
 
 fn fac(n: i32) -> i32 {
     let result: i32 = 1;
@@ -50,6 +15,10 @@ fn fac(n: i32) -> i32 {
         n = n - 1
     }
     result
+}
+
+fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {
+    |x| a * x + b
 }
 
 struct Point {
@@ -65,81 +34,5 @@ impl Point {
     fn new(x: i32, y: i32) -> Self {
         let p: Self = Point { x, y };
         p
-    }
-}
-
-trait ToString {
-    fn to_string(self) -> *c_char;
-}
-
-fn print<T>(x: T) 
-    where T: ToString
-{
-    printf("Printing object: %s\n", x.to_string());
-}
-
-impl ToString for bool {
-    fn to_string(self) -> *c_char {
-        if self { "true" } else { "false" }
-    }
-}
-
-impl ToString for *c_char {
-    fn to_string(self) -> *c_char {
-        self
-    }
-}
-
-impl bool {
-    fn then_some<T>(self, item: T) -> Option<T> {
-        if self {
-            Option::Some { item }
-        } else {
-            Option::None
-        }
-    }
-}
-
-trait Eq {
-    fn eq(&self, other: &Self) -> bool;
-}
-
-impl Eq for i32 {
-    fn eq(&self, other: &Self) -> bool {
-        *self == *other
-    }
-}
-
-impl Eq for bool {
-    fn eq(&self, other: &bool) -> bool {
-        *self == *other
-    }
-}
-
-fn convert<A, B>(x: A) -> B
-    where A: Into<B>
-{
-    x.into()
-}
-
-trait Into<T> {
-    fn into(self) -> T;
-}
-
-impl<S> Into<S> for S {
-    fn into(self) -> S {
-        self
-    }
-}
-
-impl Into<bool> for i32 {
-    fn into(self) -> bool {
-        self != 0
-    }
-}
-
-impl Into<i32> for bool {
-    fn into(self) -> i32 {
-        if self { 1 } else { 0 }
     }
 }

@@ -1,0 +1,14 @@
+fn malloc(size: i32) -> *c_void;
+fn free(alloc: *c_void);
+
+fn alloc<T>() -> *T {
+    malloc(size_of::<T>()) as *T
+}
+
+fn alloc_n<T>(n: i32) -> *T {
+    malloc(n * size_of::<T>()) as *T
+}
+
+fn delete<T>(ref: *T) {
+    free(ref as *c_void)
+}

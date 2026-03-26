@@ -1,0 +1,13 @@
+fn apply<A, B, F>(f: F, a: A) -> B
+where F: Fn(A) -> B
+{
+    f(a)
+}
+
+fn compose<A, B, C, F, G>(f: F, g: G) -> impl Fn(A) -> C
+where
+    F: Fn(A) -> B,
+    G: Fn(B) -> C
+{
+    |a| g(f(a))
+}
