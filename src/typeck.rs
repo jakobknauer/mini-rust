@@ -30,6 +30,7 @@ pub enum ExprExtra<'ty> {
     BinaryPrim(language_items::BinaryPrimOp),
     BinaryOpMthd(MthdResolution<'ty>),
     UnaryPrim(language_items::UnaryPrimOp),
+    DerefMthd(MthdResolution<'ty>),
     FieldAccess { derefs: usize, index: usize },
     Closure { captured_vars: Vec<hlr::VarId> },
 }
@@ -139,7 +140,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             hlr::ExprDef::FieldAccess { base, field } => self.check_field_access(expr.1, *base, field),
             hlr::ExprDef::Tuple(exprs) => self.check_tuple_expr(exprs),
             hlr::ExprDef::Assign { target, value } => self.check_assignment(*target, *value),
-            hlr::ExprDef::Deref(expr) => self.check_deref(*expr),
+            hlr::ExprDef::Deref(inner) => self.check_deref(expr.1, *inner),
             hlr::ExprDef::AddrOf(expr) => self.check_addr_of(*expr),
             hlr::ExprDef::As { expr, ty } => self.check_as(*expr, ty),
             hlr::ExprDef::Closure {
@@ -556,8 +557,8 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         Ok(self.ctxt.tys.unit())
     }
 
-    fn check_deref(&mut self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let expr_ty = self.check_expr(expr, None)?;
+    fn check_deref(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+        let expr_ty = self.check_expr(inner, None)?;
         let expr_ty = self.normalize(expr_ty);
 
         match expr_ty.0 {
@@ -568,7 +569,20 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     Ok(base_ty)
                 }
             }
-            _ => Err(TypeckError::DereferenceOfNonRef { ty: expr_ty }),
+            _ => {
+                let deref_trait = self.ctxt.language_items.deref_trait.unwrap();
+                let gen_args = self.ctxt.tys.ty_slice(&[]);
+                let trait_inst = self.ctxt.traits.inst_trait(deref_trait, gen_args).unwrap();
+                self.pending_obligations
+                    .push((expr_ty, ty::ConstraintRequirement::Trait(trait_inst)));
+                let mthd = self.ctxt.traits.resolve_trait_method(deref_trait, "deref").unwrap();
+                let found = mthd::FoundMthd::Trait { trait_inst, mthd };
+                let resolution = self
+                    .instantiate_mthd(found, expr_ty, "deref", None)
+                    .map_err(|_| TypeckError::DereferenceOfNonRef { ty: expr_ty })?;
+                self.typing.expr_extra.insert(expr_id, ExprExtra::DerefMthd(resolution));
+                Ok(self.ctxt.tys.assoc_ty(expr_ty, trait_inst, 0))
+            }
         }
     }
 

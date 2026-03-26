@@ -115,7 +115,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             FieldAccess { base, .. } => self.lower_field_access(expr_id, *base),
             Tuple(exprs) => self.lower_tuple(exprs),
             Assign { target, value } => self.lower_assign(*target, *value),
-            Deref(inner) => self.lower_deref(*inner),
+            Deref(inner) => self.lower_deref(expr_id, *inner),
             AddrOf(inner) => self.lower_addr_of(*inner),
             As { expr: inner, .. } => self.lower_as(expr_id, *inner),
             Closure { params, body, .. } => self.lower_closure(expr_id, params, *body),
@@ -456,9 +456,26 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.insert_unit_val().into()
     }
 
-    fn lower_deref(&mut self, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
-        let op = self.lower_to_op(inner);
-        self.builder.insert_deref_place(op).into()
+    fn lower_deref(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
+        let deref_mthd = match self.typing.expr_extra.get(&expr_id) {
+            Some(ExprExtra::DerefMthd(resolution)) => Some(resolution.clone()),
+            _ => None,
+        };
+        match deref_mthd {
+            Some(resolution) => {
+                let callee_op = self.lower_mthd_resolution_to_op(&resolution);
+                let inner_place = self.lower_to_place(inner);
+                let ref_inner = self.builder.insert_addr_of_val(inner_place);
+                let ref_inner_op = LoweredExpr::from(ref_inner).into_op(&mut self.builder);
+                let call_val = self.builder.insert_call_val(callee_op, vec![ref_inner_op]);
+                let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
+                self.builder.insert_deref_place(call_op).into()
+            }
+            None => {
+                let op = self.lower_to_op(inner);
+                self.builder.insert_deref_place(op).into()
+            }
+        }
     }
 
     fn lower_addr_of(&mut self, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
