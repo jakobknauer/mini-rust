@@ -3,7 +3,9 @@ fn main() -> i32 {
     let rx = &x;
     let y = *rx;
 
-    y
+    let z = Box::new(x);
+    let w = *z;
+    w
 }
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {
