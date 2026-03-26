@@ -7,7 +7,7 @@ use super::{Driver, ResCtxt};
 
 impl<'arena> Driver<'_, 'arena> {
     pub(super) fn try_resolve_ast_ty_annot(
-        &mut self,
+        &self,
         annot: ast::TyAnnot,
         res_ctxt: ResCtxt<'_, 'arena>,
         allow_opaque: bool,
@@ -117,7 +117,7 @@ impl<'arena> Driver<'_, 'arena> {
     }
 
     pub(super) fn try_resolve_ast_path_segment_to_ty(
-        &mut self,
+        &self,
         path_segment: &ast::PathSegment,
         res_ctxt: ResCtxt<'_, 'arena>,
     ) -> Option<ty::Ty<'arena>> {
