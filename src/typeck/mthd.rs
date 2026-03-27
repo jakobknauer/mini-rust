@@ -1,6 +1,6 @@
 use crate::ctxt::{fns, traits, ty};
 use crate::hlr;
-use crate::typeck::{TypeckError, TypeckResult};
+use crate::typeck::{DerefStep, TypeckError, TypeckResult};
 
 #[derive(Clone)]
 pub enum MthdResolution<'ty> {
@@ -20,6 +20,45 @@ pub(super) enum FoundMthd<'ty> {
 }
 
 impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
+    fn build_deref_chain(&mut self, receiver_ty: ty::Ty<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, Vec<DerefStep<'ctxt>>) {
+        let mut levels = vec![receiver_ty];
+        let mut steps = vec![];
+        while let Some((next, step)) = self.try_deref_step(*levels.last().unwrap()) {
+            levels.push(next);
+            steps.push(step);
+        }
+        (levels, steps)
+    }
+
+    pub(super) fn resolve_mthd_with_deref(
+        &mut self,
+        receiver_ty: ty::Ty<'ctxt>,
+        mthd_name: &str,
+    ) -> TypeckResult<'ctxt, (FoundMthd<'ctxt>, Vec<DerefStep<'ctxt>>, ty::Ty<'ctxt>)> {
+        let (levels, mut steps) = self.build_deref_chain(receiver_ty);
+
+        // Pass 1: inherent methods across all deref levels.
+        for (i, &ty) in levels.iter().enumerate() {
+            if let Some(found) = self.resolve_inherent_mthd(ty, mthd_name, true)? {
+                steps.truncate(i);
+                return Ok((found, steps, ty));
+            }
+        }
+
+        // Pass 2: trait methods across all deref levels.
+        for (i, &ty) in levels.iter().enumerate() {
+            if let Some(found) = self.resolve_trait_mthd(ty, mthd_name, true)? {
+                steps.truncate(i);
+                return Ok((found, steps, ty));
+            }
+        }
+
+        Err(TypeckError::MthdResolutionFailed {
+            base_ty: receiver_ty,
+            mthd_name: mthd_name.to_string(),
+        })
+    }
+
     pub(super) fn resolve_mthd(
         &mut self,
         base_ty: ty::Ty<'ctxt>,

@@ -292,25 +292,25 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         receiver: hlr::Expr<'ctxt>,
         args: hlr::ExprSlice<'ctxt>,
     ) -> LoweredExpr<'ctxt> {
-        let resolution = match &self.typing.expr_extra[&expr_id] {
-            ExprExtra::ValMthd(r) => r.clone(),
-            _ => panic!("expected ValMthd extra for MthdCall"),
+        let ExprExtra::MthdCall { resolution, steps } = &self.typing.expr_extra[&expr_id] else {
+            panic!("expected MthdCall extra for MthdCall")
         };
-        let (callee_op, by_ref) = self.mthd_resolution_to_op(&resolution);
+        let (callee_op, by_ref) = self.mthd_resolution_to_op(resolution);
 
-        let receiver_place = self.lower_to_place(receiver);
+        let derefed_receiver = self.lower_deref_chain_to_place(receiver, steps);
+
         let receiver_op = if by_ref {
-            let addr_val = self.builder.insert_addr_of_val(receiver_place);
+            let addr_val = self.builder.insert_addr_of_val(derefed_receiver);
             let addr_place = self.builder.store_val(addr_val);
             self.builder.insert_copy_op(addr_place)
         } else {
-            self.builder.insert_copy_op(receiver_place)
+            self.builder.insert_copy_op(derefed_receiver)
         };
 
-        let mut call_args = vec![receiver_op];
-        for &arg in args {
-            call_args.push(self.lower_to_op(arg));
-        }
+        let call_args = std::iter::once(receiver_op)
+            .chain(args.iter().map(|&arg| self.lower_to_op(arg)))
+            .collect();
+
         self.builder.insert_call_val(callee_op, call_args).into()
     }
 
@@ -413,35 +413,32 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.copy_val(enum_place)
     }
 
+    fn lower_deref_chain_to_place(&mut self, expr: hlr::Expr<'ctxt>, steps: &[DerefStep<'ctxt>]) -> mlr::Place<'ctxt> {
+        steps.iter().fold(self.lower_to_place(expr), |place, step| match step {
+            DerefStep::Builtin => {
+                let op = self.builder.insert_copy_op(place);
+                self.builder.insert_deref_place(op)
+            }
+            DerefStep::Trait(resolution) => {
+                let callee_op = self.lower_mthd_resolution_to_op(resolution);
+                let ref_place = self.builder.insert_addr_of_val(place);
+                let ref_op = LoweredExpr::from(ref_place).into_op(&mut self.builder);
+                let call_val = self.builder.insert_call_val(callee_op, vec![ref_op]);
+                let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
+                self.builder.insert_deref_place(call_op)
+            }
+        })
+    }
+
     fn lower_field_access(&mut self, expr_id: hlr::ExprId, base: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
-        let (steps, field_index) = match &self.typing.expr_extra[&expr_id] {
-            ExprExtra::FieldAccess { steps, index } => (steps, *index),
-            _ => panic!("expected FieldAccess extra"),
+        let &ExprExtra::FieldAccess { ref steps, index } = &self.typing.expr_extra[&expr_id] else {
+            panic!("expected FieldAccess extra")
         };
 
-        let mut place = self.lower_to_place(base);
-
-        for step in steps {
-            place = match step {
-                DerefStep::Builtin => {
-                    let op = self.builder.insert_copy_op(place);
-                    self.builder.insert_deref_place(op)
-                }
-                DerefStep::Trait(resolution) => {
-                    let callee_op = self.lower_mthd_resolution_to_op(resolution);
-                    let ref_place = self.builder.insert_addr_of_val(place);
-                    let ref_op = LoweredExpr::from(ref_place).into_op(&mut self.builder);
-                    let call_val = self.builder.insert_call_val(callee_op, vec![ref_op]);
-                    let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
-                    self.builder.insert_deref_place(call_op)
-                }
-            };
-        }
+        let base = self.lower_deref_chain_to_place(base, steps);
 
         let field_ty = self.typing.expr_types[&expr_id];
-        self.builder
-            .insert_field_access_place(place, field_index, field_ty)
-            .into()
+        self.builder.insert_field_access_place(base, index, field_ty).into()
     }
 
     fn lower_tuple(&mut self, exprs: hlr::ExprSlice<'ctxt>) -> LoweredExpr<'ctxt> {

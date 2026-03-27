@@ -151,6 +151,16 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
     }
 
+    fn normalize_deref_steps(&mut self, steps: Vec<DerefStep<'ctxt>>) -> Vec<DerefStep<'ctxt>> {
+        steps
+            .into_iter()
+            .map(|step| match step {
+                DerefStep::Builtin => DerefStep::Builtin,
+                DerefStep::Trait(r) => DerefStep::Trait(self.normalize_mthd_resolution(r)),
+            })
+            .collect()
+    }
+
     fn normalize_expr_extra(&mut self, extra: ExprExtra<'ctxt>) -> ExprExtra<'ctxt> {
         match extra {
             ExprExtra::Closure { .. } => extra,
@@ -158,14 +168,12 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::BinaryOpMthd(resolution) => ExprExtra::BinaryOpMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::DerefMthd(resolution) => ExprExtra::DerefMthd(self.normalize_mthd_resolution(resolution)),
+            ExprExtra::MthdCall { resolution, steps } => ExprExtra::MthdCall {
+                resolution: self.normalize_mthd_resolution(resolution),
+                steps: self.normalize_deref_steps(steps),
+            },
             ExprExtra::FieldAccess { steps, index } => ExprExtra::FieldAccess {
-                steps: steps
-                    .into_iter()
-                    .map(|step| match step {
-                        DerefStep::Builtin => DerefStep::Builtin,
-                        DerefStep::Trait(r) => DerefStep::Trait(self.normalize_mthd_resolution(r)),
-                    })
-                    .collect(),
+                steps: self.normalize_deref_steps(steps),
                 index,
             },
             ExprExtra::BinaryPrim(_) | ExprExtra::UnaryPrim(_) => extra,

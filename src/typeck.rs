@@ -24,6 +24,7 @@ pub struct HlrTyping<'ty> {
     pub expr_extra: HashMap<hlr::ExprId, ExprExtra<'ty>>,
 }
 
+#[derive(Clone)]
 pub enum DerefStep<'ty> {
     Builtin,
     Trait(MthdResolution<'ty>),
@@ -36,8 +37,17 @@ pub enum ExprExtra<'ty> {
     BinaryOpMthd(MthdResolution<'ty>),
     UnaryPrim(language_items::UnaryPrimOp),
     DerefMthd(MthdResolution<'ty>),
-    FieldAccess { steps: Vec<DerefStep<'ty>>, index: usize },
-    Closure { captured_vars: Vec<hlr::VarId> },
+    MthdCall {
+        resolution: MthdResolution<'ty>,
+        steps: Vec<DerefStep<'ty>>,
+    },
+    FieldAccess {
+        steps: Vec<DerefStep<'ty>>,
+        index: usize,
+    },
+    Closure {
+        captured_vars: Vec<hlr::VarId>,
+    },
 }
 
 pub fn typeck<'a, 'ctxt: 'a>(
@@ -457,10 +467,12 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let receiver_ty = self.check_expr(receiver, None)?;
         let receiver_ty = self.normalize(receiver_ty);
 
-        let found = self.resolve_mthd(receiver_ty, mthd_name, true)?;
-        let resolution = self.instantiate_mthd(found, receiver_ty, mthd_name, gen_args)?;
+        let (found, steps, base_ty) = self.resolve_mthd_with_deref(receiver_ty, mthd_name)?;
+        let resolution = self.instantiate_mthd(found, base_ty, mthd_name, gen_args)?;
         let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
-        self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
+        self.typing
+            .expr_extra
+            .insert(expr_id, ExprExtra::MthdCall { resolution, steps });
 
         let Some((param_tys, return_ty, var_args)) = self.ctxt.ty_is_callable(&self.constraints, fn_ty) else {
             unreachable!("method resolution always produces a callable type");
