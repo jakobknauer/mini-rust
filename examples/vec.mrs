@@ -100,7 +100,7 @@ impl<T> Iterator for RefVecIter<T> {
     type Item = &T;
 
     fn next(&self) -> Option<&T> {
-        let next = (*self.vec).get(self.idx);
+        let next = self.vec.get(self.idx);
         self.idx = self.idx + 1;
         next
     }
