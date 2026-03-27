@@ -7,14 +7,14 @@ macro_rules! parse_left_associative {
         fn $name(&mut self, allow_struct: bool) -> Result<Expr<'ast>, ParserErr> {
             let mut acc: Expr = self.$next_fn(allow_struct)?;
 
-            while let Some(token) = self.current() {
+            while let Some(token) = self.tokens.current() {
                 let operator = match token {
                     $(
                         $token => $op,
                     )+
                     _ => break,
                 };
-                self.position += 1; // consume operator
+                self.tokens.advance(); // consume operator
                 let right = self.$next_fn(allow_struct)?;
                 acc = self.builder.binary_op(acc, operator, right);
             }
