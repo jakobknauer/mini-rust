@@ -1,12 +1,33 @@
-trait Eq {
-    fn eq(&self, other: &Self) -> bool;
-    fn ne(&self, other: &Self) -> bool {
+trait Eq<Rhs> {
+    fn eq(&self, other: &Rhs) -> bool;
+    fn ne(&self, other: &Rhs) -> bool {
         !self.eq(other)
     }
 }
 
-impl Eq for i32 {
+impl Eq<i32> for i32 {
     fn eq(&self, other: &i32) -> bool {
         *self == *other
+    }
+}
+
+impl Eq<bool> for bool {
+    fn eq(&self, other: &bool) -> bool {
+        *self == *other
+    }
+}
+
+impl Eq<()> for () {
+    fn eq(&self, other: &()) -> bool {
+        true
+    }
+}
+
+impl<A, B> Eq<&B> for &A
+where
+    A: Eq<B>
+{
+    fn eq(&self, other: &&B) -> bool {
+        **self == **other
     }
 }

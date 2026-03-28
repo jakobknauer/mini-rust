@@ -12,7 +12,8 @@ impl<T> Option<T> {
     }
 
     fn map<F, U>(self, f: F) -> Option<U>
-        where F: Fn(T) -> U
+    where
+        F: Fn(T) -> U
     {
         match self {
             Option::Some { item } => Option::Some { item: f(item) },
@@ -21,7 +22,8 @@ impl<T> Option<T> {
     }
 
     fn update<F>(&self, f: F)
-        where F: Fn(&T)
+    where
+        F: Fn(&T)
     {
         match self {
             Option::Some { item } => f(item),

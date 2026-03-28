@@ -6,7 +6,7 @@ trait Iterator {
 
 impl<I> I
 where
-    I: Iterator 
+    I: Iterator
 {
     fn count(self) -> i32 {
         let len = 0;
@@ -91,8 +91,9 @@ struct Filter<I, P> {
 }
 
 impl<I, P> Iterator for Filter<I, P>
-where I: Iterator,
-      P: Fn(<I as Iterator>::Item) -> bool
+where
+    I: Iterator,
+    P: Fn(<I as Iterator>::Item) -> bool
 {
     type Item = <I as Iterator>::Item;
 
@@ -119,8 +120,9 @@ struct Map<I, F, B> {
 }
 
 impl<I, F, B> Iterator for Map<I, F, B>
-where I: Iterator,
-      F: Fn(<I as Iterator>::Item) -> B
+where
+    I: Iterator,
+    F: Fn(<I as Iterator>::Item) -> B
 {
     type Item = B;
 

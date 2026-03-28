@@ -207,9 +207,18 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                     self.builder.insert_binary_prim_val(*prim, lhs, rhs, result_ty)
                 }
                 ExprExtra::BinaryOpMthd(resolution) => {
-                    let callee_op = self.lower_mthd_resolution_to_op(resolution);
-                    let left_op = self.lower_to_op(left);
-                    let right_op = self.lower_to_op(right);
+                    let (callee_op, by_ref) = self.mthd_resolution_to_op(resolution);
+                    let (left_op, right_op) = if by_ref {
+                        let left_place = self.lower_to_place(left);
+                        let left_addr = self.builder.insert_addr_of_val(left_place);
+                        let left_op = LoweredExpr::from(left_addr).into_op(&mut self.builder);
+                        let right_place = self.lower_to_place(right);
+                        let right_addr = self.builder.insert_addr_of_val(right_place);
+                        let right_op = LoweredExpr::from(right_addr).into_op(&mut self.builder);
+                        (left_op, right_op)
+                    } else {
+                        (self.lower_to_op(left), self.lower_to_op(right))
+                    };
                     self.builder.insert_call_val(callee_op, vec![left_op, right_op])
                 }
                 _ => panic!("expected BinaryPrim or BinaryOpMthd extra"),

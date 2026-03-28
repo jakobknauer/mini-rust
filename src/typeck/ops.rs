@@ -106,6 +106,8 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             BitOr => (self.ctxt.language_items.bit_or_trait, "bitor"),
             BitAnd => (self.ctxt.language_items.bit_and_trait, "bitand"),
             Remainder => (self.ctxt.language_items.rem_trait, "rem"),
+            Equal => (self.ctxt.language_items.eq_trait, "eq"),
+            NotEqual => (self.ctxt.language_items.eq_trait, "ne"),
             _ => {
                 return Err(TypeckError::BinaryOpTypeMismatch {
                     operator,
@@ -132,6 +134,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .expr_extra
             .insert(expr_id, ExprExtra::BinaryOpMthd(resolution));
 
-        Ok(self.ctxt.tys.assoc_ty(left_ty, trait_inst, 0))
+        let result_ty = match operator {
+            Equal | NotEqual => self.ctxt.tys.primitive(ty::Primitive::Boolean),
+            _ => self.ctxt.tys.assoc_ty(left_ty, trait_inst, 0),
+        };
+        Ok(result_ty)
     }
 }

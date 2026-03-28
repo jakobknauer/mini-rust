@@ -72,6 +72,25 @@ impl<T> Vec<T> {
     }
 }
 
+impl<A, B> Eq<Vec<B>> for Vec<A>
+where
+    A: Eq<B>
+{
+    fn eq(&self, other: &Vec<B>) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+        let i = 0;
+        while i < self.len {
+            if !(*self.ptr.offset(i) == *other.ptr.offset(i)) {
+                return false;
+            }
+            i = i + 1;
+        }
+        true
+    }
+}
+
 struct VecIter<T> {
     vec: Vec<T>,
     idx: i32,

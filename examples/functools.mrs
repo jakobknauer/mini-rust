@@ -1,5 +1,6 @@
 fn apply<A, B, F>(f: F, a: A) -> B
-where F: Fn(A) -> B
+where
+    F: Fn(A) -> B
 {
     f(a)
 }
