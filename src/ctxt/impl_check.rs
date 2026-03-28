@@ -8,8 +8,17 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         &self,
         trait_mthd_inst: fns::TraitMthdInst<'ctxt>,
         subst: &GenVarSubst<'ctxt>,
+        self_ty: Option<ty::Ty<'ctxt>>,
     ) -> fns::FnInst<'ctxt> {
         let mut trait_mthd_inst = self.subst_trait_mthd_inst(trait_mthd_inst, subst);
+        // Substitute TraitSelf with the concrete self type (for default trait method bodies)
+        if let &ty::TyDef::TraitSelf(_) = trait_mthd_inst.impl_ty.0
+            && let Some(concrete_self_ty) = self_ty
+        {
+            trait_mthd_inst = trait_mthd_inst
+                .with_updated(concrete_self_ty, trait_mthd_inst.trait_inst, trait_mthd_inst.gen_args)
+                .unwrap();
+        }
         // Resolve opaque and associated types to their concrete types for monomorphization
         trait_mthd_inst.impl_ty = self.normalize_ty(trait_mthd_inst.impl_ty);
         let trait_gen_args: Vec<_> = trait_mthd_inst
@@ -34,17 +43,29 @@ impl<'ctxt> super::Ctxt<'ctxt> {
 
         let trait_mthd_name = trait_mthd_inst.mthd.fn_.name.as_str();
 
-        let fn_ = *impl_inst
+        let (fn_, env_gen_args) = match impl_inst
             .impl_
             .mthds
             .borrow()
             .iter()
             .find(|&&m| m.name == trait_mthd_name)
-            .unwrap();
+            .copied()
+        {
+            Some(impl_fn) => (impl_fn, impl_inst.gen_args),
+            None => {
+                // Fall back to the default trait method body
+                assert!(
+                    trait_mthd_inst.mthd.has_default_body,
+                    "missing impl for method without default body"
+                );
+                (trait_mthd_inst.mthd.fn_, trait_mthd_inst.trait_inst.gen_args)
+            }
+        };
 
         self.fns
-            .inst_fn(fn_, trait_mthd_inst.gen_args, impl_inst.gen_args)
+            .inst_fn(fn_, trait_mthd_inst.gen_args, env_gen_args)
             .unwrap()
+            .with_self_ty(Some(trait_mthd_inst.impl_ty))
     }
 
     pub(crate) fn get_impl_insts_for_ty_and_trait_inst(

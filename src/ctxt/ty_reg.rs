@@ -588,7 +588,10 @@ impl<'ty> TyReg<'ty> {
         match *ty.0 {
             Primitive(_) | InfVar(_) => ty,
             GenVar(gen_var) => gen_vars.get(gen_var).unwrap_or(ty),
-            TraitSelf(_) => self_ty.unwrap_or(ty), // TODO: check actual trait
+            TraitSelf(_) => match self_ty {
+                Some(replacement) => self.substitute(replacement, gen_vars, None),
+                None => ty,
+            },
             Opaque { opaque, gen_args } => {
                 let gen_args = self.substitute_on_slice(gen_args, gen_vars, self_ty);
                 self.register_ty(TyDef::Opaque { opaque, gen_args })

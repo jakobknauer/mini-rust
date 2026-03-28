@@ -44,7 +44,6 @@ fn format_parse_err(err: &parse::ParserErr) -> String {
         UndelimitedStmt => "Parser error: undelimited statement".to_string(),
         InvalidLiteral => "Parser error: invalid literal".to_string(),
         UnexpectedEOF => "Parser error: unexpected end of file".to_string(),
-        TraitMthdWithBody => "Parser error: trait method with body".to_string(),
         ExpectedTraitName => "Parser error: expected trait name".to_string(),
         UnexpectedReceiverArg => "Parser error: unexpected receiver argument".to_string(),
     }

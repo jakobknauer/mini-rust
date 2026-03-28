@@ -461,73 +461,81 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     fn register_trait_methods(&mut self) -> Result<(), DriverError<'arena>> {
         for ast_trait in self.ast.traits().iter() {
             let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
-            let self_type = self.ctxt.tys.trait_self(trait_);
-            for &mthd in ast_trait.mthds.iter() {
-                let mthd_gen_params: Vec<_> = mthd
-                    .gen_params
-                    .iter()
-                    .map(|gp| self.ctxt.tys.register_gen_var(gp))
-                    .collect();
-                let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_.gen_params).cloned().collect();
-
-                let mut constraints: Vec<ty::Constraint> = Vec::new();
-                for constraint in &mthd.constraints {
-                    let res_ctxt = ResCtxt {
-                        gen_vars: &all_gen_params,
-                        self_ty: Some(self_type),
-                        constraints: &constraints,
-                    };
-                    constraints.extend(self.resolve_constraint(constraint, res_ctxt)?);
-                }
-
-                let trait_res_ctxt = ResCtxt {
-                    gen_vars: &all_gen_params,
-                    self_ty: Some(self_type),
-                    constraints: &constraints,
-                };
-                let params = mthd
-                    .params
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, param)| self.build_fn_param(param, trait_res_ctxt, idx == 0))
-                    .collect::<Result<_, _>>()?;
-
-                let return_ty = match mthd.return_ty {
-                    Some(ty) => self
-                        .try_resolve_ast_ty_annot(ty, trait_res_ctxt, false)
-                        .ok_or(DriverError::ContextBuild("Failed to resolve trait method return type"))?,
-                    None => self.ctxt.tys.unit(),
-                };
-
-                let trait_gen_args: Vec<_> = trait_.gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
-                let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
-
-                let fn_ = self
-                    .ctxt
-                    .fns
-                    .register_fn(
-                        fns::FnDecl {
-                            id: fns::FnId::default(),
-                            name: mthd.name.clone(),
-                            associated_ty: None,
-                            associated_trait_inst: Some(trait_inst),
-                            gen_params: mthd_gen_params,
-                            env_gen_params: trait_.gen_params.clone(),
-                            env_constraints: Vec::new(),
-                            params,
-                            var_args: false,
-                            return_ty,
-                            constraints,
-                        },
-                        false,
-                    )
-                    .unwrap();
-
-                self.ctxt.traits.register_mthd(trait_, fn_);
+            for mthd in ast_trait.mthds.iter() {
+                self.register_trait_mthd(trait_, mthd)?;
             }
         }
+        Ok(())
+    }
 
+    fn register_trait_mthd(
+        &mut self,
+        trait_: traits::Trait<'arena>,
+        mthd: &ast::Fn,
+    ) -> Result<(), DriverError<'arena>> {
+        let self_type = self.ctxt.tys.trait_self(trait_);
+        let mthd_gen_params: Vec<_> = mthd
+            .gen_params
+            .iter()
+            .map(|gp| self.ctxt.tys.register_gen_var(gp))
+            .collect();
+        let all_gen_params: Vec<_> = mthd_gen_params.iter().chain(&trait_.gen_params).cloned().collect();
+
+        let mut constraints: Vec<ty::Constraint> = Vec::new();
+        for constraint in &mthd.constraints {
+            let res_ctxt = ResCtxt {
+                gen_vars: &all_gen_params,
+                self_ty: Some(self_type),
+                constraints: &constraints,
+            };
+            constraints.extend(self.resolve_constraint(constraint, res_ctxt)?);
+        }
+
+        let trait_res_ctxt = ResCtxt {
+            gen_vars: &all_gen_params,
+            self_ty: Some(self_type),
+            constraints: &constraints,
+        };
+        let params = mthd
+            .params
+            .iter()
+            .enumerate()
+            .map(|(idx, param)| self.build_fn_param(param, trait_res_ctxt, idx == 0))
+            .collect::<Result<_, _>>()?;
+
+        let return_ty = match mthd.return_ty {
+            Some(ty) => self
+                .try_resolve_ast_ty_annot(ty, trait_res_ctxt, false)
+                .ok_or(DriverError::ContextBuild("Failed to resolve trait method return type"))?,
+            None => self.ctxt.tys.unit(),
+        };
+
+        let trait_gen_args: Vec<_> = trait_.gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
+        let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
+        let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
+
+        let fn_ = self
+            .ctxt
+            .fns
+            .register_fn(
+                fns::FnDecl {
+                    id: fns::FnId::default(),
+                    name: mthd.name.clone(),
+                    associated_ty: None,
+                    associated_trait_inst: Some(trait_inst),
+                    gen_params: mthd_gen_params,
+                    env_gen_params: trait_.gen_params.clone(),
+                    env_constraints: Vec::new(),
+                    params,
+                    var_args: false,
+                    return_ty,
+                    constraints,
+                },
+                false,
+            )
+            .unwrap();
+
+        self.ctxt.traits.register_mthd(trait_, fn_, mthd.body.is_some());
         Ok(())
     }
 
@@ -566,6 +574,17 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 let Some(body) = ast_mthd.body else { continue };
                 let target_fn = self.ast_meta.fn_ids[&ast_mthd.1];
                 let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
+                    .map_err(DriverError::AstLowering)?;
+                hlr_fns.push(hlr_fn);
+            }
+        }
+
+        for ast_trait in self.ast.traits().iter() {
+            let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
+            for mthd in ast_trait.mthds.iter() {
+                let Some(body) = mthd.body else { continue };
+                let trait_mthd = self.ctxt.traits.resolve_trait_method(trait_, &mthd.name).unwrap();
+                let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, trait_mthd.fn_, body, self.hlr)
                     .map_err(DriverError::AstLowering)?;
                 hlr_fns.push(hlr_fn);
             }
@@ -659,14 +678,19 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 .map(|fn_inst| {
                     let new_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.gen_args, &subst);
                     let new_env_gen_args = self.ctxt.tys.substitute_gen_vars_on_slice(fn_inst.env_gen_args, &subst);
-                    fn_inst.with_gen_args(new_gen_args, new_env_gen_args).unwrap()
+                    let new_self_ty = fn_inst.self_ty.map(|ty| self.ctxt.tys.substitute_gen_vars(ty, &subst));
+                    fn_inst
+                        .with_gen_args(new_gen_args, new_env_gen_args)
+                        .unwrap()
+                        .with_self_ty(new_self_ty)
                 });
             open.extend(fn_insts);
 
             let called_trait_mthd_insts = self.ctxt.fns.get_called_trait_mthd_insts(current.fn_);
-            let trait_fn_insts = called_trait_mthd_insts
-                .into_iter()
-                .map(|trait_mthd_inst| self.ctxt.resolve_trait_mthd_to_fn(trait_mthd_inst, &subst));
+            let trait_fn_insts = called_trait_mthd_insts.into_iter().map(|trait_mthd_inst| {
+                self.ctxt
+                    .resolve_trait_mthd_to_fn(trait_mthd_inst, &subst, current.self_ty)
+            });
             open.extend(trait_fn_insts);
 
             closed.insert(current);

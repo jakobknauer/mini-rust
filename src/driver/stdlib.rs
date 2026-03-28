@@ -50,7 +50,7 @@ fn register_arith_trait<'ctxt>(
             false,
         )
         .unwrap();
-    ctxt.traits.register_mthd(trait_, fn_);
+    ctxt.traits.register_mthd(trait_, fn_, false);
 
     trait_
 }
@@ -115,7 +115,7 @@ pub fn register_deref_trait<'ctxt>(ctxt: &mut ctxt::Ctxt<'ctxt>) {
             false,
         )
         .unwrap();
-    ctxt.traits.register_mthd(trait_, fn_);
+    ctxt.traits.register_mthd(trait_, fn_, false);
 
     ctxt.language_items.deref_trait = Some(trait_);
 }

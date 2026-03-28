@@ -51,6 +51,7 @@ pub struct TraitInst<'traits> {
 pub struct TraitMthdDef<'traits> {
     pub trait_: Trait<'traits>,
     pub fn_: Fn<'traits>,
+    pub has_default_body: bool,
 }
 
 impl std::fmt::Debug for TraitMthdDef<'_> {

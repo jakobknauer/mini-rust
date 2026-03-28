@@ -106,11 +106,11 @@ impl<'ctxt> Ctxt<'ctxt> {
             .fn_
             .params
             .iter()
-            .map(|p| self.tys.substitute_gen_vars(p.ty, &subst))
+            .map(|p| self.tys.substitute(p.ty, &subst, fn_inst.self_ty))
             .collect();
         let param_tys = self.tys.ty_slice(&param_tys);
 
-        let return_ty = self.tys.substitute_gen_vars(fn_inst.fn_.return_ty, &subst);
+        let return_ty = self.tys.substitute(fn_inst.fn_.return_ty, &subst, fn_inst.self_ty);
 
         (param_tys, return_ty, fn_inst.fn_.var_args)
     }

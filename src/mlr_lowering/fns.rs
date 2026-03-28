@@ -23,6 +23,7 @@ pub struct MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     entry_block: Option<BasicBlock<'iw>>,
     after_loop_blocks: VecDeque<BasicBlock<'iw>>,
     subst: mr_ty::GenVarSubst<'ctxt>,
+    self_ty: Option<mr_ty::Ty<'ctxt>>,
 }
 
 #[derive(Debug)]
@@ -48,6 +49,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let iw_fn = parent.get_fn(fn_inst).unwrap();
         let after_loop_blocks = VecDeque::new();
         let subst = fn_inst.get_subst();
+        let self_ty = fn_inst.self_ty;
 
         Self {
             parent,
@@ -58,6 +60,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             entry_block: None,
             after_loop_blocks,
             subst,
+            self_ty,
         }
     }
 
@@ -325,9 +328,11 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     fn build_global_function(&mut self, fn_inst: mr_fns::FnInst<'ctxt>) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let substituted_gen_args = self.substitute_slice(fn_inst.gen_args);
         let substituted_env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
+        let substituted_self_ty = fn_inst.self_ty.map(|ty| self.substitute(ty));
         let substituted_fn_inst = fn_inst
             .with_gen_args(substituted_gen_args, substituted_env_gen_args)
-            .unwrap();
+            .unwrap()
+            .with_self_ty(substituted_self_ty);
 
         let result = self
             .parent
@@ -344,7 +349,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let fn_inst = self
             .parent
             .mr_ctxt
-            .resolve_trait_mthd_to_fn(trait_mthd_inst, &self.subst);
+            .resolve_trait_mthd_to_fn(trait_mthd_inst, &self.subst, self.self_ty);
         self.build_global_function(fn_inst)
     }
 
@@ -478,10 +483,11 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     }
 
     fn substitute(&mut self, ty: mr_ty::Ty<'ctxt>) -> mr_ty::Ty<'ctxt> {
-        self.parent.mr_ctxt.tys.substitute_gen_vars(ty, &self.subst)
+        self.parent.mr_ctxt.tys.substitute(ty, &self.subst, self.self_ty)
     }
 
     fn substitute_slice(&mut self, slice: mr_ty::TySlice<'ctxt>) -> mr_ty::TySlice<'ctxt> {
-        self.parent.mr_ctxt.tys.substitute_gen_vars_on_slice(slice, &self.subst)
+        let tys: Vec<_> = slice.iter().map(|&t| self.substitute(t)).collect();
+        self.parent.mr_ctxt.tys.ty_slice(&tys)
     }
 }

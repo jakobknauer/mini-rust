@@ -1,0 +1,12 @@
+trait Eq {
+    fn eq(&self, other: &Self) -> bool;
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl Eq for i32 {
+    fn eq(&self, other: &i32) -> bool {
+        *self == *other
+    }
+}

@@ -42,14 +42,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.ctxt.tys.closure(name, captures_ty, param_tys, return_ty)
             }
 
-            TraitSelf(_) => {
-                let self_ty = self
-                    .fn_
-                    .fn_
-                    .associated_ty
-                    .expect("TraitSelf in a function with no associated type");
-                self.normalize(self_ty)
-            }
+            TraitSelf(_) => ty,
 
             Tuple(items) => {
                 let items = self.normalize_slice(items);
@@ -183,7 +176,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     fn normalize_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> fns::FnInst<'ctxt> {
         let gen_args = self.normalize_slice(fn_inst.gen_args);
         let env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
-        fn_inst.with_gen_args(gen_args, env_gen_args).unwrap()
+        let self_ty = fn_inst.self_ty.map(|ty| self.normalize(ty));
+        fn_inst
+            .with_gen_args(gen_args, env_gen_args)
+            .unwrap()
+            .with_self_ty(self_ty)
     }
 
     fn normalize_mthd_resolution(&mut self, resolution: MthdResolution<'ctxt>) -> MthdResolution<'ctxt> {

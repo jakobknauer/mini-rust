@@ -121,21 +121,30 @@ fn check_mthd_names<'ctxt>(
     impl_: Impl<'ctxt>,
     trait_: Trait<'ctxt>,
 ) -> Result<(), ImplCheckErrorKind<'ctxt>> {
-    let trait_mthd_names: HashSet<&str> = ctxt
+    let all_trait_mthd_names: HashSet<&str> = ctxt
         .traits
         .get_trait_mthds(trait_)
         .map(|m| m.fn_.name.as_str())
         .collect();
+    let required_trait_mthd_names: HashSet<&str> = ctxt
+        .traits
+        .get_trait_mthds(trait_)
+        .filter(|m| !m.has_default_body)
+        .map(|m| m.fn_.name.as_str())
+        .collect();
     let impl_mthd_names: HashSet<&str> = impl_.mthds.borrow().iter().map(|&mthd| mthd.name.as_str()).collect();
 
-    let missing_mthds: Vec<&str> = trait_mthd_names.difference(&impl_mthd_names).cloned().collect();
+    let missing_mthds: Vec<&str> = required_trait_mthd_names
+        .difference(&impl_mthd_names)
+        .cloned()
+        .collect();
     if !missing_mthds.is_empty() {
         return Err(ImplCheckErrorKind::MissingMthds(
             missing_mthds.iter().map(|s| s.to_string()).collect(),
         ));
     }
 
-    let extra_mthds: Vec<&str> = impl_mthd_names.difference(&trait_mthd_names).cloned().collect();
+    let extra_mthds: Vec<&str> = impl_mthd_names.difference(&all_trait_mthd_names).cloned().collect();
     if !extra_mthds.is_empty() {
         return Err(ImplCheckErrorKind::ExtraMthds(
             extra_mthds.iter().map(|s| s.to_string()).collect(),

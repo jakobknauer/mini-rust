@@ -86,8 +86,17 @@ impl<'traits> TraitReg<'traits> {
         trait_
     }
 
-    pub fn register_mthd(&self, trait_: Trait<'traits>, fn_: Fn<'traits>) -> TraitMthd<'traits> {
-        let mthd: TraitMthd<'traits> = self.arena.alloc(TraitMthdDef { trait_, fn_ });
+    pub fn register_mthd(
+        &self,
+        trait_: Trait<'traits>,
+        fn_: Fn<'traits>,
+        has_default_body: bool,
+    ) -> TraitMthd<'traits> {
+        let mthd: TraitMthd<'traits> = self.arena.alloc(TraitMthdDef {
+            trait_,
+            fn_,
+            has_default_body,
+        });
         self.mthds.borrow_mut().push(mthd);
         mthd
     }

@@ -23,7 +23,7 @@ pub enum ParserErr {
     UndelimitedStmt,
     InvalidLiteral,
     UnexpectedEOF,
-    TraitMthdWithBody,
+
     ExpectedTraitName,
     UnexpectedReceiverArg,
 }
@@ -429,9 +429,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 }
                 Some(Token::Keyword(Keyword::Fn)) => {
                     let mthd = self.parse_function(true)?;
-                    if mthd.body.is_some() {
-                        return Err(ParserErr::TraitMthdWithBody);
-                    }
                     mthds.push(mthd);
                 }
                 Some(Token::RBrace) => break,

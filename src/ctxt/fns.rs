@@ -98,6 +98,7 @@ pub struct FnInst<'fns> {
     pub fn_: Fn<'fns>,
     pub gen_args: TySlice<'fns>,
     pub env_gen_args: TySlice<'fns>,
+    pub self_ty: Option<ty::Ty<'fns>>,
     pub(in crate::ctxt) _private: (),
 }
 
@@ -106,6 +107,10 @@ impl<'fns> FnInst<'fns> {
         let gen_param_subst = ty::GenVarSubst::new(&self.fn_.gen_params, self.gen_args).unwrap();
         let env_gen_param_subst = ty::GenVarSubst::new(&self.fn_.env_gen_params, self.env_gen_args).unwrap();
         ty::GenVarSubst::compose(env_gen_param_subst, gen_param_subst)
+    }
+
+    pub fn with_self_ty(self, self_ty: Option<ty::Ty<'fns>>) -> Self {
+        FnInst { self_ty, ..self }
     }
 
     pub fn with_gen_args(
@@ -129,6 +134,7 @@ impl<'fns> FnInst<'fns> {
             fn_: self.fn_,
             gen_args,
             env_gen_args,
+            self_ty: self.self_ty,
             _private: (),
         })
     }

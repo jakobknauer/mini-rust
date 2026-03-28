@@ -171,9 +171,8 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.add_constraint_obligations(fn_, &full_subst);
 
                 let fn_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
-                Ok(MthdResolution::Inherent(
-                    self.ctxt.fns.inst_fn(fn_, fn_gen_args, env_gen_args).unwrap(),
-                ))
+                let fn_inst = self.ctxt.fns.inst_fn(fn_, fn_gen_args, env_gen_args).unwrap();
+                Ok(MthdResolution::Inherent(fn_inst.with_self_ty(fn_.associated_ty)))
             }
             FoundMthd::Trait { trait_inst, mthd } => {
                 let decl = mthd.fn_;

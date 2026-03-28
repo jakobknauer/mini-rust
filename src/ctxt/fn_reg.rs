@@ -48,6 +48,7 @@ impl<'fns> FnReg<'fns> {
             fn_,
             gen_args,
             env_gen_args,
+            self_ty: None,
             _private: (),
         })
     }
