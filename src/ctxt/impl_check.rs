@@ -74,13 +74,39 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         ty: ty::Ty<'ctxt>,
         trait_inst: traits::TraitInst<'ctxt>,
     ) -> impl Iterator<Item = impls::ImplInst<'ctxt>> {
-        let impl_insts = self.get_impl_insts_for_ty_and_trait(constraints, ty, trait_inst.trait_);
+        self.impls
+            .get_impls_for_trait(trait_inst.trait_)
+            .filter_map(move |impl_| {
+                let impl_trait_inst = impl_.trait_inst.unwrap();
 
-        impl_insts.into_iter().filter(move |impl_inst| {
-            let subst = GenVarSubst::new(&impl_inst.impl_.gen_params, impl_inst.gen_args).unwrap();
-            let inst_impl_trait_inst = self.subst_trait_inst(impl_inst.impl_.trait_inst.unwrap(), &subst);
-            inst_impl_trait_inst == trait_inst
-        })
+                // Build (target, generic) pairs from both the impl type and the trait gen args,
+                // so gen vars that only appear in the trait gen args (not the `for` type) are resolved.
+                let pairs: Vec<_> = std::iter::once((ty, impl_.ty))
+                    .chain(
+                        trait_inst
+                            .gen_args
+                            .iter()
+                            .copied()
+                            .zip(impl_trait_inst.gen_args.iter().copied()),
+                    )
+                    .collect();
+                let gen_args = self
+                    .tys
+                    .try_find_instantiation_from_pairs(&pairs, &impl_.gen_params)
+                    .ok()?;
+
+                let subst = GenVarSubst::new(&impl_.gen_params, gen_args).unwrap();
+                if !self.impl_constraints_satisfied(constraints, &impl_.constraints, &subst) {
+                    return None;
+                }
+
+                let inst_impl_trait_inst = self.subst_trait_inst(impl_trait_inst, &subst);
+                if inst_impl_trait_inst != trait_inst {
+                    return None;
+                }
+
+                self.impls.inst_impl(impl_, gen_args).ok()
+            })
     }
 
     pub fn ty_implements_trait_inst(

@@ -1,4 +1,5 @@
 fn main() -> i32 {
+    let v = Vec::new();
     0
 }
 

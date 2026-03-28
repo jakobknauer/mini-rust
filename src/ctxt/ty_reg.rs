@@ -751,21 +751,31 @@ impl<'ty> TyReg<'ty> {
         generic: Ty<'ty>,
         gen_vars: &[GenVar<'ty>],
     ) -> Result<TySlice<'ty>, ()> {
+        self.try_find_instantiation_from_pairs(&[(target, generic)], gen_vars)
+    }
+
+    pub fn try_find_instantiation_from_pairs(
+        &self,
+        pairs: &[(Ty<'ty>, Ty<'ty>)],
+        gen_vars: &[GenVar<'ty>],
+    ) -> Result<TySlice<'ty>, ()> {
         let mut instantiations = HashMap::new();
         for gen_param in gen_vars {
             instantiations.insert(*gen_param, None);
         }
 
-        if self.try_find_instantiation_internal(target, generic, &mut instantiations) {
-            let inst: Vec<Ty<'ty>> = gen_vars
-                .iter()
-                .map(|gen_var| instantiations[gen_var])
-                .collect::<Option<_>>()
-                .ok_or(())?;
-            Ok(self.ty_slice(&inst))
-        } else {
-            Err(())
+        for &(target, generic) in pairs {
+            if !self.try_find_instantiation_internal(target, generic, &mut instantiations) {
+                return Err(());
+            }
         }
+
+        let inst: Vec<Ty<'ty>> = gen_vars
+            .iter()
+            .map(|gen_var| instantiations[gen_var])
+            .collect::<Option<_>>()
+            .ok_or(())?;
+        Ok(self.ty_slice(&inst))
     }
 
     fn try_find_instantiation_internal(

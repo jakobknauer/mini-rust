@@ -67,19 +67,19 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let (lhs, rhs) = self.build_int_pair(lhs, rhs)?;
 
         let op = match op {
-            AddI32 => self.iw_builder.build_int_add(lhs, rhs, "")?,
-            SubI32 => self.iw_builder.build_int_sub(lhs, rhs, "")?,
-            MulI32 => self.iw_builder.build_int_mul(lhs, rhs, "")?,
-            DivI32 => self.iw_builder.build_int_signed_div(lhs, rhs, "")?,
-            RemI32 => self.iw_builder.build_int_signed_rem(lhs, rhs, "")?,
-            EqI32 | EqBool => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "")?,
-            NeI32 | NeBool => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "")?,
-            BitOrBool | BitOrI32 => self.iw_builder.build_or(lhs, rhs, "")?,
-            BitAndBool | BitAndI32 => self.iw_builder.build_and(lhs, rhs, "")?,
-            LtI32 => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "")?,
-            GtI32 => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "")?,
-            LeI32 => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "")?,
-            GeI32 => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "")?,
+            AddI32 => self.iw_builder.build_int_add(lhs, rhs, "add")?,
+            SubI32 => self.iw_builder.build_int_sub(lhs, rhs, "sub")?,
+            MulI32 => self.iw_builder.build_int_mul(lhs, rhs, "mul")?,
+            DivI32 => self.iw_builder.build_int_signed_div(lhs, rhs, "div")?,
+            RemI32 => self.iw_builder.build_int_signed_rem(lhs, rhs, "rem")?,
+            EqI32 | EqBool => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")?,
+            NeI32 | NeBool => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne")?,
+            BitOrBool | BitOrI32 => self.iw_builder.build_or(lhs, rhs, "bitor")?,
+            BitAndBool | BitAndI32 => self.iw_builder.build_and(lhs, rhs, "bitand")?,
+            LtI32 => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "lt")?,
+            GtI32 => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
+            LeI32 => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,
+            GeI32 => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")?,
             EqUnit | NeUnit => unreachable!(),
         };
 
@@ -94,8 +94,8 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         use language_items::UnaryPrimOp::*;
         let operand = self.build_op(operand)?.into_int_value();
         let result = match op {
-            NegI32 => self.iw_builder.build_int_neg(operand, "")?,
-            NotBool => self.iw_builder.build_not(operand, "")?,
+            NegI32 => self.iw_builder.build_int_neg(operand, "neg")?,
+            NotBool => self.iw_builder.build_not(operand, "not")?,
         };
         Ok(result.as_basic_value_enum())
     }
