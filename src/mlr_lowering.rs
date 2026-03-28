@@ -95,7 +95,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             let return_type = self.get_ty_as_basic_type_enum(return_ty).unwrap();
             let iw_fn_type = return_type.fn_type(&param_types, var_args);
 
-            let fn_name = self.mr_ctxt.get_fn_inst_name(fn_inst);
+            let fn_name = fn_inst.to_string();
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
             self.functions.insert(fn_inst, fn_value);
         }
@@ -175,8 +175,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             }
         }
 
-        let name = self.mr_ctxt.tys.get_string_rep(ty);
-        let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(&name);
+        let iw_struct: inkwell::types::StructType<'_> = self.iw_ctxt.opaque_struct_type(&ty.to_string());
         self.types.insert(ty, iw_struct.as_any_type_enum());
         self.structs.push((ty, iw_struct));
 
@@ -197,8 +196,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             }
         }
 
-        let name = self.mr_ctxt.tys.get_string_rep(ty);
-        let iw_enum_struct = self.iw_ctxt.opaque_struct_type(&name);
+        let iw_enum_struct = self.iw_ctxt.opaque_struct_type(&ty.to_string());
         self.types.insert(ty, iw_enum_struct.as_any_type_enum());
         self.enums.push((ty, iw_enum_struct));
 

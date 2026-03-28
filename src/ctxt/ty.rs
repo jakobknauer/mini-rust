@@ -276,6 +276,117 @@ impl<'fns> Clone for ClosureFnCell<'fns> {
         ClosureFnCell(self.0.clone())
     }
 }
+
+impl std::fmt::Display for Ty<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::fmt::Display for TyDef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use self::Primitive::*;
+        use TyDef::*;
+        match self {
+            &Primitive(p) => match p {
+                Integer32 => write!(f, "i32"),
+                Boolean => write!(f, "bool"),
+                CVoid => write!(f, "c_void"),
+                CChar => write!(f, "c_char"),
+            },
+            &Tuple(tys) => match tys {
+                [] => write!(f, "()"),
+                [ty] => write!(f, "({},)", ty),
+                tys => {
+                    write!(f, "(")?;
+                    for (i, ty) in tys.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", ty)?;
+                    }
+                    write!(f, ")")
+                }
+            },
+            &Fn {
+                param_tys,
+                return_ty,
+                var_args,
+            } => {
+                write!(f, "fn(")?;
+                for (i, ty) in param_tys.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", ty)?;
+                }
+                if var_args {
+                    if !param_tys.is_empty() {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "...")?;
+                }
+                write!(f, ") -> {}", return_ty)
+            }
+            &Ref(ty) => write!(f, "&{}", ty),
+            &Ptr(ty) => write!(f, "*{}", ty),
+            GenVar(gv) => write!(f, "{}", gv.name()),
+            &Struct { struct_, gen_args } => {
+                write!(f, "{}", struct_.name)?;
+                if !gen_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, ty) in gen_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", ty)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            &Enum { enum_, gen_args } => {
+                write!(f, "{}", enum_.name)?;
+                if !gen_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, ty) in gen_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", ty)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            TraitSelf(trait_) => write!(f, "Self({})", trait_.name),
+            Closure { name, .. } => write!(f, "{}", name),
+            &AssocTy {
+                base_ty,
+                trait_inst,
+                assoc_ty_idx,
+            } => {
+                let assoc_ty_name = &trait_inst.trait_.assoc_tys[assoc_ty_idx];
+                write!(f, "<{} as {}>::{}", base_ty, trait_inst, assoc_ty_name)
+            }
+            &InfVar(id) => write!(f, "inf({})", id.0),
+            &Opaque { opaque, gen_args } => {
+                write!(f, "impl({})", opaque.id.0)?;
+                if !gen_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, ty) in gen_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", ty)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
 impl std::fmt::Debug for ClosureFnCell<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ClosureFnCell({:?})", self.0.get())

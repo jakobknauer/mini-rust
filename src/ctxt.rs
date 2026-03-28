@@ -37,68 +37,6 @@ impl<'ctxt> Ctxt<'ctxt> {
         }
     }
 
-    /// TODO Only needs self for [`TyReg::get_string_rep`]. Once that method is refactored,
-    /// refactor this one as well.
-    pub fn get_fn_inst_name(&self, fn_inst: fns::FnInst<'ctxt>) -> String {
-        let assoc_ty = if let Some(assoc_ty) = fn_inst.fn_.associated_ty {
-            let assoc_ty_name = self.tys.get_string_rep(assoc_ty);
-            if let Some(assoc_trait_inst) = &fn_inst.fn_.associated_trait_inst {
-                let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "<{}>",
-                        assoc_trait_inst
-                            .gen_args
-                            .iter()
-                            .map(|&ty| self.tys.get_string_rep(ty))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                };
-
-                format!(
-                    "<{} as {}{}>::",
-                    assoc_ty_name, assoc_trait_inst.trait_.name, assoc_trait_gen_params
-                )
-            } else {
-                format!("{}::", assoc_ty_name)
-            }
-        } else {
-            "".to_string()
-        };
-
-        let env_gen_args = if fn_inst.env_gen_args.is_empty() {
-            "".to_string()
-        } else {
-            format!(
-                "{{{}}}",
-                fn_inst
-                    .env_gen_args
-                    .iter()
-                    .map(|&ty| self.tys.get_string_rep(ty))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-
-        let gen_args = if fn_inst.gen_args.is_empty() {
-            "".to_string()
-        } else {
-            format!(
-                "<{}>",
-                fn_inst
-                    .gen_args
-                    .iter()
-                    .map(|&ty| self.tys.get_string_rep(ty))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-
-        format!("{}{}{}{}", assoc_ty, fn_inst.fn_.name, env_gen_args, gen_args)
-    }
-
     pub fn get_fn_inst_sig(&self, fn_inst: fns::FnInst<'ctxt>) -> (ty::TySlice<'ctxt>, ty::Ty<'ctxt>, bool) {
         let subst = fn_inst.get_subst();
 

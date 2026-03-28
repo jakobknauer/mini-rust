@@ -54,7 +54,7 @@ pub fn compile(
         mlr: &mlr::Mlr::new(&arena),
     };
 
-    driver.compile().map_err(|err| format_driver_error(err, &driver.ctxt))
+    driver.compile().map_err(format_driver_error)
 }
 
 struct Driver<'a, 'arena> {
@@ -657,8 +657,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating HLR file"))?;
         for hlr_fn in hlr_fns {
             let typing = typings.get(&hlr_fn.fn_);
-            print::print_hlr(hlr_fn, &self.ctxt, typing, &mut file)
-                .map_err(|_| DriverError::Io("Error printing HLR"))?;
+            print::print_hlr(hlr_fn, typing, &mut file).map_err(|_| DriverError::Io("Error printing HLR"))?;
         }
         Ok(())
     }
@@ -667,8 +666,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         let mut file = std::fs::File::create(path).map_err(|_| DriverError::Io("Error creating MLR file"))?;
 
         for mlr_fn in mlr_fns {
-            print::print_mlr(mlr_fn.fn_, Some(mlr_fn), &self.ctxt, &mut file)
-                .map_err(|_| DriverError::Io("Error printing MLR"))?;
+            print::print_mlr(mlr_fn.fn_, Some(mlr_fn), &mut file).map_err(|_| DriverError::Io("Error printing MLR"))?;
         }
 
         Ok(())

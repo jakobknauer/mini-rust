@@ -1,6 +1,5 @@
 use crate::{
     ast_lowering::AstLoweringError,
-    ctxt::{self, ty},
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     mlr_lowering::MlrLoweringError,
     parse,
@@ -18,20 +17,19 @@ pub enum DriverError<'ty> {
     Io(&'static str),
 }
 
-pub fn format_driver_error<'ctxt>(err: DriverError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>) -> String {
+pub fn format_driver_error<'ctxt>(err: DriverError<'ctxt>) -> String {
     match err {
         DriverError::Parse(e) => format_parse_err(&e),
         DriverError::ContextBuild(msg) => format!("Compilation failed: {msg}"),
         DriverError::NoMainFunction => "Compilation failed: no 'main' function found".to_string(),
-        DriverError::ImplCheck(e) => format!("Compilation failed: {}", format_impl_check_error(e, ctxt)),
+        DriverError::ImplCheck(e) => format!("Compilation failed: {}", format_impl_check_error(e)),
         DriverError::AstLowering(e) => format!("Compilation failed: {}", e.msg),
         DriverError::Typeck { fn_name, error } => {
-            format!("Type error in '{}': {}", fn_name, format_typeck_error(&error, ctxt))
+            format!("Type error in '{}': {}", fn_name, format_typeck_error(&error))
         }
-        DriverError::MlrLowering(MlrLoweringError::FnLowering { fn_inst, .. }) => format!(
-            "Failed to lower function '{}' to LLVM IR",
-            ctxt.get_fn_inst_name(fn_inst)
-        ),
+        DriverError::MlrLowering(MlrLoweringError::FnLowering { fn_inst, .. }) => {
+            format!("Failed to lower function '{}' to LLVM IR", fn_inst)
+        }
         DriverError::Io(msg) => format!("IO error: {msg}"),
     }
 }
@@ -49,10 +47,8 @@ fn format_parse_err(err: &parse::ParserErr) -> String {
     }
 }
 
-fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>) -> String {
+fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>) -> String {
     use ImplCheckErrorKind::*;
-
-    let ty = |t| ctxt.tys.get_string_rep(t);
 
     let desc = match err.kind {
         MissingMthds(items) => format!("missing methods: {}", items.join(", ")),
@@ -68,16 +64,11 @@ fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>, ctxt: &ctxt::Ctxt<
             actual,
         } => format!(
             "argument {} type mismatch for method '{}': expected '{}', got '{}'",
-            arg_idx,
-            mthd,
-            ty(expected),
-            ty(actual)
+            arg_idx, mthd, expected, actual
         ),
         ReturnTypeMismatch { mthd, expected, actual } => format!(
             "return type mismatch for method '{}': expected '{}', got '{}'",
-            mthd,
-            ty(expected),
-            ty(actual)
+            mthd, expected, actual
         ),
         MthdGenParamCountMismatch { mthd, expected, actual } => format!(
             "generic argument count mismatch for method '{}': expected {}, got {}",
@@ -97,30 +88,20 @@ fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>, ctxt: &ctxt::Ctxt<
 
     format!(
         "error checking implementation of trait '{}' for type '{}': {}",
-        err.trait_inst.trait_.name,
-        ctxt.tys.get_string_rep(err.impl_.ty),
-        desc
+        err.trait_inst.trait_.name, err.impl_.ty, desc
     )
 }
 
-fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>) -> String {
+fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>) -> String {
     use TypeckError::*;
 
-    let ty = |t| ctxt.tys.get_string_rep(t);
-    let trait_ = |t: ctxt::traits::Trait| t.name.to_string();
-    let struct_ = |s: ty::Struct<'_>| s.name.clone();
-    let enum_ = |e: ty::Enum<'_>| e.name.clone();
-
     match err {
-        ReturnTypeMismatch { expected, actual } => format!(
-            "return type mismatch: expected '{}', got '{}'",
-            ty(*expected),
-            ty(*actual)
-        ),
+        ReturnTypeMismatch { expected, actual } => {
+            format!("return type mismatch: expected '{}', got '{}'", expected, actual)
+        }
         ReturnExprTypeMismatch { expected, actual } => format!(
             "return expression type mismatch: expected '{}', got '{}'",
-            ty(*expected),
-            ty(*actual)
+            expected, actual
         ),
         FnGenArgCountMismatch { fn_, expected, actual } => format!(
             "wrong number of generic arguments for function '{}': expected {}, got {}",
@@ -132,9 +113,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             actual,
         } => format!(
             "wrong number of generic arguments for struct '{}': expected {}, got {}",
-            struct_(*s),
-            expected,
-            actual
+            s.name, expected, actual
         ),
         EnumGenArgCountMismatch {
             enum_: e,
@@ -142,9 +121,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             actual,
         } => format!(
             "wrong number of generic arguments for enum '{}': expected {}, got {}",
-            enum_(*e),
-            expected,
-            actual
+            e.name, expected, actual
         ),
         TraitGenArgCountMismatch {
             trait_: t,
@@ -152,16 +129,14 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             actual,
         } => format!(
             "wrong number of generic arguments for trait '{}': expected {}, got {}",
-            trait_(*t),
-            expected,
-            actual
+            t.name, expected, actual
         ),
-        UnresolvableAssocTy { base, name } => format!("cannot resolve associated type '{}' on '{}'", name, ty(*base)),
+        UnresolvableAssocTy { base, name } => format!("cannot resolve associated type '{}' on '{}'", name, base),
         MthdResolutionFailed { base_ty, mthd_name } => {
-            format!("no method '{}' found for type '{}'", mthd_name, ty(*base_ty))
+            format!("no method '{}' found for type '{}'", mthd_name, base_ty)
         }
         AmbiguousMthd { base_ty, mthd_name } => {
-            format!("method '{}' is ambiguous for type '{}'", mthd_name, ty(*base_ty))
+            format!("method '{}' is ambiguous for type '{}'", mthd_name, base_ty)
         }
         MthdGenArgCountMismatch {
             mthd_name,
@@ -171,9 +146,9 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             "wrong number of generic arguments for method '{}': expected {}, got {}",
             mthd_name, expected, actual
         ),
-        NamedFieldAccessOnNonStruct { ty: t } => format!("named field access on non-struct type '{}'", ty(*t)),
-        IndexedFieldAccessOnNonTuple { ty: t } => format!("indexed field access on non-tuple type '{}'", ty(*t)),
-        StructFieldNotFound { struct_ty, field } => format!("no field '{}' on type '{}'", field, ty(*struct_ty)),
+        NamedFieldAccessOnNonStruct { ty: t } => format!("named field access on non-struct type '{}'", t),
+        IndexedFieldAccessOnNonTuple { ty: t } => format!("indexed field access on non-tuple type '{}'", t),
+        StructFieldNotFound { struct_ty, field } => format!("no field '{}' on type '{}'", field, struct_ty),
         StructFieldTypeMismatch {
             struct_ty,
             field_idx,
@@ -181,12 +156,9 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             actual,
         } => format!(
             "field {} type mismatch in '{}': expected '{}', got '{}'",
-            field_idx,
-            ty(*struct_ty),
-            ty(*expected),
-            ty(*actual)
+            field_idx, struct_ty, expected, actual
         ),
-        CalleeNotCallable { ty: t } => format!("type '{}' is not callable", ty(*t)),
+        CalleeNotCallable { ty: t } => format!("type '{}' is not callable", t),
         CallArgCountMismatch {
             expected,
             actual,
@@ -207,9 +179,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             actual,
         } => format!(
             "argument {} type mismatch: expected '{}', got '{}'",
-            index,
-            ty(*expected),
-            ty(*actual)
+            index, expected, actual
         ),
         BinaryOpTypeMismatch {
             operator,
@@ -217,9 +187,7 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             right_ty,
         } => format!(
             "operator '{:?}' cannot be applied to '{}' and '{}'",
-            operator,
-            ty(*left_ty),
-            ty(*right_ty)
+            operator, left_ty, right_ty
         ),
         ArithTraitNotImplemented {
             operator,
@@ -227,66 +195,55 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>, ctxt: &ctxt::Ctxt<'ctxt>
             right_ty,
         } => format!(
             "operator '{:?}' is not implemented for '{}' and '{}'",
-            operator,
-            ty(*left_ty),
-            ty(*right_ty)
+            operator, left_ty, right_ty
         ),
         UnaryOpTypeMismatch { operator, operand_ty } => {
-            format!("operator '{:?}' cannot be applied to '{}'", operator, ty(*operand_ty))
+            format!("operator '{:?}' cannot be applied to '{}'", operator, operand_ty)
         }
         AssignmentTargetNotAPlace => "assignment target is not a place".to_string(),
-        AssignmentTypeMismatch { expected, actual } => format!(
-            "assignment type mismatch: expected '{}', got '{}'",
-            ty(*expected),
-            ty(*actual)
-        ),
-        DereferenceOfNonRef { ty: t } => format!("cannot dereference non-reference type '{}'", ty(*t)),
-        DereferenceOfCVoid { ty: t } => format!("cannot dereference c_void pointer '{}'", ty(*t)),
-        InvalidAsConversion { op_ty, target_ty } => format!("cannot cast '{}' to '{}'", ty(*op_ty), ty(*target_ty)),
+        AssignmentTypeMismatch { expected, actual } => {
+            format!("assignment type mismatch: expected '{}', got '{}'", expected, actual)
+        }
+        DereferenceOfNonRef { ty: t } => format!("cannot dereference non-reference type '{}'", t),
+        DereferenceOfCVoid { ty: t } => format!("cannot dereference c_void pointer '{}'", t),
+        InvalidAsConversion { op_ty, target_ty } => format!("cannot cast '{}' to '{}'", op_ty, target_ty),
         IfConditionNotBoolean => "if condition must be boolean".to_string(),
-        IfBranchesTypeMismatch { then_ty, else_ty } => format!(
-            "if branches have mismatched types: '{}' vs '{}'",
-            ty(*then_ty),
-            ty(*else_ty)
-        ),
-        NonMatchableScrutinee { ty: t } => format!("type '{}' cannot be matched on", ty(*t)),
+        IfBranchesTypeMismatch { then_ty, else_ty } => {
+            format!("if branches have mismatched types: '{}' vs '{}'", then_ty, else_ty)
+        }
+        NonMatchableScrutinee { ty: t } => format!("type '{}' cannot be matched on", t),
         MatchArmWrongEnum { expected, found } => format!(
             "match arm has wrong enum type: expected '{}', got '{}'",
-            ty(*expected),
-            ty(*found)
+            expected, found
         ),
-        MatchArmTypeMismatch { expected, actual } => format!(
-            "match arm type mismatch: expected '{}', got '{}'",
-            ty(*expected),
-            ty(*actual)
-        ),
-        LetTypeMismatch { expected, actual } => format!(
-            "let binding type mismatch: expected '{}', got '{}'",
-            ty(*expected),
-            ty(*actual)
-        ),
+        MatchArmTypeMismatch { expected, actual } => {
+            format!("match arm type mismatch: expected '{}', got '{}'", expected, actual)
+        }
+        LetTypeMismatch { expected, actual } => {
+            format!("let binding type mismatch: expected '{}', got '{}'", expected, actual)
+        }
         VarTypeNotSet { var_id, expr_id } => format!(
             "internal error: type of variable {} not set at expression {:?}",
             var_id, expr_id
         ),
         ConstraintNotSatisfied { ty: t, trait_inst } => {
-            format!("'{}' does not implement '{}'", ty(*t), trait_(trait_inst.trait_))
+            format!("'{}' does not implement '{}'", t, trait_inst.trait_.name)
         }
         CallableConstraintNotSatisfied {
             ty: t,
             expected_param_tys,
             expected_return_ty,
         } => {
-            let params: Vec<_> = expected_param_tys.iter().map(|&p| ty(p)).collect();
+            let params: Vec<_> = expected_param_tys.iter().map(|p| p.to_string()).collect();
             format!(
                 "'{}' is not callable as fn({}) -> '{}'",
-                ty(*t),
+                t,
                 params.join(", "),
-                ty(*expected_return_ty)
+                expected_return_ty
             )
         }
         &TypeckError::AssocTyEqNotSatisfied { subject, expected } => {
-            format!("associated type '{}' does not equal '{}'", ty(subject), ty(expected))
+            format!("associated type '{}' does not equal '{}'", subject, expected)
         }
     }
 }

@@ -1,15 +1,13 @@
 use std::io::Write;
 
-use crate::{ctxt, hlr, typeck::HlrTyping};
+use crate::{hlr, typeck::HlrTyping};
 
 pub fn print_hlr<'ctxt, W: Write>(
     hlr_fn: &hlr::Fn<'ctxt>,
-    ctxt: &ctxt::Ctxt<'ctxt>,
     typing: Option<&HlrTyping<'ctxt>>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = HlrPrinter {
-        ctxt,
         typing,
         indent_level: 0,
         writer,
@@ -18,7 +16,6 @@ pub fn print_hlr<'ctxt, W: Write>(
 }
 
 struct HlrPrinter<'ctxt, 'a, W: Write> {
-    ctxt: &'a ctxt::Ctxt<'ctxt>,
     typing: Option<&'a HlrTyping<'ctxt>>,
     indent_level: usize,
     writer: &'a mut W,
@@ -29,11 +26,10 @@ const INDENT: &str = "    ";
 impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
     fn print_fn(&mut self, hlr_fn: &hlr::Fn<'ctxt>) -> Result<(), std::io::Error> {
         let assoc = if let Some(assoc_ty) = hlr_fn.fn_.associated_ty {
-            let ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
             if let Some(trait_inst) = &hlr_fn.fn_.associated_trait_inst {
-                format!("<{} as {}>::", ty_name, trait_inst.trait_.name)
+                format!("<{} as {}>::", assoc_ty, trait_inst)
             } else {
-                format!("{}::", ty_name)
+                format!("{}::", assoc_ty)
             }
         } else {
             String::new()
@@ -51,11 +47,9 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            let ty_name = self.ctxt.tys.get_string_rep(param.ty);
-            write!(self.writer, "{}: {}", var_id, ty_name)?;
+            write!(self.writer, "{}: {}", var_id, param.ty)?;
         }
-        let return_ty = self.ctxt.tys.get_string_rep(hlr_fn.fn_.return_ty);
-        writeln!(self.writer, ") -> {} {{", return_ty)?;
+        writeln!(self.writer, ") -> {} {{", hlr_fn.fn_.return_ty)?;
 
         self.indent_level += 1;
         self.print_expr_indented(hlr_fn.body)?;
@@ -189,8 +183,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                     if let Some(typing) = self.typing
                         && let Some(&ty) = typing.var_types.get(var_id)
                     {
-                        let ty_name = self.ctxt.tys.get_string_rep(ty);
-                        write!(self.writer, "{}: {}", var_id, ty_name)?;
+                        write!(self.writer, "{}: {}", var_id, ty)?;
                     } else if let Some(annot) = annot {
                         write!(self.writer, "{}: ", var_id)?;
                         self.print_ty_annot(annot)?;
@@ -325,7 +318,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 if let Some(typing) = self.typing
                     && let Some(&inferred) = typing.var_types.get(var)
                 {
-                    write!(self.writer, "{}", self.ctxt.tys.get_string_rep(inferred))?;
+                    write!(self.writer, "{}", inferred)?;
                 } else if let Some(annot) = ty {
                     self.print_ty_annot(annot)?;
                 } else {
@@ -423,7 +416,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 }
                 Ok(())
             }
-            Ty(ty) => write!(self.writer, "{}", self.ctxt.tys.get_string_rep(*ty)),
+            Ty(ty) => write!(self.writer, "{}", ty),
             GenVar(gv) => write!(self.writer, "{}", gv.name()),
             AssocTy { base, trait_, name } => {
                 write!(self.writer, "<")?;

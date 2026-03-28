@@ -102,6 +102,40 @@ pub struct FnInst<'fns> {
     pub(in crate::ctxt) _private: (),
 }
 
+impl std::fmt::Display for FnInst<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(assoc_ty) = self.fn_.associated_ty {
+            if let Some(assoc_trait_inst) = &self.fn_.associated_trait_inst {
+                write!(f, "<{} as {}>::", assoc_ty, assoc_trait_inst)?;
+            } else {
+                write!(f, "{}::", assoc_ty)?;
+            }
+        }
+        write!(f, "{}", self.fn_.name)?;
+        if !self.env_gen_args.is_empty() {
+            write!(f, "{{")?;
+            for (i, ty) in self.env_gen_args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", ty)?;
+            }
+            write!(f, "}}")?;
+        }
+        if !self.gen_args.is_empty() {
+            write!(f, "<")?;
+            for (i, ty) in self.gen_args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", ty)?;
+            }
+            write!(f, ">")?;
+        }
+        Ok(())
+    }
+}
+
 impl<'fns> FnInst<'fns> {
     pub fn get_subst(&self) -> ty::GenVarSubst<'fns> {
         let gen_param_subst = ty::GenVarSubst::new(&self.fn_.gen_params, self.gen_args).unwrap();

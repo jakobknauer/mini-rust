@@ -1,20 +1,18 @@
 use std::io::Write;
 
 use crate::{
-    ctxt::{self, fns::Fn, language_items},
+    ctxt::{fns::Fn, language_items},
     mlr,
 };
 
 pub fn print_mlr<'mlr, W: Write>(
     fn_: Fn<'mlr>,
     mlr_fn: Option<&mlr::Fn<'mlr>>,
-    ctxt: &ctxt::Ctxt<'mlr>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
     let mut printer = MlrPrinter {
         mlr_fn,
         decl: fn_,
-        ctxt,
         indent_level: 0,
         writer,
     };
@@ -24,7 +22,6 @@ pub fn print_mlr<'mlr, W: Write>(
 struct MlrPrinter<'a, 'mlr, W: Write> {
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
     decl: Fn<'mlr>,
-    ctxt: &'a ctxt::Ctxt<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
 }
@@ -45,28 +42,10 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
 
     fn print_signature(&mut self) -> Result<(), std::io::Error> {
         let assoc_ty = if let Some(assoc_ty) = self.decl.associated_ty {
-            let assoc_ty_name = self.ctxt.tys.get_string_rep(assoc_ty);
             if let Some(assoc_trait_inst) = &self.decl.associated_trait_inst {
-                let assoc_trait_gen_params = if assoc_trait_inst.gen_args.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "<{}>",
-                        assoc_trait_inst
-                            .gen_args
-                            .iter()
-                            .map(|&ty| self.ctxt.tys.get_string_rep(ty))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                };
-
-                format!(
-                    "<{} as {}{}>::",
-                    assoc_ty_name, &assoc_trait_inst.trait_.name, assoc_trait_gen_params
-                )
+                format!("<{} as {}>::", assoc_ty, assoc_trait_inst)
             } else {
-                format!("{}::", assoc_ty_name)
+                format!("{}::", assoc_ty)
             }
         } else {
             "".to_string()
@@ -112,22 +91,18 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 if i > 0 {
                     write!(self.writer, ", ")?;
                 }
-                let param_ty = self.ctxt.tys.get_string_rep(param.ty);
-                write!(self.writer, "{}: {}", param_loc, param_ty)?;
+                write!(self.writer, "{}: {}", param_loc, param.ty)?;
             }
         } else {
             for (i, param) in self.decl.params.iter().enumerate() {
                 if i > 0 {
                     write!(self.writer, ", ")?;
                 }
-                let param_ty = self.ctxt.tys.get_string_rep(param.ty);
-                write!(self.writer, "_{}: {}", i, param_ty)?;
+                write!(self.writer, "_{}: {}", i, param.ty)?;
             }
         }
         write!(self.writer, ") -> ")?;
-
-        let return_ty = self.ctxt.tys.get_string_rep(self.decl.return_ty);
-        write!(self.writer, "{}", return_ty)
+        write!(self.writer, "{}", self.decl.return_ty)
     }
 
     fn print_block(&mut self, stmts: &[mlr::Stmt<'mlr>]) -> Result<(), std::io::Error> {
@@ -148,9 +123,8 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
 
         match *stmt {
             Alloc { loc } => {
-                let ty_name = self.ctxt.tys.get_string_rep(loc.1);
                 self.indent()?;
-                writeln!(self.writer, "alloc {}: {};", loc, ty_name)
+                writeln!(self.writer, "alloc {}: {};", loc, loc.1)
             }
             Assign { place, value } => {
                 self.indent()?;
@@ -221,8 +195,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             As { op, target_ty } => {
                 write!(self.writer, "(")?;
                 self.print_op(op)?;
-                let ty_name = self.ctxt.tys.get_string_rep(target_ty);
-                write!(self.writer, " as {})", ty_name)
+                write!(self.writer, " as {})", target_ty)
             }
             UnaryPrim { op, operand } => {
                 use language_items::UnaryPrimOp::*;
@@ -272,10 +245,9 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 write!(self.writer, ")")
             }
             ProjectToVariant { base, variant_index } => {
-                let enum_name = self.ctxt.tys.get_string_rep(base.1);
                 write!(self.writer, "(")?;
                 self.print_place(base)?;
-                write!(self.writer, " as {}::{})", enum_name, variant_index)
+                write!(self.writer, " as {}::{})", base.1, variant_index)
             }
             Deref(op) => {
                 write!(self.writer, "Deref(")?;
@@ -295,35 +267,12 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         use mlr::OpDef::*;
 
         match *op {
-            Fn(fn_inst) => {
-                let fn_name = self.ctxt.get_fn_inst_name(fn_inst);
-                write!(self.writer, "fn {}", fn_name)
-            }
-            TraitMthdCall(trait_mthd) => {
-                let base_ty_name = self.ctxt.tys.get_string_rep(trait_mthd.impl_ty);
-
-                let trait_gen_args = if trait_mthd.trait_inst.gen_args.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "<{}>",
-                        trait_mthd
-                            .trait_inst
-                            .gen_args
-                            .iter()
-                            .map(|&ty| self.ctxt.tys.get_string_rep(ty))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                };
-
-                let mthd_name = trait_mthd.mthd.fn_.name.as_str();
-                write!(
-                    self.writer,
-                    "<{} as {}{}>::{}",
-                    base_ty_name, trait_mthd.trait_inst.trait_.name, trait_gen_args, mthd_name
-                )
-            }
+            Fn(fn_inst) => write!(self.writer, "fn {}", fn_inst),
+            TraitMthdCall(trait_mthd) => write!(
+                self.writer,
+                "<{} as {}>::{}",
+                trait_mthd.impl_ty, trait_mthd.trait_inst, trait_mthd.mthd.fn_.name
+            ),
             Const(ref constant) => match *constant {
                 Int(i) => write!(self.writer, "const {}", i),
                 Bool(b) => write!(self.writer, "const {}", b),

@@ -74,6 +74,23 @@ impl std::hash::Hash for TraitMthdDef<'_> {
     }
 }
 
+impl std::fmt::Display for TraitInst<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.trait_.name)?;
+        if !self.gen_args.is_empty() {
+            write!(f, "<")?;
+            for (i, ty) in self.gen_args.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", ty)?;
+            }
+            write!(f, ">")?;
+        }
+        Ok(())
+    }
+}
+
 impl<'traits> TraitInst<'traits> {
     pub fn with_gen_args(self, gen_args: TySlice<'traits>) -> Result<TraitInst<'traits>, TraitInstError<'traits>> {
         if gen_args.len() != self.gen_args.len() {
