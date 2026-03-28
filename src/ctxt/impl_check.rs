@@ -265,7 +265,13 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             ty::ConstraintRequirement::Trait(trait_inst) => {
                 self.ty_implements_trait_inst(ambient_constraints, subject, trait_inst)
             }
-            ty::ConstraintRequirement::Callable { .. } => self.ty_is_callable(ambient_constraints, subject).is_some(),
+            ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
+                let Some((actual_param_tys, actual_return_ty, _)) = self.ty_is_callable(ambient_constraints, subject)
+                else {
+                    return false;
+                };
+                actual_param_tys == param_tys && actual_return_ty == return_ty
+            }
             ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
                 let subject = self.normalize_ty(subject);
                 let eq_ty = self.normalize_ty(eq_ty);
