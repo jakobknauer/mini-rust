@@ -1,3 +1,43 @@
+trait Add<Rhs> {
+    type Output;
+    fn add(self, rhs: Rhs) -> <Self as Add<Rhs>>::Output;
+}
+
+trait Sub<Rhs> {
+    type Output;
+    fn sub(self, rhs: Rhs) -> <Self as Sub<Rhs>>::Output;
+}
+
+trait Mul<Rhs> {
+    type Output;
+    fn mul(self, rhs: Rhs) -> <Self as Mul<Rhs>>::Output;
+}
+
+trait Div<Rhs> {
+    type Output;
+    fn div(self, rhs: Rhs) -> <Self as Div<Rhs>>::Output;
+}
+
+trait Rem<Rhs> {
+    type Output;
+    fn rem(self, rhs: Rhs) -> <Self as Rem<Rhs>>::Output;
+}
+
+trait BitOr<Rhs> {
+    type Output;
+    fn bitor(self, rhs: Rhs) -> <Self as BitOr<Rhs>>::Output;
+}
+
+trait BitAnd<Rhs> {
+    type Output;
+    fn bitand(self, rhs: Rhs) -> <Self as BitAnd<Rhs>>::Output;
+}
+
+trait Deref {
+    type Target;
+    fn deref(&self) -> &<Self as Deref>::Target;
+}
+
 impl Add<i32> for i32 {
     type Output = i32;
     fn add(self, rhs: i32) -> <i32 as Add<i32>>::Output {
@@ -26,6 +66,13 @@ impl Div<i32> for i32 {
     }
 }
 
+impl Rem<i32> for i32 {
+    type Output = i32;
+    fn rem(self, rhs: i32) -> <i32 as Rem<i32>>::Output {
+        self % rhs
+    }
+}
+
 impl BitOr<bool> for bool {
     type Output = bool;
     fn bitor(self, rhs: bool) -> bool {
@@ -37,13 +84,6 @@ impl BitAnd<bool> for bool {
     type Output = bool;
     fn bitand(self, rhs: bool) -> bool {
         self & rhs
-    }
-}
-
-impl Rem<i32> for i32 {
-    type Output = i32;
-    fn rem(self, rhs: i32) -> <i32 as Rem<i32>>::Output {
-        self % rhs
     }
 }
 

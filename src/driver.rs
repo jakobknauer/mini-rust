@@ -1,7 +1,6 @@
 mod constraints;
 mod err;
 mod impl_check;
-mod stdlib;
 mod ty_annots;
 
 use std::{
@@ -95,6 +94,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         self.register_free_fns()?;
         self.register_trait_methods()?;
         self.register_impl_methods()?;
+        self.populate_language_items_fns()?;
 
         check_trait_impls(&mut self.ctxt).map_err(DriverError::ImplCheck)?;
 
@@ -229,15 +229,6 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     }
 
     fn register_traits(&mut self) -> Result<(), DriverError<'arena>> {
-        stdlib::register_add_trait(&mut self.ctxt);
-        stdlib::register_sub_trait(&mut self.ctxt);
-        stdlib::register_mul_trait(&mut self.ctxt);
-        stdlib::register_div_trait(&mut self.ctxt);
-        stdlib::register_bit_or_trait(&mut self.ctxt);
-        stdlib::register_bit_and_trait(&mut self.ctxt);
-        stdlib::register_rem_trait(&mut self.ctxt);
-        stdlib::register_deref_trait(&mut self.ctxt);
-
         for ast_trait in self.ast.traits().iter() {
             let trait_gen_params: Vec<_> = ast_trait
                 .gen_params
@@ -253,13 +244,48 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             self.ast_meta.trait_ids.insert(ast_trait.1, trait_);
         }
 
+        self.populate_language_item_traits()?;
+
+        Ok(())
+    }
+
+    fn populate_language_items_fns(&mut self) -> Result<(), DriverError<'arena>> {
+        self.ctxt.language_items.size_of = Some(self.ctxt.fns.get_fn_by_name("size_of").ok_or(
+            DriverError::ContextBuild("Missing size_of function (is mem.mrs included?)"),
+        )?);
+
+        let ptr_offset = self
+            .ctxt
+            .impls
+            .get_inherent_impls()
+            .find_map(|impl_| {
+                if !matches!(*impl_.ty.0, ty::TyDef::Ptr(_)) {
+                    return None;
+                }
+                impl_.mthds.borrow().iter().copied().find(|m| m.name == "offset")
+            })
+            .ok_or(DriverError::ContextBuild(
+                "Missing *T::offset method (is mem.mrs included?)",
+            ))?;
+        self.ctxt.language_items.ptr_offset = Some(ptr_offset);
+
+        Ok(())
+    }
+
+    fn populate_language_item_traits(&mut self) -> Result<(), DriverError<'arena>> {
+        let err = || DriverError::ContextBuild("Missing required stdlib trait (is ops.mrs included?)");
+        self.ctxt.language_items.add_trait = Some(self.ctxt.traits.resolve_trait_name("Add").ok_or_else(err)?);
+        self.ctxt.language_items.sub_trait = Some(self.ctxt.traits.resolve_trait_name("Sub").ok_or_else(err)?);
+        self.ctxt.language_items.mul_trait = Some(self.ctxt.traits.resolve_trait_name("Mul").ok_or_else(err)?);
+        self.ctxt.language_items.div_trait = Some(self.ctxt.traits.resolve_trait_name("Div").ok_or_else(err)?);
+        self.ctxt.language_items.rem_trait = Some(self.ctxt.traits.resolve_trait_name("Rem").ok_or_else(err)?);
+        self.ctxt.language_items.bit_or_trait = Some(self.ctxt.traits.resolve_trait_name("BitOr").ok_or_else(err)?);
+        self.ctxt.language_items.bit_and_trait = Some(self.ctxt.traits.resolve_trait_name("BitAnd").ok_or_else(err)?);
+        self.ctxt.language_items.deref_trait = Some(self.ctxt.traits.resolve_trait_name("Deref").ok_or_else(err)?);
         Ok(())
     }
 
     fn register_impls(&mut self) -> Result<(), DriverError<'arena>> {
-        stdlib::register_impl_for_ptr(&mut self.ctxt)
-            .map_err(|_| DriverError::ContextBuild("Failed to register stdlib pointer impl"))?;
-
         for &ast_impl in self.ast.impls().iter() {
             let impl_ = self.register_impl(ast_impl)?;
             self.ast_meta.impl_ids.insert(ast_impl.1, impl_);
@@ -349,9 +375,6 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     }
 
     fn register_free_fns(&mut self) -> Result<(), DriverError<'arena>> {
-        stdlib::register_fns(&mut self.ctxt)
-            .map_err(|_| DriverError::ContextBuild("Failed to register stdlib functions"))?;
-
         for &function in self.ast.free_fns().iter() {
             let fn_ = self.register_function(function, None, None, Vec::new(), Vec::new())?;
             self.ast_meta.fn_ids.insert(function.1, fn_);
