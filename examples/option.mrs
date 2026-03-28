@@ -45,8 +45,37 @@ impl<T> Option<T> {
         }
     }
 
+    fn is_some_and<P>(&self, pred: P) -> bool
+    where
+        P: Fn(&T) -> bool
+    {
+        match self {
+            Option::Some { item } => pred(item),
+            Option::None => false
+        }
+    }
+
+    fn is_none(&self) -> bool {
+        match self {
+            Option::Some { item } => false,
+            Option::None => true,
+        }
+    }
+
     fn into_iter(self) -> OptionIter<T> {
         OptionIter { item: self }
+    }
+}
+
+impl <A, B> Eq<Option<B>> for Option<A>
+where
+    A: Eq<B>
+{
+    fn eq(&self, other: &Option<B>) -> bool {
+        match self {
+            Option::Some { item } => other.is_some_and(|other_item| item == other_item),
+            Option::None => other.is_none()
+        }
     }
 }
 
