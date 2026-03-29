@@ -2,7 +2,7 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{
-    traits::{self, Trait, TraitInst},
+    traits::{self, Trait},
     ty::*,
 };
 
@@ -773,65 +773,6 @@ impl<'ty> TyReg<'ty> {
 
             (_, _) => false,
         }
-    }
-
-    pub fn get_trait_inst_constraint(
-        &self,
-        constraints: &[Constraint<'ty>],
-        subject: Ty<'ty>,
-        trait_: Trait,
-    ) -> Option<TraitInst<'ty>> {
-        constraints.iter().find_map(|c| {
-            if c.subject != subject {
-                return None;
-            }
-            match c.requirement {
-                ConstraintRequirement::Trait(trait_inst) if trait_inst.trait_ == trait_ => Some(trait_inst),
-                _ => None,
-            }
-        })
-    }
-
-    pub fn implements_trait_constraint_exists(
-        &self,
-        constraints: &[Constraint<'ty>],
-        subject: Ty<'ty>,
-        trait_: Trait,
-    ) -> bool {
-        constraints.iter().any(|c| {
-            c.subject == subject
-                && matches!(c.requirement,
-                    ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_)
-        })
-    }
-
-    pub fn implements_trait_inst_constraint_exists(
-        &self,
-        constraints: &[Constraint<'ty>],
-        subject: Ty<'ty>,
-        trait_inst: TraitInst<'ty>,
-    ) -> bool {
-        constraints.iter().any(|c| {
-            c.subject == subject && matches!(&c.requirement, ConstraintRequirement::Trait(ti) if *ti == trait_inst)
-        })
-    }
-
-    pub fn try_get_callable_constraint(
-        &self,
-        constraints: &[Constraint<'ty>],
-        subject: Ty<'ty>,
-    ) -> Option<(TySlice<'ty>, Ty<'ty>)> {
-        constraints.iter().find_map(|c| {
-            if c.subject == subject {
-                if let &ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
-                    Some((param_tys, return_ty))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
     }
 
     pub fn get_ty_by_name(&self, ty_name: &str) -> Result<Named<'ty>, NotATypeName> {

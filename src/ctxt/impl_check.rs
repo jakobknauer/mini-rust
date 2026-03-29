@@ -116,10 +116,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         ty: ty::Ty<'ctxt>,
         trait_inst: traits::TraitInst<'ctxt>,
     ) -> bool {
-        if self
-            .tys
-            .implements_trait_inst_constraint_exists(constraints, ty, trait_inst)
-        {
+        if implements_trait_inst_constraint_exists(constraints, ty, trait_inst) {
             return true;
         }
 
@@ -148,7 +145,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         ty: ty::Ty<'ctxt>,
         trait_: traits::Trait<'ctxt>,
     ) -> bool {
-        if self.tys.implements_trait_constraint_exists(constraints, ty, trait_) {
+        if implements_trait_constraint_exists(constraints, ty, trait_) {
             return true;
         }
 
@@ -175,7 +172,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         } = ty.0
         {
             Some((param_tys, return_ty, var_args))
-        } else if let Some((param_tys, return_ty)) = self.tys.try_get_callable_constraint(constraints, ty) {
+        } else if let Some((param_tys, return_ty)) = try_get_callable_constraint(constraints, ty) {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure {
             param_tys, return_ty, ..
@@ -227,7 +224,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                     .collect();
 
                 let [impl_inst] = &impl_insts[..] else {
-                    if let Some(trait_inst) = self.tys.get_trait_inst_constraint(constraints, base_ty, trait_) {
+                    if let Some(trait_inst) = get_trait_inst_constraint(constraints, base_ty, trait_) {
                         return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                     }
                     let gen_args: Vec<_> = trait_.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
@@ -342,4 +339,59 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         let gen_args = self.tys.substitute_gen_vars_on_slice(trait_mthd_inst.gen_args, subst);
         trait_mthd_inst.with_updated(impl_ty, trait_inst, gen_args).unwrap()
     }
+}
+
+fn get_trait_inst_constraint<'ty>(
+    constraints: &[ty::Constraint<'ty>],
+    subject: ty::Ty<'ty>,
+    trait_: traits::Trait<'ty>,
+) -> Option<TraitInst<'ty>> {
+    constraints.iter().find_map(|c| {
+        if c.subject != subject {
+            return None;
+        }
+        match c.requirement {
+            ty::ConstraintRequirement::Trait(trait_inst) if trait_inst.trait_ == trait_ => Some(trait_inst),
+            _ => None,
+        }
+    })
+}
+
+fn implements_trait_constraint_exists<'ty>(
+    constraints: &[ty::Constraint<'ty>],
+    subject: ty::Ty<'ty>,
+    trait_: traits::Trait<'ty>,
+) -> bool {
+    constraints.iter().any(|c| {
+        c.subject == subject
+            && matches!(c.requirement,
+                ty::ConstraintRequirement::Trait(TraitInst { trait_: the_trait_, .. }) if the_trait_ == trait_)
+    })
+}
+
+fn implements_trait_inst_constraint_exists<'ty>(
+    constraints: &[ty::Constraint<'ty>],
+    subject: ty::Ty<'ty>,
+    trait_inst: TraitInst<'ty>,
+) -> bool {
+    constraints.iter().any(|c| {
+        c.subject == subject && matches!(&c.requirement, ty::ConstraintRequirement::Trait(ti) if *ti == trait_inst)
+    })
+}
+
+fn try_get_callable_constraint<'ty>(
+    constraints: &[ty::Constraint<'ty>],
+    subject: ty::Ty<'ty>,
+) -> Option<(ty::TySlice<'ty>, ty::Ty<'ty>)> {
+    constraints.iter().find_map(|c| {
+        if c.subject == subject {
+            if let &ty::ConstraintRequirement::Callable { param_tys, return_ty } = &c.requirement {
+                Some((param_tys, return_ty))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    })
 }
