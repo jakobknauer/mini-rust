@@ -3,6 +3,7 @@ use crate::ctxt::{
     impls::{self, ImplInst},
     traits::{self, TraitInst},
     ty::{self, GenVarSubst},
+    ty_match,
 };
 
 impl<'ctxt> super::Ctxt<'ctxt> {
@@ -91,10 +92,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                             .zip(impl_trait_inst.gen_args.iter().copied()),
                     )
                     .collect();
-                let gen_args = self
-                    .tys
-                    .try_find_instantiation_from_pairs(&pairs, &impl_.gen_params)
-                    .ok()?;
+                let gen_args = ty_match::try_find_instantiation_from_pairs(&pairs, &impl_.gen_params)
+                    .ok()
+                    .map(|v| self.tys.ty_slice(&v))?;
 
                 let subst = GenVarSubst::new(&impl_.gen_params, gen_args).unwrap();
                 if !self.impl_constraints_satisfied(constraints, &impl_.constraints, &subst) {
@@ -307,7 +307,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         trait_: traits::Trait<'ctxt>,
     ) -> impl Iterator<Item = impls::ImplInst<'ctxt>> {
         self.impls.get_impls_for_trait(trait_).filter_map(move |impl_| {
-            let gen_args = self.tys.try_find_instantiation(ty, impl_.ty, &impl_.gen_params).ok()?;
+            let gen_args = ty_match::try_find_instantiation(ty, impl_.ty, &impl_.gen_params)
+                .ok()
+                .map(|v| self.tys.ty_slice(&v))?;
 
             let subst = ty::GenVarSubst::new(&impl_.gen_params, gen_args).unwrap();
 

@@ -9,6 +9,7 @@ mod fn_reg;
 mod impl_check;
 mod impl_reg;
 mod trait_reg;
+pub(crate) mod ty_match;
 mod ty_reg;
 
 pub use fn_reg::FnReg;

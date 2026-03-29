@@ -1,10 +1,12 @@
-use crate::ctxt::{
-    fns::{self, FnInst, TraitMthdInst},
-    traits::{self, TraitInst},
-    ty,
+use crate::{
+    ctxt::{
+        fns::{self, FnInst, TraitMthdInst},
+        traits::{self, TraitInst},
+        ty, ty_match,
+    },
+    hlr,
+    typeck::{DerefStep, TypeckError, TypeckResult},
 };
-use crate::hlr;
-use crate::typeck::{DerefStep, TypeckError, TypeckResult};
 
 #[derive(Clone)]
 pub enum MthdResolution<'ty> {
@@ -93,11 +95,9 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .get_inherent_impls()
             .filter_map(|impl_| {
                 let mthd_fn = *impl_.mthds.borrow().iter().find(|&&m| m.name == mthd_name)?;
-                let env_gen_args = self
-                    .ctxt
-                    .tys
-                    .try_find_instantiation(base_ty, impl_.ty, &impl_.gen_params)
-                    .ok()?;
+                let env_gen_args = ty_match::try_find_instantiation(base_ty, impl_.ty, &impl_.gen_params)
+                    .ok()
+                    .map(|v| self.ctxt.tys.ty_slice(&v))?;
                 let subst = ty::GenVarSubst::new(&impl_.gen_params, env_gen_args).unwrap();
 
                 let impl_constraints_satisfied =
