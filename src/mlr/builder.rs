@@ -241,9 +241,7 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
             .tys
             .fn_(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
 
-        let trait_subst = ty::GenVarSubst::new(&inst.trait_inst.trait_.gen_params, inst.trait_inst.gen_args).unwrap();
-        let mthd_subst = ty::GenVarSubst::new(&inst.mthd.fn_.gen_params, inst.gen_args).unwrap();
-        let all_subst = ty::GenVarSubst::compose(trait_subst, mthd_subst);
+        let all_subst = inst.get_subst();
 
         self.ctxt.tys.substitute(fn_ty, &all_subst, Some(inst.impl_ty))
     }

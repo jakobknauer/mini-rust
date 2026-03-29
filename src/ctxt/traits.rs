@@ -1,6 +1,6 @@
 use crate::ctxt::{
     fns::Fn,
-    ty::{GenVar, TySlice},
+    ty::{self, GenVar, TySlice},
 };
 
 pub type Trait<'traits> = &'traits TraitDef<'traits>;
@@ -71,6 +71,10 @@ impl<'traits> TraitInst<'traits> {
             gen_args,
             _private: (),
         })
+    }
+
+    pub fn get_subst(&self) -> ty::GenVarSubst<'traits> {
+        ty::GenVarSubst::new(&self.trait_.gen_params, self.gen_args).unwrap()
     }
 }
 

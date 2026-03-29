@@ -189,7 +189,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                     }
                 })?;
 
-                let trait_subst = ty::GenVarSubst::new(&trait_inst.trait_.gen_params, trait_inst.gen_args).unwrap();
+                let trait_subst = trait_inst.get_subst();
                 let mthd_subst = ty::GenVarSubst::new(&decl.gen_params, resolved_gen_args.iter().copied()).unwrap();
                 let full_subst = ty::GenVarSubst::compose(trait_subst, mthd_subst);
 
@@ -227,10 +227,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .tys
             .fn_(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
 
-        let trait_gen_var_subst =
-            ty::GenVarSubst::new(&inst.trait_inst.trait_.gen_params, inst.trait_inst.gen_args).unwrap();
-        let gen_var_subst = ty::GenVarSubst::new(&inst.mthd.fn_.gen_params, inst.gen_args).unwrap();
-        let all_gen_var_subst = ty::GenVarSubst::compose(trait_gen_var_subst, gen_var_subst);
+        let all_gen_var_subst = inst.get_subst();
 
         self.ctxt.tys.substitute(fn_ty, &all_gen_var_subst, Some(inst.impl_ty))
     }

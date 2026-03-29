@@ -273,4 +273,10 @@ impl<'fns> TraitMthdInst<'fns> {
             _private: (),
         })
     }
+
+    pub fn get_subst(&self) -> ty::GenVarSubst<'fns> {
+        let trait_subst = self.trait_inst.get_subst();
+        let mthd_subst = ty::GenVarSubst::new(&self.mthd.fn_.gen_params, self.gen_args).unwrap();
+        ty::GenVarSubst::compose(trait_subst, mthd_subst)
+    }
 }

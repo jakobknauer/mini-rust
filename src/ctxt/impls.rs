@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::ctxt::{
     fns::Fn,
     traits::TraitInst,
-    ty::{Constraint, GenVar, Ty, TySlice},
+    ty::{self, Constraint, GenVar, Ty, TySlice},
 };
 
 pub type Impl<'impls> = &'impls ImplDef<'impls>;
@@ -37,6 +37,10 @@ impl<'impls> ImplInst<'impls> {
             gen_args,
             _private: (),
         })
+    }
+
+    pub fn get_subst(&self) -> ty::GenVarSubst<'impls> {
+        ty::GenVarSubst::new(&self.impl_.gen_params, self.gen_args).unwrap()
     }
 }
 

@@ -99,7 +99,7 @@ fn check_trait_impl<'ctxt>(
     // Substitution of the generic params of the trait with the arguments of the impl.
     // E.g. if we have a trait `trait Into<T>` and an impl `impl Into<u32> for Foo`,
     // then we have to substitute `T` with `u32`.
-    let trait_gen_params_subst = ty::GenVarSubst::new(&trait_inst.trait_.gen_params, trait_inst.gen_args).unwrap();
+    let trait_gen_params_subst = trait_inst.get_subst();
 
     for &mthd in impl_.mthds.borrow().iter() {
         let trait_mthd = ctxt.traits.resolve_trait_method(trait_inst.trait_, &mthd.name).unwrap();

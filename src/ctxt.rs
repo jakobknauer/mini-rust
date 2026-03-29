@@ -111,7 +111,7 @@ impl<'ctxt> Ctxt<'ctxt> {
 
                 let assoc_ty = impl_inst.impl_.assoc_tys[&assoc_ty_idx];
 
-                let subst = GenVarSubst::new(&impl_inst.impl_.gen_params, impl_inst.gen_args).unwrap();
+                let subst = impl_inst.get_subst();
 
                 let resolved = self.tys.substitute_gen_vars(assoc_ty, &subst);
                 self.normalize_ty(resolved)
