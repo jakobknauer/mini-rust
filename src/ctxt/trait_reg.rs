@@ -104,14 +104,4 @@ impl<'traits> TraitReg<'traits> {
             .collect::<Vec<_>>()
             .into_iter()
     }
-
-    // TODO make this a method of Trait?
-    pub fn resolve_assoc_ty_name(&self, trait_: Trait<'traits>, name: &str) -> Option<usize> {
-        trait_.assoc_tys.iter().position(|n| n == name)
-    }
-
-    // TODO make this a method of Trait?
-    pub fn get_trait_assoc_ty_index(&self, trait_: Trait<'traits>, name: &str) -> usize {
-        trait_.assoc_tys.iter().position(|assoc_ty| assoc_ty == name).unwrap()
-    }
 }

@@ -76,7 +76,7 @@ impl<'arena> Driver<'_, 'arena> {
                 {
                     return None;
                 }
-                let assoc_ty_idx = self.ctxt.traits.get_trait_assoc_ty_index(trait_, &assoc_seg.ident);
+                let assoc_ty_idx = trait_.try_resolve_assoc_ty(&assoc_seg.ident)?;
                 Some(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }
             ImplTrait(req) => {

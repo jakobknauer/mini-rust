@@ -139,7 +139,13 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                         trait_inst,
                     });
                 }
-                let assoc_ty_idx = self.ctxt.traits.get_trait_assoc_ty_index(trait_, name);
+                let assoc_ty_idx =
+                    trait_
+                        .try_resolve_assoc_ty(name)
+                        .ok_or_else(|| TypeckError::UnresolvableAssocTy {
+                            base: base_ty,
+                            name: name.to_string(),
+                        })?;
                 Ok(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }
             None => {

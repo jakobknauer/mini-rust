@@ -17,6 +17,12 @@ pub struct TraitDef<'traits> {
     pub assoc_tys: Vec<String>,
 }
 
+impl TraitDef<'_> {
+    pub fn try_resolve_assoc_ty(&self, name: &str) -> Option<usize> {
+        self.assoc_tys.iter().position(|n| n == name)
+    }
+}
+
 impl PartialEq for TraitDef<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id

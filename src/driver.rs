@@ -366,10 +366,11 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             let ty = self
                 .try_resolve_ast_ty_annot(assoc_ty.ty, res_ctxt, false)
                 .ok_or(DriverError::ContextBuild("Failed to resolve associated type"))?;
-            let assoc_ty_idx = self
-                .ctxt
-                .traits
-                .get_trait_assoc_ty_index(trait_inst.unwrap().trait_, &assoc_ty.name);
+            let assoc_ty_idx = trait_inst
+                .unwrap()
+                .trait_
+                .try_resolve_assoc_ty(&assoc_ty.name)
+                .ok_or(DriverError::ContextBuild("Unknown associated type in impl"))?;
             assoc_tys.insert(assoc_ty_idx, ty);
         }
 

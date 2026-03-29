@@ -98,9 +98,13 @@ impl<'arena> Driver<'_, 'arena> {
         for binding in bindings {
             let (name, assoc_subject) = match binding {
                 ast::AssocBinding::Eq { name, .. } | ast::AssocBinding::Bound { name, .. } => {
-                    let assoc_ty_idx = self.ctxt.traits.resolve_assoc_ty_name(trait_inst.trait_, name).ok_or(
-                        DriverError::ContextBuild("Unknown associated type in constraint binding"),
-                    )?;
+                    let assoc_ty_idx =
+                        trait_inst
+                            .trait_
+                            .try_resolve_assoc_ty(name)
+                            .ok_or(DriverError::ContextBuild(
+                                "Unknown associated type in constraint binding",
+                            ))?;
                     let assoc_subject = self.ctxt.tys.assoc_ty(subject, trait_inst, assoc_ty_idx);
                     (name, assoc_subject)
                 }
