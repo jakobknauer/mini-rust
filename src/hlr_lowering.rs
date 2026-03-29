@@ -355,11 +355,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
         for (field_spec, field_expr) in fields.iter() {
             let field_index = match field_spec {
-                hlr::FieldSpec::Name(name) => self
-                    .builder
-                    .ctxt
-                    .tys
-                    .get_struct_field_index_by_name(struct_ty, name)
+                hlr::FieldSpec::Name(name) => struct_ty
+                    .struct_field_index_by_name(name)
                     .unwrap_or_else(|_| panic!("struct field {name} should exist")),
                 hlr::FieldSpec::Index(idx) => *idx,
             };
@@ -402,11 +399,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
         for (field_spec, field_expr) in fields.iter() {
             let field_index = match field_spec {
-                hlr::FieldSpec::Name(name) => self
-                    .builder
-                    .ctxt
-                    .tys
-                    .get_struct_field_index_by_name(variant_ty, name)
+                hlr::FieldSpec::Name(name) => variant_ty
+                    .struct_field_index_by_name(name)
                     .unwrap_or_else(|_| panic!("variant field {name} should exist")),
                 hlr::FieldSpec::Index(idx) => *idx,
             };

@@ -277,6 +277,36 @@ impl<'fns> Clone for ClosureFnCell<'fns> {
     }
 }
 
+#[allow(unused)]
+pub enum StructFieldError<'ty> {
+    NotAStruct(Ty<'ty>),
+    NotAFieldName(Ty<'ty>, String),
+}
+
+impl<'ty> Ty<'ty> {
+    pub fn is_c_void(self) -> bool {
+        matches!(self.0, TyDef::Primitive(Primitive::CVoid))
+    }
+
+    pub fn tuple_field_tys(self) -> Result<&'ty [Ty<'ty>], ()> {
+        match self.0 {
+            &TyDef::Tuple(tys) => Ok(tys),
+            _ => Err(()),
+        }
+    }
+
+    pub fn struct_field_index_by_name(self, field_name: &str) -> Result<usize, StructFieldError<'ty>> {
+        let &TyDef::Struct { struct_, .. } = self.0 else {
+            return Err(StructFieldError::NotAStruct(self));
+        };
+        struct_
+            .get_fields()
+            .iter()
+            .position(|field| field.name == field_name)
+            .ok_or_else(|| StructFieldError::NotAFieldName(self, field_name.to_string()))
+    }
+}
+
 impl std::fmt::Display for Ty<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)

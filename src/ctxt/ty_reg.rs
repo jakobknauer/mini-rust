@@ -34,12 +34,6 @@ pub struct NotAStruct<'ty>(#[allow(unused)] pub Ty<'ty>);
 #[derive(Debug)]
 pub struct NotAnEnum<'ty>(#[allow(unused)] pub Ty<'ty>);
 
-#[allow(unused)]
-pub enum NotAStructField<'ty> {
-    NotAStruct(Ty<'ty>),
-    NotAFieldName(Ty<'ty>, String),
-}
-
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
 #[allow(unused)]
@@ -464,11 +458,6 @@ impl<'ty> TyReg<'ty> {
         enum_.variants.set(variants).expect("enum variants already defined");
     }
 
-    pub fn is_c_void_ty(&self, base_ty: Ty<'ty>) -> bool {
-        let ty_def = base_ty.0;
-        matches!(ty_def, TyDef::Primitive(Primitive::CVoid))
-    }
-
     #[must_use]
     pub fn substitute(&self, ty: Ty<'ty>, gen_vars: &GenVarSubst<'ty>, self_ty: Option<Ty<'ty>>) -> Ty<'ty> {
         use TyDef::*;
@@ -608,29 +597,6 @@ impl<'ty> TyReg<'ty> {
             .map(|variant_ty| self.inst_struct_from_ty_slice(variant_ty, gen_args).unwrap())
             .collect();
         Ok(instantiated_variant_struct_tys)
-    }
-
-    pub fn get_tuple_field_tys(&self, ty: Ty<'ty>) -> Result<&[Ty<'ty>], ()> {
-        match ty.0 {
-            &TyDef::Tuple(tys) => Ok(tys),
-            _ => Err(()),
-        }
-    }
-
-    pub fn get_struct_field_index_by_name(
-        &self,
-        struct_ty: Ty<'ty>,
-        field_name: &str,
-    ) -> Result<usize, NotAStructField<'ty>> {
-        let &TyDef::Struct { struct_, .. } = struct_ty.0 else {
-            return Err(NotAStructField::NotAStruct(struct_ty));
-        };
-
-        let fields = struct_.get_fields();
-        fields
-            .iter()
-            .position(|field| field.name == field_name)
-            .ok_or_else(|| NotAStructField::NotAFieldName(struct_ty, field_name.to_string()))
     }
 
     pub fn try_find_instantiation(

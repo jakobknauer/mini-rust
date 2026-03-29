@@ -355,7 +355,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             let found_index = match field {
                 hlr::FieldSpec::Name(name) => {
                     if let ty::TyDef::Struct { .. } = base_ty.0 {
-                        self.ctxt.tys.get_struct_field_index_by_name(base_ty, name).ok()
+                        base_ty.struct_field_index_by_name(name).ok()
                     } else {
                         None
                     }
@@ -375,7 +375,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     .insert(expr_id, ExprExtra::FieldAccess { steps, index });
                 return match field {
                     hlr::FieldSpec::Name(_) => Ok(self.ctxt.tys.get_struct_field_ty(base_ty, index).unwrap()),
-                    hlr::FieldSpec::Index(_) => Ok(self.ctxt.tys.get_tuple_field_tys(base_ty).unwrap()[index]),
+                    hlr::FieldSpec::Index(_) => Ok(base_ty.tuple_field_tys().unwrap()[index]),
                 };
             }
 
@@ -437,9 +437,8 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         for (field_spec, field_expr) in fields {
             let field_idx = match field_spec {
                 hlr::FieldSpec::Name(name) => {
-                    self.ctxt
-                        .tys
-                        .get_struct_field_index_by_name(fields_ty, name)
+                    fields_ty
+                        .struct_field_index_by_name(name)
                         .map_err(|_| TypeckError::StructFieldNotFound {
                             struct_ty: fields_ty,
                             field: name.clone(),
@@ -612,7 +611,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
         match self.try_deref_step(expr_ty) {
             Some((target_ty, DerefStep::Builtin)) => {
-                if self.ctxt.tys.is_c_void_ty(target_ty) {
+                if target_ty.is_c_void() {
                     Err(TypeckError::DereferenceOfCVoid { ty: expr_ty })
                 } else {
                     Ok(target_ty)
