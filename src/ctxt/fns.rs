@@ -99,7 +99,7 @@ pub struct FnInst<'fns> {
     pub gen_args: TySlice<'fns>,
     pub env_gen_args: TySlice<'fns>,
     pub self_ty: Option<ty::Ty<'fns>>,
-    pub(in crate::ctxt) _private: (),
+    _private: (),
 }
 
 impl std::fmt::Display for FnInst<'_> {
@@ -137,6 +137,32 @@ impl std::fmt::Display for FnInst<'_> {
 }
 
 impl<'fns> FnInst<'fns> {
+    pub fn new(
+        fn_: Fn<'fns>,
+        gen_args: TySlice<'fns>,
+        env_gen_args: TySlice<'fns>,
+    ) -> Result<FnInst<'fns>, FnInstError> {
+        if fn_.gen_params.len() != gen_args.len() {
+            return Err(FnInstError::GenArgCountMismatch {
+                expected: fn_.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+        if fn_.env_gen_params.len() != env_gen_args.len() {
+            return Err(FnInstError::EnvGenArgCountMismatch {
+                expected: fn_.env_gen_params.len(),
+                actual: env_gen_args.len(),
+            });
+        }
+        Ok(FnInst {
+            fn_,
+            gen_args,
+            env_gen_args,
+            self_ty: None,
+            _private: (),
+        })
+    }
+
     pub fn get_subst(&self) -> ty::GenVarSubst<'fns> {
         let gen_param_subst = ty::GenVarSubst::new(&self.fn_.gen_params, self.gen_args).unwrap();
         let env_gen_param_subst = ty::GenVarSubst::new(&self.fn_.env_gen_params, self.env_gen_args).unwrap();
@@ -194,10 +220,32 @@ pub struct TraitMthdInst<'fns> {
     pub mthd: TraitMthd<'fns>,
     pub impl_ty: Ty<'fns>,
     pub gen_args: TySlice<'fns>,
-    pub(in crate::ctxt) _private: (),
+    _private: (),
 }
 
 impl<'fns> TraitMthdInst<'fns> {
+    pub fn new(
+        trait_inst: TraitInst<'fns>,
+        mthd: TraitMthd<'fns>,
+        impl_ty: Ty<'fns>,
+        gen_args: TySlice<'fns>,
+    ) -> Result<TraitMthdInst<'fns>, TraitMthdInstError<'fns>> {
+        if mthd.fn_.gen_params.len() != gen_args.len() {
+            return Err(TraitMthdInstError::GenArgCountMismatch {
+                mthd,
+                expected: mthd.fn_.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+        Ok(TraitMthdInst {
+            trait_inst,
+            mthd,
+            impl_ty,
+            gen_args,
+            _private: (),
+        })
+    }
+
     pub fn with_updated(
         self,
         impl_ty: Ty<'fns>,

@@ -45,7 +45,27 @@ pub struct TraitInstError<'traits> {
 pub struct TraitInst<'traits> {
     pub trait_: Trait<'traits>,
     pub gen_args: TySlice<'traits>,
-    pub(in crate::ctxt) _private: (),
+    _private: (),
+}
+
+impl<'traits> TraitInst<'traits> {
+    pub fn new(
+        trait_: Trait<'traits>,
+        gen_args: TySlice<'traits>,
+    ) -> Result<TraitInst<'traits>, TraitInstError<'traits>> {
+        if trait_.gen_params.len() != gen_args.len() {
+            return Err(TraitInstError {
+                trait_,
+                expected: trait_.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+        Ok(TraitInst {
+            trait_,
+            gen_args,
+            _private: (),
+        })
+    }
 }
 
 pub struct TraitMthdDef<'traits> {

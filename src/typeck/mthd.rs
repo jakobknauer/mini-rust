@@ -1,4 +1,8 @@
-use crate::ctxt::{fns, traits, ty};
+use crate::ctxt::{
+    fns::{self, FnInst, TraitMthdInst},
+    traits::{self, TraitInst},
+    ty,
+};
 use crate::hlr;
 use crate::typeck::{DerefStep, TypeckError, TypeckResult};
 
@@ -137,7 +141,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 let n_trait_gen_params = mthd.trait_.gen_params.len();
                 let trait_gen_args: Vec<_> = (0..n_trait_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
                 let trait_gen_args_slice = self.ctxt.tys.ty_slice(&trait_gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(mthd.trait_, trait_gen_args_slice).unwrap();
+                let trait_inst = TraitInst::new(mthd.trait_, trait_gen_args_slice).unwrap();
                 Ok(Some(FoundMthd::Trait { trait_inst, mthd }))
             }
             _ => Err(TypeckError::AmbiguousMthd {
@@ -171,7 +175,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.add_constraint_obligations(fn_, &full_subst);
 
                 let fn_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
-                let fn_inst = self.ctxt.fns.inst_fn(fn_, fn_gen_args, env_gen_args).unwrap();
+                let fn_inst = FnInst::new(fn_, fn_gen_args, env_gen_args).unwrap();
                 Ok(MthdResolution::Inherent(fn_inst.with_self_ty(fn_.associated_ty)))
             }
             FoundMthd::Trait { trait_inst, mthd } => {
@@ -193,10 +197,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
 
                 let mthd_gen_args = self.ctxt.tys.ty_slice(&resolved_gen_args);
                 Ok(MthdResolution::Trait(
-                    self.ctxt
-                        .traits
-                        .inst_trait_mthd(trait_inst, mthd, base_ty, mthd_gen_args)
-                        .unwrap(),
+                    TraitMthdInst::new(trait_inst, mthd, base_ty, mthd_gen_args).unwrap(),
                 ))
             }
         }

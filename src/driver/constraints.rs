@@ -1,6 +1,9 @@
 use crate::{
     ast,
-    ctxt::{traits, ty},
+    ctxt::{
+        traits::{self, TraitInst},
+        ty,
+    },
 };
 
 use super::{Driver, DriverError, ResCtxt};
@@ -45,7 +48,7 @@ impl<'arena> Driver<'_, 'arena> {
                     .collect::<Result<_, _>>()?;
 
                 let gen_args = self.ctxt.tys.ty_slice(&trait_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
 
                 let mut result = vec![ty::Constraint {
                     subject,

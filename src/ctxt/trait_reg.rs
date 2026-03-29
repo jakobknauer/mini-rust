@@ -1,12 +1,10 @@
 use std::cell::RefCell;
 
 use crate::ctxt::{
-    fns::{Fn, TraitMthdInst, TraitMthdInstError},
-    traits::{Trait, TraitDef, TraitId, TraitInst, TraitMthd, TraitMthdDef},
-    ty::{GenVar, Ty, TySlice},
+    fns::Fn,
+    traits::{Trait, TraitDef, TraitId, TraitMthd, TraitMthdDef},
+    ty::GenVar,
 };
-
-pub use crate::ctxt::traits::TraitInstError;
 
 pub struct TraitReg<'traits> {
     arena: &'traits bumpalo::Bump,
@@ -21,52 +19,6 @@ impl<'traits> TraitReg<'traits> {
             traits: RefCell::default(),
             mthds: RefCell::default(),
         }
-    }
-
-    // TODO must this be a method?
-    // Also check that trait_inst.trait and mthd.trait coincide
-    pub fn inst_trait_mthd(
-        &self,
-        trait_inst: TraitInst<'traits>,
-        mthd: TraitMthd<'traits>,
-        impl_ty: Ty<'traits>,
-        gen_args: TySlice<'traits>,
-    ) -> Result<TraitMthdInst<'traits>, TraitMthdInstError<'traits>> {
-        let n_gen_params = mthd.fn_.gen_params.len();
-        if n_gen_params != gen_args.len() {
-            return Err(TraitMthdInstError::GenArgCountMismatch {
-                mthd,
-                expected: n_gen_params,
-                actual: gen_args.len(),
-            });
-        }
-        Ok(TraitMthdInst {
-            trait_inst,
-            mthd,
-            impl_ty,
-            gen_args,
-            _private: (),
-        })
-    }
-
-    // TODO must this be a method?
-    pub fn inst_trait(
-        &self,
-        trait_: Trait<'traits>,
-        gen_args: TySlice<'traits>,
-    ) -> Result<TraitInst<'traits>, TraitInstError<'traits>> {
-        if trait_.gen_params.len() != gen_args.len() {
-            return Err(TraitInstError {
-                trait_,
-                expected: trait_.gen_params.len(),
-                actual: gen_args.len(),
-            });
-        }
-        Ok(TraitInst {
-            trait_,
-            gen_args,
-            _private: (),
-        })
     }
 
     pub fn register_trait(

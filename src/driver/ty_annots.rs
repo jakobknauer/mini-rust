@@ -1,6 +1,6 @@
 use crate::{
     ast,
-    ctxt::{Named, ty},
+    ctxt::{Named, traits::TraitInst, ty},
 };
 
 use super::{Driver, ResCtxt};
@@ -69,7 +69,7 @@ impl<'arena> Driver<'_, 'arena> {
                     None => vec![],
                 };
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).ok()?;
+                let trait_inst = TraitInst::new(trait_, gen_args).ok()?;
                 if !self
                     .ctxt
                     .ty_implements_trait_inst(res_ctxt.constraints, base_ty, trait_inst)
@@ -93,7 +93,7 @@ impl<'arena> Driver<'_, 'arena> {
                             .map(|&a| self.try_resolve_ast_ty_annot(a, res_ctxt, false))
                             .collect::<Option<_>>()?;
                         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
-                        let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                        let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
                         ty::ConstraintRequirement::Trait(trait_inst)
                     }
                     ast::ConstraintRequirement::Callable { params, return_ty } => {

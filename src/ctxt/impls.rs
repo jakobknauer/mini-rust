@@ -20,7 +20,24 @@ pub struct ImplInstError<'impls> {
 pub struct ImplInst<'impls> {
     pub impl_: Impl<'impls>,
     pub gen_args: TySlice<'impls>,
-    pub(in crate::ctxt) _private: (),
+    _private: (),
+}
+
+impl<'impls> ImplInst<'impls> {
+    pub fn new(impl_: Impl<'impls>, gen_args: TySlice<'impls>) -> Result<ImplInst<'impls>, ImplInstError<'impls>> {
+        if impl_.gen_params.len() != gen_args.len() {
+            return Err(ImplInstError {
+                impl_,
+                expected: impl_.gen_params.len(),
+                actual: gen_args.len(),
+            });
+        }
+        Ok(ImplInst {
+            impl_,
+            gen_args,
+            _private: (),
+        })
+    }
 }
 
 pub struct ImplDef<'impls> {

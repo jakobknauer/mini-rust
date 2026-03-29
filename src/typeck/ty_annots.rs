@@ -1,5 +1,8 @@
 use crate::{
-    ctxt::{traits, ty},
+    ctxt::{
+        traits::{self, TraitInst},
+        ty,
+    },
     hlr,
     typeck::{TypeckError, TypeckResult},
 };
@@ -126,7 +129,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                     }
                 })?;
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
                 if !self
                     .ctxt
                     .ty_implements_trait_inst(&self.constraints, base_ty, trait_inst)
@@ -152,7 +155,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 let n_gen_params = trait_.gen_params.len();
                 let gen_args: Vec<_> = (0..n_gen_params).map(|_| self.ctxt.tys.inf_var()).collect();
                 let gen_args = self.ctxt.tys.ty_slice(&gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
                 Ok(self.ctxt.tys.assoc_ty(base_ty, trait_inst, assoc_ty_idx))
             }
         }

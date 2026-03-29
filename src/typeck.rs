@@ -10,7 +10,13 @@ mod unify;
 use std::collections::HashMap;
 
 use crate::{
-    ctxt::{self, fns, language_items, traits, ty},
+    ctxt::{
+        self,
+        fns::{self, FnInst},
+        language_items,
+        traits::{self, TraitInst},
+        ty,
+    },
     hlr,
 };
 
@@ -244,10 +250,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
         let empty = self.ctxt.tys.ty_slice(&[]);
-        let fn_inst = self
-            .ctxt
-            .fns
-            .inst_fn(fn_, gen_args, empty)
+        let fn_inst = FnInst::new(fn_, gen_args, empty)
             .unwrap()
             .with_self_ty(fn_.associated_ty);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValFn(fn_inst));
@@ -293,7 +296,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     }
                 })?;
                 let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
+                let trait_inst = TraitInst::new(trait_, trait_gen_args).unwrap();
 
                 let mthd = self
                     .ctxt
@@ -589,7 +592,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             _ => {
                 let deref_trait = self.ctxt.language_items.deref_trait?;
                 let gen_args = self.ctxt.tys.ty_slice(&[]);
-                let trait_inst = self.ctxt.traits.inst_trait(deref_trait, gen_args).unwrap();
+                let trait_inst = TraitInst::new(deref_trait, gen_args).unwrap();
                 if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
                     return None;
                 }

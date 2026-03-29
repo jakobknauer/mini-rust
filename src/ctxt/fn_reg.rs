@@ -1,10 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::ctxt::{
-    fns::{Fn, FnDecl, FnId, FnInst, FnInstError, TraitMthdInst},
-    ty::TySlice,
-};
+use crate::ctxt::fns::{Fn, FnDecl, FnId, FnInst, TraitMthdInst};
 
 pub struct FnReg<'fns> {
     arena: &'fns bumpalo::Bump,
@@ -23,34 +20,6 @@ impl<'fns> FnReg<'fns> {
             called_fn_insts: RefCell::default(),
             called_trait_mthd_insts: RefCell::default(),
         }
-    }
-
-    // TODO does this need to be a method?
-    pub fn inst_fn(
-        &self,
-        fn_: Fn<'fns>,
-        gen_args: TySlice<'fns>,
-        env_gen_args: TySlice<'fns>,
-    ) -> Result<FnInst<'fns>, FnInstError> {
-        if fn_.gen_params.len() != gen_args.len() {
-            return Err(FnInstError::GenArgCountMismatch {
-                expected: fn_.gen_params.len(),
-                actual: gen_args.len(),
-            });
-        }
-        if fn_.env_gen_params.len() != env_gen_args.len() {
-            return Err(FnInstError::EnvGenArgCountMismatch {
-                expected: fn_.env_gen_params.len(),
-                actual: env_gen_args.len(),
-            });
-        }
-        Ok(FnInst {
-            fn_,
-            gen_args,
-            env_gen_args,
-            self_ty: None,
-            _private: (),
-        })
     }
 
     // TODO create the FnDecl inside the function?

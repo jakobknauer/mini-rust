@@ -2,9 +2,9 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::ctxt::{
     fns::Fn,
-    impls::{Impl, ImplDef, ImplInst, ImplInstError},
+    impls::{Impl, ImplDef},
     traits::{Trait, TraitInst},
-    ty::{Constraint, GenVar, Ty, TySlice},
+    ty::{Constraint, GenVar, Ty},
 };
 
 pub struct ImplReg<'impls> {
@@ -18,25 +18,6 @@ impl<'impls> ImplReg<'impls> {
             arena,
             impls: RefCell::new(Vec::new()),
         }
-    }
-
-    pub fn inst_impl(
-        &self,
-        impl_: Impl<'impls>,
-        gen_args: TySlice<'impls>,
-    ) -> Result<ImplInst<'impls>, ImplInstError<'impls>> {
-        if impl_.gen_params.len() != gen_args.len() {
-            return Err(ImplInstError {
-                impl_,
-                expected: impl_.gen_params.len(),
-                actual: gen_args.len(),
-            });
-        }
-        Ok(ImplInst {
-            impl_,
-            gen_args,
-            _private: (),
-        })
     }
 
     pub fn register_impl(

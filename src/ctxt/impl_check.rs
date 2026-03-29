@@ -1,5 +1,7 @@
 use crate::ctxt::{
-    fns, impls, traits,
+    fns::{self, FnInst},
+    impls::{self, ImplInst},
+    traits::{self, TraitInst},
     ty::{self, GenVarSubst},
 };
 
@@ -62,8 +64,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             }
         };
 
-        self.fns
-            .inst_fn(fn_, trait_mthd_inst.gen_args, env_gen_args)
+        FnInst::new(fn_, trait_mthd_inst.gen_args, env_gen_args)
             .unwrap()
             .with_self_ty(Some(trait_mthd_inst.impl_ty))
     }
@@ -105,7 +106,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                     return None;
                 }
 
-                self.impls.inst_impl(impl_, gen_args).ok()
+                ImplInst::new(impl_, gen_args).ok()
             })
     }
 
@@ -207,7 +208,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
             let assoc_ty_index = trait_.assoc_tys.iter().position(|name| name == ident)?;
             let gen_args: Vec<_> = trait_.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
             let gen_args = self.tys.ty_slice(&gen_args);
-            let default_trait_inst = self.traits.inst_trait(trait_, gen_args).unwrap();
+            let default_trait_inst = TraitInst::new(trait_, gen_args).unwrap();
             let ty = self.tys.assoc_ty(base_ty, default_trait_inst, assoc_ty_index);
             return Some(ty);
         }
@@ -231,7 +232,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                     }
                     let gen_args: Vec<_> = trait_.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
                     let gen_args = self.tys.ty_slice(&gen_args);
-                    let trait_inst = self.traits.inst_trait(trait_, gen_args).unwrap();
+                    let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
                     return Some(self.tys.assoc_ty(base_ty, trait_inst, *assoc_ty_idx));
                 };
 
@@ -317,7 +318,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                 return None;
             }
 
-            let impl_inst = self.impls.inst_impl(impl_, gen_args).unwrap();
+            let impl_inst = ImplInst::new(impl_, gen_args).unwrap();
             Some(impl_inst)
         })
     }
@@ -328,7 +329,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         subst: &GenVarSubst<'ctxt>,
     ) -> traits::TraitInst<'ctxt> {
         let gen_args = self.tys.substitute_gen_vars_on_slice(trait_inst.gen_args, subst);
-        self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap()
+        TraitInst::new(trait_inst.trait_, gen_args).unwrap()
     }
 
     fn subst_trait_mthd_inst(

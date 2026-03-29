@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use lowered_expr::LoweredExpr;
 
 use crate::{
-    ctxt::{self, fns, language_items, ty},
+    ctxt::{
+        self,
+        fns::{self, FnInst},
+        language_items, ty,
+    },
     hlr,
     mlr::{self, builder::MlrBuilder},
     typeck::{DerefStep, ExprExtra, HlrTyping, MthdResolution},
@@ -716,11 +720,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 .collect();
             let env_gen_args = self.builder.ctxt.tys.ty_slice(&env_gen_args);
             let gen_args = self.builder.ctxt.tys.ty_slice(&[]);
-            self.builder
-                .ctxt
-                .fns
-                .inst_fn(closure_fn, gen_args, env_gen_args)
-                .unwrap()
+            FnInst::new(closure_fn, gen_args, env_gen_args).unwrap()
         };
 
         self.builder.register_fn_call(fn_inst);

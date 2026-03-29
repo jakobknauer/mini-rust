@@ -10,7 +10,10 @@ use inkwell::{
 };
 
 use crate::{
-    ctxt::{fns as mr_fns, ty as mr_ty},
+    ctxt::{
+        fns::{self as mr_fns, FnInst},
+        ty as mr_ty,
+    },
     mlr,
 };
 
@@ -384,11 +387,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     .collect();
                 let env_gen_args = self.parent.mr_ctxt.tys.ty_slice(&env_gen_args);
                 let gen_args = self.parent.mr_ctxt.tys.ty_slice(&[]);
-                self.parent
-                    .mr_ctxt
-                    .fns
-                    .inst_fn(closure_fn, gen_args, env_gen_args)
-                    .unwrap()
+                FnInst::new(closure_fn, gen_args, env_gen_args).unwrap()
             };
             let fn_ptr = self.build_global_function(fn_inst)?.into_pointer_value();
             let captures: BasicMetadataValueEnum<'iw> = self.build_op(callable)?.into();

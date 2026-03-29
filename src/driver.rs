@@ -10,7 +10,13 @@ use std::{
 
 use crate::{
     ast, ast_lowering,
-    ctxt::{self, fns, impls, traits, ty},
+    ctxt::{
+        self,
+        fns::{self, FnInst},
+        impls,
+        traits::{self, TraitInst},
+        ty,
+    },
     driver::{
         err::{DriverError, format_driver_error},
         impl_check::check_trait_impls,
@@ -350,7 +356,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 };
 
                 let gen_args = self.ctxt.tys.ty_slice(&trait_args);
-                let trait_inst = self.ctxt.traits.inst_trait(trait_, gen_args).unwrap();
+                let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
                 Ok(trait_inst)
             })
             .transpose()?;
@@ -536,7 +542,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
         let trait_gen_args: Vec<_> = trait_.gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
         let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
-        let trait_inst = self.ctxt.traits.inst_trait(trait_, trait_gen_args).unwrap();
+        let trait_inst = TraitInst::new(trait_, trait_gen_args).unwrap();
 
         let fn_ = self
             .ctxt
@@ -680,7 +686,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             .get_fn_by_name("main")
             .ok_or(DriverError::NoMainFunction)?;
         let empty = self.ctxt.tys.ty_slice(&[]);
-        open.push_back(self.ctxt.fns.inst_fn(main_fn, empty, empty).unwrap());
+        open.push_back(FnInst::new(main_fn, empty, empty).unwrap());
 
         #[allow(clippy::mutable_key_type)]
         let mut closed = HashSet::new();

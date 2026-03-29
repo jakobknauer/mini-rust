@@ -16,7 +16,7 @@ pub use impl_reg::ImplReg;
 pub use trait_reg::TraitReg;
 pub use ty_reg::*;
 
-use crate::ctxt::ty::GenVarSubst;
+use crate::ctxt::{traits::TraitInst, ty::GenVarSubst};
 
 pub struct Ctxt<'ctxt> {
     pub tys: TyReg<'ctxt>,
@@ -100,7 +100,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 let base_ty = self.normalize_ty(base_ty);
                 let gen_args: Vec<_> = trait_inst.gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
                 let gen_args = self.tys.ty_slice(&gen_args);
-                let trait_inst = self.traits.inst_trait(trait_inst.trait_, gen_args).unwrap();
+                let trait_inst = TraitInst::new(trait_inst.trait_, gen_args).unwrap();
 
                 let impl_insts: Vec<_> = self
                     .get_impl_insts_for_ty_and_trait_inst(&[], base_ty, trait_inst)
