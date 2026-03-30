@@ -660,34 +660,38 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     ]);
 
     fn parse_unary_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
-        // TODO refactor to a match
-        if self.tokens.advance_if(Token::Asterisk) {
-            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            let expr = self.builder.deref(base);
-            Ok(expr)
-        } else if self.tokens.advance_if(Token::Ampersand) {
-            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            let expr = self.builder.addr_of(base);
-            Ok(expr)
-        } else if self.tokens.advance_if(Token::AmpersandAmpersand) {
-            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            let expr = self.builder.addr_of(base);
-            let expr = self.builder.addr_of(expr);
-            Ok(expr)
-        } else if self.tokens.advance_if(Token::Bang) {
-            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            let expr = self.builder.unary_op(UnaryOperator::Not, base);
-            Ok(expr)
-        } else if self.tokens.advance_if(Token::Minus) {
-            let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-            let expr = self.builder.unary_op(UnaryOperator::Negative, base);
-            Ok(expr)
-        } else {
-            self.parse_function_call_and_field_access(allow_top_level_struct_expr)
+        match self.tokens.current() {
+            Some(Token::Asterisk) => {
+                self.tokens.advance();
+                let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+                Ok(self.builder.deref(base))
+            }
+            Some(Token::Ampersand) => {
+                self.tokens.advance();
+                let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+                Ok(self.builder.addr_of(base))
+            }
+            Some(Token::AmpersandAmpersand) => {
+                self.tokens.advance();
+                let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+                let inner = self.builder.addr_of(base);
+                Ok(self.builder.addr_of(inner))
+            }
+            Some(Token::Bang) => {
+                self.tokens.advance();
+                let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+                Ok(self.builder.unary_op(UnaryOperator::Not, base))
+            }
+            Some(Token::Minus) => {
+                self.tokens.advance();
+                let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+                Ok(self.builder.unary_op(UnaryOperator::Negative, base))
+            }
+            _ => self.parse_function_call_and_member_access(allow_top_level_struct_expr),
         }
     }
 
-    fn parse_function_call_and_field_access(
+    fn parse_function_call_and_member_access(
         &mut self,
         allow_top_level_struct_expr: bool,
     ) -> Result<Expr<'ast>, ParserErr> {
