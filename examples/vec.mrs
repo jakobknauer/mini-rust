@@ -5,7 +5,7 @@ struct Vec<T> {
 }
 
 fn copy_n<T>(src: *T, dst: *T, n: i32) {
-    let i = 0;
+    let mut i = 0;
     while i < n {
         *dst.offset(i) = *src.offset(i);
         i = i + 1;
@@ -80,7 +80,7 @@ where
         if self.len != other.len {
             return false;
         }
-        let i = 0;
+        let mut i = 0;
         while i < self.len {
             if !(*self.ptr.offset(i) == *other.ptr.offset(i)) {
                 return false;

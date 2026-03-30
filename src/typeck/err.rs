@@ -7,36 +7,36 @@ pub type TypeckResult<'ty, T> = Result<T, TypeckError<'ty>>;
 
 #[derive(Debug)]
 #[allow(unused)]
-pub enum TypeckError<'ty> {
+pub enum TypeckError<'ctxt> {
     ReturnTypeMismatch {
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     FnGenArgCountMismatch {
-        fn_: fns::Fn<'ty>,
+        fn_: fns::Fn<'ctxt>,
         expected: usize,
         actual: usize,
     },
     StructGenArgCountMismatch {
-        struct_: ty::Struct<'ty>,
+        struct_: ty::Struct<'ctxt>,
         expected: usize,
         actual: usize,
     },
     EnumGenArgCountMismatch {
-        enum_: ty::Enum<'ty>,
+        enum_: ty::Enum<'ctxt>,
         expected: usize,
         actual: usize,
     },
     UnresolvableAssocTy {
-        base: ty::Ty<'ty>,
+        base: ty::Ty<'ctxt>,
         name: String,
     },
     MthdResolutionFailed {
-        base_ty: ty::Ty<'ty>,
+        base_ty: ty::Ty<'ctxt>,
         mthd_name: String,
     },
     AmbiguousMthd {
-        base_ty: ty::Ty<'ty>,
+        base_ty: ty::Ty<'ctxt>,
         mthd_name: String,
     },
     MthdGenArgCountMismatch {
@@ -45,23 +45,23 @@ pub enum TypeckError<'ty> {
         actual: usize,
     },
     NamedFieldAccessOnNonStruct {
-        ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
     },
     IndexedFieldAccessOnNonTuple {
-        ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
     },
     StructFieldNotFound {
-        struct_ty: ty::Ty<'ty>,
+        struct_ty: ty::Ty<'ctxt>,
         field: String,
     },
     StructFieldTypeMismatch {
-        struct_ty: ty::Ty<'ty>,
+        struct_ty: ty::Ty<'ctxt>,
         field_idx: usize,
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     CalleeNotCallable {
-        ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
     },
     CallArgCountMismatch {
         expected: usize,
@@ -70,82 +70,83 @@ pub enum TypeckError<'ty> {
     },
     CallArgTypeMismatch {
         index: usize,
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     BinaryOpTypeMismatch {
         operator: hlr::BinaryOperator,
-        left_ty: ty::Ty<'ty>,
-        right_ty: ty::Ty<'ty>,
+        left_ty: ty::Ty<'ctxt>,
+        right_ty: ty::Ty<'ctxt>,
     },
     ArithTraitNotImplemented {
         operator: hlr::BinaryOperator,
-        left_ty: ty::Ty<'ty>,
-        right_ty: ty::Ty<'ty>,
+        left_ty: ty::Ty<'ctxt>,
+        right_ty: ty::Ty<'ctxt>,
     },
     UnaryOpTypeMismatch {
         operator: hlr::UnaryOperator,
-        operand_ty: ty::Ty<'ty>,
+        operand_ty: ty::Ty<'ctxt>,
     },
     AssignmentTargetNotAPlace,
     AssignmentTypeMismatch {
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     DereferenceOfNonRef {
-        ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
     },
     DereferenceOfCVoid {
-        ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
     },
     InvalidAsConversion {
-        op_ty: ty::Ty<'ty>,
-        target_ty: ty::Ty<'ty>,
+        op_ty: ty::Ty<'ctxt>,
+        target_ty: ty::Ty<'ctxt>,
     },
     IfConditionNotBoolean,
     IfBranchesTypeMismatch {
-        then_ty: ty::Ty<'ty>,
-        else_ty: ty::Ty<'ty>,
+        then_ty: ty::Ty<'ctxt>,
+        else_ty: ty::Ty<'ctxt>,
     },
     NonMatchableScrutinee {
-        ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
     },
     MatchArmWrongEnum {
-        expected: ty::Ty<'ty>,
-        found: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        found: ty::Ty<'ctxt>,
     },
     MatchArmTypeMismatch {
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     TraitGenArgCountMismatch {
-        trait_: traits::Trait<'ty>,
+        trait_: traits::Trait<'ctxt>,
         expected: usize,
         actual: usize,
     },
     ReturnExprTypeMismatch {
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     LetTypeMismatch {
-        expected: ty::Ty<'ty>,
-        actual: ty::Ty<'ty>,
+        expected: ty::Ty<'ctxt>,
+        actual: ty::Ty<'ctxt>,
     },
     VarTypeNotSet {
         var_id: hlr::VarId,
         expr_id: hlr::ExprId,
     },
     ConstraintNotSatisfied {
-        ty: ty::Ty<'ty>,
-        trait_inst: traits::TraitInst<'ty>,
+        ty: ty::Ty<'ctxt>,
+        trait_inst: traits::TraitInst<'ctxt>,
     },
     CallableConstraintNotSatisfied {
-        ty: ty::Ty<'ty>,
-        expected_param_tys: ty::TySlice<'ty>,
-        expected_return_ty: ty::Ty<'ty>,
+        ty: ty::Ty<'ctxt>,
+        expected_param_tys: ty::TySlice<'ctxt>,
+        expected_return_ty: ty::Ty<'ctxt>,
     },
     AssocTyEqNotSatisfied {
-        subject: ty::Ty<'ty>,
-        expected: ty::Ty<'ty>,
+        subject: ty::Ty<'ctxt>,
+        expected: ty::Ty<'ctxt>,
     },
+    NonAssignablePlace(hlr::Expr<'ctxt>),
 }

@@ -9,7 +9,7 @@ where
     I: Iterator
 {
     fn count(self) -> i32 {
-        let len = 0;
+        let mut len = 0;
         while self.next().is_some() {
             len = len + 1;
         }
@@ -20,7 +20,7 @@ where
     where
         F: Fn(<I as Iterator>::Item)
     {
-        let current = self.next();
+        let mut current = self.next();
         loop {
             match current {
                 Option::Some { item } => {
@@ -45,7 +45,7 @@ where
     where
         F: Fn(B, <I as Iterator>::Item) -> B
     {
-        let result = init;
+        let mut result = init;
         loop {
             match self.next() {
                 Option::Some { item } => {
@@ -70,7 +70,7 @@ where
     where
         S: Add<<I as Iterator>::Item, Output=S>
     {
-        let result = init;
+        let mut result = init;
         loop {
             match self.next() {
                 Option::Some { item } => {

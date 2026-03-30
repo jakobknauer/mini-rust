@@ -563,9 +563,16 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         Ok(tuple_ty)
     }
 
-    fn check_expr_is_place(&self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ()> {
+    fn check_expr_is_assignable_place(&self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ()> {
         match expr.0 {
-            hlr::ExprDef::Val(hlr::Val::Var(_)) | hlr::ExprDef::Deref(_) | hlr::ExprDef::FieldAccess { .. } => Ok(()),
+            hlr::ExprDef::Deref(_) | hlr::ExprDef::FieldAccess { .. } => Ok(()),
+            hlr::ExprDef::Val(hlr::Val::Var(var_id)) => {
+                if self.mutable_vars.contains(var_id) {
+                    Ok(())
+                } else {
+                    Err(TypeckError::NonAssignablePlace(expr))
+                }
+            }
             _ => Err(TypeckError::AssignmentTargetNotAPlace),
         }
     }
@@ -575,7 +582,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         target: hlr::Expr<'ctxt>,
         value: hlr::Expr<'ctxt>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        self.check_expr_is_place(target)?;
+        self.check_expr_is_assignable_place(target)?;
 
         let target_ty = self.check_expr(target, None)?;
         let value_ty = self.check_expr(value, None)?;

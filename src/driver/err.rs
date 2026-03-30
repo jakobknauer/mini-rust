@@ -242,8 +242,9 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>) -> String {
                 expected_return_ty
             )
         }
-        &TypeckError::AssocTyEqNotSatisfied { subject, expected } => {
+        TypeckError::AssocTyEqNotSatisfied { subject, expected } => {
             format!("associated type '{}' does not equal '{}'", subject, expected)
         }
+        NonAssignablePlace(expr) => format!("expression {:?} is not an assignable place", expr),
     }
 }

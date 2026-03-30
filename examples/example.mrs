@@ -1,13 +1,15 @@
 fn main() -> i32 {
     let mut x = 3;
-    0
+    x = 5;
+    x
 }
 
 fn printf(format: *c_char, ...) -> i32;
 fn scanf(format: *c_char, ...) -> i32;
 
 fn fac(n: i32) -> i32 {
-    let result: i32 = 1;
+    let mut n = n;
+    let mut result: i32 = 1;
     while n > 0 {
         result = result * n;
         n = n - 1
