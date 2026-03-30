@@ -140,8 +140,19 @@ impl<'ast> AstBuilder<'ast> {
 
 // Statements
 impl<'ast> AstBuilder<'ast> {
-    pub fn let_stmt(&self, name: String, ty_annot: Option<TyAnnot<'ast>>, value: Expr<'ast>) -> Stmt<'ast> {
-        self.ast.stmt(StmtKind::Let { name, ty_annot, value })
+    pub fn let_stmt(
+        &self,
+        name: String,
+        mutable: bool,
+        ty_annot: Option<TyAnnot<'ast>>,
+        value: Expr<'ast>,
+    ) -> Stmt<'ast> {
+        self.ast.stmt(StmtKind::Let {
+            name,
+            mutable,
+            ty_annot,
+            value,
+        })
     }
 
     pub fn expr_stmt(&self, expr: Expr<'ast>) -> Stmt<'ast> {

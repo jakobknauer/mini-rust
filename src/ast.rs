@@ -331,6 +331,7 @@ pub type StmtSlice<'ast> = &'ast [Stmt<'ast>];
 pub enum StmtKind<'ast> {
     Let {
         name: String,
+        mutable: bool,
         ty_annot: Option<TyAnnot<'ast>>,
         value: Expr<'ast>,
     },

@@ -312,11 +312,14 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.print_expr_indented(*expr)?;
                 writeln!(self.writer, ";")
             }
-            Let { var, ty, init } => {
+            &Let { var, mutable, ty, init } => {
                 self.indent()?;
-                write!(self.writer, "let {}: ", var)?;
+                write!(self.writer, "let ")?;
+                if mutable {
+                    write!(self.writer, "mut ")?;
+                }
                 if let Some(typing) = self.typing
-                    && let Some(&inferred) = typing.var_types.get(var)
+                    && let Some(&inferred) = typing.var_types.get(&var)
                 {
                     write!(self.writer, "{}", inferred)?;
                 } else if let Some(annot) = ty {
@@ -325,7 +328,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                     write!(self.writer, "_")?;
                 }
                 write!(self.writer, " = ")?;
-                self.print_expr(*init)?;
+                self.print_expr(init)?;
                 writeln!(self.writer, ";")
             }
             Break => {

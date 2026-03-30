@@ -33,6 +33,10 @@ impl<'token> TokenStream<'token> {
         }
     }
 
+    pub(super) fn advance_if_keyword(&mut self, keyword: Keyword) -> bool {
+        self.advance_if(Token::Keyword(keyword))
+    }
+
     pub(super) fn advance_if_turbofish(&mut self) -> bool {
         if self.current() == Some(&Token::ColonColon) && self.next() == Some(&Token::Smaller) {
             self.position += 2;

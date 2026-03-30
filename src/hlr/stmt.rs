@@ -9,6 +9,7 @@ pub enum StmtDef<'hlr> {
     Expr(Expr<'hlr>),
     Let {
         var: VarId,
+        mutable: bool,
         ty: Option<TyAnnot<'hlr>>,
         init: Expr<'hlr>,
     },

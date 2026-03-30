@@ -7,7 +7,7 @@ mod post_check;
 mod ty_annots;
 mod unify;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     ctxt::{
@@ -69,6 +69,7 @@ pub fn typeck<'a, 'ctxt: 'a>(
         closure_counter: 0,
         return_ty_stack: vec![],
         var_uses: vec![],
+        mutable_vars: HashSet::new(),
         created_closure_structs: vec![],
         pending_obligations: vec![],
     };
@@ -86,6 +87,8 @@ struct Typeck<'a, 'ctxt: 'a> {
     closure_counter: usize,
     return_ty_stack: Vec<ty::Ty<'ctxt>>,
     var_uses: Vec<hlr::VarId>,
+
+    mutable_vars: HashSet<hlr::VarId>,
 
     created_closure_structs: Vec<(ty::Struct<'ctxt>, Vec<hlr::VarId>)>,
 
@@ -190,7 +193,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_stmt(&mut self, stmt: hlr::Stmt<'ctxt>) -> TypeckResult<'ctxt, ()> {
         match stmt {
             hlr::StmtDef::Expr(expr) => self.check_expr(*expr, None).map(|_| ()),
-            hlr::StmtDef::Let { var, ty, init } => self.check_let_stmt(*var, *ty, *init),
+            &hlr::StmtDef::Let { var, mutable, ty, init } => self.check_let_stmt(var, mutable, ty, init),
             hlr::StmtDef::Break => Ok(()),
             hlr::StmtDef::Return(expr) => self.check_return_stmt(*expr),
         }
@@ -779,6 +782,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_let_stmt(
         &mut self,
         var: hlr::VarId,
+        mutable: bool,
         ty: Option<hlr::TyAnnot<'ctxt>>,
         init: hlr::Expr<'ctxt>,
     ) -> TypeckResult<'ctxt, ()> {
@@ -794,6 +798,9 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             self.typing.var_types.insert(var, annot_ty);
         } else {
             self.typing.var_types.insert(var, init_ty);
+        }
+        if mutable {
+            self.mutable_vars.insert(var);
         }
         Ok(())
     }

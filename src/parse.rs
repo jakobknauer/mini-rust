@@ -566,6 +566,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     fn parse_let_stmt(&mut self) -> Result<Stmt<'ast>, ParserErr> {
         self.tokens.expect_keyword(Keyword::Let)?;
+        let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
         let name = self.tokens.expect_identifier()?;
         let ty_annot = if self.tokens.advance_if(Token::Colon) {
             Some(self.parse_ty_annot()?)
@@ -574,7 +575,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         };
         self.tokens.expect_token(Token::Equal)?;
         let value = self.parse_expr(true)?;
-        let stmt = self.builder.let_stmt(name.clone(), ty_annot, value);
+        let stmt = self.builder.let_stmt(name, mutable, ty_annot, value);
         Ok(stmt)
     }
 

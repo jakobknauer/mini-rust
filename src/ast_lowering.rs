@@ -128,9 +128,10 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         match *stmt {
             Let {
                 ref name,
+                mutable,
                 ty_annot,
                 value,
-            } => self.lower_let_stmt(name, ty_annot, value),
+            } => self.lower_let_stmt(name, mutable, ty_annot, value),
             Expr(expr) => self.lower_expr_stmt(expr),
             Return(expr) => self.lower_return_stmt(expr),
             Break => self.lower_break_stmt(),
@@ -140,6 +141,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_let_stmt(
         &mut self,
         name: &str,
+        mutable: bool,
         ty_annot: Option<ast::TyAnnot>,
         value: ast::Expr<'ast>,
     ) -> AstLoweringResult<()> {
@@ -150,7 +152,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
         let ty = ty_annot.map(|ty_annot| self.lower_ty_annot(ty_annot)).transpose()?;
 
-        let stmt = hlr::StmtDef::Let { var, ty, init };
+        let stmt = hlr::StmtDef::Let { var, mutable, ty, init };
         self.push_stmt(stmt)
     }
 
