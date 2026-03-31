@@ -78,11 +78,11 @@ struct Driver<'a, 'arena> {
 
 #[derive(Default)]
 struct AstMeta<'ty> {
-    fn_ids: HashMap<ast::FnId, fns::Fn<'ty>>,
-    struct_ids: HashMap<ast::StructId, ty::Struct<'ty>>,
-    enum_ids: HashMap<ast::EnumId, ty::Enum<'ty>>,
-    trait_ids: HashMap<ast::TraitId, traits::Trait<'ty>>,
-    impl_ids: HashMap<ast::ImplId, impls::Impl<'ty>>,
+    fns: HashMap<ast::FnId, fns::Fn<'ty>>,
+    structs: HashMap<ast::StructId, ty::Struct<'ty>>,
+    enums: HashMap<ast::EnumId, ty::Enum<'ty>>,
+    traits: HashMap<ast::TraitId, traits::Trait<'ty>>,
+    impls: HashMap<ast::ImplId, impls::Impl<'ty>>,
 }
 
 impl<'a, 'arena> Driver<'a, 'arena> {
@@ -159,7 +159,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 .tys
                 .register_struct(&struct_.name, &struct_.gen_params)
                 .map_err(|_| DriverError::ContextBuild("Failed to register struct (duplicate name?)"))?;
-            self.ast_meta.struct_ids.insert(struct_.1, ty);
+            self.ast_meta.structs.insert(struct_.1, ty);
         }
 
         for enum_ in self.ast.enums().iter() {
@@ -168,7 +168,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 .tys
                 .register_enum(&enum_.name, &enum_.gen_params)
                 .map_err(|_| DriverError::ContextBuild("Failed to register enum (duplicate name?)"))?;
-            self.ast_meta.enum_ids.insert(enum_.1, ty);
+            self.ast_meta.enums.insert(enum_.1, ty);
 
             let mut variants = Vec::new();
             for variant in &enum_.variants {
@@ -191,11 +191,11 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
     fn define_tys(&mut self) -> Result<(), DriverError<'arena>> {
         for struct_ in self.ast.structs().iter() {
-            self.set_struct_fields(self.ast_meta.struct_ids[&struct_.1], &struct_.fields)?
+            self.set_struct_fields(self.ast_meta.structs[&struct_.1], &struct_.fields)?
         }
 
         for ast_enum in self.ast.enums().iter() {
-            let enum_ = self.ast_meta.enum_ids[&ast_enum.1];
+            let enum_ = self.ast_meta.enums[&ast_enum.1];
             for (ast_variant, variant) in ast_enum.variants.iter().zip(enum_.get_variants()) {
                 self.set_struct_fields(variant.struct_, &ast_variant.fields)?;
             }
@@ -247,7 +247,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 .ctxt
                 .traits
                 .register_trait(&ast_trait.name, trait_gen_params.clone(), assoc_tys);
-            self.ast_meta.trait_ids.insert(ast_trait.1, trait_);
+            self.ast_meta.traits.insert(ast_trait.1, trait_);
         }
 
         self.populate_language_item_traits()?;
@@ -295,7 +295,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     fn register_impls(&mut self) -> Result<(), DriverError<'arena>> {
         for &ast_impl in self.ast.impls().iter() {
             let impl_ = self.register_impl(ast_impl)?;
-            self.ast_meta.impl_ids.insert(ast_impl.1, impl_);
+            self.ast_meta.impls.insert(ast_impl.1, impl_);
         }
 
         Ok(())
@@ -385,7 +385,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     fn register_free_fns(&mut self) -> Result<(), DriverError<'arena>> {
         for &function in self.ast.free_fns().iter() {
             let fn_ = self.register_function(function, None, None, Vec::new(), Vec::new())?;
-            self.ast_meta.fn_ids.insert(function.1, fn_);
+            self.ast_meta.fns.insert(function.1, fn_);
         }
 
         Ok(())
@@ -491,7 +491,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
     fn register_trait_methods(&mut self) -> Result<(), DriverError<'arena>> {
         for ast_trait in self.ast.traits().iter() {
-            let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
+            let trait_ = self.ast_meta.traits[&ast_trait.1];
             for mthd in ast_trait.mthds.iter() {
                 self.register_trait_mthd(trait_, mthd)?;
             }
@@ -572,7 +572,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
     fn register_impl_methods(&mut self) -> Result<(), DriverError<'arena>> {
         for ast_impl in self.ast.impls().iter() {
-            let impl_ = self.ast_meta.impl_ids[&ast_impl.1];
+            let impl_ = self.ast_meta.impls[&ast_impl.1];
             let ty = impl_.ty;
             let gen_params = impl_.gen_params.clone();
             let trait_inst = impl_.trait_inst;
@@ -582,7 +582,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 let fn_ =
                     self.register_function(mthd, Some(ty), trait_inst, gen_params.clone(), impl_constraints.clone())?;
                 self.ctxt.impls.register_mthd(impl_, fn_);
-                self.ast_meta.fn_ids.insert(mthd.1, fn_);
+                self.ast_meta.fns.insert(mthd.1, fn_);
             }
         }
 
@@ -594,7 +594,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
 
         for &ast_fn in self.ast.free_fns().iter() {
             let Some(body) = ast_fn.body else { continue };
-            let target_fn = self.ast_meta.fn_ids[&ast_fn.1];
+            let target_fn = self.ast_meta.fns[&ast_fn.1];
             let hlr_fn =
                 ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr).map_err(DriverError::AstLowering)?;
             hlr_fns.push(hlr_fn);
@@ -603,7 +603,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         for ast_impl in self.ast.impls().iter() {
             for &ast_mthd in ast_impl.mthds.iter() {
                 let Some(body) = ast_mthd.body else { continue };
-                let target_fn = self.ast_meta.fn_ids[&ast_mthd.1];
+                let target_fn = self.ast_meta.fns[&ast_mthd.1];
                 let hlr_fn = ast_lowering::ast_to_hlr(&self.ctxt, target_fn, body, self.hlr)
                     .map_err(DriverError::AstLowering)?;
                 hlr_fns.push(hlr_fn);
@@ -611,7 +611,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         }
 
         for ast_trait in self.ast.traits().iter() {
-            let trait_ = self.ast_meta.trait_ids[&ast_trait.1];
+            let trait_ = self.ast_meta.traits[&ast_trait.1];
             for mthd in ast_trait.mthds.iter() {
                 let Some(body) = mthd.body else { continue };
                 let trait_mthd = self.ctxt.traits.resolve_trait_method(trait_, &mthd.name).unwrap();
