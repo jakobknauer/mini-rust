@@ -67,7 +67,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             param_var_ids.push(var_id);
 
             match &param.kind {
-                fns::FnParamKind::Regular(name) => {
+                fns::FnParamKind::Regular(name, ..) => {
                     self.scopes
                         .back_mut()
                         .unwrap()

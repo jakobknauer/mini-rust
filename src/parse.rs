@@ -145,24 +145,23 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_fn_param(&mut self, allow_receiver: bool) -> Result<Param<'ast>, ParserErr> {
-        if self.tokens.current() == Some(&Token::Keyword(Keyword::Self_)) {
-            self.tokens.advance();
+        if self.tokens.advance_if_keyword(Keyword::Self_) {
             if !allow_receiver {
                 return Err(ParserErr::UnexpectedReceiverArg);
             }
             Ok(Param::Receiver)
-        } else if self.tokens.current() == Some(&Token::Ampersand) {
-            self.tokens.advance();
+        } else if self.tokens.advance_if(Token::Ampersand) {
             self.tokens.expect_token(Token::Keyword(Keyword::Self_))?;
             if !allow_receiver {
                 return Err(ParserErr::UnexpectedReceiverArg);
             }
             Ok(Param::ReceiverByRef)
         } else {
+            let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
             let name = self.tokens.expect_identifier()?;
             self.tokens.expect_token(Token::Colon)?;
             let ty = self.parse_ty_annot()?;
-            Ok(Param::Regular { name, ty })
+            Ok(Param::Regular { name, ty, mutable })
         }
     }
 

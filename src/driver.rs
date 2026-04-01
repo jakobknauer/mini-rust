@@ -466,17 +466,19 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         allow_receiver: bool,
     ) -> Result<fns::FnParam<'arena>, DriverError<'arena>> {
         match param {
-            ast::Param::Regular { name, ty } => Ok(fns::FnParam {
+            &ast::Param::Regular { ref name, ty, mutable } => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Regular(name.clone()),
                 ty: self
                     .try_resolve_ast_ty_annot(ty, res_ctxt, false)
                     .ok_or(DriverError::ContextBuild("Failed to resolve parameter type"))?,
+                mutable,
             }),
             ast::Param::Receiver if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::Self_,
                 ty: res_ctxt
                     .self_ty
                     .ok_or(DriverError::ContextBuild("Self type not available"))?,
+                mutable: false,
             }),
             ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::SelfByRef,
@@ -484,6 +486,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                     .self_ty
                     .map(|self_ty| self.ctxt.tys.ref_(self_ty))
                     .ok_or(DriverError::ContextBuild("Self type not available"))?,
+                mutable: false,
             }),
             _ => Err(DriverError::ContextBuild("Unexpected receiver parameter")),
         }

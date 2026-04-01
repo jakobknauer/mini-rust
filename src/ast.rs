@@ -167,7 +167,11 @@ pub struct FnDef<'ast> {
 
 #[derive(Debug)]
 pub enum Param<'ast> {
-    Regular { name: String, ty: TyAnnot<'ast> },
+    Regular {
+        name: String,
+        ty: TyAnnot<'ast>,
+        mutable: bool,
+    },
     Receiver,
     ReceiverByRef,
 }

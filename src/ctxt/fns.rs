@@ -68,6 +68,7 @@ impl<'fns> FnDecl<'fns> {
 pub struct FnParam<'fns> {
     pub kind: FnParamKind,
     pub ty: Ty<'fns>,
+    pub mutable: bool,
 }
 
 #[derive(PartialEq, Eq)]

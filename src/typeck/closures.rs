@@ -104,11 +104,13 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             let captures_param = fns::FnParam {
                 kind: fns::FnParamKind::Regular("__captures".to_string()),
                 ty: captures_ty,
+                mutable: false,
             };
             let params: Vec<fns::FnParam> = std::iter::once(captures_param)
                 .chain(param_tys.iter().map(|&ty| fns::FnParam {
                     kind: fns::FnParamKind::Regular("__param".to_string()),
                     ty,
+                    mutable: false,
                 }))
                 .collect();
 

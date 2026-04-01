@@ -114,8 +114,11 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     }
 
     fn check_body(&mut self) -> TypeckResult<'ctxt, Option<(ty::Opaque<'ctxt>, ty::Ty<'ctxt>)>> {
-        for (param, param_var_id) in self.fn_.fn_.params.iter().zip(&self.fn_.param_var_ids) {
-            self.typing.var_types.insert(*param_var_id, param.ty);
+        for (param, &param_var_id) in self.fn_.fn_.params.iter().zip(&self.fn_.param_var_ids) {
+            self.typing.var_types.insert(param_var_id, param.ty);
+            if param.mutable {
+                self.mutable_vars.insert(param_var_id);
+            }
         }
 
         let return_ty = self.fn_.fn_.return_ty;
