@@ -31,6 +31,7 @@ impl<'arena> Driver<'_, 'arena> {
             &Ref(ty_annot) => self
                 .try_resolve_ast_ty_annot(ty_annot, res_ctxt, false)
                 .map(|inner| self.ctxt.tys.ref_(inner)),
+            RefMut(..) => todo!(),
             &Ptr(ty_annot) => self
                 .try_resolve_ast_ty_annot(ty_annot, res_ctxt, false)
                 .map(|inner| self.ctxt.tys.ptr(inner)),

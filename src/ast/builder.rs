@@ -199,6 +199,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.ty_annot(TyAnnotKind::Ref(ty_annot))
     }
 
+    pub fn ref_mut_annot(&self, ty_annot: TyAnnot<'ast>) -> TyAnnot<'ast> {
+        self.ast.ty_annot(TyAnnotKind::RefMut(ty_annot))
+    }
+
     pub fn ptr_annot(&self, ty_annot: TyAnnot<'ast>) -> TyAnnot<'ast> {
         self.ast.ty_annot(TyAnnotKind::Ptr(ty_annot))
     }

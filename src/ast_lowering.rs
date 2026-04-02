@@ -223,6 +223,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 hlr::TyAnnotDef::Tuple(fields)
             }
             &ast::TyAnnotKind::Ref(ty_annot) => hlr::TyAnnotDef::Ref(self.lower_ty_annot(ty_annot)?),
+            &ast::TyAnnotKind::RefMut(..) => todo!(),
             &ast::TyAnnotKind::Ptr(ty_annot) => hlr::TyAnnotDef::Ptr(self.lower_ty_annot(ty_annot)?),
             &ast::TyAnnotKind::Fn { param_tys, return_ty } => {
                 let param_tys = self.lower_ty_annots(param_tys)?;

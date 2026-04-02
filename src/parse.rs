@@ -1071,15 +1071,25 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Token::Ampersand => {
                 self.tokens.advance();
+                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
                 let inner_ty = self.parse_ty_annot()?;
-                let annot = self.builder.ref_annot(inner_ty);
+                let annot = if mutable {
+                    self.builder.ref_mut_annot(inner_ty)
+                } else {
+                    self.builder.ref_annot(inner_ty)
+                };
                 Ok(annot)
             }
             Token::AmpersandAmpersand => {
                 // Two levels of reference
                 self.tokens.advance();
+                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
                 let inner_ty = self.parse_ty_annot()?;
-                let inner = self.builder.ref_annot(inner_ty);
+                let inner = if mutable {
+                    self.builder.ref_mut_annot(inner_ty)
+                } else {
+                    self.builder.ref_annot(inner_ty)
+                };
                 let annot = self.builder.ref_annot(inner);
                 Ok(annot)
             }
