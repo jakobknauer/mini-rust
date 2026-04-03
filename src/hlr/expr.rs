@@ -59,6 +59,7 @@ pub enum ExprDef<'hlr> {
 
     Deref(Expr<'hlr>),
     AddrOf(Expr<'hlr>),
+    AddrOfMut(Expr<'hlr>),
 
     As {
         expr: Expr<'hlr>,

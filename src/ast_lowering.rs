@@ -205,7 +205,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             &Match { scrutinee, ref arms } => self.lower_match_expr(scrutinee, arms),
             &Deref { base } => self.lower_deref_expr(base),
             &AddrOf { base } => self.lower_addr_of_expr(base),
-            &AddrOfMut { base } => todo!("{:?}", base),
+            &AddrOfMut { base } => self.lower_addr_of_mut_expr(base),
             &As { expr, target_ty } => self.lower_as_expr(expr, target_ty),
             Self_ => self.lower_self_expr(),
             &Closure {
@@ -787,6 +787,12 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_addr_of_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'ctxt>> {
         let base = self.lower_expr(base)?;
         let expr = hlr::ExprDef::AddrOf(base);
+        Ok(self.hlr.expr(expr))
+    }
+
+    fn lower_addr_of_mut_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'ctxt>> {
+        let base = self.lower_expr(base)?;
+        let expr = hlr::ExprDef::AddrOfMut(base);
         Ok(self.hlr.expr(expr))
     }
 

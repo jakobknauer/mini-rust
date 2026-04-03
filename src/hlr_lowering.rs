@@ -128,6 +128,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             Assign { target, value } => self.lower_assign(*target, *value),
             Deref(inner) => self.lower_deref(expr_id, *inner),
             AddrOf(inner) => self.lower_addr_of(*inner),
+            AddrOfMut(inner) => self.lower_addr_of_mut(*inner),
             As { expr: inner, .. } => self.lower_as(expr_id, *inner),
             Closure { params, body, .. } => self.lower_closure(expr_id, params, *body),
             If { cond, then, else_ } => self.lower_if(expr_id, *cond, *then, *else_),
@@ -504,6 +505,11 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn lower_addr_of(&mut self, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let place = self.lower_to_place(inner);
         self.builder.insert_addr_of_val(place).into()
+    }
+
+    fn lower_addr_of_mut(&mut self, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
+        let place = self.lower_to_place(inner);
+        self.builder.insert_addr_of_mut_val(place).into()
     }
 
     fn lower_as(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {

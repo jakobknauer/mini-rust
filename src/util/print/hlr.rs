@@ -165,6 +165,10 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 write!(self.writer, "&")?;
                 self.print_expr(*inner)
             }
+            AddrOfMut(inner) => {
+                write!(self.writer, "&mut ")?;
+                self.print_expr(*inner)
+            }
             As { expr, ty } => {
                 self.print_expr(*expr)?;
                 write!(self.writer, " as ")?;

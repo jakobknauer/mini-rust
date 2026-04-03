@@ -175,6 +175,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             hlr::ExprDef::Assign { target, value } => self.check_assignment(*target, *value),
             hlr::ExprDef::Deref(inner) => self.check_deref(expr.1, *inner),
             hlr::ExprDef::AddrOf(expr) => self.check_addr_of(*expr),
+            hlr::ExprDef::AddrOfMut(expr) => self.check_addr_of_mut(*expr),
             hlr::ExprDef::As { expr, ty } => self.check_as(*expr, ty),
             hlr::ExprDef::Closure {
                 params,
@@ -649,6 +650,11 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_addr_of(&mut self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_ty = self.check_expr(expr, None)?;
         Ok(self.ctxt.tys.ref_(expr_ty))
+    }
+
+    fn check_addr_of_mut(&mut self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+        let expr_ty = self.check_expr(expr, None)?;
+        Ok(self.ctxt.tys.ref_mut(expr_ty))
     }
 
     fn check_as(
