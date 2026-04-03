@@ -406,6 +406,9 @@ pub enum ExprKind<'ast> {
     AddrOf {
         base: Expr<'ast>,
     },
+    AddrOfMut {
+        base: Expr<'ast>,
+    },
     As {
         expr: Expr<'ast>,
         target_ty: TyAnnot<'ast>,

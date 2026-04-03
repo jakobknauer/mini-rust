@@ -116,6 +116,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.expr(ExprKind::AddrOf { base })
     }
 
+    pub fn addr_of_mut(&self, base: Expr<'ast>) -> Expr<'ast> {
+        self.ast.expr(ExprKind::AddrOfMut { base })
+    }
+
     pub fn as_(&self, expr: Expr<'ast>, target_ty: TyAnnot<'ast>) -> Expr<'ast> {
         self.ast.expr(ExprKind::As { expr, target_ty })
     }

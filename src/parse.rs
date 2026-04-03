@@ -668,13 +668,23 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Some(Token::Ampersand) => {
                 self.tokens.advance();
+                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
                 let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-                Ok(self.builder.addr_of(base))
+                if mutable {
+                    Ok(self.builder.addr_of_mut(base))
+                } else {
+                    Ok(self.builder.addr_of(base))
+                }
             }
             Some(Token::AmpersandAmpersand) => {
                 self.tokens.advance();
+                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
                 let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-                let inner = self.builder.addr_of(base);
+                let inner = if mutable {
+                    self.builder.addr_of_mut(base)
+                } else {
+                    self.builder.addr_of(base)
+                };
                 Ok(self.builder.addr_of(inner))
             }
             Some(Token::Bang) => {
