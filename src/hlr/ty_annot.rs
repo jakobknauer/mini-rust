@@ -15,6 +15,7 @@ pub enum TyAnnotDef<'hlr> {
         name: String,
     },
     Ref(TyAnnot<'hlr>),
+    RefMut(TyAnnot<'hlr>),
     Ptr(TyAnnot<'hlr>),
     Fn {
         params: TyAnnotSlice<'hlr>,

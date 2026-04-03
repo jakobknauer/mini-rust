@@ -41,6 +41,7 @@ pub enum TyDef<'ty> {
         var_args: bool,
     },
     Ref(Ty<'ty>),
+    RefMut(Ty<'ty>),
     Ptr(Ty<'ty>),
     GenVar(GenVar<'ty>),
     TraitSelf(traits::Trait<'ty>),
@@ -359,6 +360,7 @@ impl std::fmt::Display for TyDef<'_> {
                 write!(f, ") -> {}", return_ty)
             }
             &Ref(ty) => write!(f, "&{}", ty),
+            &RefMut(ty) => write!(f, "&mut {}", ty),
             &Ptr(ty) => write!(f, "*{}", ty),
             GenVar(gv) => write!(f, "{}", gv.name()),
             &Struct { struct_, gen_args } => {

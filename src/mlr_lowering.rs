@@ -133,7 +133,9 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             Struct { .. } => self.define_struct(ty),
             Enum { .. } => self.define_enum(ty),
             Tuple(..) => self.define_tuple_ty(ty),
-            Fn { .. } | Ref(..) | Ptr(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Fn { .. } | Ref(..) | RefMut(..) | Ptr(..) => {
+                self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum()
+            }
             Closure { captures_ty, .. } => self.get_or_define_ty(captures_ty).unwrap(),
             GenVar(gen_var) => unreachable!(
                 "generic type variable '{}' should be substituted before this point",

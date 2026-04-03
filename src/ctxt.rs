@@ -86,6 +86,10 @@ impl<'ctxt> Ctxt<'ctxt> {
                 let ty = self.normalize_ty(ty);
                 self.tys.ref_(ty)
             }
+            &RefMut(ty) => {
+                let ty = self.normalize_ty(ty);
+                self.tys.ref_mut(ty)
+            }
             &Ptr(ty) => {
                 let ty = self.normalize_ty(ty);
                 self.tys.ptr(ty)

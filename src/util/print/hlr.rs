@@ -443,6 +443,10 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 write!(self.writer, "&")?;
                 self.print_ty_annot(inner)
             }
+            RefMut(inner) => {
+                write!(self.writer, "&mut ")?;
+                self.print_ty_annot(inner)
+            }
             Ptr(inner) => {
                 write!(self.writer, "*")?;
                 self.print_ty_annot(inner)

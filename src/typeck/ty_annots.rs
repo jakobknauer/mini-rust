@@ -53,6 +53,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             hlr::TyAnnotDef::GenVar(gen_var) => self.resolve_gen_var_ty_annot(*gen_var),
             hlr::TyAnnotDef::AssocTy { base, trait_, name } => self.resolve_assoc_ty_annot(base, *trait_, name),
             hlr::TyAnnotDef::Ref(inner) => self.resolve_ref_ty_annot(inner),
+            hlr::TyAnnotDef::RefMut(inner) => self.resolve_ref_mut_ty_annot(inner),
             hlr::TyAnnotDef::Ptr(inner) => self.resolve_ptr_ty_annot(inner),
             hlr::TyAnnotDef::Fn { params, ret } => self.resolve_fn_ty_annot(params, *ret),
             hlr::TyAnnotDef::Tuple(elems) => self.resolve_tuple_ty_annot(elems),
@@ -170,6 +171,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     fn resolve_ref_ty_annot(&mut self, inner: hlr::TyAnnot<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let inner_ty = self.resolve_ty_annot(inner)?;
         Ok(self.ctxt.tys.ref_(inner_ty))
+    }
+
+    fn resolve_ref_mut_ty_annot(&mut self, inner: hlr::TyAnnot<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+        let inner_ty = self.resolve_ty_annot(inner)?;
+        Ok(self.ctxt.tys.ref_mut(inner_ty))
     }
 
     fn resolve_ptr_ty_annot(&mut self, inner: hlr::TyAnnot<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {

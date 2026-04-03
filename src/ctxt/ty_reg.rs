@@ -212,6 +212,10 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(ref_ty)
     }
 
+    pub fn ref_mut(&self, inner_ty: Ty<'ty>) -> Ty<'ty> {
+        self.register_ty(TyDef::RefMut(inner_ty))
+    }
+
     pub fn ptr(&self, inner_ty: Ty<'ty>) -> Ty<'ty> {
         let ptr_ty = TyDef::Ptr(inner_ty);
         self.register_ty(ptr_ty)
@@ -325,6 +329,10 @@ impl<'ty> TyReg<'ty> {
             Ref(inner) => {
                 let inner = self.resolve_opaque_in_ty(inner);
                 self.ref_(inner)
+            }
+            RefMut(inner) => {
+                let inner = self.resolve_opaque_in_ty(inner);
+                self.ref_mut(inner)
             }
             Ptr(inner) => {
                 let inner = self.resolve_opaque_in_ty(inner);
@@ -485,6 +493,10 @@ impl<'ty> TyReg<'ty> {
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
                 self.ref_(new_inner_ty)
+            }
+            RefMut(inner_ty) => {
+                let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
+                self.ref_mut(new_inner_ty)
             }
             Ptr(inner_ty) => {
                 let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);

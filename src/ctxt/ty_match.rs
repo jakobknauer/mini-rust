@@ -81,7 +81,7 @@ fn try_find_instantiation_internal<'ty>(
                 && var_args1 == var_args2
         }
 
-        (&Ref(inner1), &Ref(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => {
+        (&Ref(inner1), &Ref(inner2)) | (&RefMut(inner1), &RefMut(inner2)) | (&Ptr(inner1), &Ptr(inner2)) => {
             try_find_instantiation_internal(inner1, inner2, instantiation)
         }
 

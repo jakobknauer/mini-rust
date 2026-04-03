@@ -25,7 +25,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             Primitive(_) | GenVar(_) | TraitSelf(_) => false,
             &Opaque { gen_args, .. } => self.slice_contains_inf_var(gen_args),
             &Tuple(items) => self.slice_contains_inf_var(items),
-            &Ref(inner) | &Ptr(inner) => self.contains_inf_var(inner),
+            &Ref(inner) | &RefMut(inner) | &Ptr(inner) => self.contains_inf_var(inner),
             &Struct { gen_args, .. } => self.slice_contains_inf_var(gen_args),
             &Enum { gen_args, .. } => self.slice_contains_inf_var(gen_args),
             &Fn {

@@ -74,6 +74,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.ctxt.tys.ref_(inner)
             }
 
+            RefMut(inner) => {
+                let inner = self.normalize(inner);
+                self.ctxt.tys.ref_mut(inner)
+            }
+
             Ptr(inner) => {
                 let inner = self.normalize(inner);
                 self.ctxt.tys.ptr(inner)
