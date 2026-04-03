@@ -163,6 +163,11 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
         self.mlr.insert_val(mlr::ValDef::AddrOf(place), ref_ty)
     }
 
+    pub fn insert_addr_of_mut_val(&mut self, place: mlr::Place<'ctxt>) -> mlr::Val<'ctxt> {
+        let ref_ty = self.ctxt.tys.ref_mut(place.1);
+        self.mlr.insert_val(mlr::ValDef::AddrOf(place), ref_ty)
+    }
+
     pub fn insert_as_val(&self, op: mlr::Op<'ctxt>, target_ty: ty::Ty<'ctxt>) -> mlr::Val<'ctxt> {
         self.mlr.insert_val(mlr::ValDef::As { op, target_ty }, target_ty)
     }

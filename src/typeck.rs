@@ -30,7 +30,13 @@ pub struct HlrTyping<'ty> {
     pub expr_extra: HashMap<hlr::ExprId, ExprExtra<'ty>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
+enum MatchBinding {
+    Direct,
+    ByRef,
+    ByRefMut,
+}
+
 pub enum DerefStep<'ty> {
     Builtin,
     Trait(MthdResolution<'ty>),
@@ -716,12 +722,19 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let scrutinee_ty = self.check_expr(scrutinee, None)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
 
-        let (enum_ty, by_ref) = match scrutinee_ty.0 {
-            ty::TyDef::Enum { .. } => (scrutinee_ty, false),
+        let (enum_ty, binding) = match scrutinee_ty.0 {
+            ty::TyDef::Enum { .. } => (scrutinee_ty, MatchBinding::Direct),
             &ty::TyDef::Ref(inner) => {
                 let inner = self.normalize(inner);
                 match inner.0 {
-                    ty::TyDef::Enum { .. } => (inner, true),
+                    ty::TyDef::Enum { .. } => (inner, MatchBinding::ByRef),
+                    _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+                }
+            }
+            &ty::TyDef::RefMut(inner) => {
+                let inner = self.normalize(inner);
+                match inner.0 {
+                    ty::TyDef::Enum { .. } => (inner, MatchBinding::ByRefMut),
                     _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
                 }
             }
@@ -760,7 +773,11 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     .tys
                     .get_struct_field_ty(variant_ty, field.field_index)
                     .unwrap();
-                let binding_ty = if by_ref { self.ctxt.tys.ref_(field_ty) } else { field_ty };
+                let binding_ty = match binding {
+                    MatchBinding::Direct => field_ty,
+                    MatchBinding::ByRef => self.ctxt.tys.ref_(field_ty),
+                    MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
+                };
                 self.typing.var_types.insert(field.binding, binding_ty);
             }
 

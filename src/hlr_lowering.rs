@@ -15,6 +15,13 @@ use crate::{
     typeck::{DerefStep, ExprExtra, HlrTyping, MthdResolution},
 };
 
+#[derive(Clone, Copy)]
+enum MatchBinding {
+    Direct,
+    ByRef,
+    ByRefMut,
+}
+
 pub fn hlr_to_mlr<'a, 'ctxt>(
     ctxt: &'a mut ctxt::Ctxt<'ctxt>,
     mlr: &'a mlr::Mlr<'ctxt>,
@@ -555,12 +562,17 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
         let scrutinee_place = self.lower_to_place(scrutinee);
 
-        let (enum_ty, by_ref, scrutinee_place) = match scrutinee_ty.0 {
-            ty::TyDef::Enum { .. } => (scrutinee_ty, false, scrutinee_place),
+        let (enum_ty, binding, scrutinee_place) = match scrutinee_ty.0 {
+            ty::TyDef::Enum { .. } => (scrutinee_ty, MatchBinding::Direct, scrutinee_place),
             &ty::TyDef::Ref(inner) => {
                 let copy_op = self.builder.insert_copy_op(scrutinee_place);
                 let deref_place = self.builder.insert_deref_place(copy_op);
-                (inner, true, deref_place)
+                (inner, MatchBinding::ByRef, deref_place)
+            }
+            &ty::TyDef::RefMut(inner) => {
+                let copy_op = self.builder.insert_copy_op(scrutinee_place);
+                let deref_place = self.builder.insert_deref_place(copy_op);
+                (inner, MatchBinding::ByRefMut, deref_place)
             }
             _ => panic!("match scrutinee must be an enum or ref-to-enum"),
         };
@@ -573,7 +585,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
         self.lower_match_arms(
             enum_ty,
-            by_ref,
+            binding,
             arms,
             discriminant_op,
             i32_ty,
@@ -588,7 +600,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn lower_match_arms(
         &mut self,
         enum_ty: ty::Ty<'ctxt>,
-        by_ref: bool,
+        binding: MatchBinding,
         arms: &'ctxt [hlr::MatchArm<'ctxt>],
         discriminant_op: mlr::Op<'ctxt>,
         i32_ty: ty::Ty<'ctxt>,
@@ -598,7 +610,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         match arms {
             [] => panic!("match must have at least one arm"),
             [arm] => {
-                let arm_val = self.lower_match_arm(enum_ty, by_ref, arm, scrutinee_place);
+                let arm_val = self.lower_match_arm(enum_ty, binding, arm, scrutinee_place);
                 self.builder.insert_assign_stmt(result_place, arm_val);
             }
             [first_arm, rest_arms @ ..] => {
@@ -623,14 +635,14 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let cond_op = self.builder.insert_copy_op(cond_place);
 
                 self.builder.start_block();
-                let first_arm_val = self.lower_match_arm(enum_ty, by_ref, first_arm, scrutinee_place);
+                let first_arm_val = self.lower_match_arm(enum_ty, binding, first_arm, scrutinee_place);
                 self.builder.insert_assign_stmt(result_place, first_arm_val);
                 let then_block = self.builder.end_block();
 
                 self.builder.start_block();
                 self.lower_match_arms(
                     enum_ty,
-                    by_ref,
+                    binding,
                     rest_arms,
                     discriminant_op,
                     i32_ty,
@@ -647,7 +659,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn lower_match_arm(
         &mut self,
         enum_ty: ty::Ty<'ctxt>,
-        by_ref: bool,
+        binding: MatchBinding,
         arm: &'ctxt hlr::MatchArm<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Val<'ctxt> {
@@ -675,12 +687,19 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             let binding_ty = self.typing.var_types[&field.binding];
             let binding_loc = self.builder.alloc_loc(binding_ty);
 
-            if by_ref {
-                let addr_val = self.builder.insert_addr_of_val(field_place);
-                self.builder.insert_assign_to_loc_stmt(binding_loc, addr_val);
-            } else {
-                let field_val = self.builder.copy_val(field_place);
-                self.builder.insert_assign_to_loc_stmt(binding_loc, field_val);
+            match binding {
+                MatchBinding::Direct => {
+                    let field_val = self.builder.copy_val(field_place);
+                    self.builder.insert_assign_to_loc_stmt(binding_loc, field_val);
+                }
+                MatchBinding::ByRef => {
+                    let addr_val = self.builder.insert_addr_of_val(field_place);
+                    self.builder.insert_assign_to_loc_stmt(binding_loc, addr_val);
+                }
+                MatchBinding::ByRefMut => {
+                    let addr_val = self.builder.insert_addr_of_mut_val(field_place);
+                    self.builder.insert_assign_to_loc_stmt(binding_loc, addr_val);
+                }
             }
 
             self.var_locs.insert(field.binding, binding_loc);
