@@ -4,6 +4,18 @@ fn main() -> i32 {
     x
 }
 
+fn mut_ref_to_shared_ref<T>(r: &mut T) -> &T {
+    r as &_
+}
+
+fn mut_ref_to_ptr<T>(r: &mut T) -> *T {
+    r as *_
+}
+
+fn deref_mut<T>(r: &mut T) -> T {
+    *r
+}
+
 fn printf(format: *c_char, ...) -> i32;
 fn scanf(format: *c_char, ...) -> i32;
 

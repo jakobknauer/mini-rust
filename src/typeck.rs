@@ -600,7 +600,9 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
     fn try_deref_step(&mut self, ty: ty::Ty<'ctxt>) -> Option<(ty::Ty<'ctxt>, DerefStep<'ctxt>)> {
         match ty.0 {
-            &ty::TyDef::Ref(inner) | &ty::TyDef::Ptr(inner) => Some((self.normalize(inner), DerefStep::Builtin)),
+            &ty::TyDef::Ref(inner) | &ty::TyDef::RefMut(inner) | &ty::TyDef::Ptr(inner) => {
+                Some((self.normalize(inner), DerefStep::Builtin))
+            }
             _ => {
                 let deref_trait = self.ctxt.language_items.deref_trait?;
                 let gen_args = self.ctxt.tys.ty_slice(&[]);
@@ -656,7 +658,9 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
         match (expr_ty.0, target_ty.0) {
             (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => Ok(target_ty),
-            (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty)) => {
+            (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty))
+            | (&ty::TyDef::RefMut(op_base_ty), &ty::TyDef::Ptr(target_base_ty))
+            | (&ty::TyDef::RefMut(op_base_ty), &ty::TyDef::Ref(target_base_ty)) => {
                 if self.unify(op_base_ty, target_base_ty) {
                     Ok(target_ty)
                 } else {
