@@ -9,7 +9,7 @@ impl<T> Box<T> {
         Box { ptr }
     }
 
-    fn drop(&self) {
+    fn drop(&mut self) {
         delete(self.ptr);
     }
 }

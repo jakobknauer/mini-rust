@@ -75,8 +75,10 @@ fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>) -> String {
             mthd, expected, actual
         ),
         ReceiverMismatch { mthd, expected, actual } => format!(
-            "receiver type mismatch for method '{}': expected '{}', got '{}'",
-            mthd, expected, actual
+            "receiver mismatch for method '{}': expected '{}', got '{}'",
+            mthd,
+            expected.as_ref().map_or("none", |k| k.as_str()),
+            actual.as_ref().map_or("none", |k| k.as_str()),
         ),
         ImplGenParamCountMismatch { expected, actual } => format!(
             "generic argument count mismatch for implementation: expected {}, got {}",

@@ -16,6 +16,13 @@ use crate::{
 };
 
 #[derive(Clone, Copy)]
+enum ReceiverMode {
+    Direct,
+    ByRef,
+    ByRefMut,
+}
+
+#[derive(Clone, Copy)]
 enum MatchBinding {
     Direct,
     ByRef,
@@ -219,17 +226,18 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                     self.builder.insert_binary_prim_val(*prim, lhs, rhs, result_ty)
                 }
                 ExprExtra::BinaryOpMthd(resolution) => {
-                    let (callee_op, by_ref) = self.mthd_resolution_to_op(resolution);
-                    let (left_op, right_op) = if by_ref {
-                        let left_place = self.lower_to_place(left);
-                        let left_addr = self.builder.insert_addr_of_val(left_place);
-                        let left_op = LoweredExpr::from(left_addr).into_op(&mut self.builder);
-                        let right_place = self.lower_to_place(right);
-                        let right_addr = self.builder.insert_addr_of_val(right_place);
-                        let right_op = LoweredExpr::from(right_addr).into_op(&mut self.builder);
-                        (left_op, right_op)
-                    } else {
-                        (self.lower_to_op(left), self.lower_to_op(right))
+                    let (callee_op, receiver_mode) = self.mthd_resolution_to_op(resolution);
+                    let (left_op, right_op) = match receiver_mode {
+                        ReceiverMode::ByRef | ReceiverMode::ByRefMut => {
+                            let left_place = self.lower_to_place(left);
+                            let left_addr = self.builder.insert_addr_of_val(left_place);
+                            let left_op = LoweredExpr::from(left_addr).into_op(&mut self.builder);
+                            let right_place = self.lower_to_place(right);
+                            let right_addr = self.builder.insert_addr_of_val(right_place);
+                            let right_op = LoweredExpr::from(right_addr).into_op(&mut self.builder);
+                            (left_op, right_op)
+                        }
+                        ReceiverMode::Direct => (self.lower_to_op(left), self.lower_to_op(right)),
                     };
                     self.builder.insert_call_val(callee_op, vec![left_op, right_op])
                 }
@@ -316,16 +324,22 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         let ExprExtra::MthdCall { resolution, steps } = &self.typing.expr_extra[&expr_id] else {
             panic!("expected MthdCall extra for MthdCall")
         };
-        let (callee_op, by_ref) = self.mthd_resolution_to_op(resolution);
+        let (callee_op, receiver_mode) = self.mthd_resolution_to_op(resolution);
 
         let derefed_receiver = self.lower_deref_chain_to_place(receiver, steps);
 
-        let receiver_op = if by_ref {
-            let addr_val = self.builder.insert_addr_of_val(derefed_receiver);
-            let addr_place = self.builder.store_val(addr_val);
-            self.builder.insert_copy_op(addr_place)
-        } else {
-            self.builder.insert_copy_op(derefed_receiver)
+        let receiver_op = match receiver_mode {
+            ReceiverMode::Direct => self.builder.insert_copy_op(derefed_receiver),
+            ReceiverMode::ByRef => {
+                let addr_val = self.builder.insert_addr_of_val(derefed_receiver);
+                let addr_place = self.builder.store_val(addr_val);
+                self.builder.insert_copy_op(addr_place)
+            }
+            ReceiverMode::ByRefMut => {
+                let addr_val = self.builder.insert_addr_of_mut_val(derefed_receiver);
+                let addr_place = self.builder.store_val(addr_val);
+                self.builder.insert_copy_op(addr_place)
+            }
         };
 
         let call_args = std::iter::once(receiver_op)
@@ -821,28 +835,35 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.end_and_push_block();
     }
 
-    fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> (mlr::Op<'ctxt>, bool) {
+    fn mthd_resolution_to_op(&mut self, resolution: &MthdResolution<'ctxt>) -> (mlr::Op<'ctxt>, ReceiverMode) {
+        fn receiver_mode(kind: &fns::FnParamKind) -> ReceiverMode {
+            match kind {
+                fns::FnParamKind::SelfByRef => ReceiverMode::ByRef,
+                fns::FnParamKind::SelfByRefMut => ReceiverMode::ByRefMut,
+                _ => ReceiverMode::Direct,
+            }
+        }
         match resolution {
             MthdResolution::Inherent(fn_inst) => {
-                let by_ref = fn_inst
+                let mode = fn_inst
                     .fn_
                     .params
                     .first()
-                    .map(|p| p.kind == fns::FnParamKind::SelfByRef)
-                    .unwrap_or(false);
+                    .map(|p| receiver_mode(&p.kind))
+                    .unwrap_or(ReceiverMode::Direct);
                 let op = self.builder.insert_fn_inst_op(*fn_inst);
-                (op, by_ref)
+                (op, mode)
             }
             MthdResolution::Trait(inst) => {
-                let by_ref = inst
+                let mode = inst
                     .mthd
                     .fn_
                     .params
                     .first()
-                    .map(|p| p.kind == fns::FnParamKind::SelfByRef)
-                    .unwrap_or(false);
+                    .map(|p| receiver_mode(&p.kind))
+                    .unwrap_or(ReceiverMode::Direct);
                 let op = self.builder.insert_trait_mthd_op(*inst);
-                (op, by_ref)
+                (op, mode)
             }
         }
     }

@@ -39,8 +39,8 @@ pub enum ImplCheckErrorKind<'ctxt> {
     },
     ReceiverMismatch {
         mthd: String,
-        expected: bool,
-        actual: bool,
+        expected: Option<fns::FnParamKind>,
+        actual: Option<fns::FnParamKind>,
     },
     ImplGenParamCountMismatch {
         actual: usize,
@@ -180,11 +180,21 @@ fn check_mthd_decl<'ctxt>(
     let all_gen_params_subst = ty::GenVarSubst::compose(trait_gen_params_subst.clone(), mthd_gen_params_subst);
 
     // Compare receiver
-    if impl_mthd_decl.has_receiver() != trait_mthd_decl.has_receiver() {
+    let receiver_kind = |decl: &fns::FnDecl| -> Option<fns::FnParamKind> {
+        match decl.params.first().map(|p| &p.kind) {
+            Some(fns::FnParamKind::Self_) => Some(fns::FnParamKind::Self_),
+            Some(fns::FnParamKind::SelfByRef) => Some(fns::FnParamKind::SelfByRef),
+            Some(fns::FnParamKind::SelfByRefMut) => Some(fns::FnParamKind::SelfByRefMut),
+            _ => None,
+        }
+    };
+    let expected_receiver = receiver_kind(trait_mthd_decl);
+    let actual_receiver = receiver_kind(impl_mthd_decl);
+    if expected_receiver != actual_receiver {
         return Err(ImplCheckErrorKind::ReceiverMismatch {
             mthd: impl_mthd_decl.name.to_string(),
-            expected: trait_mthd_decl.has_receiver(),
-            actual: impl_mthd_decl.has_receiver(),
+            expected: expected_receiver,
+            actual: actual_receiver,
         });
     }
 

@@ -174,6 +174,7 @@ pub enum Param<'ast> {
     },
     Receiver,
     ReceiverByRef,
+    ReceiverByRefMut,
 }
 
 #[derive(Debug)]

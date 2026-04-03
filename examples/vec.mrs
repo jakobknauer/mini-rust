@@ -23,7 +23,7 @@ impl<T> Vec<T> {
         }
     }
 
-    fn push(&self, val: T) {
+    fn push(&mut self, val: T) {
         if self.len == self.cap {
             self.cap = self.cap * 2;
 
@@ -48,7 +48,7 @@ impl<T> Vec<T> {
         }
     }
 
-    fn pop(&self) -> Option<T> {
+    fn pop(&mut self) -> Option<T> {
         if self.len == 0 {
             Option::None
         } else {
@@ -57,7 +57,7 @@ impl<T> Vec<T> {
         }
     }
 
-    fn drop(&self) {
+    fn drop(&mut self) {
         self.len = 0;
         self.cap = 0;
         delete(self.ptr);
@@ -99,7 +99,7 @@ struct VecIter<T> {
 impl<T> Iterator for VecIter<T> {
     type Item = T;
 
-    fn next(&self) -> Option<T> {
+    fn next(&mut self) -> Option<T> {
         if self.idx >= self.vec.len {
             Option::None
         } else {
@@ -118,7 +118,7 @@ struct RefVecIter<T> {
 impl<T> Iterator for RefVecIter<T> {
     type Item = &T;
 
-    fn next(&self) -> Option<&T> {
+    fn next(&mut self) -> Option<&T> {
         let next = self.vec.get(self.idx);
         self.idx = self.idx + 1;
         next

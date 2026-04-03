@@ -60,7 +60,12 @@ impl<'fns> FnDecl<'fns> {
     pub fn has_receiver(&self) -> bool {
         self.params
             .first()
-            .map(|param| matches!(param.kind, FnParamKind::Self_ | FnParamKind::SelfByRef))
+            .map(|param| {
+                matches!(
+                    param.kind,
+                    FnParamKind::Self_ | FnParamKind::SelfByRef | FnParamKind::SelfByRefMut
+                )
+            })
             .unwrap_or(false)
     }
 }
@@ -76,6 +81,24 @@ pub enum FnParamKind {
     Regular(String),
     Self_,
     SelfByRef,
+    SelfByRefMut,
+}
+
+impl FnParamKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            FnParamKind::Regular(name) => name.as_str(),
+            FnParamKind::Self_ => "self",
+            FnParamKind::SelfByRef => "&self",
+            FnParamKind::SelfByRefMut => "&mut self",
+        }
+    }
+}
+
+impl std::fmt::Display for FnParamKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug)]

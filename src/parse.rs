@@ -151,11 +151,16 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Ok(Param::Receiver)
         } else if self.tokens.advance_if(Token::Ampersand) {
+            let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
             self.tokens.expect_token(Token::Keyword(Keyword::Self_))?;
             if !allow_receiver {
                 return Err(ParserErr::UnexpectedReceiverArg);
             }
-            Ok(Param::ReceiverByRef)
+            if mutable {
+                Ok(Param::ReceiverByRefMut)
+            } else {
+                Ok(Param::ReceiverByRef)
+            }
         } else {
             let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
             let name = self.tokens.expect_identifier()?;

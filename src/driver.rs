@@ -488,6 +488,14 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                     .ok_or(DriverError::ContextBuild("Self type not available"))?,
                 mutable: false,
             }),
+            ast::Param::ReceiverByRefMut if allow_receiver => Ok(fns::FnParam {
+                kind: fns::FnParamKind::SelfByRefMut,
+                ty: res_ctxt
+                    .self_ty
+                    .map(|self_ty| self.ctxt.tys.ref_mut(self_ty))
+                    .ok_or(DriverError::ContextBuild("Self type not available"))?,
+                mutable: false,
+            }),
             _ => Err(DriverError::ContextBuild("Unexpected receiver parameter")),
         }
     }

@@ -1,7 +1,7 @@
 trait Iterator {
     type Item;
 
-    fn next(&self) -> Option<<Self as Iterator>::Item>;
+    fn next(&mut self) -> Option<<Self as Iterator>::Item>;
 }
 
 impl<I> I
@@ -97,7 +97,7 @@ where
 {
     type Item = <I as Iterator>::Item;
 
-    fn next(&self) -> Option<<Self as Iterator>::Item> {
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         loop {
             match self.iter.next() {
                 Option::Some { item } => {
@@ -126,7 +126,7 @@ where
 {
     type Item = B;
 
-    fn next(&self) -> Option<<Self as Iterator>::Item> {
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         self.iter.next().map(self.f)
     }
 }

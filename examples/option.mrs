@@ -21,9 +21,9 @@ impl<T> Option<T> {
         }
     }
 
-    fn update<F>(&self, f: F)
+    fn update<F>(&mut self, f: F)
     where
-        F: Fn(&T)
+        F: Fn(&mut T)
     {
         match self {
             Option::Some { item } => f(item),
@@ -86,7 +86,7 @@ struct OptionIter<T> {
 impl<T> Iterator for OptionIter<T> {
     type Item = T;
 
-    fn next(&self) -> Option<T> {
+    fn next(&mut self) -> Option<T> {
         let item = self.item;
         self.item = Option::None;
         item

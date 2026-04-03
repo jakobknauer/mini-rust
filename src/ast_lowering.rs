@@ -74,7 +74,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                         .bindings
                         .insert(name.to_string(), var_id);
                 }
-                fns::FnParamKind::Self_ | fns::FnParamKind::SelfByRef => {
+                fns::FnParamKind::Self_ | fns::FnParamKind::SelfByRef | fns::FnParamKind::SelfByRefMut => {
                     self.self_var_id = Some(var_id);
                 }
             }
