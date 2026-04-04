@@ -7,12 +7,15 @@ Supported features include:
 - Basic syntax (functions, variables, control flow etc.)
 - Type inference within functions
 - Primitive types, tuples, structs and enums, references and raw pointers, function pointers
+- Traits and impls, including associated types and functions, and default method implementations
 - Generics (functions, structs and enums, traits and impls) with constraints (for functions, methods, and impls)
 - Opaque return types (`impl Trait`/`impl Fn`)
 - Closures capturing local variables
-- Traits and impls, including associated types
 - Pattern matching (for enums and references to enums only)
-- Operator overloading for `+`, `-`, `*`, `/`, `%`, `&`, `|`
+- Operator overloading:
+    - Binary arithmetic/logical/bit operations: `+`, `-`, `*`, `/`, `%`, `&`, `|` via `Add`, `Sub` etc. traits
+    - `==` and `!=` via the `Eq` trait, providing a default impl for `!=`
+    - Unary `*` via the `Deref` trait, also used for deref coercion
 
 As backend LLVM is used via the [inkwell](https://github.com/TheDan64/inkwell) library.
 
@@ -53,6 +56,7 @@ The compilation process takes the following steps:
 - Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here.
 - Typecheck the HLR in [typeck](src/typeck.rs).
 - Lower the HLR to [Mid-Level Representation (MLR)](src/mlr.rs) in [hlr_lowering](src/hlr_lowering.rs).
+- Check mutability in [mutck](src/mutck.rs): verify that only mutable bindings are assigned to, and that `&mut` references are only taken of mutable places.
 - Monomorphization: Using information recorded during the previous pass, recursively determine all instantiations of functions with respective generic arguments.
 - Lower the MLR to LLVM Immediate Representation (IR) in [mlr_lowering](src/mlr_lowering.rs). This is done for all function instantiations, i.e. this is where the actual monomorphization happens.
 - Write the LLVM IR in (textual representation) to disk.
