@@ -181,7 +181,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         use mlr::StmtDef::*;
 
         match *stmt {
-            Alloc { loc } => {
+            Alloc { loc, .. } => {
                 self.build_alloca_for_loc(loc)?;
             }
             Assign { place, value } => {

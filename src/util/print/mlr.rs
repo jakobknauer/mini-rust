@@ -122,9 +122,10 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         use mlr::StmtDef::*;
 
         match *stmt {
-            Alloc { loc } => {
+            Alloc { loc, mutable } => {
                 self.indent()?;
-                writeln!(self.writer, "alloc {}: {};", loc, loc.1)
+                let mut_str = if mutable { "mut " } else { "" };
+                writeln!(self.writer, "alloc {}{}: {};", mut_str, loc, loc.1)
             }
             Assign { place, value } => {
                 self.indent()?;

@@ -6,6 +6,7 @@ mod hlr;
 mod hlr_lowering;
 mod mlr;
 mod mlr_lowering;
+mod mutck;
 mod parse;
 mod typeck;
 mod util;

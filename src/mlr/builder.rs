@@ -52,12 +52,18 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
 
     pub fn alloc_loc(&mut self, ty: ty::Ty<'ctxt>) -> mlr::Loc<'ctxt> {
         let loc = self.mlr.insert_typed_loc(ty);
-        self.insert_alloc_stmt(loc);
+        self.insert_alloc_stmt(loc, false);
+        loc
+    }
+
+    pub fn alloc_mut_loc(&mut self, ty: ty::Ty<'ctxt>) -> mlr::Loc<'ctxt> {
+        let loc = self.mlr.insert_typed_loc(ty);
+        self.insert_alloc_stmt(loc, true);
         loc
     }
 
     pub fn alloc_place(&mut self, ty: ty::Ty<'ctxt>) -> mlr::Place<'ctxt> {
-        let loc = self.alloc_loc(ty);
+        let loc = self.alloc_mut_loc(ty);
         self.insert_loc_place(loc)
     }
 
@@ -197,8 +203,8 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
         self.copy_val(place)
     }
 
-    pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc<'ctxt>) {
-        let stmt = self.mlr.insert_stmt(mlr::StmtDef::Alloc { loc });
+    pub fn insert_alloc_stmt(&mut self, loc: mlr::Loc<'ctxt>, mutable: bool) {
+        let stmt = self.mlr.insert_stmt(mlr::StmtDef::Alloc { loc, mutable });
         self.push_stmt(stmt);
     }
 

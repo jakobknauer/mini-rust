@@ -101,7 +101,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let field_ty = self.builder.ctxt.tys.get_struct_field_ty(captures_ty, i).unwrap();
                 let field_place = self.builder.insert_field_access_place(captures_place, i, field_ty);
                 let use_val = self.builder.copy_val(field_place);
-                let loc = self.builder.alloc_loc(field_ty);
+                let loc = self.builder.alloc_mut_loc(field_ty);
                 self.builder.insert_assign_to_loc_stmt(loc, use_val);
                 self.var_locs.insert(var_id, loc);
             }
@@ -705,7 +705,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 .insert_field_access_place(variant_place, field.field_index, field_ty);
 
             let binding_ty = self.typing.var_types[&field.binding];
-            let binding_loc = self.builder.alloc_loc(binding_ty);
+            let binding_loc = self.builder.alloc_mut_loc(binding_ty);
 
             match binding {
                 MatchBinding::Direct => {
@@ -800,8 +800,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 self.builder.store_val(val);
                 self.builder.end_and_push_block();
             }
-            hlr::StmtDef::Let { var, init, .. } => {
-                self.lower_let_stmt(*var, *init);
+            hlr::StmtDef::Let { var, mutable, init, .. } => {
+                self.lower_let_stmt(*var, *mutable, *init);
             }
             hlr::StmtDef::Break => {
                 self.builder.insert_break_stmt();
@@ -812,10 +812,14 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         }
     }
 
-    fn lower_let_stmt(&mut self, var: hlr::VarId, init: hlr::Expr<'ctxt>) {
+    fn lower_let_stmt(&mut self, var: hlr::VarId, mutable: bool, init: hlr::Expr<'ctxt>) {
         let var_ty = self.typing.var_types[&var];
 
-        let loc = self.builder.alloc_loc(var_ty);
+        let loc = if mutable {
+            self.builder.alloc_mut_loc(var_ty)
+        } else {
+            self.builder.alloc_loc(var_ty)
+        };
 
         self.builder.start_block();
         let val = self.lower_to_val(init);

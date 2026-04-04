@@ -79,7 +79,7 @@ impl std::fmt::Display for Loc<'_> {
 
 #[derive(Debug)]
 pub enum StmtDef<'mlr> {
-    Alloc { loc: Loc<'mlr> },
+    Alloc { loc: Loc<'mlr>, mutable: bool },
     Assign { place: Place<'mlr>, value: Val<'mlr> },
     Return { value: Val<'mlr> },
     Block(&'mlr [Stmt<'mlr>]),

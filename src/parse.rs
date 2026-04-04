@@ -163,10 +163,17 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
         } else {
             let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
-            let name = self.tokens.expect_identifier()?;
-            self.tokens.expect_token(Token::Colon)?;
-            let ty = self.parse_ty_annot()?;
-            Ok(Param::Regular { name, ty, mutable })
+            if mutable && self.tokens.advance_if_keyword(Keyword::Self_) {
+                if !allow_receiver {
+                    return Err(ParserErr::UnexpectedReceiverArg);
+                }
+                Ok(Param::ReceiverMut)
+            } else {
+                let name = self.tokens.expect_identifier()?;
+                self.tokens.expect_token(Token::Colon)?;
+                let ty = self.parse_ty_annot()?;
+                Ok(Param::Regular { name, ty, mutable })
+            }
         }
     }
 

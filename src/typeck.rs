@@ -7,7 +7,7 @@ mod post_check;
 mod ty_annots;
 mod unify;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::{
     ctxt::{
@@ -75,7 +75,6 @@ pub fn typeck<'a, 'ctxt: 'a>(
         closure_counter: 0,
         return_ty_stack: vec![],
         var_uses: vec![],
-        mutable_vars: HashSet::new(),
         created_closure_structs: vec![],
         pending_obligations: vec![],
     };
@@ -93,8 +92,6 @@ struct Typeck<'a, 'ctxt: 'a> {
     closure_counter: usize,
     return_ty_stack: Vec<ty::Ty<'ctxt>>,
     var_uses: Vec<hlr::VarId>,
-
-    mutable_vars: HashSet<hlr::VarId>,
 
     created_closure_structs: Vec<(ty::Struct<'ctxt>, Vec<hlr::VarId>)>,
 
@@ -122,9 +119,6 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_body(&mut self) -> TypeckResult<'ctxt, Option<(ty::Opaque<'ctxt>, ty::Ty<'ctxt>)>> {
         for (param, &param_var_id) in self.fn_.fn_.params.iter().zip(&self.fn_.param_var_ids) {
             self.typing.var_types.insert(param_var_id, param.ty);
-            if param.mutable {
-                self.mutable_vars.insert(param_var_id);
-            }
         }
 
         let return_ty = self.fn_.fn_.return_ty;
@@ -575,14 +569,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
     fn check_expr_is_assignable_place(&self, expr: hlr::Expr<'ctxt>) -> TypeckResult<'ctxt, ()> {
         match expr.0 {
-            hlr::ExprDef::Deref(_) | hlr::ExprDef::FieldAccess { .. } => Ok(()),
-            hlr::ExprDef::Val(hlr::Val::Var(var_id)) => {
-                if self.mutable_vars.contains(var_id) {
-                    Ok(())
-                } else {
-                    Err(TypeckError::NonAssignablePlace(expr))
-                }
-            }
+            hlr::ExprDef::Deref(_) | hlr::ExprDef::FieldAccess { .. } | hlr::ExprDef::Val(hlr::Val::Var(_)) => Ok(()),
             _ => Err(TypeckError::AssignmentTargetNotAPlace),
         }
     }
@@ -819,7 +806,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_let_stmt(
         &mut self,
         var: hlr::VarId,
-        mutable: bool,
+        _mutable: bool,
         ty: Option<hlr::TyAnnot<'ctxt>>,
         init: hlr::Expr<'ctxt>,
     ) -> TypeckResult<'ctxt, ()> {
@@ -835,9 +822,6 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             self.typing.var_types.insert(var, annot_ty);
         } else {
             self.typing.var_types.insert(var, init_ty);
-        }
-        if mutable {
-            self.mutable_vars.insert(var);
         }
         Ok(())
     }

@@ -2,6 +2,7 @@ use crate::{
     ast_lowering::AstLoweringError,
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
     mlr_lowering::MlrLoweringError,
+    mutck::MutckError,
     parse,
     typeck::TypeckError,
 };
@@ -14,6 +15,7 @@ pub enum DriverError<'ty> {
     AstLowering(AstLoweringError),
     Typeck { fn_name: String, error: TypeckError<'ty> },
     MlrLowering(MlrLoweringError<'ty>),
+    Mutck(MutckError),
     Io(&'static str),
 }
 
@@ -30,6 +32,7 @@ pub fn format_driver_error<'ctxt>(err: DriverError<'ctxt>) -> String {
         DriverError::MlrLowering(MlrLoweringError::FnLowering { fn_inst, .. }) => {
             format!("Failed to lower function '{}' to LLVM IR", fn_inst)
         }
+        DriverError::Mutck(e) => format!("Mutability error: {:?}", e),
         DriverError::Io(msg) => format!("IO error: {msg}"),
     }
 }

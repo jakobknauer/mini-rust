@@ -21,7 +21,7 @@ use crate::{
         err::{DriverError, format_driver_error},
         impl_check::check_trait_impls,
     },
-    hlr, hlr_lowering, mlr, mlr_lowering, parse, typeck,
+    hlr, hlr_lowering, mlr, mlr_lowering, mutck, parse, typeck,
     util::print,
 };
 
@@ -123,6 +123,9 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
             self.print_mlr_fns(mlr_path, &mlr_fns)?;
         }
+
+        self.print_pretty("Checking mutability");
+        mutck::mutck(&mlr_fns).map_err(DriverError::Mutck)?;
 
         self.print_pretty("Monomorphizing functions");
         #[allow(clippy::mutable_key_type)]
@@ -479,6 +482,13 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                     .self_ty
                     .ok_or(DriverError::ContextBuild("Self type not available"))?,
                 mutable: false,
+            }),
+            ast::Param::ReceiverMut if allow_receiver => Ok(fns::FnParam {
+                kind: fns::FnParamKind::Self_,
+                ty: res_ctxt
+                    .self_ty
+                    .ok_or(DriverError::ContextBuild("Self type not available"))?,
+                mutable: true,
             }),
             ast::Param::ReceiverByRef if allow_receiver => Ok(fns::FnParam {
                 kind: fns::FnParamKind::SelfByRef,

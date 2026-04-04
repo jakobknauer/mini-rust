@@ -173,6 +173,7 @@ pub enum Param<'ast> {
         mutable: bool,
     },
     Receiver,
+    ReceiverMut,
     ReceiverByRef,
     ReceiverByRefMut,
 }
