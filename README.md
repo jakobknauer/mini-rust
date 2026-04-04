@@ -17,7 +17,6 @@ Supported features include:
 As backend LLVM is used via the [inkwell](https://github.com/TheDan64/inkwell) library.
 
 Major missing features include:
-- Mutability vs immutability
 - Lifetimes and borrow checking
 - Packages and crates
 - Metaprogramming (macros)
