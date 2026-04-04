@@ -104,12 +104,18 @@ fn check_trait_impl<'ctxt>(
     for &mthd in impl_.mthds.borrow().iter() {
         let trait_mthd = ctxt.traits.resolve_trait_method(trait_inst.trait_, &mthd.name).unwrap();
 
-        check_mthd_decl(ctxt, mthd, trait_mthd.fn_, impl_.ty, &trait_gen_params_subst).map_err(|kind| {
-            ImplCheckError {
-                impl_,
-                trait_inst,
-                kind,
-            }
+        check_mthd_decl(
+            ctxt,
+            mthd,
+            trait_mthd.fn_,
+            impl_.ty,
+            &trait_gen_params_subst,
+            &impl_.constraints,
+        )
+        .map_err(|kind| ImplCheckError {
+            impl_,
+            trait_inst,
+            kind,
         })?;
     }
 
@@ -160,6 +166,7 @@ fn check_mthd_decl<'ctxt>(
     trait_mthd_decl: &fns::FnDecl<'ctxt>,
     impl_ty: ty::Ty<'ctxt>,
     trait_gen_params_subst: &ty::GenVarSubst<'ctxt>,
+    impl_constraints: &[ty::Constraint<'ctxt>],
 ) -> Result<(), ImplCheckErrorKind<'ctxt>> {
     // Compare mthd gen params
     if impl_mthd_decl.gen_params.len() != trait_mthd_decl.gen_params.len() {
@@ -210,7 +217,7 @@ fn check_mthd_decl<'ctxt>(
     // Little helper closure to avoid code duplication
     let do_substitutions = |ctxt: &mut ctxt::Ctxt<'ctxt>, ty: ty::Ty<'ctxt>| -> ty::Ty<'ctxt> {
         let ty = ctxt.tys.substitute(ty, &all_gen_params_subst, Some(impl_ty));
-        ctxt.normalize_ty(ty)
+        ctxt.normalize_ty_with_constraints(ty, impl_constraints)
     };
 
     // Compare params
@@ -222,7 +229,7 @@ fn check_mthd_decl<'ctxt>(
     {
         let subst_expected = do_substitutions(ctxt, expected.ty);
 
-        let actual_ty = ctxt.normalize_ty(actual.ty);
+        let actual_ty = ctxt.normalize_ty_with_constraints(actual.ty, impl_constraints);
         if subst_expected != actual_ty {
             return Err(ImplCheckErrorKind::ArgTypeMismatch {
                 mthd: impl_mthd_decl.name.to_string(),
@@ -235,7 +242,7 @@ fn check_mthd_decl<'ctxt>(
 
     // Compare return type
     let subst_return_ty = do_substitutions(ctxt, trait_mthd_decl.return_ty);
-    let actual_return_ty = ctxt.normalize_ty(impl_mthd_decl.return_ty);
+    let actual_return_ty = ctxt.normalize_ty_with_constraints(impl_mthd_decl.return_ty, impl_constraints);
     if subst_return_ty != actual_return_ty {
         return Err(ImplCheckErrorKind::ReturnTypeMismatch {
             mthd: impl_mthd_decl.name.to_string(),

@@ -3,10 +3,19 @@ trait IntoIterator {
     fn into_iter(self) -> <Self as IntoIterator>::IntoIter;
 }
 
+impl<I> IntoIterator for I
+where
+    I: Iterator
+{
+    type IntoIter = I;
+
+    fn into_iter(self) -> I {
+        self
+    }
+}
 
 trait Iterator {
     type Item;
-
     fn next(&mut self) -> Option<<Self as Iterator>::Item>;
 }
 

@@ -57,20 +57,30 @@ impl<'ctxt> Ctxt<'ctxt> {
     // TODO check the relevance of this function. Is it only use to resolve associated types?
     // If so, perhaps rename, but compare to normalize() in typeck.rs
     pub fn normalize_ty(&self, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
+        self.normalize_ty_with_constraints(ty, &[])
+    }
+
+    pub fn normalize_ty_with_constraints(
+        &self,
+        ty: ty::Ty<'ctxt>,
+        constraints: &[ty::Constraint<'ctxt>],
+    ) -> ty::Ty<'ctxt> {
         use ty::TyDef::*;
+
+        let norm = |ty| self.normalize_ty_with_constraints(ty, constraints);
 
         match ty.0 {
             Primitive(_) => ty,
             &Tuple(items) => {
-                let items: Vec<_> = items.iter().map(|&ty| self.normalize_ty(ty)).collect();
+                let items: Vec<_> = items.iter().map(|&ty| norm(ty)).collect();
                 self.tys.tuple(&items)
             }
             &Struct { struct_, gen_args } => {
-                let gen_args: Vec<_> = gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
+                let gen_args: Vec<_> = gen_args.iter().map(|&ty| norm(ty)).collect();
                 self.tys.inst_struct(struct_, &gen_args).unwrap()
             }
             &Enum { enum_, gen_args } => {
-                let gen_args: Vec<_> = gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
+                let gen_args: Vec<_> = gen_args.iter().map(|&ty| norm(ty)).collect();
                 self.tys.inst_enum(enum_, &gen_args).unwrap()
             }
             &Fn {
@@ -78,22 +88,13 @@ impl<'ctxt> Ctxt<'ctxt> {
                 return_ty,
                 var_args,
             } => {
-                let param_tys: Vec<_> = param_tys.iter().map(|&ty| self.normalize_ty(ty)).collect();
-                let return_ty = self.normalize_ty(return_ty);
+                let param_tys: Vec<_> = param_tys.iter().map(|&ty| norm(ty)).collect();
+                let return_ty = norm(return_ty);
                 self.tys.fn_(&param_tys, return_ty, var_args)
             }
-            &Ref(ty) => {
-                let ty = self.normalize_ty(ty);
-                self.tys.ref_(ty)
-            }
-            &RefMut(ty) => {
-                let ty = self.normalize_ty(ty);
-                self.tys.ref_mut(ty)
-            }
-            &Ptr(ty) => {
-                let ty = self.normalize_ty(ty);
-                self.tys.ptr(ty)
-            }
+            &Ref(ty) => self.tys.ref_(norm(ty)),
+            &RefMut(ty) => self.tys.ref_mut(norm(ty)),
+            &Ptr(ty) => self.tys.ptr(norm(ty)),
             GenVar(_) => ty,
             TraitSelf(_) => ty,
             Closure { .. } => ty,
@@ -102,13 +103,13 @@ impl<'ctxt> Ctxt<'ctxt> {
                 trait_inst,
                 assoc_ty_idx,
             } => {
-                let base_ty = self.normalize_ty(base_ty);
-                let gen_args: Vec<_> = trait_inst.gen_args.iter().map(|&ty| self.normalize_ty(ty)).collect();
+                let base_ty = norm(base_ty);
+                let gen_args: Vec<_> = trait_inst.gen_args.iter().map(|&ty| norm(ty)).collect();
                 let gen_args = self.tys.ty_slice(&gen_args);
                 let trait_inst = TraitInst::new(trait_inst.trait_, gen_args).unwrap();
 
                 let impl_insts: Vec<_> = self
-                    .get_impl_insts_for_ty_and_trait_inst(&[], base_ty, trait_inst)
+                    .get_impl_insts_for_ty_and_trait_inst(constraints, base_ty, trait_inst)
                     .collect();
 
                 let [impl_inst] = &impl_insts[..] else { return ty };
@@ -118,7 +119,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 let subst = impl_inst.get_subst();
 
                 let resolved = self.tys.substitute_gen_vars(assoc_ty, &subst);
-                self.normalize_ty(resolved)
+                norm(resolved)
             }
             InfVar(_) => unreachable!(),
             &Opaque { opaque, gen_args } => {
@@ -127,7 +128,7 @@ impl<'ctxt> Ctxt<'ctxt> {
                 };
                 let subst = GenVarSubst::new(&opaque.gen_params, gen_args).unwrap();
                 let instantiated = self.tys.substitute_gen_vars(resolved, &subst);
-                self.normalize_ty(instantiated)
+                norm(instantiated)
             }
         }
     }
