@@ -398,6 +398,12 @@ pub enum ExprKind<'ast> {
         cond: Expr<'ast>,
         body: Block<'ast>,
     },
+    For {
+        binding: String,
+        mutable: bool,
+        iter: Expr<'ast>,
+        body: Block<'ast>,
+    },
     Match {
         scrutinee: Expr<'ast>,
         arms: Vec<MatchArm<'ast>>,

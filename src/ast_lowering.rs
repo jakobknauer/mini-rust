@@ -202,6 +202,12 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             &If { cond, then, else_ } => self.lower_if_expr(cond, then, else_),
             &Loop { body } => self.lower_loop_expr(body),
             &While { cond, body } => self.lower_while_expr(cond, body),
+            &For {
+                ref binding,
+                mutable,
+                iter,
+                body,
+            } => self.lower_for_expr(binding, mutable, iter, body),
             &Match { scrutinee, ref arms } => self.lower_match_expr(scrutinee, arms),
             &Deref { base } => self.lower_deref_expr(base),
             &AddrOf { base } => self.lower_addr_of_expr(base),
@@ -699,6 +705,17 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             body: self.hlr.expr(expr),
         };
         Ok(self.hlr.expr(loop_expr))
+    }
+
+    #[expect(unused)]
+    fn lower_for_expr(
+        &mut self,
+        binding: &str,
+        mutable: bool,
+        iter: ast::Expr<'ast>,
+        body: ast::Block<'ast>,
+    ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
+        todo!("for loop lowering")
     }
 
     fn lower_match_expr(
