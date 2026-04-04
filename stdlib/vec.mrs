@@ -67,6 +67,11 @@ impl<T> Vec<T> {
         RefVecIter { vec: self, idx: 0 }
     }
 
+}
+
+impl<T> IntoIterator for Vec<T> {
+    type IntoIter = VecIter<T>;
+
     fn into_iter(self) -> VecIter<T> {
         VecIter { vec: self, idx: 0 }
     }

@@ -1,3 +1,9 @@
+trait IntoIterator {
+    type IntoIter;
+    fn into_iter(self) -> <Self as IntoIterator>::IntoIter;
+}
+
+
 trait Iterator {
     type Item;
 
