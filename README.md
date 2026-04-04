@@ -24,11 +24,24 @@ Major missing features include:
 
 ## Usage
 
-See [run_example.sh](run_example.sh) for an example on how to use mini-rust.
-See the [examples](examples) directory for compilable code examples.
+From [run_hello_world.sh](run_hello_world.sh):
 
-The compiler as of now outputs LLVM IR, which can be compiled to machine code using clang.
+```bash
+# Compile the compiler
+cargo build
 
+# Compile Hello World example to LLVM IR
+./target/debug/mini-rust --build-dir "examples/build" --crate "hello_world" -- "examples/hello_world.mrs" "stdlib/"*".mrs"
+
+# Compile LLVM IR to executable
+clang "examples/build/hello_world.ll" -o "examples/build/hello_world"
+
+# Run Hello World
+./examples/build/hello_world
+```
+
+Check or run [run_example.sh](run_example.sh) for another example.
+See the [examples](examples) and [stdlib](stdlib) directory for compilable code examples.
 
 ## Architecture
 
