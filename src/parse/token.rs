@@ -49,6 +49,7 @@ pub enum Keyword {
     FnTrait,
     For,
     If,
+    In,
     Impl,
     Let,
     Loop,

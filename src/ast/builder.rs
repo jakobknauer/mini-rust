@@ -104,7 +104,6 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.expr(ExprKind::While { cond, body })
     }
 
-    #[expect(dead_code)]
     pub fn for_(&self, binding: String, mutable: bool, iter: Expr<'ast>, body: Block<'ast>) -> Expr<'ast> {
         self.ast.expr(ExprKind::For {
             binding,

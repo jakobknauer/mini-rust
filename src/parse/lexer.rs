@@ -63,6 +63,7 @@ const KEYWORDS: &[(&str, Token)] = &[
     ("fn", Token::Keyword(Keyword::Fn)),
     ("for", Token::Keyword(Keyword::For)),
     ("if", Token::Keyword(Keyword::If)),
+    ("in", Token::Keyword(Keyword::In)),
     ("impl", Token::Keyword(Keyword::Impl)),
     ("let", Token::Keyword(Keyword::Let)),
     ("loop", Token::Keyword(Keyword::Loop)),

@@ -557,6 +557,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let stmt = self.builder.expr_stmt(expr);
                 Ok((stmt, StmtType::BlockExpr))
             }
+            Some(Token::Keyword(Keyword::For)) => {
+                let expr = self.parse_for()?;
+                let stmt = self.builder.expr_stmt(expr);
+                Ok((stmt, StmtType::BlockExpr))
+            }
             Some(Token::Keyword(Keyword::Match)) => {
                 let expr = self.parse_match()?;
                 let stmt = self.builder.expr_stmt(expr);
@@ -858,6 +863,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Token::Keyword(Keyword::If) => self.parse_if_expr(),
             Token::Keyword(Keyword::Loop) => self.parse_loop(),
             Token::Keyword(Keyword::While) => self.parse_while(),
+            Token::Keyword(Keyword::For) => self.parse_for(),
             Token::Keyword(Keyword::Match) => self.parse_match(),
             Token::Keyword(Keyword::Self_) => {
                 self.tokens.advance();
@@ -1023,6 +1029,16 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let body = self.parse_block()?;
         let expr = self.builder.while_(cond, body);
         Ok(expr)
+    }
+
+    fn parse_for(&mut self) -> Result<Expr<'ast>, ParserErr> {
+        self.tokens.expect_keyword(Keyword::For)?;
+        let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
+        let binding = self.tokens.expect_identifier()?;
+        self.tokens.expect_keyword(Keyword::In)?;
+        let iter = self.parse_expr(false)?;
+        let body = self.parse_block()?;
+        Ok(self.builder.for_(binding, mutable, iter, body))
     }
 
     fn parse_match(&mut self) -> Result<Expr<'ast>, ParserErr> {
