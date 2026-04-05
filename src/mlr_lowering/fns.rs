@@ -380,12 +380,12 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         {
             let closure_fn = fn_.get().expect("closure fn not set");
             let fn_inst = {
-                let env_gen_args: Vec<_> = closure_fn
-                    .env_gen_params
-                    .iter()
-                    .map(|&gv| self.parent.mr_ctxt.tys.gen_var(gv))
-                    .collect();
-                let env_gen_args = self.parent.mr_ctxt.tys.ty_slice(&env_gen_args);
+                let mr_ty::TyDef::Struct {
+                    gen_args: env_gen_args, ..
+                } = *captures_ty.0
+                else {
+                    panic!("closure captures_ty is not a struct");
+                };
                 let gen_args = self.parent.mr_ctxt.tys.ty_slice(&[]);
                 FnInst::new(closure_fn, gen_args, env_gen_args).unwrap()
             };

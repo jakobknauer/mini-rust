@@ -4,11 +4,7 @@ fn main() -> i32 {
     v.push(2);
     v.push(3);
 
-    for x in v {
-        printf("%d\n", x);
-    }
-
-    0
+    v.into_iter().sum(0)
 }
 
 fn assign_to_ref(r: &mut Point) {

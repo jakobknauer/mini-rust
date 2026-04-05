@@ -45,6 +45,12 @@ pub enum TyDef<'ty> {
     Ptr(Ty<'ty>),
     GenVar(GenVar<'ty>),
     TraitSelf(traits::Trait<'ty>),
+    /// `captures_ty` is always an instance of the captures struct, whose gen_params are exactly
+    /// the closure fn's `env_gen_params` (in the same order). So `captures_ty.gen_args[i]` gives
+    /// the concrete value for `env_gen_params[i]`. This is the canonical way to recover the
+    /// concrete env_gen_args for a substituted closure type, since the closure type itself does
+    /// not store them separately. An alternative would be to add an explicit `env_gen_args` field
+    /// to this variant, which would make the intent clearer at the cost of some redundancy.
     Closure {
         name: String,
         captures_ty: Ty<'ty>,

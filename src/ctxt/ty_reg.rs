@@ -515,13 +515,21 @@ impl<'ty> TyReg<'ty> {
                 captures_ty,
                 param_tys,
                 return_ty,
-                ..
+                ref fn_,
             } => {
                 let name = name.clone();
+                let original_fn = fn_.get();
                 let captures_ty = self.substitute(captures_ty, gen_vars, self_ty);
                 let param_tys = self.substitute_on_slice(param_tys, gen_vars, self_ty);
                 let return_ty = self.substitute(return_ty, gen_vars, self_ty);
-                self.closure(name, captures_ty, param_tys, return_ty)
+                let new_ty = self.closure(name, captures_ty, param_tys, return_ty);
+                if let Some(fn_val) = original_fn
+                    && let TyDef::Closure { fn_: ref new_fn_, .. } = *new_ty.0
+                    && new_fn_.get().is_none()
+                {
+                    new_fn_.set(fn_val);
+                }
+                new_ty
             }
             Tuple(items) => {
                 let items = self.substitute_on_slice(items, gen_vars, self_ty);
