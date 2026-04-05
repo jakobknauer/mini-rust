@@ -136,6 +136,10 @@ impl<'ty> EnumDef<'ty> {
     pub fn get_variant(&self, idx: usize) -> &EnumVariant<'ty> {
         &self.get_variants()[idx]
     }
+
+    pub fn resolve_variant_by_name(&self, name: &str) -> Option<(usize, &EnumVariant<'ty>)> {
+        self.get_variants().iter().enumerate().find(|(_, v)| v.name == name)
+    }
 }
 
 impl PartialEq for EnumDef<'_> {

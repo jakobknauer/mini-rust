@@ -705,7 +705,11 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 .insert_field_access_place(variant_place, field.field_index, field_ty);
 
             let binding_ty = self.typing.var_types[&field.binding];
-            let binding_loc = self.builder.alloc_mut_loc(binding_ty);
+            let binding_loc = if field.mutable {
+                self.builder.alloc_mut_loc(binding_ty)
+            } else {
+                self.builder.alloc_loc(binding_ty)
+            };
 
             match binding {
                 MatchBinding::Direct => {

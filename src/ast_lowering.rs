@@ -710,7 +710,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_for_expr(
         &mut self,
         binding: &str,
-        _mutable: bool,
+        mutable: bool,
         iter: ast::Expr<'ast>,
         body: ast::Block<'ast>,
     ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
@@ -728,16 +728,8 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         let into_iterator_trait = self.ctxt.language_items.into_iterator_trait.unwrap();
         let iterator_trait = self.ctxt.language_items.iterator_trait.unwrap();
         let option_enum = self.ctxt.tys.get_enum_by_name("Option").unwrap();
-        let some_index = option_enum
-            .get_variants()
-            .iter()
-            .position(|v| v.name == "Some")
-            .unwrap();
-        let none_index = option_enum
-            .get_variants()
-            .iter()
-            .position(|v| v.name == "None")
-            .unwrap();
+        let (some_index, _) = option_enum.resolve_variant_by_name("Some").unwrap();
+        let (none_index, _) = option_enum.resolve_variant_by_name("None").unwrap();
 
         let infer = self.hlr.ty_annot(hlr::TyAnnotDef::Infer);
 
@@ -786,6 +778,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             fields: self.hlr.variant_pattern_fields(vec![hlr::VariantPatternField {
                 field_index: 0,
                 binding: binding_var,
+                mutable,
             }]),
         };
         self.scopes.push_back(Scope::default());
@@ -900,7 +893,12 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                     .bindings
                     .insert(field.binding_name.clone(), binding);
 
-                Ok(hlr::VariantPatternField { field_index, binding })
+                // TODO: allow `mut` on individual struct pattern bindings, e.g. `Some(mut x)`
+                Ok(hlr::VariantPatternField {
+                    field_index,
+                    binding,
+                    mutable: false,
+                })
             })
             .collect::<AstLoweringResult<_>>()?;
         let fields = self.hlr.variant_pattern_fields(fields);

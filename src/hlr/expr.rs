@@ -149,6 +149,7 @@ pub struct VariantPattern<'hlr> {
 pub struct VariantPatternField {
     pub field_index: usize,
     pub binding: VarId,
+    pub mutable: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
