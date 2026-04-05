@@ -13,6 +13,8 @@ pub struct LanguageItems<'ctxt> {
     pub rem_trait: Option<Trait<'ctxt>>,
     pub deref_trait: Option<Trait<'ctxt>>,
     pub eq_trait: Option<Trait<'ctxt>>,
+    pub into_iterator_trait: Option<Trait<'ctxt>>,
+    pub iterator_trait: Option<Trait<'ctxt>>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

@@ -707,15 +707,128 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         Ok(self.hlr.expr(loop_expr))
     }
 
-    #[expect(unused)]
     fn lower_for_expr(
         &mut self,
         binding: &str,
-        mutable: bool,
+        _mutable: bool,
         iter: ast::Expr<'ast>,
         body: ast::Block<'ast>,
     ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
-        todo!("for loop lowering")
+        // Desugar `for x in expr { body }` into:
+        //   {
+        //       let mut __for_iter = <_ as IntoIterator>::into_iter(expr);
+        //       loop {
+        //           match <_ as Iterator>::next(&mut __for_iter) {
+        //               Option::Some { item: x } => { body }
+        //               Option::None => { break }
+        //           }
+        //       }
+        //   }
+
+        let into_iterator_trait = self.ctxt.language_items.into_iterator_trait.unwrap();
+        let iterator_trait = self.ctxt.language_items.iterator_trait.unwrap();
+        let option_enum = self.ctxt.tys.get_enum_by_name("Option").unwrap();
+        let some_index = option_enum
+            .get_variants()
+            .iter()
+            .position(|v| v.name == "Some")
+            .unwrap();
+        let none_index = option_enum
+            .get_variants()
+            .iter()
+            .position(|v| v.name == "None")
+            .unwrap();
+
+        let infer = self.hlr.ty_annot(hlr::TyAnnotDef::Infer);
+
+        self.start_new_block();
+
+        // let mut __for_iter = <_ as IntoIterator>::into_iter(expr)
+        let iter_expr = self.lower_expr(iter)?;
+        let into_iter_fn = self.hlr.expr(hlr::ExprDef::QualifiedMthd {
+            ty: infer,
+            trait_: Some(into_iterator_trait),
+            trait_args: None,
+            mthd_name: "into_iter".to_string(),
+            args: None,
+        });
+        let into_iter_call = self.hlr.expr(hlr::ExprDef::Call {
+            callee: into_iter_fn,
+            args: self.hlr.expr_slice(&[iter_expr]),
+        });
+        let iter_var = self.hlr.var_id();
+        self.push_stmt(hlr::StmtDef::Let {
+            var: iter_var,
+            mutable: true,
+            ty: None,
+            init: into_iter_call,
+        })?;
+
+        // <_ as Iterator>::next(&mut __for_iter)
+        let next_fn = self.hlr.expr(hlr::ExprDef::QualifiedMthd {
+            ty: infer,
+            trait_: Some(iterator_trait),
+            trait_args: None,
+            mthd_name: "next".to_string(),
+            args: None,
+        });
+        let iter_var_expr = self.hlr.expr(hlr::ExprDef::Val(hlr::Val::Var(iter_var)));
+        let iter_var_ref = self.hlr.expr(hlr::ExprDef::AddrOfMut(iter_var_expr));
+        let next_call = self.hlr.expr(hlr::ExprDef::Call {
+            callee: next_fn,
+            args: self.hlr.expr_slice(&[iter_var_ref]),
+        });
+
+        // Some arm: Option::Some { item: binding_var } => body
+        let binding_var = self.hlr.var_id();
+        let some_pattern = hlr::VariantPattern {
+            variant: hlr::Val::Variant(option_enum, some_index, None),
+            fields: self.hlr.variant_pattern_fields(vec![hlr::VariantPatternField {
+                field_index: 0,
+                binding: binding_var,
+            }]),
+        };
+        self.scopes.push_back(Scope::default());
+        self.scopes
+            .back_mut()
+            .unwrap()
+            .bindings
+            .insert(binding.to_string(), binding_var);
+        self.start_new_block();
+        let body_trailing = self.build_block(body)?;
+        let some_body = self.release_current_block(body_trailing);
+        self.scopes.pop_back();
+
+        // None arm: Option::None => { break }
+        let none_pattern = hlr::VariantPattern {
+            variant: hlr::Val::Variant(option_enum, none_index, None),
+            fields: self.hlr.variant_pattern_fields(vec![]),
+        };
+        self.start_new_block();
+        self.lower_break_stmt()?;
+        let unit = self.hlr.expr(hlr::ExprDef::Tuple(self.hlr.expr_slice(&[])));
+        let none_body = self.release_current_block(unit);
+
+        // match <_ as Iterator>::next(&mut __for_iter) { ... }
+        let arms = self.hlr.match_arms(vec![
+            hlr::MatchArm {
+                pattern: some_pattern,
+                body: some_body,
+            },
+            hlr::MatchArm {
+                pattern: none_pattern,
+                body: none_body,
+            },
+        ]);
+        let match_expr = self.hlr.expr(hlr::ExprDef::Match {
+            scrutinee: next_call,
+            arms,
+        });
+
+        // loop { match ... }
+        let loop_expr = self.hlr.expr(hlr::ExprDef::Loop { body: match_expr });
+
+        Ok(self.release_current_block(loop_expr))
     }
 
     fn lower_match_expr(

@@ -23,29 +23,20 @@ impl<I> I
 where
     I: Iterator
 {
-    fn count(mut self) -> i32 {
+    fn count(self) -> i32 {
         let mut len = 0;
-        while self.next().is_some() {
+        for item in self {
             len = len + 1;
         }
         len
     }
 
-    fn for_each<F>(mut self, f: F)
+    fn for_each<F>(self, f: F)
     where
         F: Fn(<I as Iterator>::Item)
     {
-        let mut current = self.next();
-        loop {
-            match current {
-                Option::Some { item } => {
-                    f(item);
-                    current = self.next();
-                },
-                Option::None => {
-                    break;
-                }
-            }
+        for item in self {
+            f(item);
         }
     }
 
@@ -56,20 +47,13 @@ where
         Filter { iter: self, pred }
     }
 
-    fn fold<B, F>(mut self, init: B, f: F) -> B
+    fn fold<B, F>(self, init: B, f: F) -> B
     where
         F: Fn(B, <I as Iterator>::Item) -> B
     {
         let mut result = init;
-        loop {
-            match self.next() {
-                Option::Some { item } => {
-                    result = f(result, item);
-                },
-                Option::None => {
-                    break;
-                }
-            }
+        for item in self {
+            result = f(result, item);
         }
         result
     }
@@ -81,22 +65,11 @@ where
         Map { iter: self, f }
     }
 
-    fn sum<S>(mut self, init: S) -> S
+    fn sum<S>(self, init: S) -> S
     where
         S: Add<<I as Iterator>::Item, Output=S>
     {
-        let mut result = init;
-        loop {
-            match self.next() {
-                Option::Some { item } => {
-                    result = result + item;
-                },
-                Option::None => {
-                    break;
-                }
-            }
-        }
-        result
+        self.fold(init, |acc, item| acc + item)
     }
 }
 
