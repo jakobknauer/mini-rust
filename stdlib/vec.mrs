@@ -48,6 +48,14 @@ impl<T> Vec<T> {
         }
     }
 
+    fn get_mut(&mut self, idx: i32) -> Option<&mut T> {
+        if idx >= self.len || idx < 0 {
+            Option::None
+        } else {
+            Option::Some { item: &mut*self.ptr.offset(idx) }
+        }
+    }
+
     fn pop(&mut self) -> Option<T> {
         if self.len == 0 {
             Option::None
@@ -67,13 +75,8 @@ impl<T> Vec<T> {
         RefVecIter { vec: self, idx: 0 }
     }
 
-}
-
-impl<T> IntoIterator for Vec<T> {
-    type IntoIter = VecIter<T>;
-
-    fn into_iter(self) -> VecIter<T> {
-        VecIter { vec: self, idx: 0 }
+    fn iter_mut(&mut self) -> RefMutVecIter<T> {
+        RefMutVecIter { vec: self, idx: 0 }
     }
 }
 
@@ -96,6 +99,14 @@ where
     }
 }
 
+impl<T> IntoIterator for Vec<T> {
+    type IntoIter = VecIter<T>;
+
+    fn into_iter(self) -> VecIter<T> {
+        VecIter { vec: self, idx: 0 }
+    }
+}
+
 struct VecIter<T> {
     vec: Vec<T>,
     idx: i32,
@@ -115,6 +126,14 @@ impl<T> Iterator for VecIter<T> {
     }
 }
 
+impl<T> IntoIterator for &Vec<T> {
+    type IntoIter = RefVecIter<T>;
+
+    fn into_iter(self) -> RefVecIter<T> {
+        RefVecIter { vec: self, idx: 0 }
+    }
+}
+
 struct RefVecIter<T> {
     vec: &Vec<T>,
     idx: i32,
@@ -125,6 +144,29 @@ impl<T> Iterator for RefVecIter<T> {
 
     fn next(&mut self) -> Option<&T> {
         let next = self.vec.get(self.idx);
+        self.idx = self.idx + 1;
+        next
+    }
+}
+
+impl<T> IntoIterator for &mut Vec<T> {
+    type IntoIter = RefMutVecIter<T>;
+
+    fn into_iter(self) -> RefMutVecIter<T> {
+        RefMutVecIter { vec: self, idx: 0 }
+    }
+}
+
+struct RefMutVecIter<T> {
+    vec: &mut Vec<T>,
+    idx: i32,
+}
+
+impl<T> Iterator for RefMutVecIter<T> {
+    type Item = &mut T;
+
+    fn next(&mut self) -> Option<&mut T> {
+        let next = self.vec.get_mut(self.idx);
         self.idx = self.idx + 1;
         next
     }

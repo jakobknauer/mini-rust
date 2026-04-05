@@ -4,16 +4,19 @@ fn main() -> i32 {
     v.push(2);
     v.push(3);
 
-    for mut x in v {
-        x = x + 1;
-        printf("%d\n", x);
+    for x in &mut v {
+        *x = *x * 2;
+    }
+
+    for x in v.iter_mut() {
+        *x = *x + 1;
+    }
+
+    for x in &v {
+        printf("%d\n", *x);
     }
 
     0
-}
-
-fn assign_to_ref(r: &mut Point) {
-    let r2 = &mut r.x;
 }
 
 fn printf(format: *c_char, ...) -> i32;
