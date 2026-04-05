@@ -4,7 +4,7 @@ This is an experimental compiler for (something that resembles) a subset of the 
 written in Rust.
 
 Supported features include:
-- Basic syntax (functions, variables, control flow etc.)
+- Basic syntax (functions, variables, control flow with `if/else`, `match`, `loop`, `while`, `for` etc.)
 - Type inference within functions
 - Primitive types, tuples, structs and enums, references and raw pointers, function pointers
 - Traits and impls, including associated types and functions, and default method implementations
@@ -53,7 +53,7 @@ The main entry point is [main.rs](src/main.rs). The compilation process in orche
 The compilation process takes the following steps:
 - Parse the [Abstract Syntax Tree (AST)](src/ast.rs) from source code in [parser](src/parse.rs).
 - Build the `Ctxt` object defined in [ctxt](src/ctxt.rs) from the AST. This serves as a central registry for types, functions, traits etc..
-- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` to `loop`) also takes place here.
+- Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` and `for` to `loop`) also takes place here.
 - Typecheck the HLR in [typeck](src/typeck.rs).
 - Lower the HLR to [Mid-Level Representation (MLR)](src/mlr.rs) in [hlr_lowering](src/hlr_lowering.rs).
 - Check mutability in [mutck](src/mutck.rs): verify that only mutable bindings are assigned to, and that `&mut` references are only taken of mutable places.
