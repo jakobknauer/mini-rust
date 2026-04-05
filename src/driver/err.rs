@@ -88,6 +88,9 @@ fn format_impl_check_error<'ctxt>(err: ImplCheckError<'ctxt>) -> String {
             expected, actual
         ),
         MissingAssocTy(name) => format!("missing associated type '{}'", name),
+        AssocTyBoundViolation { assoc_ty_name, bound } => {
+            format!("associated type '{}' does not satisfy bound '{}'", assoc_ty_name, bound)
+        }
         ConstraintMismatch { mthd } => format!("constraint mismatch for method '{}'", mthd),
     };
 

@@ -47,6 +47,10 @@ pub enum ImplCheckErrorKind<'ctxt> {
         expected: usize,
     },
     MissingAssocTy(String),
+    AssocTyBoundViolation {
+        assoc_ty_name: String,
+        bound: ty::ConstraintRequirement<'ctxt>,
+    },
     ConstraintMismatch {
         mthd: String,
     },
@@ -80,13 +84,29 @@ fn check_trait_impl<'ctxt>(
         });
     }
 
-    for (assoc_ty_idx, assoc_ty_name) in trait_inst.trait_.assoc_tys.iter().enumerate() {
+    let trait_subst = trait_inst.get_subst();
+
+    for (assoc_ty_idx, assoc_ty_def) in trait_inst.trait_.assoc_tys.iter().enumerate() {
         if !impl_.assoc_tys.contains_key(&assoc_ty_idx) {
             return Err(ImplCheckError {
                 impl_,
                 trait_inst,
-                kind: ImplCheckErrorKind::MissingAssocTy(assoc_ty_name.clone()),
+                kind: ImplCheckErrorKind::MissingAssocTy(assoc_ty_def.name.clone()),
             });
+        }
+
+        for bound in assoc_ty_def.bounds.borrow().iter() {
+            let subst_bound = subst_constraint(ctxt, bound, &trait_subst, impl_.ty, &impl_.constraints);
+            if !ctxt.constraint_satisfied(&impl_.constraints, &subst_bound) {
+                return Err(ImplCheckError {
+                    impl_,
+                    trait_inst,
+                    kind: ImplCheckErrorKind::AssocTyBoundViolation {
+                        assoc_ty_name: assoc_ty_def.name.clone(),
+                        bound: subst_bound.requirement,
+                    },
+                });
+            }
         }
     }
 
@@ -96,26 +116,15 @@ fn check_trait_impl<'ctxt>(
         kind,
     })?;
 
-    // Substitution of the generic params of the trait with the arguments of the impl.
-    // E.g. if we have a trait `trait Into<T>` and an impl `impl Into<u32> for Foo`,
-    // then we have to substitute `T` with `u32`.
-    let trait_gen_params_subst = trait_inst.get_subst();
-
     for &mthd in impl_.mthds.borrow().iter() {
         let trait_mthd = ctxt.traits.resolve_trait_method(trait_inst.trait_, &mthd.name).unwrap();
 
-        check_mthd_decl(
-            ctxt,
-            mthd,
-            trait_mthd.fn_,
-            impl_.ty,
-            &trait_gen_params_subst,
-            &impl_.constraints,
-        )
-        .map_err(|kind| ImplCheckError {
-            impl_,
-            trait_inst,
-            kind,
+        check_mthd_decl(ctxt, mthd, trait_mthd.fn_, impl_.ty, &trait_subst, &impl_.constraints).map_err(|kind| {
+            ImplCheckError {
+                impl_,
+                trait_inst,
+                kind,
+            }
         })?;
     }
 
@@ -255,7 +264,7 @@ fn check_mthd_decl<'ctxt>(
     let subst_trait_constraints: Vec<_> = trait_mthd_decl
         .constraints
         .iter()
-        .map(|c| subst_constraint(ctxt, c, &all_gen_params_subst, impl_ty))
+        .map(|c| subst_constraint(ctxt, c, &all_gen_params_subst, impl_ty, impl_constraints))
         .collect();
     #[allow(clippy::mutable_key_type)]
     let trait_set: HashSet<_> = subst_trait_constraints.iter().collect();
@@ -275,14 +284,15 @@ fn subst_constraint<'ctxt>(
     c: &ty::Constraint<'ctxt>,
     subst: &ty::GenVarSubst<'ctxt>,
     self_ty: ty::Ty<'ctxt>,
+    ambient: &[ty::Constraint<'ctxt>],
 ) -> ty::Constraint<'ctxt> {
-    let subject = subst_normalize_ty(ctxt, c.subject, subst, self_ty);
+    let subject = subst_normalize_ty(ctxt, c.subject, subst, self_ty, ambient);
     let requirement = match c.requirement {
         ty::ConstraintRequirement::Trait(trait_inst) => {
             let gen_args: Vec<_> = trait_inst
                 .gen_args
                 .iter()
-                .map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty))
+                .map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty, ambient))
                 .collect();
             let gen_args = ctxt.tys.ty_slice(&gen_args);
             ty::ConstraintRequirement::Trait(trait_inst.with_gen_args(gen_args).unwrap())
@@ -290,14 +300,14 @@ fn subst_constraint<'ctxt>(
         ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
             let param_tys: Vec<_> = param_tys
                 .iter()
-                .map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty))
+                .map(|&t| subst_normalize_ty(ctxt, t, subst, self_ty, ambient))
                 .collect();
             let param_tys = ctxt.tys.ty_slice(&param_tys);
-            let return_ty = subst_normalize_ty(ctxt, return_ty, subst, self_ty);
+            let return_ty = subst_normalize_ty(ctxt, return_ty, subst, self_ty, ambient);
             ty::ConstraintRequirement::Callable { param_tys, return_ty }
         }
         ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
-            ty::ConstraintRequirement::AssocTyEq(subst_normalize_ty(ctxt, eq_ty, subst, self_ty))
+            ty::ConstraintRequirement::AssocTyEq(subst_normalize_ty(ctxt, eq_ty, subst, self_ty, ambient))
         }
     };
     ty::Constraint { subject, requirement }
@@ -308,7 +318,8 @@ fn subst_normalize_ty<'ctxt>(
     ty: ty::Ty<'ctxt>,
     subst: &ty::GenVarSubst<'ctxt>,
     self_ty: ty::Ty<'ctxt>,
+    ambient: &[ty::Constraint<'ctxt>],
 ) -> ty::Ty<'ctxt> {
     let ty = ctxt.tys.substitute(ty, subst, Some(self_ty));
-    ctxt.normalize_ty(ty)
+    ctxt.normalize_ty_with_constraints(ty, ambient)
 }

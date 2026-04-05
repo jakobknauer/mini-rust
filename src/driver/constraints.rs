@@ -21,7 +21,7 @@ impl<'arena> Driver<'_, 'arena> {
         self.resolve_constraint_requirement(subject, &constraint.requirement, res_ctxt)
     }
 
-    fn resolve_constraint_requirement(
+    pub(super) fn resolve_constraint_requirement(
         &mut self,
         subject: ty::Ty<'arena>,
         requirement: &ast::ConstraintRequirement,

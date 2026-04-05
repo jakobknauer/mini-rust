@@ -202,7 +202,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         ident: &str,
     ) -> Option<ty::Ty<'ctxt>> {
         if let &ty::TyDef::TraitSelf(trait_) = base_ty.0 {
-            let assoc_ty_index = trait_.assoc_tys.iter().position(|name| name == ident)?;
+            let assoc_ty_index = trait_.try_resolve_assoc_ty(ident)?;
             let gen_args: Vec<_> = trait_.gen_params.iter().map(|gp| self.tys.gen_var(*gp)).collect();
             let gen_args = self.tys.ty_slice(&gen_args);
             let default_trait_inst = TraitInst::new(trait_, gen_args).unwrap();
@@ -241,6 +241,27 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         }
     }
 
+    /// Expands `constraints` in-place by deriving the assoc type bounds implied by each
+    /// `X: Trait` constraint.  Runs to a fixpoint so transitively-derived bounds are included.
+    pub fn expand_constraints_with_assoc_bounds(&self, constraints: &mut Vec<ty::Constraint<'ctxt>>) {
+        let mut i = 0;
+        while i < constraints.len() {
+            let c = constraints[i].clone();
+            if let ty::ConstraintRequirement::Trait(trait_inst) = c.requirement {
+                let subst = trait_inst.get_subst();
+                for assoc_ty_def in &trait_inst.trait_.assoc_tys {
+                    for bound in assoc_ty_def.bounds.borrow().iter() {
+                        let derived = self.subst_constraint(bound, &subst, Some(c.subject));
+                        if !constraints.contains(&derived) {
+                            constraints.push(derived);
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+
     pub fn impl_constraints_satisfied(
         &self,
         ambient_constraints: &[ty::Constraint<'ctxt>],
@@ -249,11 +270,11 @@ impl<'ctxt> super::Ctxt<'ctxt> {
     ) -> bool {
         impl_constraints
             .iter()
-            .map(|c| self.subst_constraint(c, subst))
+            .map(|c| self.subst_constraint(c, subst, None))
             .all(|c| self.constraint_satisfied(ambient_constraints, &c))
     }
 
-    fn constraint_satisfied(
+    pub fn constraint_satisfied(
         &self,
         ambient_constraints: &[ty::Constraint<'ctxt>],
         constraint: &ty::Constraint<'ctxt>,
@@ -282,20 +303,25 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         &self,
         constraint: &ty::Constraint<'ctxt>,
         subst: &ty::GenVarSubst<'ctxt>,
+        self_ty: Option<ty::Ty<'ctxt>>,
     ) -> ty::Constraint<'ctxt> {
-        let subject = self.tys.substitute_gen_vars(constraint.subject, subst);
+        let s = |ty| self.tys.substitute(ty, subst, self_ty);
+        let subject = s(constraint.subject);
         let requirement = match constraint.requirement {
             ty::ConstraintRequirement::Trait(trait_inst) => {
-                ty::ConstraintRequirement::Trait(self.subst_trait_inst(trait_inst, subst))
+                let gen_args: Vec<_> = trait_inst.gen_args.iter().map(|&t| s(t)).collect();
+                let gen_args = self.tys.ty_slice(&gen_args);
+                ty::ConstraintRequirement::Trait(TraitInst::new(trait_inst.trait_, gen_args).unwrap())
             }
             ty::ConstraintRequirement::Callable { param_tys, return_ty } => {
-                let param_tys = self.tys.substitute_gen_vars_on_slice(param_tys, subst);
-                let return_ty = self.tys.substitute_gen_vars(return_ty, subst);
-                ty::ConstraintRequirement::Callable { param_tys, return_ty }
+                let param_tys: Vec<_> = param_tys.iter().map(|&t| s(t)).collect();
+                let param_tys = self.tys.ty_slice(&param_tys);
+                ty::ConstraintRequirement::Callable {
+                    param_tys,
+                    return_ty: s(return_ty),
+                }
             }
-            ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
-                ty::ConstraintRequirement::AssocTyEq(self.tys.substitute_gen_vars(eq_ty, subst))
-            }
+            ty::ConstraintRequirement::AssocTyEq(eq_ty) => ty::ConstraintRequirement::AssocTyEq(s(eq_ty)),
         };
         ty::Constraint { subject, requirement }
     }

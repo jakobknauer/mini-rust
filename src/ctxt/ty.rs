@@ -241,7 +241,7 @@ impl<'ty> GenVarSubst<'ty> {
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct InfVar(pub(in crate::ctxt) usize);
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Constraint<'ty> {
     pub subject: Ty<'ty>,
     pub requirement: ConstraintRequirement<'ty>,
@@ -255,6 +255,25 @@ pub enum ConstraintRequirement<'ty> {
         return_ty: Ty<'ty>,
     },
     AssocTyEq(Ty<'ty>),
+}
+
+impl std::fmt::Display for ConstraintRequirement<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConstraintRequirement::Trait(trait_inst) => write!(f, "{}", trait_inst),
+            ConstraintRequirement::Callable { param_tys, return_ty } => {
+                write!(f, "Fn(")?;
+                for (i, ty) in param_tys.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", ty)?;
+                }
+                write!(f, ") -> {}", return_ty)
+            }
+            ConstraintRequirement::AssocTyEq(ty) => write!(f, "= {}", ty),
+        }
+    }
 }
 
 pub struct ClosureFnCell<'fns>(OnceCell<fns::Fn<'fns>>);
@@ -408,7 +427,7 @@ impl std::fmt::Display for TyDef<'_> {
                 trait_inst,
                 assoc_ty_idx,
             } => {
-                let assoc_ty_name = &trait_inst.trait_.assoc_tys[assoc_ty_idx];
+                let assoc_ty_name = &trait_inst.trait_.assoc_tys[assoc_ty_idx].name;
                 write!(f, "<{} as {}>::{}", base_ty, trait_inst, assoc_ty_name)
             }
             &InfVar(id) => write!(f, "inf({})", id.0),

@@ -10,16 +10,25 @@ pub type TraitMthd<'traits> = &'traits TraitMthdDef<'traits>;
 pub struct TraitId(pub(in crate::ctxt) usize);
 
 #[derive(Debug)]
+pub struct AssocTyDef<'traits> {
+    pub name: String,
+    /// Bound constraints on this associated type. Subjects use `TraitSelf` to refer to Self.
+    /// E.g. for `type Item: Clone`, this contains `Constraint { subject: TraitSelf, req: Trait(Clone) }`.
+    /// Populated in a second pass after trait registration (needs the `Trait` pointer for TraitSelf).
+    pub bounds: std::cell::RefCell<Vec<ty::Constraint<'traits>>>,
+}
+
+#[derive(Debug)]
 pub struct TraitDef<'traits> {
     pub(in crate::ctxt) id: TraitId,
     pub name: String,
     pub gen_params: Vec<GenVar<'traits>>,
-    pub assoc_tys: Vec<String>,
+    pub assoc_tys: Vec<AssocTyDef<'traits>>,
 }
 
 impl TraitDef<'_> {
     pub fn try_resolve_assoc_ty(&self, name: &str) -> Option<usize> {
-        self.assoc_tys.iter().position(|n| n == name)
+        self.assoc_tys.iter().position(|def| def.name == name)
     }
 }
 

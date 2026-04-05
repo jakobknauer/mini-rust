@@ -100,6 +100,7 @@ where
 }
 
 impl<T> IntoIterator for Vec<T> {
+    type Item = T;
     type IntoIter = VecIter<T>;
 
     fn into_iter(self) -> VecIter<T> {
@@ -127,6 +128,7 @@ impl<T> Iterator for VecIter<T> {
 }
 
 impl<T> IntoIterator for &Vec<T> {
+    type Item = &T;
     type IntoIter = RefVecIter<T>;
 
     fn into_iter(self) -> RefVecIter<T> {
@@ -150,6 +152,7 @@ impl<T> Iterator for RefVecIter<T> {
 }
 
 impl<T> IntoIterator for &mut Vec<T> {
+    type Item = &mut T;
     type IntoIter = RefMutVecIter<T>;
 
     fn into_iter(self) -> RefMutVecIter<T> {

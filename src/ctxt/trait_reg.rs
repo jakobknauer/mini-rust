@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use crate::ctxt::{
     fns::Fn,
-    traits::{Trait, TraitDef, TraitId, TraitMthd, TraitMthdDef},
+    traits::{AssocTyDef, Trait, TraitDef, TraitId, TraitMthd, TraitMthdDef},
     ty::GenVar,
 };
 
@@ -25,7 +25,7 @@ impl<'traits> TraitReg<'traits> {
         &self,
         name: &str,
         gen_params: Vec<GenVar<'traits>>,
-        assoc_tys: Vec<String>,
+        assoc_tys: Vec<AssocTyDef<'traits>>,
     ) -> Trait<'traits> {
         let idx = self.traits.borrow().len();
         let trait_: Trait<'traits> = self.arena.alloc(TraitDef {
@@ -96,9 +96,7 @@ impl<'traits> TraitReg<'traits> {
             .copied()
             .filter_map(move |trait_| {
                 trait_
-                    .assoc_tys
-                    .iter()
-                    .position(|assoc_ty| assoc_ty == ident)
+                    .try_resolve_assoc_ty(ident)
                     .map(|assoc_ty_idx| (trait_, assoc_ty_idx))
             })
             .collect::<Vec<_>>()

@@ -65,6 +65,7 @@ impl<T> Option<T> {
 }
 
 impl<T> IntoIterator for Option<T> {
+    type Item = T;
     type IntoIter = OptionIter<T>;
 
     fn into_iter(self) -> OptionIter<T> {

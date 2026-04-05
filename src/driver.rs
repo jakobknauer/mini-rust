@@ -238,6 +238,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
     }
 
     fn register_traits(&mut self) -> Result<(), DriverError<'arena>> {
+        // Phase 1: register all traits with empty bounds (bounds need TraitSelf which requires the Trait pointer)
         for ast_trait in self.ast.traits().iter() {
             let trait_gen_params: Vec<_> = ast_trait
                 .gen_params
@@ -245,15 +246,46 @@ impl<'a, 'arena> Driver<'a, 'arena> {
                 .map(|gp| self.ctxt.tys.register_gen_var(gp))
                 .collect();
 
-            let assoc_tys = ast_trait.assoc_ty_names.to_vec();
+            let assoc_tys = ast_trait
+                .assoc_tys
+                .iter()
+                .map(|a| traits::AssocTyDef {
+                    name: a.name.clone(),
+                    bounds: std::cell::RefCell::new(Vec::new()),
+                })
+                .collect();
             let trait_ = self
                 .ctxt
                 .traits
-                .register_trait(&ast_trait.name, trait_gen_params.clone(), assoc_tys);
+                .register_trait(&ast_trait.name, trait_gen_params, assoc_tys);
             self.ast_meta.traits.insert(ast_trait.1, trait_);
         }
 
         self.populate_language_item_traits()?;
+
+        // Phase 2: resolve associated type bounds now that all traits are registered
+        for ast_trait in self.ast.traits().iter() {
+            let trait_ = self.ast_meta.traits[&ast_trait.1];
+            let self_ty = self.ctxt.tys.trait_self(trait_);
+            let trait_gen_args: Vec<_> = trait_.gen_params.iter().map(|&gp| self.ctxt.tys.gen_var(gp)).collect();
+            let trait_gen_args = self.ctxt.tys.ty_slice(&trait_gen_args);
+            let trait_inst = TraitInst::new(trait_, trait_gen_args).unwrap();
+            for (assoc_ty_idx, (ast_assoc_ty, assoc_ty_def)) in
+                ast_trait.assoc_tys.iter().zip(trait_.assoc_tys.iter()).enumerate()
+            {
+                let res_ctxt = ResCtxt {
+                    gen_vars: &trait_.gen_params,
+                    self_ty: Some(self_ty),
+                    constraints: &[],
+                };
+                let assoc_ty_subject = self.ctxt.tys.assoc_ty(self_ty, trait_inst, assoc_ty_idx);
+                let mut bounds = Vec::new();
+                for ast_bound in &ast_assoc_ty.bounds {
+                    bounds.extend(self.resolve_constraint_requirement(assoc_ty_subject, ast_bound, res_ctxt)?);
+                }
+                *assoc_ty_def.bounds.borrow_mut() = bounds;
+            }
+        }
 
         Ok(())
     }

@@ -66,10 +66,12 @@ pub fn typeck<'a, 'ctxt: 'a>(
     ctxt: &'a mut ctxt::Ctxt<'ctxt>,
     fn_: &'a hlr::Fn<'ctxt>,
 ) -> TypeckResult<'ctxt, HlrTyping<'ctxt>> {
+    let mut constraints: Vec<_> = fn_.fn_.all_constraints().cloned().collect();
+    ctxt.expand_constraints_with_assoc_bounds(&mut constraints);
     let typeck = Typeck {
         ctxt,
         fn_,
-        constraints: fn_.fn_.all_constraints().cloned().collect(),
+        constraints,
         type_vars: HashMap::new(),
         typing: Default::default(),
         closure_counter: 0,

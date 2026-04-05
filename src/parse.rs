@@ -428,15 +428,23 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let gen_params = self.parse_gen_params()?;
 
         let mut mthds = Vec::new();
-        let mut assoc_ty_names = Vec::new();
+        let mut assoc_tys = Vec::new();
 
         self.tokens.expect_token(Token::LBrace)?;
         loop {
             match self.tokens.current() {
                 Some(Token::Keyword(Keyword::Type)) => {
                     self.tokens.advance();
-                    assoc_ty_names.push(self.tokens.expect_identifier()?);
+                    let name = self.tokens.expect_identifier()?;
+                    let mut bounds = Vec::new();
+                    if self.tokens.advance_if(Token::Colon) {
+                        bounds.push(self.parse_constraint_requirement()?);
+                        while self.tokens.advance_if(Token::Plus) {
+                            bounds.push(self.parse_constraint_requirement()?);
+                        }
+                    }
                     self.tokens.expect_token(Token::Semicolon)?;
+                    assoc_tys.push(AssocTyDef { name, bounds });
                 }
                 Some(Token::Keyword(Keyword::Fn)) => {
                     let mthd = self.parse_function(true)?;
@@ -453,7 +461,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             name,
             gen_params,
             mthds: self.builder.fn_slice(&mthds),
-            assoc_ty_names,
+            assoc_tys,
         })
     }
 

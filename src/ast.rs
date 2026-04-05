@@ -288,11 +288,17 @@ pub struct TraitAnnot<'ast> {
 }
 
 #[derive(Debug)]
+pub struct AssocTyDef<'ast> {
+    pub name: String,
+    pub bounds: Vec<ConstraintRequirement<'ast>>,
+}
+
+#[derive(Debug)]
 pub struct TraitDef<'ast> {
     pub name: String,
     pub gen_params: Vec<String>,
     pub mthds: FnSlice<'ast>,
-    pub assoc_ty_names: Vec<String>,
+    pub assoc_tys: Vec<AssocTyDef<'ast>>,
 }
 
 #[derive(Clone, Copy, Debug)]

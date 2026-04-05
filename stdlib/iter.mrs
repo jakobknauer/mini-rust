@@ -1,5 +1,6 @@
 trait IntoIterator {
-    type IntoIter;
+    type Item;
+    type IntoIter: Iterator<Item = Self::Item>;
     fn into_iter(self) -> <Self as IntoIterator>::IntoIter;
 }
 
@@ -7,6 +8,7 @@ impl<I> IntoIterator for I
 where
     I: Iterator
 {
+    type Item = <I as Iterator>::Item;
     type IntoIter = I;
 
     fn into_iter(self) -> I {
