@@ -528,6 +528,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_stmt(&mut self) -> Result<(Stmt<'ast>, StmtType), ParserErr> {
+        // Block-like expressions (if, loop, match, bare blocks, etc.) must be parsed directly
+        // via their specific parsers, NOT through parse_expr. If routed through parse_expr,
+        // infix operators on the next line would be consumed as continuations. For example:
+        //   if cond { ... }
+        //   *ptr = val;        // `*` would be parsed as multiplication with the if expr
         match self.tokens.current() {
             Some(Token::Keyword(Keyword::Let)) => {
                 let stmt = self.parse_let_stmt()?;
@@ -1059,11 +1064,18 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         while Some(&Token::RBrace) != self.tokens.current() {
             let pattern = self.parse_variant_pattern()?;
             self.tokens.expect_token(Token::BoldArrow)?;
-            let value = self.parse_expr(true)?; // Allow top-level struct expr in match arm body
-
+            let comma_optional = matches!(
+                self.tokens.current(),
+                Some(
+                    Token::LBrace
+                        | Token::Keyword(Keyword::If | Keyword::Loop | Keyword::While | Keyword::For | Keyword::Match)
+                )
+            );
+            let value = self.parse_expr(true)?;
             arms.push(MatchArm { pattern, value });
 
-            if !self.tokens.advance_if(Token::Comma) {
+            let had_comma = self.tokens.advance_if(Token::Comma);
+            if !had_comma && !comma_optional {
                 break;
             }
         }

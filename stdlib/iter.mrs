@@ -94,7 +94,7 @@ where
                     if (self.pred)(item) {
                         return Option::Some { item };
                     }
-                },
+                }
                 Option::None => {
                     break;
                 }
