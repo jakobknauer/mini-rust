@@ -893,11 +893,10 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                     .bindings
                     .insert(field.binding_name.clone(), binding);
 
-                // TODO: allow `mut` on individual struct pattern bindings, e.g. `Some(mut x)`
                 Ok(hlr::VariantPatternField {
                     field_index,
                     binding,
-                    mutable: false,
+                    mutable: field.mutable,
                 })
             })
             .collect::<AstLoweringResult<_>>()?;

@@ -498,6 +498,7 @@ pub struct VariantPattern<'ast> {
 pub struct VariantPatternField {
     pub field_name: String,
     pub binding_name: String,
+    pub mutable: bool,
 }
 
 pub type TyAnnot<'ast> = &'ast TyAnnotKind<'ast>;

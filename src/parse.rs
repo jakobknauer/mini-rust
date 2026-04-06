@@ -1079,18 +1079,28 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
         let fields = if self.tokens.advance_if(Token::LBrace) {
             let mut fields = Vec::new();
-            while let Some(Token::Identifier(field_name)) = self.tokens.current() {
-                let field_name = field_name.clone();
-                self.tokens.advance(); // consume field name
-                let binding_name = if self.tokens.advance_if(Token::Colon) {
-                    self.tokens.expect_identifier()?
+            while matches!(
+                self.tokens.current(),
+                Some(Token::Identifier(_)) | Some(Token::Keyword(Keyword::Mut))
+            ) {
+                let mutable_prefix = self.tokens.advance_if_keyword(Keyword::Mut);
+                let field_name = self.tokens.expect_identifier()?;
+                let has_colon = self.tokens.advance_if(Token::Colon);
+                if mutable_prefix && has_colon {
+                    return Err(ParserErr::UnexpectedToken(Token::Colon));
+                }
+                let shorthand = !has_colon;
+                let (binding_name, mutable) = if shorthand {
+                    (field_name.clone(), mutable_prefix)
                 } else {
-                    field_name.clone()
+                    let mutable_binding = self.tokens.advance_if_keyword(Keyword::Mut);
+                    (self.tokens.expect_identifier()?, mutable_binding)
                 };
 
                 fields.push(VariantPatternField {
                     field_name,
                     binding_name,
+                    mutable,
                 });
 
                 if !self.tokens.advance_if(Token::Comma) {

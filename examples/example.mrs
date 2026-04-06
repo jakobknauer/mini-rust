@@ -19,6 +19,15 @@ fn main() -> i32 {
     let sum = consume_into_iter(v);
     printf("%d\n", sum);
 
+    let opt = Option::Some { item: 42 };
+    match opt {
+        Option::Some { item: mut x } => {
+            x = x + 1;
+            printf("%d\n", x);
+        },
+        Option::None => {}
+    }
+
     0
 }
 
