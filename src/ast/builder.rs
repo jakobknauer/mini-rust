@@ -113,6 +113,10 @@ impl<'ast> AstBuilder<'ast> {
         })
     }
 
+    pub fn pattern(&self, pattern: PatternKind<'ast>) -> Pattern<'ast> {
+        self.ast.pattern(pattern)
+    }
+
     pub fn match_(&self, scrutinee: Expr<'ast>, arms: Vec<MatchArm<'ast>>) -> Expr<'ast> {
         self.ast.expr(ExprKind::Match { scrutinee, arms })
     }

@@ -1062,7 +1062,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         self.tokens.expect_token(Token::LBrace)?;
 
         while Some(&Token::RBrace) != self.tokens.current() {
-            let pattern = self.parse_variant_pattern()?;
+            let pattern = self.parse_pattern()?;
             self.tokens.expect_token(Token::BoldArrow)?;
             let comma_optional = matches!(
                 self.tokens.current(),
@@ -1086,7 +1086,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(expr)
     }
 
-    fn parse_variant_pattern(&mut self) -> Result<VariantPattern<'ast>, ParserErr> {
+    fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
         let variant = self.parse_path(true)?;
 
         let fields = if self.tokens.advance_if(Token::LBrace) {
@@ -1126,7 +1126,9 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Vec::new()
         };
 
-        Ok(VariantPattern { variant, fields })
+        Ok(self
+            .builder
+            .pattern(PatternKind::Variant(VariantPattern { variant, fields })))
     }
 
     fn parse_ty_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {

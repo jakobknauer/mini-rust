@@ -773,14 +773,14 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
         // Some arm: Option::Some { item: binding_var } => body
         let binding_var = self.hlr.var_id();
-        let some_pattern = hlr::VariantPattern {
+        let some_pattern = self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
             variant: hlr::Val::Variant(option_enum, some_index, None),
             fields: self.hlr.variant_pattern_fields(vec![hlr::VariantPatternField {
                 field_index: 0,
                 binding: binding_var,
                 mutable,
             }]),
-        };
+        }));
         self.scopes.push_back(Scope::default());
         self.scopes
             .back_mut()
@@ -793,10 +793,10 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         self.scopes.pop_back();
 
         // None arm: Option::None => { break }
-        let none_pattern = hlr::VariantPattern {
+        let none_pattern = self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
             variant: hlr::Val::Variant(option_enum, none_index, None),
             fields: self.hlr.variant_pattern_fields(vec![]),
-        };
+        }));
         self.start_new_block();
         self.lower_break_stmt()?;
         let unit = self.hlr.expr(hlr::ExprDef::Tuple(self.hlr.expr_slice(&[])));
@@ -835,7 +835,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             .iter()
             .map(|arm| {
                 self.scopes.push_back(Scope::default());
-                let pattern = self.lower_pattern(&arm.pattern)?;
+                let pattern = self.lower_pattern(arm.pattern)?;
                 let body = self.lower_expr(arm.value)?;
                 self.scopes.pop_back();
                 Ok(hlr::MatchArm { pattern, body })
@@ -850,7 +850,13 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         Ok(self.hlr.expr(expr))
     }
 
-    fn lower_pattern(&mut self, pattern: &ast::VariantPattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
+    fn lower_pattern(&mut self, pattern: ast::Pattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
+        match pattern {
+            ast::PatternKind::Variant(pattern) => self.lower_variant_pattern(pattern),
+        }
+    }
+
+    fn lower_variant_pattern(&mut self, pattern: &ast::VariantPattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         let variant = self.resolve_path_to_constructor(&pattern.variant)?;
 
         let hlr::Val::Variant(enum_, variant_index, ..) = variant else {
@@ -902,7 +908,9 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             .collect::<AstLoweringResult<_>>()?;
         let fields = self.hlr.variant_pattern_fields(fields);
 
-        Ok(hlr::VariantPattern { variant, fields })
+        Ok(self
+            .hlr
+            .pattern(hlr::PatternKind::Variant(hlr::VariantPattern { variant, fields })))
     }
 
     fn lower_deref_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'ctxt>> {

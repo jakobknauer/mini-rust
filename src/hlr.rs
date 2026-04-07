@@ -104,4 +104,8 @@ impl<'hlr> Hlr<'hlr> {
     ) -> &'hlr [VariantPatternField] {
         self.arena.alloc_slice_fill_iter(fields)
     }
+
+    pub fn pattern(&'hlr self, pattern: PatternKind<'hlr>) -> Pattern<'hlr> {
+        self.arena.alloc(pattern)
+    }
 }

@@ -60,6 +60,10 @@ impl<'ast> Ast<'ast> {
         self.arena.alloc(expr)
     }
 
+    pub fn pattern(&self, pattern: PatternKind<'ast>) -> Pattern<'ast> {
+        self.arena.alloc(pattern)
+    }
+
     pub fn expr_slice(&self, exprs: &[Expr<'ast>]) -> ExprSlice<'ast> {
         self.arena.alloc_slice_copy(exprs)
     }
@@ -486,7 +490,12 @@ pub struct MatchArm<'ast> {
     pub value: Expr<'ast>,
 }
 
-type Pattern<'ast> = VariantPattern<'ast>;
+pub type Pattern<'ast> = &'ast PatternKind<'ast>;
+
+#[derive(Debug)]
+pub enum PatternKind<'ast> {
+    Variant(VariantPattern<'ast>),
+}
 
 #[derive(Debug)]
 pub struct VariantPattern<'ast> {

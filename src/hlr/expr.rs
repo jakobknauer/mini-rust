@@ -137,7 +137,12 @@ pub struct MatchArm<'hlr> {
     pub body: Expr<'hlr>,
 }
 
-pub type Pattern<'hlr> = VariantPattern<'hlr>;
+pub type Pattern<'hlr> = &'hlr PatternKind<'hlr>;
+
+#[derive(Debug)]
+pub enum PatternKind<'hlr> {
+    Variant(VariantPattern<'hlr>),
+}
 
 #[derive(Debug)]
 pub struct VariantPattern<'hlr> {

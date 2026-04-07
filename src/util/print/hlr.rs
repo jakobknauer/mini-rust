@@ -225,10 +225,11 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.indent_level += 1;
                 for arm in arms.iter() {
                     self.indent()?;
-                    self.print_val(&arm.pattern.variant)?;
-                    if !arm.pattern.fields.is_empty() {
+                    let hlr::PatternKind::Variant(pattern) = arm.pattern;
+                    self.print_val(&pattern.variant)?;
+                    if !pattern.fields.is_empty() {
                         write!(self.writer, "(")?;
-                        for (i, field) in arm.pattern.fields.iter().enumerate() {
+                        for (i, field) in pattern.fields.iter().enumerate() {
                             if i > 0 {
                                 write!(self.writer, ", ")?;
                             }

@@ -739,7 +739,9 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let mut result_ty: Option<ty::Ty<'ctxt>> = None;
 
         for arm in arms {
-            let hlr::Val::Variant(arm_enum, variant_idx, gen_args) = &arm.pattern.variant else {
+            let hlr::PatternKind::Variant(pattern) = arm.pattern;
+
+            let hlr::Val::Variant(arm_enum, variant_idx, gen_args) = &pattern.variant else {
                 unreachable!("match arm pattern must be Val::Variant");
             };
 
@@ -762,7 +764,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
             let variant_ty = self.ctxt.tys.get_enum_variant_ty(enum_ty, *variant_idx).unwrap();
 
-            for field in arm.pattern.fields {
+            for field in pattern.fields {
                 let field_ty = self
                     .ctxt
                     .tys

@@ -616,6 +616,34 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.copy_val(result_place).into()
     }
 
+    fn lower_pattern_condition(
+        &mut self,
+        pattern: hlr::Pattern<'ctxt>,
+        discriminant_op: mlr::Op<'ctxt>,
+        i32_ty: ty::Ty<'ctxt>,
+    ) -> Option<mlr::Op<'ctxt>> {
+        match pattern {
+            hlr::PatternKind::Variant(pattern) => {
+                let hlr::Val::Variant(_, variant_idx, _) = &pattern.variant else {
+                    panic!("variant pattern must have Val::Variant")
+                };
+                let variant_idx_op = self
+                    .builder
+                    .insert_const_op(mlr::Const::Int(*variant_idx as i64), i32_ty);
+                let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
+                let cond_val = self.builder.insert_binary_prim_val(
+                    language_items::BinaryPrimOp::EqI32,
+                    discriminant_op,
+                    variant_idx_op,
+                    bool_ty,
+                );
+                let cond_place = self.builder.alloc_place(bool_ty);
+                self.builder.insert_assign_stmt(cond_place, cond_val);
+                Some(self.builder.insert_copy_op(cond_place))
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn lower_match_arms(
         &mut self,
@@ -630,48 +658,37 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         match arms {
             [] => panic!("match must have at least one arm"),
             [arm] => {
+                // Last arm — emit unconditionally (no exhaustiveness check)
                 let arm_val = self.lower_match_arm(enum_ty, binding, arm, scrutinee_place);
                 self.builder.insert_assign_stmt(result_place, arm_val);
             }
             [first_arm, rest_arms @ ..] => {
-                let hlr::Val::Variant(_, variant_idx, _) = &first_arm.pattern.variant else {
-                    panic!("match arm pattern must be Val::Variant")
-                };
-                let variant_idx = *variant_idx;
+                let cond = self.lower_pattern_condition(first_arm.pattern, discriminant_op, i32_ty);
 
-                let variant_idx_op = self
-                    .builder
-                    .insert_const_op(mlr::Const::Int(variant_idx as i64), i32_ty);
+                if let Some(cond_op) = cond {
+                    self.builder.start_block();
+                    let arm_val = self.lower_match_arm(enum_ty, binding, first_arm, scrutinee_place);
+                    self.builder.insert_assign_stmt(result_place, arm_val);
+                    let then_block = self.builder.end_block();
 
-                let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
-                let cond_val = self.builder.insert_binary_prim_val(
-                    language_items::BinaryPrimOp::EqI32,
-                    discriminant_op,
-                    variant_idx_op,
-                    bool_ty,
-                );
-                let cond_place = self.builder.alloc_place(bool_ty);
-                self.builder.insert_assign_stmt(cond_place, cond_val);
-                let cond_op = self.builder.insert_copy_op(cond_place);
+                    self.builder.start_block();
+                    self.lower_match_arms(
+                        enum_ty,
+                        binding,
+                        rest_arms,
+                        discriminant_op,
+                        i32_ty,
+                        scrutinee_place,
+                        result_place,
+                    );
+                    let else_block = self.builder.end_block();
 
-                self.builder.start_block();
-                let first_arm_val = self.lower_match_arm(enum_ty, binding, first_arm, scrutinee_place);
-                self.builder.insert_assign_stmt(result_place, first_arm_val);
-                let then_block = self.builder.end_block();
-
-                self.builder.start_block();
-                self.lower_match_arms(
-                    enum_ty,
-                    binding,
-                    rest_arms,
-                    discriminant_op,
-                    i32_ty,
-                    scrutinee_place,
-                    result_place,
-                );
-                let else_block = self.builder.end_block();
-
-                self.builder.insert_if_stmt(cond_op, then_block, else_block);
+                    self.builder.insert_if_stmt(cond_op, then_block, else_block);
+                } else {
+                    // Pattern always matches — emit directly, remaining arms are unreachable
+                    let arm_val = self.lower_match_arm(enum_ty, binding, first_arm, scrutinee_place);
+                    self.builder.insert_assign_stmt(result_place, arm_val);
+                }
             }
         }
     }
@@ -683,7 +700,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         arm: &'ctxt hlr::MatchArm<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Val<'ctxt> {
-        let hlr::Val::Variant(_, variant_idx, _) = &arm.pattern.variant else {
+        let hlr::PatternKind::Variant(pattern) = arm.pattern;
+        let hlr::Val::Variant(_, variant_idx, _) = &pattern.variant else {
             panic!("match arm pattern must be Val::Variant")
         };
         let variant_idx = *variant_idx;
@@ -693,7 +711,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             .builder
             .insert_project_to_variant_place(scrutinee_place, variant_idx, variant_ty);
 
-        for field in arm.pattern.fields {
+        for field in pattern.fields {
             let field_ty = self
                 .builder
                 .ctxt
