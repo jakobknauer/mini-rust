@@ -116,7 +116,10 @@ impl<'a> Lexer<'a> {
     }
 
     fn try_parse_identifier_or_keyword(&mut self) -> Option<Token> {
-        if !(self.get_current_char()?.is_alphabetic() || self.get_current_char()? == '_') {
+        let c = self.get_current_char()?;
+        let is_ident_start =
+            c.is_alphabetic() || (c == '_' && self.get_next_char().is_some_and(|n| n.is_alphanumeric() || n == '_'));
+        if !is_ident_start {
             return None;
         }
 
@@ -259,8 +262,8 @@ impl Iterator for Lexer<'_> {
         let result = self
             .try_parse_three_char_token()
             .or_else(|| self.try_parse_two_char_token())
-            .or_else(|| self.try_parse_one_char_token())
             .or_else(|| self.try_parse_identifier_or_keyword())
+            .or_else(|| self.try_parse_one_char_token())
             .or_else(|| self.try_parse_number())
             .or_else(|| self.try_parse_c_char_literal())
             .or_else(|| self.try_parse_c_string_literal())
