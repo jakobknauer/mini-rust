@@ -3,6 +3,7 @@ mod err;
 mod mthd;
 mod normalize;
 mod ops;
+mod pattern;
 mod post_check;
 mod ty_annots;
 mod unify;
@@ -717,66 +718,10 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let scrutinee_ty = self.check_expr(scrutinee, None)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
 
-        let (enum_ty, binding) = match scrutinee_ty.0 {
-            ty::TyDef::Enum { .. } => (scrutinee_ty, MatchBinding::Direct),
-            &ty::TyDef::Ref(inner) => {
-                let inner = self.normalize(inner);
-                match inner.0 {
-                    ty::TyDef::Enum { .. } => (inner, MatchBinding::ByRef),
-                    _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-                }
-            }
-            &ty::TyDef::RefMut(inner) => {
-                let inner = self.normalize(inner);
-                match inner.0 {
-                    ty::TyDef::Enum { .. } => (inner, MatchBinding::ByRefMut),
-                    _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-                }
-            }
-            _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-        };
-
         let mut result_ty: Option<ty::Ty<'ctxt>> = None;
 
         for arm in arms {
-            let hlr::PatternKind::Variant(pattern) = arm.pattern;
-
-            let hlr::Val::Variant(arm_enum, variant_idx, gen_args) = &pattern.variant else {
-                unreachable!("match arm pattern must be Val::Variant");
-            };
-
-            let n_gen_params = arm_enum.gen_params.len();
-            let arm_gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
-                TypeckError::EnumGenArgCountMismatch {
-                    enum_: arm_enum,
-                    expected: n_gen_params,
-                    actual,
-                }
-            })?;
-            let arm_enum_ty = self.ctxt.tys.inst_enum(arm_enum, &arm_gen_args).unwrap();
-
-            if !self.unify(arm_enum_ty, enum_ty) {
-                return Err(TypeckError::MatchArmWrongEnum {
-                    expected: enum_ty,
-                    found: arm_enum_ty,
-                });
-            }
-
-            let variant_ty = self.ctxt.tys.get_enum_variant_ty(enum_ty, *variant_idx).unwrap();
-
-            for field in pattern.fields {
-                let field_ty = self
-                    .ctxt
-                    .tys
-                    .get_struct_field_ty(variant_ty, field.field_index)
-                    .unwrap();
-                let binding_ty = match binding {
-                    MatchBinding::Direct => field_ty,
-                    MatchBinding::ByRef => self.ctxt.tys.ref_(field_ty),
-                    MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
-                };
-                self.typing.var_types.insert(field.binding, binding_ty);
-            }
+            self.check_pattern(arm.pattern, scrutinee_ty)?;
 
             let arm_ty = self.check_expr(arm.body, result_ty)?;
 

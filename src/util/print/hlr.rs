@@ -225,17 +225,26 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.indent_level += 1;
                 for arm in arms.iter() {
                     self.indent()?;
-                    let hlr::PatternKind::Variant(pattern) = arm.pattern;
-                    self.print_val(&pattern.variant)?;
-                    if !pattern.fields.is_empty() {
-                        write!(self.writer, "(")?;
-                        for (i, field) in pattern.fields.iter().enumerate() {
-                            if i > 0 {
-                                write!(self.writer, ", ")?;
+                    match arm.pattern {
+                        hlr::PatternKind::Identifier { var_id, mutable } => {
+                            if *mutable {
+                                write!(self.writer, "mut ")?;
                             }
-                            write!(self.writer, "{}", field.binding)?;
+                            write!(self.writer, "{var_id}")?;
                         }
-                        write!(self.writer, ")")?;
+                        hlr::PatternKind::Variant(pattern) => {
+                            self.print_val(&pattern.variant)?;
+                            if !pattern.fields.is_empty() {
+                                write!(self.writer, "(")?;
+                                for (i, field) in pattern.fields.iter().enumerate() {
+                                    if i > 0 {
+                                        write!(self.writer, ", ")?;
+                                    }
+                                    write!(self.writer, "{}", field.binding)?;
+                                }
+                                write!(self.writer, ")")?;
+                            }
+                        }
                     }
                     write!(self.writer, " => ")?;
                     self.print_expr(arm.body)?;

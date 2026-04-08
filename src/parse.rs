@@ -1087,6 +1087,21 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
+        // `mut name` → mutable identifier pattern
+        if self.tokens.advance_if_keyword(Keyword::Mut) {
+            let name = self.tokens.expect_identifier()?;
+            return Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: true }));
+        }
+
+        // `name` not followed by `::` or `{` → plain identifier pattern
+        if let Some(Token::Identifier(name)) = self.tokens.current() {
+            let name = name.clone();
+            if !matches!(self.tokens.next(), Some(Token::ColonColon | Token::LBrace)) {
+                self.tokens.advance();
+                return Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: false }));
+            }
+        }
+
         let variant = self.parse_path(true)?;
 
         let fields = if self.tokens.advance_if(Token::LBrace) {

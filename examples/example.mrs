@@ -1,48 +1,14 @@
 fn main() -> i32 {
-    let mut v = Vec::new();
-    v.push(1);
-    v.push(2);
-    v.push(3);
-
-    for x in &mut v {
-        *x = *x * 2;
-    }
-
-    for x in v.iter_mut() {
-        *x = *x + 1;
-    }
-
-    for x in &v {
-        printf("%d\n", *x);
-    }
-
-    let sum = consume_into_iter(v);
-    printf("%d\n", sum);
-
-    let opt = Option::Some { item: 42 };
-    match opt {
-        Option::Some { item: mut x } => {
-            x = x + 1;
-            printf("%d\n", x);
+    let n = 7;
+    let doubled = match n {
+        mut x => { 
+            x = x * 2;
+            x
         }
-        Option::None => {}
-    }
+    };
+    printf("%d\n", doubled);
 
-    0
-}
-
-fn consume_iter<I>(iter: I) -> i32
-where
-    I: Iterator<Item = i32>
-{
-    iter.sum(0)
-}
-
-fn consume_into_iter<C>(collection: C) -> i32
-where
-    C: IntoIterator<Item = i32>
-{
-    consume_iter(collection.into_iter())
+    doubled
 }
 
 fn printf(format: *c_char, ...) -> i32;
