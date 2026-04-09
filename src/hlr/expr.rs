@@ -148,14 +148,13 @@ pub enum PatternKind<'hlr> {
 #[derive(Debug)]
 pub struct VariantPattern<'hlr> {
     pub variant: Val<'hlr>,
-    pub fields: &'hlr [VariantPatternField],
+    pub fields: &'hlr [VariantPatternField<'hlr>],
 }
 
 #[derive(Debug)]
-pub struct VariantPatternField {
+pub struct VariantPatternField<'hlr> {
     pub field_index: usize,
-    pub binding: VarId,
-    pub mutable: bool,
+    pub pattern: Pattern<'hlr>,
 }
 
 #[derive(Clone, Copy, Debug)]

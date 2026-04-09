@@ -1116,19 +1116,17 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 if mutable_prefix && has_colon {
                     return Err(ParserErr::UnexpectedToken(Token::Colon));
                 }
-                let shorthand = !has_colon;
-                let (binding_name, mutable) = if shorthand {
-                    (field_name.clone(), mutable_prefix)
+                let pattern = if has_colon {
+                    self.parse_pattern()?
                 } else {
-                    let mutable_binding = self.tokens.advance_if_keyword(Keyword::Mut);
-                    (self.tokens.expect_identifier()?, mutable_binding)
+                    // Shorthand: `{ field }` or `{ mut field }` — desugar to an identifier pattern
+                    self.builder.pattern(PatternKind::Identifier {
+                        name: field_name.clone(),
+                        mutable: mutable_prefix,
+                    })
                 };
 
-                fields.push(VariantPatternField {
-                    field_name,
-                    binding_name,
-                    mutable,
-                });
+                fields.push(VariantPatternField { field_name, pattern });
 
                 if !self.tokens.advance_if(Token::Comma) {
                     break;

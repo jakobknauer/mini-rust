@@ -240,7 +240,10 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                                     if i > 0 {
                                         write!(self.writer, ", ")?;
                                     }
-                                    write!(self.writer, "{}", field.binding)?;
+                                    match field.pattern {
+                                        hlr::PatternKind::Identifier { var_id, .. } => write!(self.writer, "{var_id}")?,
+                                        hlr::PatternKind::Variant(_) => write!(self.writer, "<nested>")?,
+                                    }
                                 }
                                 write!(self.writer, ")")?;
                             }

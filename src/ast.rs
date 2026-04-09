@@ -501,14 +501,13 @@ pub enum PatternKind<'ast> {
 #[derive(Debug)]
 pub struct VariantPattern<'ast> {
     pub variant: Path<'ast>,
-    pub fields: Vec<VariantPatternField>,
+    pub fields: Vec<VariantPatternField<'ast>>,
 }
 
 #[derive(Debug)]
-pub struct VariantPatternField {
+pub struct VariantPatternField<'ast> {
     pub field_name: String,
-    pub binding_name: String,
-    pub mutable: bool,
+    pub pattern: Pattern<'ast>,
 }
 
 pub type TyAnnot<'ast> = &'ast TyAnnotKind<'ast>;

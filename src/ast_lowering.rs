@@ -773,12 +773,15 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
         // Some arm: Option::Some { item: binding_var } => body
         let binding_var = self.hlr.var_id();
+        let binding_pattern = self.hlr.pattern(hlr::PatternKind::Identifier {
+            var_id: binding_var,
+            mutable,
+        });
         let some_pattern = self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
             variant: hlr::Val::Variant(option_enum, some_index, None),
             fields: self.hlr.variant_pattern_fields(vec![hlr::VariantPatternField {
                 field_index: 0,
-                binding: binding_var,
-                mutable,
+                pattern: binding_pattern,
             }]),
         }));
         self.scopes.push_back(Scope::default());
@@ -900,18 +903,9 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                         ),
                     })?;
 
-                let binding = self.hlr.var_id();
-                self.scopes
-                    .back_mut()
-                    .unwrap()
-                    .bindings
-                    .insert(field.binding_name.clone(), binding);
+                let pattern = self.lower_pattern(field.pattern)?;
 
-                Ok(hlr::VariantPatternField {
-                    field_index,
-                    binding,
-                    mutable: field.mutable,
-                })
+                Ok(hlr::VariantPatternField { field_index, pattern })
             })
             .collect::<AstLoweringResult<_>>()?;
         let fields = self.hlr.variant_pattern_fields(fields);

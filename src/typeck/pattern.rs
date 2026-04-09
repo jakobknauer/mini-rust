@@ -60,7 +60,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 MatchBinding::ByRef => self.ctxt.tys.ref_(field_ty),
                 MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
             };
-            self.typing.var_types.insert(field.binding, binding_ty);
+            self.check_pattern(field.pattern, binding_ty)?;
         }
 
         Ok(())
