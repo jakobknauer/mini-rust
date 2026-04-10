@@ -61,9 +61,12 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         let unit_ty = self.ctxt.tys.unit();
 
+        let c_char_ty = self.ctxt.tys.primitive(ty::Primitive::CChar);
+
         let i32 = left_ty == i32_ty && right_ty == i32_ty;
         let bool = left_ty == bool_ty && right_ty == bool_ty;
         let unit = left_ty == unit_ty && right_ty == unit_ty;
+        let c_char = left_ty == c_char_ty && right_ty == c_char_ty;
 
         match operator {
             Add if i32 => Some((AddI32, i32_ty)),
@@ -74,9 +77,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             Equal if i32 => Some((EqI32, bool_ty)),
             Equal if bool => Some((EqBool, bool_ty)),
             Equal if unit => Some((EqUnit, bool_ty)),
+            Equal if c_char => Some((EqCChar, bool_ty)),
             NotEqual if i32 => Some((NeI32, bool_ty)),
             NotEqual if bool => Some((NeBool, bool_ty)),
             NotEqual if unit => Some((NeUnit, bool_ty)),
+            NotEqual if c_char => Some((NeCChar, bool_ty)),
             BitOr if bool => Some((BitOrBool, bool_ty)),
             BitAnd if bool => Some((BitAndBool, bool_ty)),
             BitOr if i32 => Some((BitOrI32, i32_ty)),

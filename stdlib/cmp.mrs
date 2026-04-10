@@ -11,6 +11,12 @@ impl Eq<i32> for i32 {
     }
 }
 
+impl Eq<c_char> for c_char {
+    fn eq(&self, other: &c_char) -> bool {
+        *self == *other
+    }
+}
+
 impl Eq<bool> for bool {
     fn eq(&self, other: &bool) -> bool {
         *self == *other

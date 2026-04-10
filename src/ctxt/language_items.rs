@@ -34,6 +34,8 @@ pub enum BinaryPrimOp {
     NeI32,
     EqBool,
     NeBool,
+    EqCChar,
+    NeCChar,
     EqUnit,
     NeUnit,
     BitOrBool,
