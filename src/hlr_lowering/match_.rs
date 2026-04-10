@@ -66,7 +66,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Op<'ctxt> {
         match pattern {
-            hlr::PatternKind::Identifier { .. } => self.builder.insert_bool_const(true),
+            hlr::PatternKind::Wildcard | hlr::PatternKind::Identifier { .. } => self.builder.insert_bool_const(true),
             hlr::PatternKind::Variant(pattern) => {
                 self.lower_variant_pattern_condition(pattern, scrutinee_ty, scrutinee_place)
             }
@@ -161,6 +161,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Val<'ctxt> {
         match arm.pattern {
+            hlr::PatternKind::Wildcard => {}
             hlr::PatternKind::Identifier { .. } => {
                 self.lower_pattern_bindings(arm.pattern, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
             }
@@ -210,6 +211,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         binding: MatchBinding,
     ) {
         match pattern {
+            hlr::PatternKind::Wildcard => {}
             hlr::PatternKind::Identifier { var_id, mutable } => {
                 let binding_ty = self.typing.var_types[var_id];
                 let loc = if *mutable {

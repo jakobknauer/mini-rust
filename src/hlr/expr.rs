@@ -143,6 +143,7 @@ pub type Pattern<'hlr> = &'hlr PatternKind<'hlr>;
 pub enum PatternKind<'hlr> {
     Variant(VariantPattern<'hlr>),
     Identifier { var_id: VarId, mutable: bool },
+    Wildcard,
 }
 
 #[derive(Debug)]

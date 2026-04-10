@@ -864,6 +864,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                     mutable: *mutable,
                 }))
             }
+            ast::PatternKind::Wildcard => Ok(self.hlr.pattern(hlr::PatternKind::Wildcard)),
         }
     }
 

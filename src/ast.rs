@@ -496,6 +496,7 @@ pub type Pattern<'ast> = &'ast PatternKind<'ast>;
 pub enum PatternKind<'ast> {
     Variant(VariantPattern<'ast>),
     Identifier { name: String, mutable: bool },
+    Wildcard,
 }
 
 #[derive(Debug)]

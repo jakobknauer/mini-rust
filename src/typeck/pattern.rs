@@ -10,6 +10,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         scrutinee_ty: ty::Ty<'ctxt>,
     ) -> TypeckResult<'ctxt, ()> {
         match pattern {
+            hlr::PatternKind::Wildcard => Ok(()),
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
             hlr::PatternKind::Variant(pattern) => self.check_variant_pattern(pattern, scrutinee_ty),
         }

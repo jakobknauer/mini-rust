@@ -226,6 +226,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 for arm in arms.iter() {
                     self.indent()?;
                     match arm.pattern {
+                        hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
                         hlr::PatternKind::Identifier { var_id, mutable } => {
                             if *mutable {
                                 write!(self.writer, "mut ")?;
@@ -241,6 +242,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                                         write!(self.writer, ", ")?;
                                     }
                                     match field.pattern {
+                                        hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
                                         hlr::PatternKind::Identifier { var_id, .. } => write!(self.writer, "{var_id}")?,
                                         hlr::PatternKind::Variant(_) => write!(self.writer, "<nested>")?,
                                     }

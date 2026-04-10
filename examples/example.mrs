@@ -2,10 +2,17 @@ fn main() -> i32 {
     let nested: Option<Option<i32>> = Option::Some { item: Option::Some { item: 42 } };
 
     match nested {
-        Option::Some { item: Option::Some { item: x } } => x,
+        Option::Some { item: Option::Some { item: _ } } => 2,
         Option::Some { item: Option::None } => 1,
         Option::None => 0
-    }
+    };
+
+    let x = 3;
+    match x {
+        _ => printf("Wildcard pattern\n")
+    };
+
+    0
 }
 
 fn printf(format: *c_char, ...) -> i32;

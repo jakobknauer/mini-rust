@@ -1093,6 +1093,12 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             return Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: true }));
         }
 
+        // `_` → wildcard pattern
+        if matches!(self.tokens.current(), Some(Token::Underscore)) {
+            self.tokens.advance();
+            return Ok(self.builder.pattern(PatternKind::Wildcard));
+        }
+
         // `name` not followed by `::` or `{` → plain identifier pattern
         if let Some(Token::Identifier(name)) = self.tokens.current() {
             let name = name.clone();
