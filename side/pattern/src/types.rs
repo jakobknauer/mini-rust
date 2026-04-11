@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Int,
     Tuple(Vec<Type>),
@@ -19,6 +19,7 @@ impl Type {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub enum Constructor {
     Some,
     None,

@@ -2,7 +2,7 @@ use crate::Constructor;
 use crate::Pattern;
 use crate::Type;
 
-fn valid_pattern(pattern: &Pattern, type_: &Type) -> bool {
+pub fn valid_pattern(pattern: &Pattern, type_: &Type) -> bool {
     match (pattern, type_) {
         (Pattern::Wildcard, _) => true,
         (Pattern::Alternative(patterns), type_) => patterns.iter().all(|p| valid_pattern(p, type_)),
@@ -17,7 +17,7 @@ fn valid_pattern(pattern: &Pattern, type_: &Type) -> bool {
     }
 }
 
-fn matches(pattern: &Pattern, constructor: &Constructor) -> bool {
+pub fn matches(pattern: &Pattern, constructor: &Constructor) -> bool {
     match (pattern, constructor) {
         (Pattern::Alternative(..), _) => panic!(),
 
@@ -27,6 +27,17 @@ fn matches(pattern: &Pattern, constructor: &Constructor) -> bool {
         (Pattern::Tuple(ts), Constructor::Tuple(n)) => ts.len() == *n,
 
         (_, _) => false,
+    }
+}
+
+pub fn as_constructor(pattern: &Pattern) -> Option<Constructor> {
+    match pattern {
+        Pattern::Wildcard => None,
+        Pattern::Alternative(patterns) => unreachable!(),
+        Pattern::Constant(_) => None,
+        Pattern::Tuple(patterns) => Some(Constructor::Tuple(patterns.len())),
+        Pattern::Some(pattern) => Some(Constructor::Some),
+        Pattern::None => Some(Constructor::None),
     }
 }
 
