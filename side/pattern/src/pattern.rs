@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Eq)]
+use itertools::Itertools;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pattern {
     Wildcard,
     Alternative(Vec<Pattern>),
@@ -15,59 +17,20 @@ impl Pattern {
     pub fn some(p: Pattern) -> Pattern {
         Pattern::Some(Box::new(p))
     }
-}
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Type {
-    Int,
-    Tuple(Vec<Type>),
-    Option(Box<Type>),
-}
-
-impl Type {
-    pub fn option(t: Type) -> Type {
-        Type::Option(Box::new(t))
-    }
-}
-
-fn valid_pattern(pattern: &Pattern, type_: &Type) -> bool {
-    match (pattern, type_) {
-        (Pattern::Wildcard, _) => true,
-        (Pattern::Alternative(patterns), type_) => patterns.iter().all(|p| valid_pattern(p, type_)),
-        (Pattern::Constant(_), Type::Int) => true,
-        (Pattern::Tuple(ps), Type::Tuple(ts)) => {
-            ps.len() == ts.len() && ps.iter().zip(ts).all(|(p, t)| valid_pattern(p, t))
-        }
-        (Pattern::Some(p), Type::Option(t)) => valid_pattern(p, t),
-        (Pattern::None, Type::Option(_)) => true,
-
-        (_, _) => false,
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_valid_pattern() {
-        let test_cases = [
-            (&Pattern::Constant(3), &Type::Int, true),
-            (&Pattern::Constant(3), &Type::Tuple(vec![]), false),
-            (
-                &Pattern::some(Pattern::some(Pattern::Wildcard)),
-                &Type::option(Type::option(Type::Int)),
-                true,
-            ),
-            (
-                &Pattern::some(Pattern::some(Pattern::Wildcard)),
-                &Type::option(Type::Int),
-                false,
-            ),
-        ];
-
-        for (p, t, expected) in test_cases {
-            assert_eq!(expected, valid_pattern(p, t))
+    pub fn expand_alternatives(&self) -> Vec<Pattern> {
+        match self {
+            Pattern::Wildcard => vec![Pattern::Wildcard],
+            Pattern::Alternative(patterns) => patterns.iter().flat_map(|p| p.expand_alternatives()).collect(),
+            Pattern::Constant(n) => vec![Pattern::Constant(*n)],
+            Pattern::Tuple(patterns) => patterns
+                .iter()
+                .map(|p| p.expand_alternatives())
+                .multi_cartesian_product()
+                .map(Pattern::Tuple)
+                .collect(),
+            Pattern::Some(pattern) => pattern.expand_alternatives().into_iter().map(Pattern::some).collect(),
+            Pattern::None => vec![Pattern::None],
         }
     }
 }
