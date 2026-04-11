@@ -34,3 +34,38 @@ impl Pattern {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_expand_alternatives() {
+        let test_cases = [
+            (
+                Pattern::Alternative(vec![Pattern::Constant(1), Pattern::Constant(2)]),
+                vec![Pattern::Constant(1), Pattern::Constant(2)],
+            ),
+            (
+                Pattern::some(Pattern::Alternative(vec![Pattern::Constant(1), Pattern::Constant(2)])),
+                vec![Pattern::some(Pattern::Constant(1)), Pattern::some(Pattern::Constant(2))],
+            ),
+            (
+                Pattern::Tuple(vec![
+                    Pattern::Alternative(vec![Pattern::Constant(1), Pattern::Constant(2)]),
+                    Pattern::Alternative(vec![Pattern::Constant(3), Pattern::Constant(4)]),
+                ]),
+                vec![
+                    Pattern::Tuple(vec![Pattern::Constant(1), Pattern::Constant(3)]),
+                    Pattern::Tuple(vec![Pattern::Constant(1), Pattern::Constant(4)]),
+                    Pattern::Tuple(vec![Pattern::Constant(2), Pattern::Constant(3)]),
+                    Pattern::Tuple(vec![Pattern::Constant(2), Pattern::Constant(4)]),
+                ],
+            ),
+        ];
+
+        for (pattern, expected) in test_cases {
+            assert_eq!(expected, pattern.expand_alternatives());
+        }
+    }
+}
