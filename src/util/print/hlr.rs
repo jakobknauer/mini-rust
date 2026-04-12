@@ -49,13 +49,9 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             }
             write!(self.writer, "{}: {}", var_id, param.ty)?;
         }
-        writeln!(self.writer, ") -> {} {{", hlr_fn.fn_.return_ty)?;
-
-        self.indent_level += 1;
-        self.print_expr_indented(hlr_fn.body)?;
-        writeln!(self.writer)?;
-        self.indent_level -= 1;
-        writeln!(self.writer, "}}")
+        write!(self.writer, ") -> {} ", hlr_fn.fn_.return_ty)?;
+        self.print_expr(hlr_fn.body)?;
+        writeln!(self.writer)
     }
 
     fn print_expr_indented(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), std::io::Error> {
@@ -225,49 +221,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 self.indent_level += 1;
                 for arm in arms.iter() {
                     self.indent()?;
-                    match arm.pattern {
-                        hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
-                        hlr::PatternKind::Identifier { var_id, mutable } => {
-                            if *mutable {
-                                write!(self.writer, "mut ")?;
-                            }
-                            write!(self.writer, "{var_id}")?;
-                        }
-                        hlr::PatternKind::Variant(pattern) => {
-                            self.print_val(&pattern.variant)?;
-                            if !pattern.fields.is_empty() {
-                                write!(self.writer, "(")?;
-                                for (i, field) in pattern.fields.iter().enumerate() {
-                                    if i > 0 {
-                                        write!(self.writer, ", ")?;
-                                    }
-                                    match field.pattern {
-                                        hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
-                                        hlr::PatternKind::Identifier { var_id, .. } => write!(self.writer, "{var_id}")?,
-                                        hlr::PatternKind::Variant(_) => write!(self.writer, "<nested>")?,
-                                        hlr::PatternKind::Tuple(_) => write!(self.writer, "<nested>")?,
-                                    }
-                                }
-                                write!(self.writer, ")")?;
-                            }
-                        }
-                        hlr::PatternKind::Tuple(sub_patterns) => {
-                            write!(self.writer, "(")?;
-                            for (i, sub_pattern) in sub_patterns.iter().enumerate() {
-                                if i > 0 {
-                                    write!(self.writer, ", ")?;
-                                }
-                                match sub_pattern {
-                                    hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
-                                    hlr::PatternKind::Identifier { var_id, .. } => write!(self.writer, "{var_id}")?,
-                                    hlr::PatternKind::Variant(_) | hlr::PatternKind::Tuple(_) => {
-                                        write!(self.writer, "<nested>")?
-                                    }
-                                }
-                            }
-                            write!(self.writer, ")")?;
-                        }
-                    }
+                    self.print_pattern(arm.pattern)?;
                     write!(self.writer, " => ")?;
                     self.print_expr(arm.body)?;
                     writeln!(self.writer, ",")?;
@@ -322,6 +276,42 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                     write!(self.writer, ">")?;
                 }
                 Ok(())
+            }
+        }
+    }
+
+    fn print_pattern(&mut self, pattern: hlr::Pattern<'ctxt>) -> Result<(), std::io::Error> {
+        match pattern {
+            hlr::PatternKind::Wildcard => write!(self.writer, "_"),
+            hlr::PatternKind::Identifier { var_id, mutable } => {
+                if *mutable {
+                    write!(self.writer, "mut ")?;
+                }
+                write!(self.writer, "{var_id}")
+            }
+            hlr::PatternKind::Variant(pattern) => {
+                self.print_val(&pattern.variant)?;
+                if !pattern.fields.is_empty() {
+                    write!(self.writer, "(")?;
+                    for (i, field) in pattern.fields.iter().enumerate() {
+                        if i > 0 {
+                            write!(self.writer, ", ")?;
+                        }
+                        self.print_pattern(field.pattern)?;
+                    }
+                    write!(self.writer, ")")?;
+                }
+                Ok(())
+            }
+            hlr::PatternKind::Tuple(sub_patterns) => {
+                write!(self.writer, "(")?;
+                for (i, &sub_pattern) in sub_patterns.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.writer, ", ")?;
+                    }
+                    self.print_pattern(sub_pattern)?;
+                }
+                write!(self.writer, ")")
             }
         }
     }
