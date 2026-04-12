@@ -13,6 +13,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             hlr::PatternKind::Wildcard => Ok(()),
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
             hlr::PatternKind::Variant(pattern) => self.check_variant_pattern(pattern, scrutinee_ty),
+            hlr::PatternKind::Tuple(sub_patterns) => self.check_tuple_pattern(sub_patterns, scrutinee_ty),
         }
     }
 
@@ -62,6 +63,29 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
             };
             self.check_pattern(field.pattern, binding_ty)?;
+        }
+
+        Ok(())
+    }
+
+    fn check_tuple_pattern(
+        &mut self,
+        sub_patterns: &[hlr::Pattern<'ctxt>],
+        scrutinee_ty: ty::Ty<'ctxt>,
+    ) -> TypeckResult<'ctxt, ()> {
+        let field_tys = scrutinee_ty
+            .tuple_field_tys()
+            .map_err(|()| TypeckError::NonMatchableScrutinee { ty: scrutinee_ty })?;
+
+        if sub_patterns.len() != field_tys.len() {
+            return Err(TypeckError::TuplePatternLenMismatch {
+                expected: field_tys.len(),
+                found: sub_patterns.len(),
+            });
+        }
+
+        for (pattern, &field_ty) in sub_patterns.iter().zip(field_tys) {
+            self.check_pattern(pattern, field_ty)?;
         }
 
         Ok(())

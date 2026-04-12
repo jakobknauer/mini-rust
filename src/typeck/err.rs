@@ -110,6 +110,10 @@ pub enum TypeckError<'ctxt> {
     NonMatchableScrutinee {
         ty: ty::Ty<'ctxt>,
     },
+    TuplePatternLenMismatch {
+        expected: usize,
+        found: usize,
+    },
     MatchArmWrongEnum {
         expected: ty::Ty<'ctxt>,
         found: ty::Ty<'ctxt>,

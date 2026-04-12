@@ -105,6 +105,13 @@ impl<'hlr> Hlr<'hlr> {
         self.arena.alloc_slice_fill_iter(fields)
     }
 
+    pub fn patterns(
+        &'hlr self,
+        patterns: impl IntoIterator<Item = Pattern<'hlr>, IntoIter: ExactSizeIterator>,
+    ) -> &'hlr [Pattern<'hlr>] {
+        self.arena.alloc_slice_fill_iter(patterns)
+    }
+
     pub fn pattern(&'hlr self, pattern: PatternKind<'hlr>) -> Pattern<'hlr> {
         self.arena.alloc(pattern)
     }

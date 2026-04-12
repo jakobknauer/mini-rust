@@ -856,6 +856,14 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_pattern(&mut self, pattern: ast::Pattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         match pattern {
             ast::PatternKind::Variant(pattern) => self.lower_variant_pattern(pattern),
+            ast::PatternKind::Tuple(sub_patterns) => {
+                let lowered: Vec<_> = sub_patterns
+                    .iter()
+                    .map(|&p| self.lower_pattern(p))
+                    .collect::<AstLoweringResult<_>>()?;
+                let lowered = self.hlr.patterns(lowered);
+                Ok(self.hlr.pattern(hlr::PatternKind::Tuple(lowered)))
+            }
             ast::PatternKind::Identifier { name, mutable } => {
                 let var_id = self.hlr.var_id();
                 self.scopes.back_mut().unwrap().bindings.insert(name.clone(), var_id);

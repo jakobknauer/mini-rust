@@ -70,6 +70,9 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             hlr::PatternKind::Variant(pattern) => {
                 self.lower_variant_pattern_condition(pattern, scrutinee_ty, scrutinee_place)
             }
+            hlr::PatternKind::Tuple(sub_patterns) => {
+                self.lower_tuple_pattern_condition(sub_patterns, scrutinee_ty, scrutinee_place)
+            }
         }
     }
 
@@ -168,6 +171,9 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             hlr::PatternKind::Variant(pattern) => {
                 self.lower_variant_pattern_arm(pattern, scrutinee_ty, scrutinee_place);
             }
+            hlr::PatternKind::Tuple(sub_patterns) => {
+                self.lower_tuple_pattern_arm(sub_patterns, scrutinee_ty, scrutinee_place);
+            }
         }
         self.lower_to_val(arm.body)
     }
@@ -200,6 +206,64 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 .builder
                 .insert_field_access_place(variant_place, field.field_index, field_ty);
             self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
+        }
+    }
+
+    fn lower_tuple_pattern_condition(
+        &mut self,
+        sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
+        scrutinee_ty: ty::Ty<'ctxt>,
+        scrutinee_place: mlr::Place<'ctxt>,
+    ) -> mlr::Op<'ctxt> {
+        let field_tys = scrutinee_ty.tuple_field_tys().unwrap();
+        let guard = self.builder.insert_bool_const(true);
+        self.lower_tuple_field_conditions(guard, sub_patterns, field_tys, scrutinee_place, 0)
+    }
+
+    fn lower_tuple_field_conditions(
+        &mut self,
+        guard: mlr::Op<'ctxt>,
+        sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
+        field_tys: &'ctxt [ty::Ty<'ctxt>],
+        tuple_place: mlr::Place<'ctxt>,
+        offset: usize,
+    ) -> mlr::Op<'ctxt> {
+        let ([pattern, remaining_patterns @ ..], [field_ty, remaining_tys @ ..]) = (sub_patterns, field_tys) else {
+            return guard;
+        };
+
+        let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
+        let field_place = self.builder.insert_field_access_place(tuple_place, offset, *field_ty);
+        let combined_place = self.builder.alloc_place(bool_ty);
+
+        self.builder.start_block();
+        let field_cond = self.lower_pattern_condition(pattern, *field_ty, field_place);
+        let remaining_cond =
+            self.lower_tuple_field_conditions(field_cond, remaining_patterns, remaining_tys, tuple_place, offset + 1);
+        self.builder
+            .insert_assign_stmt(combined_place, self.builder.insert_use_val(remaining_cond));
+        let then_block = self.builder.end_block();
+
+        self.builder.start_block();
+        let false_op = self.builder.insert_bool_const(false);
+        self.builder
+            .insert_assign_stmt(combined_place, self.builder.insert_use_val(false_op));
+        let else_block = self.builder.end_block();
+
+        self.builder.insert_if_stmt(guard, then_block, else_block);
+        self.builder.insert_copy_op(combined_place)
+    }
+
+    fn lower_tuple_pattern_arm(
+        &mut self,
+        sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
+        scrutinee_ty: ty::Ty<'ctxt>,
+        scrutinee_place: mlr::Place<'ctxt>,
+    ) {
+        let field_tys = scrutinee_ty.tuple_field_tys().unwrap();
+        for (i, (&sub_pattern, &field_ty)) in sub_patterns.iter().zip(field_tys).enumerate() {
+            let field_place = self.builder.insert_field_access_place(scrutinee_place, i, field_ty);
+            self.lower_pattern_bindings(sub_pattern, field_place, field_ty, MatchBinding::Direct);
         }
     }
 
@@ -251,6 +315,13 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                             .insert_field_access_place(variant_place, field.field_index, field_ty);
                     // binding propagates from the top-level arm unchanged
                     self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
+                }
+            }
+            hlr::PatternKind::Tuple(sub_patterns) => {
+                let field_tys = place_ty.tuple_field_tys().unwrap();
+                for (i, (&sub_pattern, &field_ty)) in sub_patterns.iter().zip(field_tys).enumerate() {
+                    let field_place = self.builder.insert_field_access_place(place, i, field_ty);
+                    self.lower_pattern_bindings(sub_pattern, field_place, field_ty, binding);
                 }
             }
         }

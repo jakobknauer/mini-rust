@@ -1,8 +1,10 @@
 fn main() -> i32 {
-    if 'a' == 'b' {
-        1
-    } else {
-        2
+    let t: (Option<i32>, Option<i32>) = (Option::Some { item: 10 }, Option::None);
+    match t {
+        (Option::Some { item: a }, Option::Some { item: b }) => a + b,
+        (Option::Some { item: a }, Option::None) => a,
+        (Option::None, Option::Some { item: b }) => b,
+        (Option::None, Option::None) => 0,
     }
 }
 

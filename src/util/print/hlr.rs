@@ -245,10 +245,27 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                                         hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
                                         hlr::PatternKind::Identifier { var_id, .. } => write!(self.writer, "{var_id}")?,
                                         hlr::PatternKind::Variant(_) => write!(self.writer, "<nested>")?,
+                                        hlr::PatternKind::Tuple(_) => write!(self.writer, "<nested>")?,
                                     }
                                 }
                                 write!(self.writer, ")")?;
                             }
+                        }
+                        hlr::PatternKind::Tuple(sub_patterns) => {
+                            write!(self.writer, "(")?;
+                            for (i, sub_pattern) in sub_patterns.iter().enumerate() {
+                                if i > 0 {
+                                    write!(self.writer, ", ")?;
+                                }
+                                match sub_pattern {
+                                    hlr::PatternKind::Wildcard => write!(self.writer, "_")?,
+                                    hlr::PatternKind::Identifier { var_id, .. } => write!(self.writer, "{var_id}")?,
+                                    hlr::PatternKind::Variant(_) | hlr::PatternKind::Tuple(_) => {
+                                        write!(self.writer, "<nested>")?
+                                    }
+                                }
+                            }
+                            write!(self.writer, ")")?;
                         }
                     }
                     write!(self.writer, " => ")?;

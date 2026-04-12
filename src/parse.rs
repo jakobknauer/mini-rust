@@ -1087,6 +1087,19 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
+        // `(p1, p2, ...)` → tuple pattern
+        if self.tokens.advance_if(Token::LParen) {
+            let mut fields = Vec::new();
+            while !matches!(self.tokens.current(), Some(Token::RParen)) {
+                fields.push(self.parse_pattern()?);
+                if !self.tokens.advance_if(Token::Comma) {
+                    break;
+                }
+            }
+            self.tokens.expect_token(Token::RParen)?;
+            return Ok(self.builder.pattern(PatternKind::Tuple(fields)));
+        }
+
         // `mut name` → mutable identifier pattern
         if self.tokens.advance_if_keyword(Keyword::Mut) {
             let name = self.tokens.expect_identifier()?;

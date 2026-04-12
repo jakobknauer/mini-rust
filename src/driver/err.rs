@@ -220,6 +220,12 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>) -> String {
             format!("if branches have mismatched types: '{}' vs '{}'", then_ty, else_ty)
         }
         NonMatchableScrutinee { ty: t } => format!("type '{}' cannot be matched on", t),
+        TuplePatternLenMismatch { expected, found } => {
+            format!(
+                "tuple pattern has wrong number of fields: expected {}, found {}",
+                expected, found
+            )
+        }
         MatchArmWrongEnum { expected, found } => format!(
             "match arm has wrong enum type: expected '{}', got '{}'",
             expected, found
