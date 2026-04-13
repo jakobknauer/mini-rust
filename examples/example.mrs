@@ -1,10 +1,29 @@
 fn main() -> i32 {
-    let t: (Option<i32>, Option<i32>) = (Option::Some { item: 10 }, Option::None);
+    describe((1, true, 'a'));
+    describe((1, false, 'x'));
+    describe((42, true, 'z'));
+    describe((99, false, 'q'));
+    0
+}
+
+fn describe(t: (i32, bool, c_char)) -> i32 {
     match t {
-        (Option::Some { item: a }, Option::Some { item: b }) => a + b,
-        (Option::Some { item: a }, Option::None) => a,
-        (Option::None, Option::Some { item: b }) => b,
-        (Option::None, Option::None) => 0,
+        (1, true, 'a') => {
+            printf("one, true, a\n\0");
+            1
+        },
+        (1, false, _) => {
+            printf("one, false, any\n\0");
+            2
+        },
+        (_, true, 'z') => {
+            printf("any, true, z\n\0");
+            3
+        },
+        _ => {
+            printf("other\n\0");
+            0
+        },
     }
 }
 

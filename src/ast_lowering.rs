@@ -856,6 +856,19 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_pattern(&mut self, pattern: ast::Pattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         match pattern {
             ast::PatternKind::Variant(pattern) => self.lower_variant_pattern(pattern),
+            ast::PatternKind::Lit(lit) => {
+                let lit = match lit {
+                    ast::Lit::Int(i) => hlr::Lit::Int(*i),
+                    ast::Lit::Bool(b) => hlr::Lit::Bool(*b),
+                    ast::Lit::CChar(c) => hlr::Lit::CChar(*c),
+                    ast::Lit::CString(_) => {
+                        return Err(AstLoweringError {
+                            msg: "string literals are not supported in patterns".into(),
+                        });
+                    }
+                };
+                Ok(self.hlr.pattern(hlr::PatternKind::Lit(lit)))
+            }
             ast::PatternKind::Tuple(sub_patterns) => {
                 let lowered: Vec<_> = sub_patterns
                     .iter()

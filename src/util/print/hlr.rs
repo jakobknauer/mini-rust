@@ -283,6 +283,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
     fn print_pattern(&mut self, pattern: hlr::Pattern<'ctxt>) -> Result<(), std::io::Error> {
         match pattern {
             hlr::PatternKind::Wildcard => write!(self.writer, "_"),
+            hlr::PatternKind::Lit(lit) => self.print_lit(lit),
             hlr::PatternKind::Identifier { var_id, mutable } => {
                 if *mutable {
                     write!(self.writer, "mut ")?;

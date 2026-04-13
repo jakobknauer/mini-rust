@@ -14,6 +14,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
             hlr::PatternKind::Variant(pattern) => self.check_variant_pattern(pattern, scrutinee_ty),
             hlr::PatternKind::Tuple(sub_patterns) => self.check_tuple_pattern(sub_patterns, scrutinee_ty),
+            hlr::PatternKind::Lit(lit) => self.check_lit_pattern(lit, scrutinee_ty),
         }
     }
 
@@ -66,6 +67,21 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
 
         Ok(())
+    }
+
+    fn check_lit_pattern(&mut self, lit: &hlr::Lit, scrutinee_ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ()> {
+        use ty::Primitive::*;
+        let lit_ty = self.ctxt.tys.primitive(match lit {
+            hlr::Lit::Int(_) => Integer32,
+            hlr::Lit::Bool(_) => Boolean,
+            hlr::Lit::CChar(_) => CChar,
+            hlr::Lit::CString(_) => unreachable!("CString not supported in patterns"),
+        });
+        if self.unify(lit_ty, scrutinee_ty) {
+            Ok(())
+        } else {
+            Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty })
+        }
     }
 
     fn check_tuple_pattern(

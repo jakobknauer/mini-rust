@@ -143,6 +143,7 @@ pub type Pattern<'hlr> = &'hlr PatternKind<'hlr>;
 pub enum PatternKind<'hlr> {
     Variant(VariantPattern<'hlr>),
     Tuple(&'hlr [Pattern<'hlr>]),
+    Lit(Lit),
     Identifier { var_id: VarId, mutable: bool },
     Wildcard,
 }

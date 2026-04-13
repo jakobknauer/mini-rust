@@ -73,6 +73,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             hlr::PatternKind::Tuple(sub_patterns) => {
                 self.lower_tuple_pattern_condition(sub_patterns, scrutinee_ty, scrutinee_place)
             }
+            hlr::PatternKind::Lit(lit) => self.lower_lit_pattern_condition(lit, scrutinee_ty, scrutinee_place),
         }
     }
 
@@ -164,7 +165,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Val<'ctxt> {
         match arm.pattern {
-            hlr::PatternKind::Wildcard => {}
+            hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
             hlr::PatternKind::Identifier { .. } => {
                 self.lower_pattern_bindings(arm.pattern, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
             }
@@ -254,6 +255,29 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         self.builder.insert_copy_op(combined_place)
     }
 
+    fn lower_lit_pattern_condition(
+        &mut self,
+        lit: &hlr::Lit,
+        scrutinee_ty: ty::Ty<'ctxt>,
+        scrutinee_place: mlr::Place<'ctxt>,
+    ) -> mlr::Op<'ctxt> {
+        let (const_, eq_op) = match lit {
+            hlr::Lit::Int(n) => (mlr::Const::Int(*n), language_items::BinaryPrimOp::EqI32),
+            hlr::Lit::Bool(b) => (mlr::Const::Bool(*b), language_items::BinaryPrimOp::EqBool),
+            hlr::Lit::CChar(c) => (mlr::Const::CChar(*c), language_items::BinaryPrimOp::EqCChar),
+            hlr::Lit::CString(_) => unreachable!("CString not supported in patterns"),
+        };
+        let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
+        let scrutinee_op = self.builder.insert_copy_op(scrutinee_place);
+        let lit_op = self.builder.insert_const_op(const_, scrutinee_ty);
+        let cond_val = self
+            .builder
+            .insert_binary_prim_val(eq_op, scrutinee_op, lit_op, bool_ty);
+        let cond_place = self.builder.alloc_place(bool_ty);
+        self.builder.insert_assign_stmt(cond_place, cond_val);
+        self.builder.insert_copy_op(cond_place)
+    }
+
     fn lower_tuple_pattern_arm(
         &mut self,
         sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
@@ -275,7 +299,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         binding: MatchBinding,
     ) {
         match pattern {
-            hlr::PatternKind::Wildcard => {}
+            hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
             hlr::PatternKind::Identifier { var_id, mutable } => {
                 let binding_ty = self.typing.var_types[var_id];
                 let loc = if *mutable {

@@ -1100,6 +1100,23 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             return Ok(self.builder.pattern(PatternKind::Tuple(fields)));
         }
 
+        // literal patterns: 42, true, false, 'a'
+        if let Some(Token::NumLiteral(s)) = self.tokens.current() {
+            let value = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+            self.tokens.advance();
+            return Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(value))));
+        }
+        if let Some(Token::BoolLiteral(b)) = self.tokens.current() {
+            let value = *b;
+            self.tokens.advance();
+            return Ok(self.builder.pattern(PatternKind::Lit(Lit::Bool(value))));
+        }
+        if let Some(Token::CCharLiteral(c)) = self.tokens.current() {
+            let value = *c;
+            self.tokens.advance();
+            return Ok(self.builder.pattern(PatternKind::Lit(Lit::CChar(value))));
+        }
+
         // `mut name` → mutable identifier pattern
         if self.tokens.advance_if_keyword(Keyword::Mut) {
             let name = self.tokens.expect_identifier()?;
