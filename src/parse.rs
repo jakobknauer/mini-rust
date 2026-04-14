@@ -814,59 +814,15 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Token::Identifier(..) => {
                 let path = self.parse_path(true)?;
-
                 if allow_top_level_struct_expr && self.tokens.advance_if(Token::LBrace) {
-                    // parse struct expr
-                    let mut fields = Vec::new();
-                    while let Some(Token::Identifier(field_name)) = self.tokens.current() {
-                        let field_name = field_name.clone();
-                        self.tokens.advance(); // consume field name
-                        let field_value = if self.tokens.advance_if(Token::Colon) {
-                            self.parse_expr(true)?
-                        } else {
-                            let segment = PathSegment {
-                                ident: field_name.clone(),
-                                args: None,
-                                is_self: false,
-                            };
-                            self.builder.path(Path {
-                                segments: vec![segment],
-                            })
-                        };
-                        fields.push((field_name, field_value));
-                        if !self.tokens.advance_if(Token::Comma) {
-                            break;
-                        }
-                    }
-                    self.tokens.expect_token(Token::RBrace)?;
-                    let expr = self.builder.struct_expr(path, fields);
-                    Ok(expr)
+                    self.parse_struct_expr(path)
                 } else {
-                    let expr = self.builder.path(path);
-                    Ok(expr)
+                    Ok(self.builder.path(path))
                 }
             }
             Token::LParen => {
                 self.tokens.advance();
-
-                let mut inner_exprs = Vec::new();
-                let mut trailing_comma = true;
-                while self.tokens.current() != Some(&Token::RParen) {
-                    let inner_expr = self.parse_expr(true)?; // Allow top-level struct expression
-                    inner_exprs.push(inner_expr);
-                    if !self.tokens.advance_if(Token::Comma) {
-                        trailing_comma = false;
-                        break;
-                    }
-                }
-                self.tokens.expect_token(Token::RParen)?;
-
-                if inner_exprs.len() == 1 && !trailing_comma {
-                    Ok(inner_exprs.remove(0))
-                } else {
-                    let expr = self.builder.tuple(&inner_exprs);
-                    Ok(expr)
-                }
+                self.parse_paren_or_tuple()
             }
             Token::LBrace => {
                 let block = self.parse_block()?;
@@ -896,53 +852,86 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 }
                 self.tokens.expect_token(Token::Pipe)?;
 
-                let return_ty = if self.tokens.advance_if(Token::Arrow) {
-                    Some(self.parse_ty_annot()?)
-                } else {
-                    None
-                };
-
-                let body = self.parse_closure_body(return_ty.is_some())?;
-
-                let expr = self.builder.closure(params, return_ty, body);
-                Ok(expr)
+                self.parse_closure(params)
             }
             Token::PipePipe => {
                 self.tokens.advance();
-
-                let return_ty = if self.tokens.advance_if(Token::Arrow) {
-                    Some(self.parse_ty_annot()?)
-                } else {
-                    None
-                };
-
-                let body = self.parse_closure_body(return_ty.is_some())?;
-
-                let expr = self.builder.closure(vec![], return_ty, body);
-                Ok(expr)
+                self.parse_closure(vec![])
             }
             Token::Smaller => {
                 self.tokens.advance();
-                let ty = self.parse_ty_annot()?;
-
-                let trait_ = if self.tokens.advance_if(Token::Keyword(Keyword::As)) {
-                    Some(self.parse_trait_annot()?)
-                } else {
-                    None
-                };
-
-                self.tokens.expect_token(Token::Greater)?;
-                self.tokens.expect_token(Token::ColonColon)?;
-                let path = self.parse_path(true)?;
-
-                let qual_path = QualifiedPath { ty, trait_, path };
-
-                let expr = self.builder.qualified_path(qual_path);
-                Ok(expr)
+                self.parse_qualified_expr()
             }
 
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
+    }
+
+    fn parse_qualified_expr(&mut self) -> Result<Expr<'ast>, ParserErr> {
+        let ty = self.parse_ty_annot()?;
+        let trait_ = if self.tokens.advance_if(Token::Keyword(Keyword::As)) {
+            Some(self.parse_trait_annot()?)
+        } else {
+            None
+        };
+        self.tokens.expect_token(Token::Greater)?;
+        self.tokens.expect_token(Token::ColonColon)?;
+        let path = self.parse_path(true)?;
+        Ok(self.builder.qualified_path(QualifiedPath { ty, trait_, path }))
+    }
+
+    fn parse_paren_or_tuple(&mut self) -> Result<Expr<'ast>, ParserErr> {
+        let mut inner_exprs = Vec::new();
+        let mut trailing_comma = true;
+        while self.tokens.current() != Some(&Token::RParen) {
+            inner_exprs.push(self.parse_expr(true)?);
+            if !self.tokens.advance_if(Token::Comma) {
+                trailing_comma = false;
+                break;
+            }
+        }
+        self.tokens.expect_token(Token::RParen)?;
+        if inner_exprs.len() == 1 && !trailing_comma {
+            Ok(inner_exprs.remove(0))
+        } else {
+            Ok(self.builder.tuple(&inner_exprs))
+        }
+    }
+
+    fn parse_struct_expr(&mut self, path: Path<'ast>) -> Result<Expr<'ast>, ParserErr> {
+        let mut fields = Vec::new();
+        while let Some(Token::Identifier(field_name)) = self.tokens.current() {
+            let field_name = field_name.clone();
+            self.tokens.advance();
+            let field_value = if self.tokens.advance_if(Token::Colon) {
+                self.parse_expr(true)?
+            } else {
+                let segment = PathSegment {
+                    ident: field_name.clone(),
+                    args: None,
+                    is_self: false,
+                };
+                self.builder.path(Path {
+                    segments: vec![segment],
+                })
+            };
+            fields.push((field_name, field_value));
+            if !self.tokens.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        self.tokens.expect_token(Token::RBrace)?;
+        Ok(self.builder.struct_expr(path, fields))
+    }
+
+    fn parse_closure(&mut self, params: Vec<ClosureParam<'ast>>) -> Result<Expr<'ast>, ParserErr> {
+        let return_ty = if self.tokens.advance_if(Token::Arrow) {
+            Some(self.parse_ty_annot()?)
+        } else {
+            None
+        };
+        let body = self.parse_closure_body(return_ty.is_some())?;
+        Ok(self.builder.closure(params, return_ty, body))
     }
 
     fn parse_closure_param(&mut self) -> Result<ClosureParam<'ast>, ParserErr> {
