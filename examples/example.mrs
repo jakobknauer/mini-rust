@@ -1,29 +1,10 @@
 fn main() -> i32 {
-    describe((1, true, 'a'));
-    describe((1, false, 'x'));
-    describe((42, true, 'z'));
-    describe((99, false, 'q'));
-    0
-}
-
-fn describe(t: (i32, bool, c_char)) -> i32 {
-    match t {
-        (1, true, 'a') => {
-            printf("one, true, a\n\0");
-            1
-        },
-        (1, false, _) => {
-            printf("one, false, any\n\0");
-            2
-        },
-        (_, true, 'z') => {
-            printf("any, true, z\n\0");
-            3
-        },
-        _ => {
-            printf("other\n\0");
-            0
-        },
+    let x = -5;
+    match x {
+        -10 => -1,
+        -5 => 0,
+        0 => 1,
+        _ => 2,
     }
 }
 

@@ -724,8 +724,14 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Some(Token::Minus) => {
                 self.tokens.advance();
-                let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
-                Ok(self.builder.unary_op(UnaryOperator::Negative, base))
+                if let Some(Token::NumLiteral(s)) = self.tokens.current() {
+                    let value: i64 = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                    self.tokens.advance();
+                    Ok(self.builder.lit(Lit::Int(-value)))
+                } else {
+                    let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
+                    Ok(self.builder.unary_op(UnaryOperator::Negative, base))
+                }
             }
             _ => self.parse_function_call_and_member_access(allow_top_level_struct_expr),
         }
@@ -1089,7 +1095,15 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             return Ok(self.builder.pattern(PatternKind::Tuple(fields)));
         }
 
-        // literal patterns: 42, true, false, 'a'
+        // literal patterns: 42, -42, true, false, 'a'
+        if let Some(Token::Minus) = self.tokens.current()
+            && let Some(Token::NumLiteral(s)) = self.tokens.next()
+        {
+            let value: i64 = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+            self.tokens.advance();
+            self.tokens.advance();
+            return Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(-value))));
+        }
         if let Some(Token::NumLiteral(s)) = self.tokens.current() {
             let value = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
             self.tokens.advance();
