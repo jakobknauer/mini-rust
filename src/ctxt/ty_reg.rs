@@ -117,6 +117,11 @@ impl<'ty> TyReg<'ty> {
         Ok(())
     }
 
+    #[expect(unused)]
+    pub fn never(&self) -> Ty<'ty> {
+        self.register_ty(TyDef::Never)
+    }
+
     pub fn primitive(&self, primitive: Primitive) -> Ty<'ty> {
         let ty_def = TyDef::Primitive(primitive);
         self.register_ty(ty_def)
@@ -325,7 +330,7 @@ impl<'ty> TyReg<'ty> {
                 let instantiated = self.substitute_gen_vars(resolved, &subst);
                 self.resolve_opaque_in_ty(instantiated)
             }
-            Primitive(_) | GenVar(_) | TraitSelf(_) | InfVar(_) => ty,
+            Primitive(_) | GenVar(_) | TraitSelf(_) | InfVar(_) | Never => ty,
             Ref(inner) => {
                 let inner = self.resolve_opaque_in_ty(inner);
                 self.ref_(inner)
@@ -471,7 +476,7 @@ impl<'ty> TyReg<'ty> {
         use TyDef::*;
 
         match *ty.0 {
-            Primitive(_) | InfVar(_) => ty,
+            Primitive(_) | InfVar(_) | Never => ty,
             GenVar(gen_var) => gen_vars.get(gen_var).unwrap_or(ty),
             TraitSelf(_) => match self_ty {
                 Some(replacement) => self.substitute(replacement, gen_vars, None),

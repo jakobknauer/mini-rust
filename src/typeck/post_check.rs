@@ -22,7 +22,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
 
         match ty.0 {
             InfVar(_) => true,
-            Primitive(_) | GenVar(_) | TraitSelf(_) => false,
+            Primitive(_) | GenVar(_) | TraitSelf(_) | Never => false,
             &Opaque { gen_args, .. } => self.slice_contains_inf_var(gen_args),
             &Tuple(items) => self.slice_contains_inf_var(items),
             &Ref(inner) | &RefMut(inner) | &Ptr(inner) => self.contains_inf_var(inner),

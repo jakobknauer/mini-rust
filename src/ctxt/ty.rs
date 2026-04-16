@@ -68,6 +68,7 @@ pub enum TyDef<'ty> {
         opaque: Opaque<'ty>,
         gen_args: TySlice<'ty>,
     },
+    Never,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -430,6 +431,7 @@ impl std::fmt::Display for TyDef<'_> {
                 let assoc_ty_name = &trait_inst.trait_.assoc_tys[assoc_ty_idx].name;
                 write!(f, "<{} as {}>::{}", base_ty, trait_inst, assoc_ty_name)
             }
+            Never => write!(f, "!"),
             &InfVar(id) => write!(f, "inf({})", id.0),
             &Opaque { opaque, gen_args } => {
                 write!(f, "impl({})", opaque.id.0)?;

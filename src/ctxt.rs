@@ -70,7 +70,7 @@ impl<'ctxt> Ctxt<'ctxt> {
         let norm = |ty| self.normalize_ty_with_constraints(ty, constraints);
 
         match ty.0 {
-            Primitive(_) => ty,
+            Primitive(_) | Never => ty,
             &Tuple(items) => {
                 let items: Vec<_> = items.iter().map(|&ty| norm(ty)).collect();
                 self.tys.tuple(&items)

@@ -21,7 +21,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 None => ty,
             },
 
-            Primitive(_) | GenVar(_) => ty,
+            Primitive(_) | GenVar(_) | Never => ty,
 
             Opaque { opaque, gen_args } => {
                 let gen_args = self.normalize_slice(gen_args);
