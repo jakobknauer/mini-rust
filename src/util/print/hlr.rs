@@ -508,6 +508,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             }
             Infer => write!(self.writer, "_"),
             Self_ => write!(self.writer, "Self"),
+            Never => write!(self.writer, "!"),
         }
     }
 

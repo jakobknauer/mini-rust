@@ -59,6 +59,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             hlr::TyAnnotDef::Tuple(elems) => self.resolve_tuple_ty_annot(elems),
             hlr::TyAnnotDef::Infer => self.resolve_infer_ty_annot(),
             hlr::TyAnnotDef::Self_ => self.resolve_self_ty_annot(),
+            hlr::TyAnnotDef::Never => Ok(self.ctxt.tys.never()),
         }
     }
 

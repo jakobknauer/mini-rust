@@ -24,4 +24,5 @@ pub enum TyAnnotDef<'hlr> {
     Tuple(TyAnnotSlice<'hlr>),
     Infer,
     Self_,
+    Never,
 }

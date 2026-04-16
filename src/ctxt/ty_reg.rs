@@ -117,7 +117,6 @@ impl<'ty> TyReg<'ty> {
         Ok(())
     }
 
-    #[expect(unused)]
     pub fn never(&self) -> Ty<'ty> {
         self.register_ty(TyDef::Never)
     }
