@@ -1,11 +1,5 @@
 fn main() -> i32 {
-    let x = -5;
-    match x {
-        -10 => -1,
-        -5 => 0,
-        0 => 1,
-        _ => 2,
-    }
+    exit(11) as _
 }
 
 fn printf(format: *c_char, ...) -> i32;

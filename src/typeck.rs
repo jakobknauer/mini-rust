@@ -659,6 +659,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let target_ty = self.normalize(target_ty);
 
         match (expr_ty.0, target_ty.0) {
+            (ty::TyDef::Never, _) => Ok(target_ty),
             (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => Ok(target_ty),
             (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty))
             | (&ty::TyDef::RefMut(op_base_ty), &ty::TyDef::Ptr(target_base_ty))

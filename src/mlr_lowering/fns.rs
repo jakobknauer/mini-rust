@@ -215,11 +215,20 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 Ok(result)
             }
             AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
-            As { op, .. } => {
-                // since the only valid conversion atm is from ref to ptr of the same base type,
-                // we can just build the op and return it
-                self.build_op(op)
-            }
+            As { op, target_ty } => match op.1.0 {
+                mr_ty::TyDef::Never => {
+                    let iw_ty = self
+                        .parent
+                        .get_ty_as_basic_type_enum(target_ty)
+                        .ok_or(MlrFnLoweringError)?;
+                    Ok(undef_of(iw_ty))
+                }
+                _ => {
+                    // since the only valid conversion atm is from ref to ptr of the same base type,
+                    // we can just build the op and return it
+                    self.build_op(op)
+                }
+            },
             BinaryPrim { op, lhs, rhs } => self.build_binary_prim(op, lhs, rhs),
             UnaryPrim { op, operand } => self.build_unary_prim(op, operand),
         }
@@ -488,5 +497,18 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     fn substitute_slice(&mut self, slice: mr_ty::TySlice<'ctxt>) -> mr_ty::TySlice<'ctxt> {
         let tys: Vec<_> = slice.iter().map(|&t| self.substitute(t)).collect();
         self.parent.mr_ctxt.tys.ty_slice(&tys)
+    }
+}
+
+fn undef_of<'ctx>(ty: BasicTypeEnum<'ctx>) -> BasicValueEnum<'ctx> {
+    use inkwell::types::BasicTypeEnum::*;
+    match ty {
+        ArrayType(t) => t.get_undef().as_basic_value_enum(),
+        FloatType(t) => t.get_undef().as_basic_value_enum(),
+        IntType(t) => t.get_undef().as_basic_value_enum(),
+        PointerType(t) => t.get_undef().as_basic_value_enum(),
+        StructType(t) => t.get_undef().as_basic_value_enum(),
+        VectorType(t) => t.get_undef().as_basic_value_enum(),
+        ScalableVectorType(t) => t.get_undef().as_basic_value_enum(),
     }
 }

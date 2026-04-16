@@ -1,0 +1,6 @@
+fn exit(code: i32) -> !;
+
+fn panic(msg: *c_char) -> ! {
+    printf(msg);
+    exit(1)
+}
