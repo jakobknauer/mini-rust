@@ -530,4 +530,5 @@ pub enum TyAnnotKind<'ast> {
     },
     ImplTrait(ConstraintRequirement<'ast>),
     Wildcard,
+    Never,
 }

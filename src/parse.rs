@@ -1275,6 +1275,10 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let annot = self.builder.wildcard_annot();
                 Ok(annot)
             }
+            Token::Bang => {
+                self.tokens.advance();
+                Ok(self.builder.never_annot())
+            }
             Token::Smaller => {
                 self.tokens.advance();
                 let ty = self.parse_ty_annot()?;

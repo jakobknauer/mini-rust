@@ -116,6 +116,7 @@ impl<'arena> Driver<'_, 'arena> {
                 Some(opaque_ty)
             }
             Wildcard => panic!("wildcard type annotation not supported at this position"),
+            Never => todo!("never type annotation"),
         }
     }
 

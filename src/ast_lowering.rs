@@ -242,6 +242,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             }
             ast::TyAnnotKind::QualifiedPath(qual_path) => self.lower_qualified_path_ty_annot(qual_path)?,
             ast::TyAnnotKind::Wildcard => hlr::TyAnnotDef::Infer,
+            ast::TyAnnotKind::Never => todo!("never type annotation"),
             ast::TyAnnotKind::ImplTrait(_) => {
                 return Err(AstLoweringError {
                     msg: "impl Trait is only valid in return position".to_string(),

@@ -236,4 +236,8 @@ impl<'ast> AstBuilder<'ast> {
     pub fn wildcard_annot(&self) -> TyAnnot<'ast> {
         self.ast.ty_annot(TyAnnotKind::Wildcard)
     }
+
+    pub fn never_annot(&self) -> TyAnnot<'ast> {
+        self.ast.ty_annot(TyAnnotKind::Never)
+    }
 }
