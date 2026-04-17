@@ -6,12 +6,12 @@ written in Rust.
 Supported features include:
 - Basic syntax (functions, variables, control flow with `if/else`, `match`, `loop`, `while`, `for` etc.)
 - Type inference within functions
-- Primitive types, tuples, structs and enums, references and raw pointers, function pointers
+- Primitive types, tuples, structs and enums, references and raw pointers, function pointers, never type
 - Traits and impls, including associated types and functions, and default method implementations
 - Generics (functions, structs and enums, traits and impls) with constraints (for functions, methods, and impls)
 - Opaque return types (`impl Trait`/`impl Fn`)
 - Closures capturing local variables
-- Pattern matching with recursive pattern consisting of enum variants, tuples, constants, variables (bindings), and wilcards
+- Pattern matching with recursive patterns: enum variants, tuples, constants, variables (bindings), and wilcards
 - Operator overloading:
     - Binary arithmetic/logical/bit operations: `+`, `-`, `*`, `/`, `%`, `&`, `|` via `Add`, `Sub` etc. traits
     - `==` and `!=` via the `Eq` trait, providing a default impl for `!=`
