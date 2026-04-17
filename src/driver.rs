@@ -295,6 +295,10 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             DriverError::ContextBuild("Missing size_of function (is mem.mrs included?)"),
         )?);
 
+        self.ctxt.language_items.panic_fn = Some(self.ctxt.fns.get_fn_by_name("panic").ok_or(
+            DriverError::ContextBuild("Missing panic function (is panic.mrs included?)"),
+        )?);
+
         let ptr_offset = self
             .ctxt
             .impls
