@@ -362,18 +362,17 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 self.var_locs.insert(*var_id, loc);
             }
             hlr::PatternKind::Struct(nested_pattern) => {
-                let (struct_ty, inner_binding, struct_place) = self.resolve_struct_place(place_ty, place);
                 for field in nested_pattern.fields {
                     let field_ty = self
                         .builder
                         .ctxt
                         .tys
-                        .get_struct_field_ty(struct_ty, field.field_index)
+                        .get_struct_field_ty(place_ty, field.field_index)
                         .unwrap();
                     let field_place = self
                         .builder
-                        .insert_field_access_place(struct_place, field.field_index, field_ty);
-                    self.lower_pattern_bindings(field.pattern, field_place, field_ty, inner_binding);
+                        .insert_field_access_place(place, field.field_index, field_ty);
+                    self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
                 }
             }
             hlr::PatternKind::Variant(nested_pattern) => {
