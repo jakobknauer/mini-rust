@@ -1,8 +1,12 @@
 fn main() -> i32 {
-    match 5 {
-        1 => printf("1\n"),
-        2 => printf("2\n"),
-        3 => printf("3\n"),
+    let p = Point::new(1, 2);
+    let op = Option::Some { item: p };
+
+    match op {
+        Option::Some { item: Point { x, y } } => {
+            x + y
+        }
+        Option::None => 0
     }
 }
 

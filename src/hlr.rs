@@ -98,10 +98,10 @@ impl<'hlr> Hlr<'hlr> {
         self.arena.alloc_slice_fill_iter(arms)
     }
 
-    pub fn variant_pattern_fields(
+    pub fn pattern_fields(
         &'hlr self,
-        fields: impl IntoIterator<Item = VariantPatternField<'hlr>, IntoIter: ExactSizeIterator>,
-    ) -> &'hlr [VariantPatternField<'hlr>] {
+        fields: impl IntoIterator<Item = PatternField<'hlr>, IntoIter: ExactSizeIterator>,
+    ) -> &'hlr [PatternField<'hlr>] {
         self.arena.alloc_slice_fill_iter(fields)
     }
 

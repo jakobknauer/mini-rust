@@ -494,7 +494,7 @@ pub type Pattern<'ast> = &'ast PatternKind<'ast>;
 
 #[derive(Debug)]
 pub enum PatternKind<'ast> {
-    Variant(VariantPattern<'ast>),
+    Struct(StructPattern<'ast>),
     Tuple(Vec<Pattern<'ast>>),
     Lit(Lit),
     Identifier { name: String, mutable: bool },
@@ -502,13 +502,13 @@ pub enum PatternKind<'ast> {
 }
 
 #[derive(Debug)]
-pub struct VariantPattern<'ast> {
-    pub variant: Path<'ast>,
-    pub fields: Vec<VariantPatternField<'ast>>,
+pub struct StructPattern<'ast> {
+    pub path: Path<'ast>,
+    pub fields: Vec<StructPatternField<'ast>>,
 }
 
 #[derive(Debug)]
-pub struct VariantPatternField<'ast> {
+pub struct StructPatternField<'ast> {
     pub field_name: String,
     pub pattern: Pattern<'ast>,
 }

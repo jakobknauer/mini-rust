@@ -304,6 +304,18 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 }
                 Ok(())
             }
+            hlr::PatternKind::Struct(pattern) => {
+                self.print_val(&pattern.constructor)?;
+                write!(self.writer, " {{")?;
+                for (i, field) in pattern.fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.writer, ", ")?;
+                    }
+                    write!(self.writer, "{}: ", field.field_index)?;
+                    self.print_pattern(field.pattern)?;
+                }
+                write!(self.writer, "}}")
+            }
             hlr::PatternKind::Tuple(sub_patterns) => {
                 write!(self.writer, "(")?;
                 for (i, &sub_pattern) in sub_patterns.iter().enumerate() {

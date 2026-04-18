@@ -1081,6 +1081,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(expr)
     }
 
+    /// TODO use a switch-case etc. here
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
         // `(p1, p2, ...)` → tuple pattern
         if self.tokens.advance_if(Token::LParen) {
@@ -1141,7 +1142,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
         }
 
-        let variant = self.parse_path(true)?;
+        let path = self.parse_path(true)?;
 
         let fields = if self.tokens.advance_if(Token::LBrace) {
             let mut fields = Vec::new();
@@ -1165,7 +1166,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                     })
                 };
 
-                fields.push(VariantPatternField { field_name, pattern });
+                fields.push(StructPatternField { field_name, pattern });
 
                 if !self.tokens.advance_if(Token::Comma) {
                     break;
@@ -1180,7 +1181,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
         Ok(self
             .builder
-            .pattern(PatternKind::Variant(VariantPattern { variant, fields })))
+            .pattern(PatternKind::Struct(StructPattern { path, fields })))
     }
 
     fn parse_ty_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {

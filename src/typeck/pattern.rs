@@ -13,6 +13,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             hlr::PatternKind::Wildcard => Ok(()),
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
             hlr::PatternKind::Variant(pattern) => self.check_variant_pattern(pattern, scrutinee_ty),
+            hlr::PatternKind::Struct(pattern) => self.check_struct_pattern(pattern, scrutinee_ty),
             hlr::PatternKind::Tuple(sub_patterns) => self.check_tuple_pattern(sub_patterns, scrutinee_ty),
             hlr::PatternKind::Lit(lit) => self.check_lit_pattern(lit, scrutinee_ty),
         }
@@ -67,6 +68,71 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
 
         Ok(())
+    }
+
+    fn check_struct_pattern(
+        &mut self,
+        pattern: &hlr::StructPattern<'ctxt>,
+        scrutinee_ty: ty::Ty<'ctxt>,
+    ) -> TypeckResult<'ctxt, ()> {
+        let (struct_scrutinee_ty, binding) = self.resolve_struct_scrutinee(scrutinee_ty)?;
+
+        let hlr::Val::Struct(struct_, gen_args) = &pattern.constructor else {
+            unreachable!("struct pattern must have Val::Struct");
+        };
+
+        let n_gen_params = struct_.gen_params.len();
+        let gen_args = self.resolve_optional_gen_args(*gen_args, n_gen_params, |actual| {
+            TypeckError::StructGenArgCountMismatch {
+                struct_,
+                expected: n_gen_params,
+                actual,
+            }
+        })?;
+        let struct_ty = self.ctxt.tys.inst_struct(struct_, &gen_args).unwrap();
+
+        if !self.unify(struct_ty, struct_scrutinee_ty) {
+            return Err(TypeckError::MatchArmTypeMismatch {
+                expected: struct_scrutinee_ty,
+                actual: struct_ty,
+            });
+        }
+
+        for field in pattern.fields {
+            let field_ty = self.ctxt.tys.get_struct_field_ty(struct_ty, field.field_index).unwrap();
+            let binding_ty = match binding {
+                MatchBinding::Direct => field_ty,
+                MatchBinding::ByRef => self.ctxt.tys.ref_(field_ty),
+                MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
+            };
+            self.check_pattern(field.pattern, binding_ty)?;
+        }
+
+        Ok(())
+    }
+
+    fn resolve_struct_scrutinee(
+        &mut self,
+        scrutinee_ty: ty::Ty<'ctxt>,
+    ) -> TypeckResult<'ctxt, (ty::Ty<'ctxt>, MatchBinding)> {
+        match scrutinee_ty.0 {
+            ty::TyDef::Struct { .. } => Ok((scrutinee_ty, MatchBinding::Direct)),
+            &ty::TyDef::Ref(inner) => {
+                let inner = self.normalize(inner);
+                match inner.0 {
+                    ty::TyDef::Struct { .. } => Ok((inner, MatchBinding::ByRef)),
+                    _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+                }
+            }
+            &ty::TyDef::RefMut(inner) => {
+                let inner = self.normalize(inner);
+                match inner.0 {
+                    ty::TyDef::Struct { .. } => Ok((inner, MatchBinding::ByRefMut)),
+                    _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+                }
+            }
+            _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+        }
     }
 
     fn check_lit_pattern(&mut self, lit: &hlr::Lit, scrutinee_ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ()> {

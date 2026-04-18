@@ -91,6 +91,11 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             hlr::PatternKind::Variant(pattern) => {
                 self.lower_variant_pattern_condition(pattern, scrutinee_ty, scrutinee_place)
             }
+            hlr::PatternKind::Struct(pattern) => {
+                let (struct_ty, _, struct_place) = self.resolve_struct_place(scrutinee_ty, scrutinee_place);
+                let guard = self.builder.insert_bool_const(true);
+                self.lower_field_conditions(guard, pattern.fields, struct_ty, struct_place)
+            }
             hlr::PatternKind::Tuple(sub_patterns) => {
                 self.lower_tuple_pattern_condition(sub_patterns, scrutinee_ty, scrutinee_place)
             }
@@ -141,7 +146,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
     fn lower_field_conditions(
         &mut self,
         guard: mlr::Op<'ctxt>,
-        fields: &'ctxt [hlr::VariantPatternField<'ctxt>],
+        fields: &'ctxt [hlr::PatternField<'ctxt>],
         variant_ty: ty::Ty<'ctxt>,
         variant_place: mlr::Place<'ctxt>,
     ) -> mlr::Op<'ctxt> {
@@ -193,6 +198,9 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             hlr::PatternKind::Variant(pattern) => {
                 self.lower_variant_pattern_arm(pattern, scrutinee_ty, scrutinee_place);
             }
+            hlr::PatternKind::Struct(pattern) => {
+                self.lower_struct_pattern_arm(pattern, scrutinee_place);
+            }
             hlr::PatternKind::Tuple(sub_patterns) => {
                 self.lower_tuple_pattern_arm(sub_patterns, scrutinee_ty, scrutinee_place);
             }
@@ -227,6 +235,23 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             let field_place = self
                 .builder
                 .insert_field_access_place(variant_place, field.field_index, field_ty);
+            self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
+        }
+    }
+
+    fn lower_struct_pattern_arm(&mut self, pattern: &hlr::StructPattern<'ctxt>, scrutinee_place: mlr::Place<'ctxt>) {
+        let scrutinee_ty = scrutinee_place.1;
+        let (struct_ty, binding, struct_place) = self.resolve_struct_place(scrutinee_ty, scrutinee_place);
+        for field in pattern.fields {
+            let field_ty = self
+                .builder
+                .ctxt
+                .tys
+                .get_struct_field_ty(struct_ty, field.field_index)
+                .unwrap();
+            let field_place = self
+                .builder
+                .insert_field_access_place(struct_place, field.field_index, field_ty);
             self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
         }
     }
@@ -336,6 +361,21 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 self.builder.insert_assign_to_loc_stmt(loc, val);
                 self.var_locs.insert(*var_id, loc);
             }
+            hlr::PatternKind::Struct(nested_pattern) => {
+                let (struct_ty, inner_binding, struct_place) = self.resolve_struct_place(place_ty, place);
+                for field in nested_pattern.fields {
+                    let field_ty = self
+                        .builder
+                        .ctxt
+                        .tys
+                        .get_struct_field_ty(struct_ty, field.field_index)
+                        .unwrap();
+                    let field_place = self
+                        .builder
+                        .insert_field_access_place(struct_place, field.field_index, field_ty);
+                    self.lower_pattern_bindings(field.pattern, field_place, field_ty, inner_binding);
+                }
+            }
             hlr::PatternKind::Variant(nested_pattern) => {
                 let hlr::Val::Variant(_, variant_idx, _) = &nested_pattern.variant else {
                     panic!("nested variant pattern must have Val::Variant")
@@ -369,6 +409,27 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                     self.lower_pattern_bindings(sub_pattern, field_place, field_ty, binding);
                 }
             }
+        }
+    }
+
+    fn resolve_struct_place(
+        &mut self,
+        scrutinee_ty: ty::Ty<'ctxt>,
+        scrutinee_place: mlr::Place<'ctxt>,
+    ) -> (ty::Ty<'ctxt>, MatchBinding, mlr::Place<'ctxt>) {
+        match scrutinee_ty.0 {
+            ty::TyDef::Struct { .. } => (scrutinee_ty, MatchBinding::Direct, scrutinee_place),
+            &ty::TyDef::Ref(inner) => {
+                let copy_op = self.builder.insert_copy_op(scrutinee_place);
+                let deref_place = self.builder.insert_deref_place(copy_op);
+                (inner, MatchBinding::ByRef, deref_place)
+            }
+            &ty::TyDef::RefMut(inner) => {
+                let copy_op = self.builder.insert_copy_op(scrutinee_place);
+                let deref_place = self.builder.insert_deref_place(copy_op);
+                (inner, MatchBinding::ByRefMut, deref_place)
+            }
+            _ => panic!("struct pattern requires struct scrutinee"),
         }
     }
 

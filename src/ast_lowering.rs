@@ -780,7 +780,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         });
         let some_pattern = self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
             variant: hlr::Val::Variant(option_enum, some_index, None),
-            fields: self.hlr.variant_pattern_fields(vec![hlr::VariantPatternField {
+            fields: self.hlr.pattern_fields(vec![hlr::PatternField {
                 field_index: 0,
                 pattern: binding_pattern,
             }]),
@@ -799,7 +799,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         // None arm: Option::None => { break }
         let none_pattern = self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
             variant: hlr::Val::Variant(option_enum, none_index, None),
-            fields: self.hlr.variant_pattern_fields(vec![]),
+            fields: self.hlr.pattern_fields(vec![]),
         }));
         self.start_new_block();
         self.lower_break_stmt()?;
@@ -856,7 +856,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
     fn lower_pattern(&mut self, pattern: ast::Pattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         match pattern {
-            ast::PatternKind::Variant(pattern) => self.lower_variant_pattern(pattern),
+            ast::PatternKind::Struct(pattern) => self.lower_struct_pattern(pattern),
             ast::PatternKind::Lit(lit) => {
                 let lit = match lit {
                     ast::Lit::Int(i) => hlr::Lit::Int(*i),
@@ -890,52 +890,60 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         }
     }
 
-    fn lower_variant_pattern(&mut self, pattern: &ast::VariantPattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
-        let variant = self.resolve_path_to_constructor(&pattern.variant)?;
+    fn lower_struct_pattern(&mut self, pattern: &ast::StructPattern) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
+        let constructor = self.resolve_path_to_constructor(&pattern.path)?;
+        match constructor {
+            hlr::Val::Variant(enum_, variant_index, ..) => {
+                let struct_ = enum_.get_variant(variant_index).struct_;
+                let fields = self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &enum_.name)?;
+                let fields = self.hlr.pattern_fields(fields);
+                Ok(self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
+                    variant: constructor,
+                    fields,
+                })))
+            }
+            hlr::Val::Struct(struct_, ..) => {
+                let fields = self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &struct_.name)?;
+                let fields = self.hlr.pattern_fields(fields);
+                Ok(self
+                    .hlr
+                    .pattern(hlr::PatternKind::Struct(hlr::StructPattern { constructor, fields })))
+            }
+            _ => Err(AstLoweringError {
+                msg: format!("Expected struct or enum variant in pattern, found {:?}", constructor),
+            }),
+        }
+    }
 
-        let hlr::Val::Variant(enum_, variant_index, ..) = variant else {
-            return Err(AstLoweringError {
-                msg: format!("Only enum variants are supported in patterns, found {:?}", variant),
-            });
-        };
-
-        let variant_struct = enum_.get_variant(variant_index).struct_;
-
-        let variant_fields = variant_struct.get_fields();
-        if pattern.fields.len() != variant_fields.len() {
+    fn lower_pattern_fields(
+        &mut self,
+        ast_fields: &[ast::StructPatternField],
+        def_fields: &[crate::ctxt::ty::StructField],
+        type_name: &str,
+    ) -> AstLoweringResult<Vec<hlr::PatternField<'ctxt>>> {
+        if ast_fields.len() != def_fields.len() {
             return Err(AstLoweringError {
                 msg: format!(
-                    "Pattern for variant has wrong number of fields: expected {}, found {}",
-                    variant_fields.len(),
-                    pattern.fields.len()
+                    "Pattern for '{}' has wrong number of fields: expected {}, found {}",
+                    type_name,
+                    def_fields.len(),
+                    ast_fields.len()
                 ),
             });
         }
-
-        let fields: Vec<_> = pattern
-            .fields
+        ast_fields
             .iter()
             .map(|field| {
-                let field_index = variant_fields
+                let field_index = def_fields
                     .iter()
                     .position(|f| f.name == field.field_name)
                     .ok_or_else(|| AstLoweringError {
-                        msg: format!(
-                            "Unknown field '{}' in pattern for variant '{}'",
-                            field.field_name, enum_.name
-                        ),
+                        msg: format!("Unknown field '{}' in pattern for '{}'", field.field_name, type_name),
                     })?;
-
                 let pattern = self.lower_pattern(field.pattern)?;
-
-                Ok(hlr::VariantPatternField { field_index, pattern })
+                Ok(hlr::PatternField { field_index, pattern })
             })
-            .collect::<AstLoweringResult<_>>()?;
-        let fields = self.hlr.variant_pattern_fields(fields);
-
-        Ok(self
-            .hlr
-            .pattern(hlr::PatternKind::Variant(hlr::VariantPattern { variant, fields })))
+            .collect()
     }
 
     fn lower_deref_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'ctxt>> {

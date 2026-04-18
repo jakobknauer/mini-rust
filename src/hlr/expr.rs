@@ -142,6 +142,7 @@ pub type Pattern<'hlr> = &'hlr PatternKind<'hlr>;
 #[derive(Debug)]
 pub enum PatternKind<'hlr> {
     Variant(VariantPattern<'hlr>),
+    Struct(StructPattern<'hlr>),
     Tuple(&'hlr [Pattern<'hlr>]),
     Lit(Lit),
     Identifier { var_id: VarId, mutable: bool },
@@ -151,11 +152,17 @@ pub enum PatternKind<'hlr> {
 #[derive(Debug)]
 pub struct VariantPattern<'hlr> {
     pub variant: Val<'hlr>,
-    pub fields: &'hlr [VariantPatternField<'hlr>],
+    pub fields: &'hlr [PatternField<'hlr>],
 }
 
 #[derive(Debug)]
-pub struct VariantPatternField<'hlr> {
+pub struct StructPattern<'hlr> {
+    pub constructor: Val<'hlr>,
+    pub fields: &'hlr [PatternField<'hlr>],
+}
+
+#[derive(Debug)]
+pub struct PatternField<'hlr> {
     pub field_index: usize,
     pub pattern: Pattern<'hlr>,
 }
