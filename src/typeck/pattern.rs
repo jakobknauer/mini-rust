@@ -29,7 +29,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         pattern: &hlr::VariantPattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
     ) -> TypeckResult<'ctxt, ()> {
-        let (enum_ty, binding) = self.resolve_enum_scrutinee(scrutinee_ty)?;
+        let (inner_ty, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+        let enum_ty = match inner_ty.0 {
+            ty::TyDef::Enum { .. } => inner_ty,
+            _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+        };
 
         let hlr::Val::Variant(arm_enum, variant_idx, gen_args) = &pattern.variant else {
             unreachable!("match arm pattern must be Val::Variant");
@@ -59,11 +63,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 .tys
                 .get_struct_field_ty(variant_ty, field.field_index)
                 .unwrap();
-            let binding_ty = match binding {
-                MatchBinding::Direct => field_ty,
-                MatchBinding::ByRef => self.ctxt.tys.ref_(field_ty),
-                MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
-            };
+            let binding_ty = self.apply_binding(binding, field_ty);
             self.check_pattern(field.pattern, binding_ty)?;
         }
 
@@ -75,7 +75,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         pattern: &hlr::StructPattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
     ) -> TypeckResult<'ctxt, ()> {
-        let (struct_scrutinee_ty, binding) = self.resolve_struct_scrutinee(scrutinee_ty)?;
+        let (inner_ty, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+        let struct_scrutinee_ty = match inner_ty.0 {
+            ty::TyDef::Struct { .. } => inner_ty,
+            _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+        };
 
         let hlr::Val::Struct(struct_, gen_args) = &pattern.constructor else {
             unreachable!("struct pattern must have Val::Struct");
@@ -100,39 +104,35 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
 
         for field in pattern.fields {
             let field_ty = self.ctxt.tys.get_struct_field_ty(struct_ty, field.field_index).unwrap();
-            let binding_ty = match binding {
-                MatchBinding::Direct => field_ty,
-                MatchBinding::ByRef => self.ctxt.tys.ref_(field_ty),
-                MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(field_ty),
-            };
+            let binding_ty = self.apply_binding(binding, field_ty);
             self.check_pattern(field.pattern, binding_ty)?;
         }
 
         Ok(())
     }
 
-    fn resolve_struct_scrutinee(
+    fn check_tuple_pattern(
         &mut self,
+        sub_patterns: &[hlr::Pattern<'ctxt>],
         scrutinee_ty: ty::Ty<'ctxt>,
-    ) -> TypeckResult<'ctxt, (ty::Ty<'ctxt>, MatchBinding)> {
-        match scrutinee_ty.0 {
-            ty::TyDef::Struct { .. } => Ok((scrutinee_ty, MatchBinding::Direct)),
-            &ty::TyDef::Ref(inner) => {
-                let inner = self.normalize(inner);
-                match inner.0 {
-                    ty::TyDef::Struct { .. } => Ok((inner, MatchBinding::ByRef)),
-                    _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-                }
-            }
-            &ty::TyDef::RefMut(inner) => {
-                let inner = self.normalize(inner);
-                match inner.0 {
-                    ty::TyDef::Struct { .. } => Ok((inner, MatchBinding::ByRefMut)),
-                    _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-                }
-            }
-            _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+    ) -> TypeckResult<'ctxt, ()> {
+        let (inner_ty, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+        let field_tys = inner_ty
+            .tuple_field_tys()
+            .map_err(|()| TypeckError::NonMatchableScrutinee { ty: scrutinee_ty })?;
+
+        if sub_patterns.len() != field_tys.len() {
+            return Err(TypeckError::TuplePatternLenMismatch {
+                expected: field_tys.len(),
+                found: sub_patterns.len(),
+            });
         }
+
+        for (pattern, &field_ty) in sub_patterns.iter().zip(field_tys) {
+            self.check_pattern(pattern, self.apply_binding(binding, field_ty))?;
+        }
+
+        Ok(())
     }
 
     fn check_lit_pattern(&mut self, lit: &hlr::Lit, scrutinee_ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ()> {
@@ -150,50 +150,19 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
     }
 
-    fn check_tuple_pattern(
-        &mut self,
-        sub_patterns: &[hlr::Pattern<'ctxt>],
-        scrutinee_ty: ty::Ty<'ctxt>,
-    ) -> TypeckResult<'ctxt, ()> {
-        let field_tys = scrutinee_ty
-            .tuple_field_tys()
-            .map_err(|()| TypeckError::NonMatchableScrutinee { ty: scrutinee_ty })?;
-
-        if sub_patterns.len() != field_tys.len() {
-            return Err(TypeckError::TuplePatternLenMismatch {
-                expected: field_tys.len(),
-                found: sub_patterns.len(),
-            });
+    fn peel_ref_scrutinee(&mut self, scrutinee_ty: ty::Ty<'ctxt>) -> (ty::Ty<'ctxt>, MatchBinding) {
+        match *scrutinee_ty.0 {
+            ty::TyDef::Ref(inner) => (self.normalize(inner), MatchBinding::ByRef),
+            ty::TyDef::RefMut(inner) => (self.normalize(inner), MatchBinding::ByRefMut),
+            _ => (scrutinee_ty, MatchBinding::Direct),
         }
-
-        for (pattern, &field_ty) in sub_patterns.iter().zip(field_tys) {
-            self.check_pattern(pattern, field_ty)?;
-        }
-
-        Ok(())
     }
 
-    fn resolve_enum_scrutinee(
-        &mut self,
-        scrutinee_ty: ty::Ty<'ctxt>,
-    ) -> TypeckResult<'ctxt, (ty::Ty<'ctxt>, MatchBinding)> {
-        match scrutinee_ty.0 {
-            ty::TyDef::Enum { .. } => Ok((scrutinee_ty, MatchBinding::Direct)),
-            &ty::TyDef::Ref(inner) => {
-                let inner = self.normalize(inner);
-                match inner.0 {
-                    ty::TyDef::Enum { .. } => Ok((inner, MatchBinding::ByRef)),
-                    _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-                }
-            }
-            &ty::TyDef::RefMut(inner) => {
-                let inner = self.normalize(inner);
-                match inner.0 {
-                    ty::TyDef::Enum { .. } => Ok((inner, MatchBinding::ByRefMut)),
-                    _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
-                }
-            }
-            _ => Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
+    fn apply_binding(&self, binding: MatchBinding, ty: ty::Ty<'ctxt>) -> ty::Ty<'ctxt> {
+        match binding {
+            MatchBinding::Direct => ty,
+            MatchBinding::ByRef => self.ctxt.tys.ref_(ty),
+            MatchBinding::ByRefMut => self.ctxt.tys.ref_mut(ty),
         }
     }
 }

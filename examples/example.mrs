@@ -1,10 +1,7 @@
 fn main() -> i32 {
-    let p = Point::new(1, 2);
-    let op = Option::Some { item: p };
-
-    match &op {
-        Option::Some { item: Point { x, y } } => *x + *y,
-        Option::None => 0
+    let t = (3, 4);
+    match &t {
+        (x, y) => *x + *y
     }
 }
 
