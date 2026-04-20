@@ -29,10 +29,11 @@ pub struct HlrTyping<'ty> {
     pub var_types: HashMap<hlr::VarId, ty::Ty<'ty>>,
     pub expr_types: HashMap<hlr::ExprId, ty::Ty<'ty>>,
     pub expr_extra: HashMap<hlr::ExprId, ExprExtra<'ty>>,
+    pub match_bindings: HashMap<*const hlr::PatternKind<'ty>, MatchBinding>,
 }
 
 #[derive(Clone, Copy)]
-enum MatchBinding {
+pub enum MatchBinding {
     Direct,
     ByRef,
     ByRefMut,

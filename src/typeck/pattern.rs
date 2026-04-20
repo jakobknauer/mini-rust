@@ -12,9 +12,16 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         match pattern {
             hlr::PatternKind::Wildcard => Ok(()),
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
-            hlr::PatternKind::Variant(pattern) => self.check_variant_pattern(pattern, scrutinee_ty),
-            hlr::PatternKind::Struct(pattern) => self.check_struct_pattern(pattern, scrutinee_ty),
-            hlr::PatternKind::Tuple(sub_patterns) => self.check_tuple_pattern(sub_patterns, scrutinee_ty),
+            hlr::PatternKind::Variant(_) | hlr::PatternKind::Struct(_) | hlr::PatternKind::Tuple(_) => {
+                let (_, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+                self.typing.match_bindings.insert(pattern as *const _, binding);
+                match pattern {
+                    hlr::PatternKind::Variant(p) => self.check_variant_pattern(p, scrutinee_ty),
+                    hlr::PatternKind::Struct(p) => self.check_struct_pattern(p, scrutinee_ty),
+                    hlr::PatternKind::Tuple(sub_patterns) => self.check_tuple_pattern(sub_patterns, scrutinee_ty),
+                    _ => unreachable!(),
+                }
+            }
             hlr::PatternKind::Lit(lit) => self.check_lit_pattern(lit, scrutinee_ty),
         }
     }

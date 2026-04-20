@@ -1,14 +1,8 @@
 use crate::ctxt::{fns, language_items, ty};
+use crate::typeck::MatchBinding;
 use crate::{hlr, mlr};
 
 use super::lowered_expr::LoweredExpr;
-
-#[derive(Clone, Copy)]
-enum MatchBinding {
-    Direct,
-    ByRef,
-    ByRefMut,
-}
 
 impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
     pub(super) fn lower_match(
@@ -92,13 +86,16 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 self.lower_pattern_bindings(arm.pattern, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
             }
             hlr::PatternKind::Variant(pattern) => {
-                self.lower_variant_pattern_arm(pattern, scrutinee_ty, scrutinee_place);
+                let binding = self.pattern_binding(arm.pattern);
+                self.lower_variant_pattern_arm(pattern, scrutinee_ty, scrutinee_place, binding);
             }
             hlr::PatternKind::Struct(pattern) => {
-                self.lower_struct_pattern_arm(pattern, scrutinee_place);
+                let binding = self.pattern_binding(arm.pattern);
+                self.lower_struct_pattern_arm(pattern, scrutinee_place, binding);
             }
             hlr::PatternKind::Tuple(sub_patterns) => {
-                self.lower_tuple_pattern_arm(sub_patterns, scrutinee_ty, scrutinee_place);
+                let binding = self.pattern_binding(arm.pattern);
+                self.lower_tuple_pattern_arm(sub_patterns, scrutinee_ty, scrutinee_place, binding);
             }
         }
         self.lower_to_val(arm.body)
@@ -109,13 +106,14 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         pattern: &hlr::VariantPattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
+        binding: MatchBinding,
     ) {
         let hlr::Val::Variant(_, variant_idx, _) = &pattern.variant else {
             panic!("match arm pattern must be Val::Variant")
         };
         let variant_idx = *variant_idx;
 
-        let (enum_ty, binding, enum_place) = self.resolve_scrutinee_place(scrutinee_ty, scrutinee_place);
+        let (enum_ty, enum_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
         let variant_ty = self.builder.ctxt.tys.get_enum_variant_ty(enum_ty, variant_idx).unwrap();
         let variant_place = self
             .builder
@@ -135,9 +133,13 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         }
     }
 
-    fn lower_struct_pattern_arm(&mut self, pattern: &hlr::StructPattern<'ctxt>, scrutinee_place: mlr::Place<'ctxt>) {
-        let scrutinee_ty = scrutinee_place.1;
-        let (struct_ty, binding, struct_place) = self.resolve_scrutinee_place(scrutinee_ty, scrutinee_place);
+    fn lower_struct_pattern_arm(
+        &mut self,
+        pattern: &hlr::StructPattern<'ctxt>,
+        scrutinee_place: mlr::Place<'ctxt>,
+        binding: MatchBinding,
+    ) {
+        let (struct_ty, struct_place) = self.deref_scrutinee_place(scrutinee_place.1, scrutinee_place);
         for field in pattern.fields {
             let field_ty = self
                 .builder
@@ -157,8 +159,9 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
         scrutinee_ty: ty::Ty<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
+        binding: MatchBinding,
     ) {
-        let (tuple_ty, binding, tuple_place) = self.resolve_scrutinee_place(scrutinee_ty, scrutinee_place);
+        let (tuple_ty, tuple_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
         let field_tys = tuple_ty.tuple_field_tys().unwrap();
         for (i, (&sub_pattern, &field_ty)) in sub_patterns.iter().zip(field_tys).enumerate() {
             let field_place = self.builder.insert_field_access_place(tuple_place, i, field_ty);
@@ -210,11 +213,15 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 };
                 let variant_idx = *variant_idx;
 
-                let (enum_ty, _, enum_place) = self.resolve_scrutinee_place(place_ty, place);
-                let variant_ty = self.builder.ctxt.tys.get_enum_variant_ty(enum_ty, variant_idx).unwrap();
+                let variant_ty = self
+                    .builder
+                    .ctxt
+                    .tys
+                    .get_enum_variant_ty(place_ty, variant_idx)
+                    .unwrap();
                 let variant_place = self
                     .builder
-                    .insert_project_to_variant_place(enum_place, variant_idx, variant_ty);
+                    .insert_project_to_variant_place(place, variant_idx, variant_ty);
 
                 for field in nested_pattern.fields {
                     let field_ty = self
@@ -252,7 +259,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 self.lower_variant_pattern_condition(pattern, scrutinee_ty, scrutinee_place)
             }
             hlr::PatternKind::Struct(pattern) => {
-                let (struct_ty, _, struct_place) = self.resolve_scrutinee_place(scrutinee_ty, scrutinee_place);
+                let (struct_ty, struct_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
                 let guard = self.builder.insert_bool_const(true);
                 self.lower_field_conditions(guard, pattern.fields, struct_ty, struct_place)
             }
@@ -274,7 +281,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         };
         let variant_idx = *variant_idx;
 
-        let (enum_ty, _, enum_place) = self.resolve_scrutinee_place(scrutinee_ty, scrutinee_place);
+        let (enum_ty, enum_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
         let disc_place = self.builder.insert_enum_discriminant_place(enum_place);
         let discriminant_op = self.builder.insert_copy_op(disc_place);
         let i32_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
@@ -373,7 +380,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_ty: ty::Ty<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Op<'ctxt> {
-        let (tuple_ty, _, tuple_place) = self.resolve_scrutinee_place(scrutinee_ty, scrutinee_place);
+        let (tuple_ty, tuple_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
         let field_tys = tuple_ty.tuple_field_tys().unwrap();
         let guard = self.builder.insert_bool_const(true);
         self.lower_tuple_field_conditions(guard, sub_patterns, field_tys, tuple_place, 0)
@@ -413,23 +420,22 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         self.builder.insert_copy_op(combined_place)
     }
 
-    fn resolve_scrutinee_place(
+    fn pattern_binding(&self, pattern: hlr::Pattern<'ctxt>) -> MatchBinding {
+        self.typing.match_bindings[&(pattern as *const _)]
+    }
+
+    fn deref_scrutinee_place(
         &mut self,
         scrutinee_ty: ty::Ty<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
-    ) -> (ty::Ty<'ctxt>, MatchBinding, mlr::Place<'ctxt>) {
+    ) -> (ty::Ty<'ctxt>, mlr::Place<'ctxt>) {
         match *scrutinee_ty.0 {
-            ty::TyDef::Ref(inner) => {
+            ty::TyDef::Ref(inner) | ty::TyDef::RefMut(inner) => {
                 let copy_op = self.builder.insert_copy_op(scrutinee_place);
                 let deref_place = self.builder.insert_deref_place(copy_op);
-                (inner, MatchBinding::ByRef, deref_place)
+                (inner, deref_place)
             }
-            ty::TyDef::RefMut(inner) => {
-                let copy_op = self.builder.insert_copy_op(scrutinee_place);
-                let deref_place = self.builder.insert_deref_place(copy_op);
-                (inner, MatchBinding::ByRefMut, deref_place)
-            }
-            _ => (scrutinee_ty, MatchBinding::Direct, scrutinee_place),
+            _ => (scrutinee_ty, scrutinee_place),
         }
     }
 }
