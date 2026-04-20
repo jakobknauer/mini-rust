@@ -97,6 +97,10 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 let binding = self.pattern_binding(arm.pattern);
                 self.lower_tuple_pattern_arm(sub_patterns, scrutinee_ty, scrutinee_place, binding);
             }
+            hlr::PatternKind::Ref(inner) => {
+                let (inner_ty, inner_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
+                self.lower_pattern_bindings(inner, inner_place, inner_ty, MatchBinding::Direct);
+            }
         }
         self.lower_to_val(arm.body)
     }
@@ -244,6 +248,10 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                     self.lower_pattern_bindings(sub_pattern, field_place, field_ty, binding);
                 }
             }
+            hlr::PatternKind::Ref(inner) => {
+                let (inner_ty, inner_place) = self.deref_scrutinee_place(place_ty, place);
+                self.lower_pattern_bindings(inner, inner_place, inner_ty, MatchBinding::Direct);
+            }
         }
     }
 
@@ -267,6 +275,10 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 self.lower_tuple_pattern_condition(sub_patterns, scrutinee_ty, scrutinee_place)
             }
             hlr::PatternKind::Lit(lit) => self.lower_lit_pattern_condition(lit, scrutinee_ty, scrutinee_place),
+            hlr::PatternKind::Ref(inner) => {
+                let (inner_ty, inner_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
+                self.lower_pattern_condition(inner, inner_ty, inner_place)
+            }
         }
     }
 

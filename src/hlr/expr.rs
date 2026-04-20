@@ -141,6 +141,7 @@ pub type Pattern<'hlr> = &'hlr PatternKind<'hlr>;
 
 #[derive(Debug)]
 pub enum PatternKind<'hlr> {
+    Ref(Pattern<'hlr>),
     Variant(VariantPattern<'hlr>),
     Struct(StructPattern<'hlr>),
     Tuple(&'hlr [Pattern<'hlr>]),

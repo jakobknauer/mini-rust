@@ -494,6 +494,7 @@ pub type Pattern<'ast> = &'ast PatternKind<'ast>;
 
 #[derive(Debug)]
 pub enum PatternKind<'ast> {
+    Ref(Pattern<'ast>),
     Struct(StructPattern<'ast>),
     Tuple(Vec<Pattern<'ast>>),
     Lit(Lit),

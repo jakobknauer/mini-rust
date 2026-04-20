@@ -23,6 +23,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 }
             }
             hlr::PatternKind::Lit(lit) => self.check_lit_pattern(lit, scrutinee_ty),
+            hlr::PatternKind::Ref(inner) => self.check_ref_pattern(inner, scrutinee_ty),
         }
     }
 
@@ -140,6 +141,18 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
 
         Ok(())
+    }
+
+    fn check_ref_pattern(
+        &mut self,
+        inner: hlr::Pattern<'ctxt>,
+        scrutinee_ty: ty::Ty<'ctxt>,
+    ) -> TypeckResult<'ctxt, ()> {
+        let ty::TyDef::Ref(inner_ty) = *scrutinee_ty.0 else {
+            return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty });
+        };
+        let inner_ty = self.normalize(inner_ty);
+        self.check_pattern(inner, inner_ty)
     }
 
     fn check_lit_pattern(&mut self, lit: &hlr::Lit, scrutinee_ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ()> {

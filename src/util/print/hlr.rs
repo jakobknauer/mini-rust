@@ -326,6 +326,10 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 }
                 write!(self.writer, ")")
             }
+            hlr::PatternKind::Ref(inner) => {
+                write!(self.writer, "&")?;
+                self.print_pattern(inner)
+            }
         }
     }
 

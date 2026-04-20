@@ -1083,6 +1083,12 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     /// TODO use a switch-case etc. here
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
+        // `&p` → ref pattern
+        if self.tokens.advance_if(Token::Ampersand) {
+            let inner = self.parse_pattern()?;
+            return Ok(self.builder.pattern(PatternKind::Ref(inner)));
+        }
+
         // `(p1, p2, ...)` → tuple pattern
         if self.tokens.advance_if(Token::LParen) {
             let mut fields = Vec::new();
