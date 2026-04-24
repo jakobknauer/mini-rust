@@ -249,8 +249,15 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 }
             }
             hlr::PatternKind::Ref(inner) => {
-                let (inner_ty, inner_place) = self.deref_scrutinee_place(place_ty, place);
-                self.lower_pattern_bindings(inner, inner_place, inner_ty, MatchBinding::Direct);
+                if binding == MatchBinding::Direct {
+                    // Real &T scrutinee — deref to T.
+                    let (inner_ty, inner_place) = self.deref_scrutinee_place(place_ty, place);
+                    self.lower_pattern_bindings(inner, inner_place, inner_ty, MatchBinding::Direct);
+                } else {
+                    // Ergonomics binding added a &; &p cancels it out. The field is already a
+                    // reference type — pass it through directly with Direct binding.
+                    self.lower_pattern_bindings(inner, place, place_ty, MatchBinding::Direct);
+                }
             }
         }
     }

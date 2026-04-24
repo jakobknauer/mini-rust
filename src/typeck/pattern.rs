@@ -8,22 +8,25 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         &mut self,
         pattern: hlr::Pattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
         match pattern {
             hlr::PatternKind::Wildcard => Ok(()),
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
             hlr::PatternKind::Variant(_) | hlr::PatternKind::Struct(_) | hlr::PatternKind::Tuple(_) => {
-                let (_, binding) = self.peel_ref_scrutinee(scrutinee_ty);
-                self.typing.match_bindings.insert(pattern as *const _, binding);
+                let (_, new_binding) = self.peel_ref_scrutinee(scrutinee_ty);
+                self.typing.match_bindings.insert(pattern as *const _, new_binding);
                 match pattern {
-                    hlr::PatternKind::Variant(p) => self.check_variant_pattern(p, scrutinee_ty),
-                    hlr::PatternKind::Struct(p) => self.check_struct_pattern(p, scrutinee_ty),
-                    hlr::PatternKind::Tuple(sub_patterns) => self.check_tuple_pattern(sub_patterns, scrutinee_ty),
+                    hlr::PatternKind::Variant(p) => self.check_variant_pattern(p, scrutinee_ty, new_binding),
+                    hlr::PatternKind::Struct(p) => self.check_struct_pattern(p, scrutinee_ty, new_binding),
+                    hlr::PatternKind::Tuple(sub_patterns) => {
+                        self.check_tuple_pattern(sub_patterns, scrutinee_ty, new_binding)
+                    }
                     _ => unreachable!(),
                 }
             }
             hlr::PatternKind::Lit(lit) => self.check_lit_pattern(lit, scrutinee_ty),
-            hlr::PatternKind::Ref(inner) => self.check_ref_pattern(inner, scrutinee_ty),
+            hlr::PatternKind::Ref(inner) => self.check_ref_pattern(inner, scrutinee_ty, binding),
         }
     }
 
@@ -36,8 +39,9 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         &mut self,
         pattern: &hlr::VariantPattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
-        let (inner_ty, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+        let (inner_ty, _) = self.peel_ref_scrutinee(scrutinee_ty);
         let enum_ty = match inner_ty.0 {
             ty::TyDef::Enum { .. } => inner_ty,
             _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
@@ -72,7 +76,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 .get_struct_field_ty(variant_ty, field.field_index)
                 .unwrap();
             let binding_ty = self.apply_binding(binding, field_ty);
-            self.check_pattern(field.pattern, binding_ty)?;
+            self.check_pattern(field.pattern, binding_ty, binding)?;
         }
 
         Ok(())
@@ -82,8 +86,9 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         &mut self,
         pattern: &hlr::StructPattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
-        let (inner_ty, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+        let (inner_ty, _) = self.peel_ref_scrutinee(scrutinee_ty);
         let struct_scrutinee_ty = match inner_ty.0 {
             ty::TyDef::Struct { .. } => inner_ty,
             _ => return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty }),
@@ -113,7 +118,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         for field in pattern.fields {
             let field_ty = self.ctxt.tys.get_struct_field_ty(struct_ty, field.field_index).unwrap();
             let binding_ty = self.apply_binding(binding, field_ty);
-            self.check_pattern(field.pattern, binding_ty)?;
+            self.check_pattern(field.pattern, binding_ty, binding)?;
         }
 
         Ok(())
@@ -123,8 +128,9 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         &mut self,
         sub_patterns: &[hlr::Pattern<'ctxt>],
         scrutinee_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
-        let (inner_ty, binding) = self.peel_ref_scrutinee(scrutinee_ty);
+        let (inner_ty, _) = self.peel_ref_scrutinee(scrutinee_ty);
         let field_tys = inner_ty
             .tuple_field_tys()
             .map_err(|()| TypeckError::NonMatchableScrutinee { ty: scrutinee_ty })?;
@@ -137,7 +143,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
 
         for (pattern, &field_ty) in sub_patterns.iter().zip(field_tys) {
-            self.check_pattern(pattern, self.apply_binding(binding, field_ty))?;
+            self.check_pattern(pattern, self.apply_binding(binding, field_ty), binding)?;
         }
 
         Ok(())
@@ -147,12 +153,20 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         &mut self,
         inner: hlr::Pattern<'ctxt>,
         scrutinee_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
+        // With Direct binding, scrutinee_ty is the real type — must be &T.
+        // With ByRef/ByRefMut binding, scrutinee_ty = &field_ty (ergonomics-added &). For &p to
+        // be valid here, field_ty must itself be a reference, i.e. scrutinee_ty = &&U. After
+        // stripping the outer &, inner gets &U (the real reference), not a plain value.
         let ty::TyDef::Ref(inner_ty) = *scrutinee_ty.0 else {
             return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty });
         };
         let inner_ty = self.normalize(inner_ty);
-        self.check_pattern(inner, inner_ty)
+        if binding != MatchBinding::Direct && !matches!(*inner_ty.0, ty::TyDef::Ref(_)) {
+            return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty });
+        }
+        self.check_pattern(inner, inner_ty, MatchBinding::Direct)
     }
 
     fn check_lit_pattern(&mut self, lit: &hlr::Lit, scrutinee_ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ()> {

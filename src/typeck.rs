@@ -32,7 +32,7 @@ pub struct HlrTyping<'ty> {
     pub match_bindings: HashMap<*const hlr::PatternKind<'ty>, MatchBinding>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum MatchBinding {
     Direct,
     ByRef,
@@ -723,7 +723,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let mut result_ty: Option<ty::Ty<'ctxt>> = None;
 
         for arm in arms {
-            self.check_pattern(arm.pattern, scrutinee_ty)?;
+            self.check_pattern(arm.pattern, scrutinee_ty, MatchBinding::Direct)?;
 
             let arm_ty = self.check_expr(arm.body, result_ty)?;
 

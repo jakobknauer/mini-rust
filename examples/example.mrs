@@ -1,8 +1,13 @@
 fn main() -> i32 {
-    let n: i32 = 42;
-    let r: &i32 = &n;
-    match r {
-        &x => x
+    let inner: i32 = 5;
+    let opt: Option<i32> = Option::Some { item: inner };
+
+    match &opt {
+        Option::Some { item: x } => *x,        // valid: x is i32 bound by ref, so we can deref it in the match expression
+        // Option::Some { item: &x } => x,     // invalid: x is i32 bound by ref, not &i32
+        // &Option::Some { item: x } => x,     // valid: x is i32
+        // &Option::Some { item: &x } => x,    // invalid: x is i32, so ref pattern does not make sense
+        Option::None => 0,
     }
 }
 
