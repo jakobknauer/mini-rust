@@ -739,7 +739,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             }
         }
 
-        Ok(result_ty.unwrap_or_else(|| self.ctxt.tys.unit()))
+        Ok(result_ty.unwrap()) // arms must be non-empty, so result_ty is guaranteed to be Some
     }
 
     fn check_block(

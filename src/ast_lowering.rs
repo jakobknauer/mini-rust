@@ -5,7 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::{
     ast,
     ast_lowering::resolve_util::TyResolution,
-    ctxt::{self, fns},
+    ctxt::{self, fns, ty},
     hlr,
 };
 
@@ -922,7 +922,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_pattern_fields(
         &mut self,
         ast_fields: &[ast::StructPatternField],
-        def_fields: &[crate::ctxt::ty::StructField],
+        def_fields: &[ty::StructField],
         type_name: &str,
     ) -> AstLoweringResult<Vec<hlr::PatternField<'ctxt>>> {
         if ast_fields.len() != def_fields.len() {
