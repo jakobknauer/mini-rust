@@ -1083,7 +1083,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     /// TODO use a switch-case etc. here
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
-        // `&p` → ref pattern
+        if self.tokens.advance_if(Token::AmpersandAmpersand) {
+            let inner = self.parse_pattern()?;
+            let inner = self.builder.pattern(PatternKind::Ref(inner));
+            return Ok(self.builder.pattern(PatternKind::Ref(inner)));
+        }
         if self.tokens.advance_if(Token::Ampersand) {
             let inner = self.parse_pattern()?;
             return Ok(self.builder.pattern(PatternKind::Ref(inner)));
