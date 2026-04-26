@@ -1083,77 +1083,83 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     /// TODO use a switch-case etc. here
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
-        if self.tokens.advance_if(Token::AmpersandAmpersand) {
-            let inner = self.parse_pattern()?;
-            let inner = self.builder.pattern(PatternKind::Ref(inner));
-            return Ok(self.builder.pattern(PatternKind::Ref(inner)));
-        }
-        if self.tokens.advance_if(Token::Ampersand) {
-            let inner = self.parse_pattern()?;
-            return Ok(self.builder.pattern(PatternKind::Ref(inner)));
-        }
-
-        // `(p1, p2, ...)` → tuple pattern
-        if self.tokens.advance_if(Token::LParen) {
-            let mut fields = Vec::new();
-            while !matches!(self.tokens.current(), Some(Token::RParen)) {
-                fields.push(self.parse_pattern()?);
-                if !self.tokens.advance_if(Token::Comma) {
-                    break;
+        match self.tokens.current() {
+            Some(Token::AmpersandAmpersand) => {
+                self.tokens.advance();
+                let inner = self.parse_pattern()?;
+                let inner = self.builder.pattern(PatternKind::Ref(inner));
+                Ok(self.builder.pattern(PatternKind::Ref(inner)))
+            }
+            Some(Token::Ampersand) => {
+                self.tokens.advance();
+                let inner = self.parse_pattern()?;
+                Ok(self.builder.pattern(PatternKind::Ref(inner)))
+            }
+            Some(Token::LParen) => self.parse_tuple_pattern(),
+            Some(Token::Minus) => {
+                self.tokens.advance();
+                let s = self.tokens.expect_num_literal()?;
+                let value: i64 = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(-value))))
+            }
+            Some(Token::NumLiteral(s)) => {
+                let value = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                self.tokens.advance();
+                Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(value))))
+            }
+            Some(Token::BoolLiteral(b)) => {
+                let value = *b;
+                self.tokens.advance();
+                Ok(self.builder.pattern(PatternKind::Lit(Lit::Bool(value))))
+            }
+            Some(Token::CCharLiteral(c)) => {
+                let value = *c;
+                self.tokens.advance();
+                Ok(self.builder.pattern(PatternKind::Lit(Lit::CChar(value))))
+            }
+            Some(Token::Keyword(Keyword::Mut)) => {
+                self.tokens.advance();
+                let name = self.tokens.expect_identifier()?;
+                Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: true }))
+            }
+            Some(Token::Underscore) => {
+                self.tokens.advance();
+                Ok(self.builder.pattern(PatternKind::Wildcard))
+            }
+            Some(Token::Identifier(_) | Token::Keyword(Keyword::SelfTy)) => {
+                let path = self.parse_path(true)?;
+                let is_plain_ident = path.segments.len() == 1
+                    && path.segments[0].args.is_none()
+                    && !path.segments[0].is_self
+                    && !matches!(self.tokens.current(), Some(Token::LBrace));
+                if is_plain_ident {
+                    Ok(self.builder.pattern(PatternKind::Identifier {
+                        name: path.segments[0].ident.clone(),
+                        mutable: false,
+                    }))
+                } else {
+                    self.parse_struct_or_variant_pattern(path)
                 }
             }
-            self.tokens.expect_token(Token::RParen)?;
-            return Ok(self.builder.pattern(PatternKind::Tuple(fields)));
+            Some(token) => Err(ParserErr::UnexpectedToken(token.clone())),
+            None => Err(ParserErr::UnexpectedEOF),
         }
+    }
 
-        // literal patterns: 42, -42, true, false, 'a'
-        if let Some(Token::Minus) = self.tokens.current()
-            && let Some(Token::NumLiteral(s)) = self.tokens.next()
-        {
-            let value: i64 = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
-            self.tokens.advance();
-            self.tokens.advance();
-            return Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(-value))));
-        }
-        if let Some(Token::NumLiteral(s)) = self.tokens.current() {
-            let value = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
-            self.tokens.advance();
-            return Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(value))));
-        }
-        if let Some(Token::BoolLiteral(b)) = self.tokens.current() {
-            let value = *b;
-            self.tokens.advance();
-            return Ok(self.builder.pattern(PatternKind::Lit(Lit::Bool(value))));
-        }
-        if let Some(Token::CCharLiteral(c)) = self.tokens.current() {
-            let value = *c;
-            self.tokens.advance();
-            return Ok(self.builder.pattern(PatternKind::Lit(Lit::CChar(value))));
-        }
-
-        // `mut name` → mutable identifier pattern
-        if self.tokens.advance_if_keyword(Keyword::Mut) {
-            let name = self.tokens.expect_identifier()?;
-            return Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: true }));
-        }
-
-        // `_` → wildcard pattern
-        if matches!(self.tokens.current(), Some(Token::Underscore)) {
-            self.tokens.advance();
-            return Ok(self.builder.pattern(PatternKind::Wildcard));
-        }
-
-        // `name` not followed by `::` or `{` → plain identifier pattern
-        if let Some(Token::Identifier(name)) = self.tokens.current() {
-            let name = name.clone();
-            if !matches!(self.tokens.next(), Some(Token::ColonColon | Token::LBrace)) {
-                self.tokens.advance();
-                return Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: false }));
+    fn parse_tuple_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::LParen)?;
+        let mut fields = Vec::new();
+        while !matches!(self.tokens.current(), Some(Token::RParen)) {
+            fields.push(self.parse_pattern()?);
+            if !self.tokens.advance_if(Token::Comma) {
+                break;
             }
         }
+        self.tokens.expect_token(Token::RParen)?;
+        Ok(self.builder.pattern(PatternKind::Tuple(fields)))
+    }
 
-        let path = self.parse_path(true)?;
-
+    fn parse_struct_or_variant_pattern(&mut self, path: Path<'ast>) -> Result<Pattern<'ast>, ParserErr> {
         let fields = if self.tokens.advance_if(Token::LBrace) {
             let mut fields = Vec::new();
             while matches!(
@@ -1169,26 +1175,21 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let pattern = if has_colon {
                     self.parse_pattern()?
                 } else {
-                    // Shorthand: `{ field }` or `{ mut field }` — desugar to an identifier pattern
                     self.builder.pattern(PatternKind::Identifier {
                         name: field_name.clone(),
                         mutable: mutable_prefix,
                     })
                 };
-
                 fields.push(StructPatternField { field_name, pattern });
-
                 if !self.tokens.advance_if(Token::Comma) {
                     break;
                 }
             }
-
             self.tokens.expect_token(Token::RBrace)?;
             fields
         } else {
             Vec::new()
         };
-
         Ok(self
             .builder
             .pattern(PatternKind::Struct(StructPattern { path, fields })))

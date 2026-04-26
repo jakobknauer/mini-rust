@@ -73,4 +73,15 @@ impl<'token> TokenStream<'token> {
             _ => unreachable!(),
         }
     }
+
+    pub(super) fn expect_num_literal(&mut self) -> Result<String, ParserErr> {
+        let s = match self.current().ok_or(ParserErr::UnexpectedEOF)? {
+            Token::NumLiteral(s) => s.clone(),
+            token => return Err(ParserErr::UnexpectedToken(token.clone())),
+        };
+        match self.expect_token(Token::NumLiteral(s))? {
+            Token::NumLiteral(s) => Ok(s),
+            _ => unreachable!(),
+        }
+    }
 }
