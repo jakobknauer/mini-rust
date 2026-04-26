@@ -33,6 +33,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             }
             hlr::PatternKind::Lit(lit) => self.check_lit_pattern(lit, scrutinee_ty),
             hlr::PatternKind::Ref(inner) => self.check_ref_pattern(inner, scrutinee_ty, binding),
+            hlr::PatternKind::RefMut(inner) => self.check_ref_mut_pattern(inner, scrutinee_ty, binding),
         }
     }
 
@@ -152,6 +153,21 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         Ok(())
     }
 
+    fn check_ref_mut_pattern(
+        &mut self,
+        inner: hlr::Pattern<'ctxt>,
+        scrutinee_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
+    ) -> TypeckResult<'ctxt, ()> {
+        let scrutinee_ty = self.peel_mut_binding(binding, scrutinee_ty)?;
+
+        let &ty::TyDef::RefMut(inner_ty) = scrutinee_ty.0 else {
+            return Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty });
+        };
+
+        self.check_pattern(inner, inner_ty, MatchBinding::Direct)
+    }
+
     fn check_ref_pattern(
         &mut self,
         inner: hlr::Pattern<'ctxt>,
@@ -179,6 +195,17 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             Ok(())
         } else {
             Err(TypeckError::NonMatchableScrutinee { ty: scrutinee_ty })
+        }
+    }
+
+    fn peel_mut_binding(&self, binding: MatchBinding, ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+        match binding {
+            MatchBinding::Direct => Ok(ty),
+            MatchBinding::ByRefMut => match ty.0 {
+                &ty::TyDef::RefMut(inner) => Ok(inner),
+                _ => Err(TypeckError::NonMatchableScrutinee { ty }),
+            },
+            MatchBinding::ByRef => Err(TypeckError::NonMatchableScrutinee { ty }),
         }
     }
 

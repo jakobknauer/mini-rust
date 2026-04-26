@@ -860,6 +860,10 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 let inner = self.lower_pattern(inner)?;
                 Ok(self.hlr.pattern(hlr::PatternKind::Ref(inner)))
             }
+            ast::PatternKind::RefMut(inner) => {
+                let inner = self.lower_pattern(inner)?;
+                Ok(self.hlr.pattern(hlr::PatternKind::RefMut(inner)))
+            }
             ast::PatternKind::Struct(pattern) => self.lower_struct_pattern(pattern),
             ast::PatternKind::Lit(lit) => {
                 let lit = match lit {

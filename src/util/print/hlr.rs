@@ -330,6 +330,10 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 write!(self.writer, "&")?;
                 self.print_pattern(inner)
             }
+            hlr::PatternKind::RefMut(inner) => {
+                write!(self.writer, "&mut ")?;
+                self.print_pattern(inner)
+            }
         }
     }
 

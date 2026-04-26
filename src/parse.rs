@@ -1086,14 +1086,24 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         match self.tokens.current() {
             Some(Token::AmpersandAmpersand) => {
                 self.tokens.advance();
+                let is_mut = self.tokens.advance_if_keyword(Keyword::Mut);
                 let inner = self.parse_pattern()?;
-                let inner = self.builder.pattern(PatternKind::Ref(inner));
+                let inner = if is_mut {
+                    self.builder.pattern(PatternKind::RefMut(inner))
+                } else {
+                    self.builder.pattern(PatternKind::Ref(inner))
+                };
                 Ok(self.builder.pattern(PatternKind::Ref(inner)))
             }
             Some(Token::Ampersand) => {
                 self.tokens.advance();
+                let is_mut = self.tokens.advance_if_keyword(Keyword::Mut);
                 let inner = self.parse_pattern()?;
-                Ok(self.builder.pattern(PatternKind::Ref(inner)))
+                if is_mut {
+                    Ok(self.builder.pattern(PatternKind::RefMut(inner)))
+                } else {
+                    Ok(self.builder.pattern(PatternKind::Ref(inner)))
+                }
             }
             Some(Token::LParen) => self.parse_tuple_pattern(),
             Some(Token::Minus) => {
