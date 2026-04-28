@@ -182,7 +182,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             } => self.check_closure(expr.1, params, *return_ty, *body, hint),
             hlr::ExprDef::If { cond, then, else_ } => self.check_if(*cond, *then, *else_, hint),
             hlr::ExprDef::Loop { body } => self.check_loop(*body),
-            hlr::ExprDef::Match { scrutinee, arms } => self.check_match(*scrutinee, arms),
+            hlr::ExprDef::Match { scrutinee, arms } => self.check_match(*scrutinee, arms, hint),
             hlr::ExprDef::Block { stmts, trailing } => self.check_block(stmts, *trailing, hint),
             hlr::ExprDef::QualifiedMthd {
                 ty,
@@ -721,18 +721,17 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         &mut self,
         scrutinee: hlr::Expr<'ctxt>,
         arms: &[hlr::MatchArm<'ctxt>],
+        mut hint: Option<ty::Ty<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let scrutinee_ty = self.check_expr(scrutinee, None)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
 
-        let mut result_ty: Option<ty::Ty<'ctxt>> = None;
-
         for arm in arms {
             self.check_pattern(arm.pattern, scrutinee_ty, MatchBinding::Direct)?;
 
-            let arm_ty = self.check_expr(arm.body, result_ty)?;
+            let arm_ty = self.check_expr(arm.body, hint)?;
 
-            if let Some(ty) = result_ty {
+            if let Some(ty) = hint {
                 if !self.unify(arm_ty, ty) {
                     return Err(TypeckError::MatchArmTypeMismatch {
                         expected: ty,
@@ -740,11 +739,11 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     });
                 }
             } else {
-                result_ty = Some(arm_ty);
+                hint = Some(arm_ty);
             }
         }
 
-        Ok(result_ty.unwrap()) // arms must be non-empty, so result_ty is guaranteed to be Some
+        Ok(hint.unwrap()) // arms must be non-empty, so result_ty is guaranteed to be Some
     }
 
     fn check_block(
