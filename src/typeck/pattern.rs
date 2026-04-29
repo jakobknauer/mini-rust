@@ -67,6 +67,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 found: arm_enum_ty,
             });
         }
+        let arm_enum_ty = self.normalize(arm_enum_ty);
 
         let variant_ty = self.ctxt.tys.get_enum_variant_ty(arm_enum_ty, *variant_idx).unwrap();
 
@@ -109,6 +110,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 actual: struct_ty,
             });
         }
+        let struct_ty = self.normalize(struct_ty);
 
         for field in pattern.fields {
             let field_ty = self.ctxt.tys.get_struct_field_ty(struct_ty, field.field_index).unwrap();
@@ -125,6 +127,15 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         scrutinee_ty: ty::Ty<'ctxt>,
         binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
+        if let Ok(field_tys) = self.normalize(scrutinee_ty).tuple_field_tys()
+            && field_tys.len() != sub_patterns.len()
+        {
+            return Err(TypeckError::TuplePatternLenMismatch {
+                expected: field_tys.len(),
+                found: sub_patterns.len(),
+            });
+        }
+
         let field_inf_vars: Vec<_> = sub_patterns.iter().map(|_| self.ctxt.tys.inf_var()).collect();
         let most_general_scrutinee = self.ctxt.tys.tuple(&field_inf_vars);
 
