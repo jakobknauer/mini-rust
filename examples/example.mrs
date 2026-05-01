@@ -1,8 +1,9 @@
 fn main() -> i32 {
-    // The only way to infer the type of x is by using the patterns that we match x on.
-    let _f = |x| match x {
-        Option::Some { item: 1 } => true,
-        Option::None => false,
+    let opt: Option<i32> = Option::Some { item: 42 };
+    let _a = match opt {
+        Option::Some { item: 1 } => 1,
+        Option::Some { item: _ } => 2,
+        Option::None => 0,
     };
     0
 }

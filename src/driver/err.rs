@@ -260,5 +260,6 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>) -> String {
             format!("associated type '{}' does not equal '{}'", subject, expected)
         }
         NonAssignablePlace(expr) => format!("expression {:?} is not an assignable place", expr),
+        NonExhaustiveMatch { scrutinee_ty } => format!("non-exhaustive match on type '{}'", scrutinee_ty),
     }
 }

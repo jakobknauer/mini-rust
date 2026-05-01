@@ -1,5 +1,6 @@
 mod closures;
 mod err;
+mod exhaust;
 mod mthd;
 mod normalize;
 mod ops;
@@ -741,6 +742,11 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             } else {
                 hint = Some(arm_ty);
             }
+        }
+
+        let scrutinee_ty = self.normalize(scrutinee_ty);
+        if !exhaust::is_exhaustive(scrutinee_ty, arms, &self.typing.match_bindings, self.ctxt) {
+            return Err(TypeckError::NonExhaustiveMatch { scrutinee_ty });
         }
 
         Ok(hint.unwrap()) // arms must be non-empty, so result_ty is guaranteed to be Some

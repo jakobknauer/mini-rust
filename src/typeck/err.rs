@@ -153,4 +153,7 @@ pub enum TypeckError<'ctxt> {
         expected: ty::Ty<'ctxt>,
     },
     NonAssignablePlace(hlr::Expr<'ctxt>),
+    NonExhaustiveMatch {
+        scrutinee_ty: ty::Ty<'ctxt>,
+    },
 }
