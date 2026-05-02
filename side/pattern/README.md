@@ -1,2 +1,2 @@
 This is a playground for understanding the algorithm for pattern exhaustiveness checks,
-later to be used in the main compiler.
+now used in the compiler in [src/typeck/exhaust.rs](src/typeck/exhaust.rs).
