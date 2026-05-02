@@ -69,7 +69,7 @@ impl<'mlr> Mutck<'mlr> {
                 self.check_stmt(if_.else_)
             }
             StmtDef::Loop { body } => self.check_stmt(body),
-            StmtDef::Break => Ok(()),
+            StmtDef::Break | StmtDef::Unreachable => Ok(()),
         }
     }
 

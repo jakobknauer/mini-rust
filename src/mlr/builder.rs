@@ -238,6 +238,11 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
         self.push_stmt(stmt);
     }
 
+    pub fn insert_unreachable_stmt(&mut self) {
+        let stmt = self.mlr.insert_stmt(mlr::StmtDef::Unreachable);
+        self.push_stmt(stmt);
+    }
+
     fn fn_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
         let param_tys: Vec<_> = fn_inst.fn_.params.iter().map(|p| p.ty).collect();
         let return_ty = fn_inst.fn_.return_ty;

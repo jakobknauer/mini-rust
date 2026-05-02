@@ -1,4 +1,4 @@
-use crate::ctxt::{fns, language_items, ty};
+use crate::ctxt::{language_items, ty};
 use crate::typeck::MatchBinding;
 use crate::{hlr, mlr};
 
@@ -29,7 +29,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         result_place: mlr::Place<'ctxt>,
     ) {
         match arms {
-            [] => self.lower_match_panic(result_place),
+            [] => self.lower_match_exhausted(),
             [first_arm, remaining_arms @ ..] => {
                 let cond_op = self.lower_pattern_condition(first_arm.pattern, scrutinee_ty, scrutinee_place);
 
@@ -47,31 +47,8 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         }
     }
 
-    fn lower_match_panic(&mut self, result_place: mlr::Place<'ctxt>) {
-        let panic_fn = self
-            .builder
-            .ctxt
-            .language_items
-            .panic_fn
-            .expect("panic function not registered");
-        let empty_slice = self.builder.ctxt.tys.ty_slice(&[]);
-        let fn_inst = fns::FnInst::new(panic_fn, empty_slice, empty_slice).unwrap();
-        let panic_op = self.builder.insert_fn_inst_op(fn_inst);
-
-        let c_char_ty = self.builder.ctxt.tys.primitive(ty::Primitive::CChar);
-        let ptr_ty = self.builder.ctxt.tys.ptr(c_char_ty);
-        let msg_op = self
-            .builder
-            .insert_const_op(mlr::Const::CString(b"match failed\n\0".to_vec()), ptr_ty);
-
-        let never_ty = self.builder.ctxt.tys.never();
-        let call_val = self.builder.insert_call_val(panic_op, vec![msg_op]);
-        let call_place = self.builder.alloc_place(never_ty);
-        self.builder.insert_assign_stmt(call_place, call_val);
-        let call_op = self.builder.insert_copy_op(call_place);
-
-        let as_val = self.builder.insert_as_val(call_op, result_place.1);
-        self.builder.insert_assign_stmt(result_place, as_val);
+    fn lower_match_exhausted(&mut self) {
+        self.builder.insert_unreachable_stmt();
     }
 
     fn lower_match_arm(

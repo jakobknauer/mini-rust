@@ -86,6 +86,7 @@ pub enum StmtDef<'mlr> {
     If(If<'mlr>),
     Loop { body: Stmt<'mlr> },
     Break,
+    Unreachable,
 }
 
 #[derive(Debug)]

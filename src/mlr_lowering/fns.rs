@@ -200,6 +200,9 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             Block(stmts) => self.build_block(stmts)?,
             If(if_) => self.build_if(if_)?,
             Loop { body } => self.build_loop(body)?,
+            Unreachable => {
+                self.iw_builder.build_unreachable()?;
+            }
         }
 
         Ok(())

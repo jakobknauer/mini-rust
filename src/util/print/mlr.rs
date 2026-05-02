@@ -145,6 +145,10 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 self.indent()?;
                 writeln!(self.writer, "break;")
             }
+            Unreachable => {
+                self.indent()?;
+                writeln!(self.writer, "unreachable;")
+            }
             Block(stmts) => {
                 self.indent()?;
                 self.print_block(stmts)?;
