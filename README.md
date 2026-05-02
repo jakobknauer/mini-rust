@@ -11,7 +11,7 @@ Supported features include:
 - Generics (functions, structs and enums, traits and impls) with constraints (for functions, methods, and impls)
 - Opaque return types (`impl Trait`/`impl Fn`)
 - Closures capturing local variables
-- Pattern matching with recursive patterns: structs, enum variants, tuples, constants, variables (bindings), references, and wilcards
+- Pattern matching with recursive patterns (structs, enum variants, tuples, constants, variables (bindings), references, and wilcards) with exhaustiveness check at compile time
 - Operator overloading:
     - Binary arithmetic/logical/bit operations: `+`, `-`, `*`, `/`, `%`, `&`, `|` via `Add`, `Sub` etc. traits
     - `==` and `!=` via the `Eq` trait, providing a default impl for `!=`
