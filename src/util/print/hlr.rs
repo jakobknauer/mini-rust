@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Write;
 
 use crate::{hlr, typeck::HlrTyping};
@@ -9,6 +10,7 @@ pub fn print_hlr<'ctxt, W: Write>(
 ) -> Result<(), std::io::Error> {
     let mut printer = HlrPrinter {
         typing,
+        var_names: &hlr_fn.var_names,
         indent_level: 0,
         writer,
     };
@@ -17,6 +19,7 @@ pub fn print_hlr<'ctxt, W: Write>(
 
 struct HlrPrinter<'ctxt, 'a, W: Write> {
     typing: Option<&'a HlrTyping<'ctxt>>,
+    var_names: &'a HashMap<hlr::VarId, String>,
     indent_level: usize,
     writer: &'a mut W,
 }
@@ -24,6 +27,13 @@ struct HlrPrinter<'ctxt, 'a, W: Write> {
 const INDENT: &str = "    ";
 
 impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
+    fn print_var_id(&mut self, var_id: hlr::VarId) -> Result<(), std::io::Error> {
+        match self.var_names.get(&var_id) {
+            Some(name) => write!(self.writer, "%{name}#{var_id}"),
+            None => write!(self.writer, "#{var_id}"),
+        }
+    }
+
     fn print_fn(&mut self, hlr_fn: &hlr::Fn<'ctxt>) -> Result<(), std::io::Error> {
         let assoc = if let Some(assoc_ty) = hlr_fn.fn_.associated_ty {
             if let Some(trait_inst) = &hlr_fn.fn_.associated_trait_inst {
@@ -47,7 +57,8 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             if i > 0 {
                 write!(self.writer, ", ")?;
             }
-            write!(self.writer, "{}: {}", var_id, param.ty)?;
+            self.print_var_id(var_id)?;
+            write!(self.writer, ": {}", param.ty)?;
         }
         write!(self.writer, ") -> {} ", hlr_fn.fn_.return_ty)?;
         self.print_expr(hlr_fn.body)?;
@@ -183,12 +194,14 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                     if let Some(typing) = self.typing
                         && let Some(&ty) = typing.var_types.get(var_id)
                     {
-                        write!(self.writer, "{}: {}", var_id, ty)?;
+                        self.print_var_id(*var_id)?;
+                        write!(self.writer, ": {}", ty)?;
                     } else if let Some(annot) = annot {
-                        write!(self.writer, "{}: ", var_id)?;
+                        self.print_var_id(*var_id)?;
+                        write!(self.writer, ": ")?;
                         self.print_ty_annot(annot)?;
                     } else {
-                        write!(self.writer, "{}", var_id)?;
+                        self.print_var_id(*var_id)?;
                     }
                 }
                 write!(self.writer, "|")?;
@@ -288,7 +301,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 if *mutable {
                     write!(self.writer, "mut ")?;
                 }
-                write!(self.writer, "{var_id}")
+                self.print_var_id(*var_id)
             }
             hlr::PatternKind::Variant(pattern) => {
                 self.print_val(&pattern.variant)?;
@@ -365,14 +378,14 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 if mutable {
                     write!(self.writer, "mut ")?;
                 }
+                self.print_var_id(var)?;
                 if let Some(typing) = self.typing
                     && let Some(&inferred) = typing.var_types.get(&var)
                 {
-                    write!(self.writer, "{}", inferred)?;
+                    write!(self.writer, ": {}", inferred)?;
                 } else if let Some(annot) = ty {
+                    write!(self.writer, ": ")?;
                     self.print_ty_annot(annot)?;
-                } else {
-                    write!(self.writer, "_")?;
                 }
                 write!(self.writer, " = ")?;
                 self.print_expr(init)?;
@@ -396,7 +409,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
 
     fn print_val(&mut self, val: &hlr::Val<'ctxt>) -> Result<(), std::io::Error> {
         match val {
-            hlr::Val::Var(var_id) => write!(self.writer, "{}", var_id),
+            hlr::Val::Var(var_id) => self.print_var_id(*var_id),
             hlr::Val::Fn(fn_, gen_args) => {
                 write!(self.writer, "{}", fn_.name)?;
                 self.print_optional_gen_args(*gen_args)

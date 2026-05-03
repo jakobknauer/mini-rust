@@ -63,21 +63,23 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         let mut param_var_ids = Vec::new();
 
         for param in &self.fn_.params {
-            let var_id = self.hlr.var_id();
-            param_var_ids.push(var_id);
-
-            match &param.kind {
+            let var_id = match &param.kind {
                 fns::FnParamKind::Regular(name, ..) => {
+                    let var_id = self.hlr.named_var_id(name.as_str());
                     self.scopes
                         .back_mut()
                         .unwrap()
                         .bindings
                         .insert(name.to_string(), var_id);
+                    var_id
                 }
                 fns::FnParamKind::Self_ | fns::FnParamKind::SelfByRef | fns::FnParamKind::SelfByRefMut => {
+                    let var_id = self.hlr.named_var_id("self");
                     self.self_var_id = Some(var_id);
+                    var_id
                 }
-            }
+            };
+            param_var_ids.push(var_id);
         }
 
         self.start_new_block();
@@ -89,6 +91,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             fn_: self.fn_,
             body,
             param_var_ids,
+            var_names: self.hlr.var_names.take(),
         })
     }
 
@@ -147,7 +150,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     ) -> AstLoweringResult<()> {
         let init = self.lower_expr(value)?;
 
-        let var = self.hlr.var_id();
+        let var = self.hlr.named_var_id(name);
         self.scopes.back_mut().unwrap().bindings.insert(name.to_string(), var);
 
         let ty = ty_annot.map(|ty_annot| self.lower_ty_annot(ty_annot)).transpose()?;
@@ -773,7 +776,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         });
 
         // Some arm: Option::Some { item: binding_var } => body
-        let binding_var = self.hlr.var_id();
+        let binding_var = self.hlr.named_var_id(binding);
         let binding_pattern = self.hlr.pattern(hlr::PatternKind::Identifier {
             var_id: binding_var,
             mutable,
@@ -887,7 +890,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 Ok(self.hlr.pattern(hlr::PatternKind::Tuple(lowered)))
             }
             ast::PatternKind::Identifier { name, mutable } => {
-                let var_id = self.hlr.var_id();
+                let var_id = self.hlr.named_var_id(name.as_str());
                 self.scopes.back_mut().unwrap().bindings.insert(name.clone(), var_id);
                 Ok(self.hlr.pattern(hlr::PatternKind::Identifier {
                     var_id,
@@ -999,7 +1002,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             .iter()
             .map(|param| -> AstLoweringResult<hlr::ClosureParam<'ctxt>> {
                 let ty = param.ty.map(|ty| self.lower_ty_annot(ty)).transpose()?;
-                let var_id = self.hlr.var_id();
+                let var_id = self.hlr.named_var_id(param.name.as_str());
                 self.scopes
                     .back_mut()
                     .unwrap()

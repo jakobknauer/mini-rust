@@ -2,7 +2,8 @@ mod expr;
 mod stmt;
 mod ty_annot;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 
 use crate::ctxt::fns;
 
@@ -15,6 +16,7 @@ pub struct Hlr<'hlr> {
 
     next_var_id: Cell<VarId>,
     next_expr_id: Cell<ExprId>,
+    pub var_names: RefCell<HashMap<VarId, String>>,
 }
 
 impl<'hlr> Hlr<'hlr> {
@@ -23,6 +25,7 @@ impl<'hlr> Hlr<'hlr> {
             arena,
             next_var_id: Cell::new(VarId(0)),
             next_expr_id: Cell::new(ExprId(0)),
+            var_names: RefCell::new(HashMap::new()),
         }
     }
 }
@@ -31,6 +34,7 @@ pub struct Fn<'hlr> {
     pub fn_: fns::Fn<'hlr>,
     pub body: Expr<'hlr>,
     pub param_var_ids: Vec<VarId>,
+    pub var_names: HashMap<VarId, String>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
@@ -38,7 +42,7 @@ pub struct VarId(usize);
 
 impl std::fmt::Display for VarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "v{}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -46,6 +50,12 @@ impl<'hlr> Hlr<'hlr> {
     pub fn var_id(&self) -> VarId {
         let id = self.next_var_id.get();
         self.next_var_id.set(VarId(id.0 + 1));
+        id
+    }
+
+    pub fn named_var_id(&self, name: impl Into<String>) -> VarId {
+        let id = self.var_id();
+        self.var_names.borrow_mut().insert(id, name.into());
         id
     }
 
