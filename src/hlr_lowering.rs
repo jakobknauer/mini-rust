@@ -25,7 +25,7 @@ pub fn hlr_to_mlr<'a, 'ctxt>(
     fn_: &'a hlr::Fn<'ctxt>,
     typing: &'a HlrTyping<'ctxt>,
 ) -> Vec<mlr::Fn<'ctxt>> {
-    let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing);
+    let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing, &fn_.var_names);
     lowerer.lower_fn(fn_)
 }
 
@@ -34,6 +34,8 @@ struct HlrLowerer<'a, 'ctxt> {
     builder: MlrBuilder<'a, 'ctxt>,
     typing: &'a HlrTyping<'ctxt>,
     var_locs: HashMap<hlr::VarId, mlr::Loc<'ctxt>>,
+    var_names: &'a HashMap<hlr::VarId, String>,
+    loc_names: HashMap<usize, String>,
     mlr_fns: Vec<mlr::Fn<'ctxt>>,
 }
 
@@ -43,14 +45,24 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         mlr: &'a mlr::Mlr<'ctxt>,
         fn_: fns::Fn<'ctxt>,
         typing: &'a HlrTyping<'ctxt>,
+        var_names: &'a HashMap<hlr::VarId, String>,
     ) -> Self {
         Self {
             fn_,
             builder: MlrBuilder::new(ctxt, mlr, fn_),
             typing,
             var_locs: HashMap::new(),
+            var_names,
+            loc_names: HashMap::new(),
             mlr_fns: Vec::new(),
         }
+    }
+
+    fn bind_var_loc(&mut self, var_id: hlr::VarId, loc: mlr::Loc<'ctxt>) {
+        if let Some(name) = self.var_names.get(&var_id) {
+            self.loc_names.insert(loc.index(), name.clone());
+        }
+        self.var_locs.insert(var_id, loc);
     }
 
     fn lower_fn(&mut self, fn_: &hlr::Fn<'ctxt>) -> Vec<mlr::Fn<'ctxt>> {
@@ -78,7 +90,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         for (param, &var_id) in regular_params.iter().zip(param_var_ids) {
             let loc = self.builder.insert_typed_loc(param.ty);
             param_locs.push(loc);
-            self.var_locs.insert(var_id, loc);
+            self.bind_var_loc(var_id, loc);
         }
 
         self.builder.start_block();
@@ -93,7 +105,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let use_val = self.builder.copy_val(field_place);
                 let loc = self.builder.alloc_mut_loc(field_ty);
                 self.builder.insert_assign_to_loc_stmt(loc, use_val);
-                self.var_locs.insert(var_id, loc);
+                self.bind_var_loc(var_id, loc);
             }
         }
 
@@ -105,6 +117,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             fn_: self.fn_,
             body,
             param_locs,
+            loc_names: std::mem::take(&mut self.loc_names),
         }
     }
 
@@ -607,7 +620,13 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
         let param_var_ids: Vec<_> = params.iter().map(|hlr::ClosureParam(v, _)| *v).collect();
         let (closure_mlr_fn, nested_mlr_fns) = {
-            let mut closure_lowerer = HlrLowerer::new(self.builder.ctxt, self.builder.mlr, closure_fn, self.typing);
+            let mut closure_lowerer = HlrLowerer::new(
+                self.builder.ctxt,
+                self.builder.mlr,
+                closure_fn,
+                self.typing,
+                self.var_names,
+            );
             let mlr_fn = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
             let nested_mlr_fns = closure_lowerer.mlr_fns;
             (mlr_fn, nested_mlr_fns)
@@ -659,7 +678,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.insert_assign_to_loc_stmt(loc, val);
         self.builder.end_and_push_block();
 
-        self.var_locs.insert(var, loc);
+        self.bind_var_loc(var, loc);
     }
 
     fn lower_return_stmt(&mut self, expr: Option<hlr::Expr<'ctxt>>) {

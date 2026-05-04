@@ -1,6 +1,7 @@
 pub mod builder;
 
 use std::cell::Cell;
+use std::collections::HashMap;
 
 use crate::ctxt::{
     fns::{self, FnInst, TraitMthdInst},
@@ -73,7 +74,13 @@ impl std::hash::Hash for Loc<'_> {
 
 impl std::fmt::Display for Loc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "_{}", self.0)
+        self.0.fmt(f)
+    }
+}
+
+impl<'mlr> Loc<'mlr> {
+    pub fn index(self) -> usize {
+        self.0
     }
 }
 
@@ -150,6 +157,7 @@ pub struct Fn<'mlr> {
     pub fn_: fns::Fn<'mlr>,
     pub body: Stmt<'mlr>,
     pub param_locs: Vec<Loc<'mlr>>,
+    pub loc_names: HashMap<usize, String>,
 }
 
 impl<'mlr> Mlr<'mlr> {

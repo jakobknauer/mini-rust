@@ -42,7 +42,7 @@ pub struct VarId(usize);
 
 impl std::fmt::Display for VarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        self.0.fmt(f)
     }
 }
 

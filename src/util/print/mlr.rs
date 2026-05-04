@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Write;
 
 use crate::{
@@ -10,8 +11,11 @@ pub fn print_mlr<'mlr, W: Write>(
     mlr_fn: Option<&mlr::Fn<'mlr>>,
     writer: &mut W,
 ) -> Result<(), std::io::Error> {
+    let empty = HashMap::new();
+    let loc_names = mlr_fn.map(|f| &f.loc_names).unwrap_or(&empty);
     let mut printer = MlrPrinter {
         mlr_fn,
+        loc_names,
         decl: fn_,
         indent_level: 0,
         writer,
@@ -21,6 +25,7 @@ pub fn print_mlr<'mlr, W: Write>(
 
 struct MlrPrinter<'a, 'mlr, W: Write> {
     mlr_fn: Option<&'a mlr::Fn<'mlr>>,
+    loc_names: &'a HashMap<usize, String>,
     decl: Fn<'mlr>,
     indent_level: usize,
     writer: &'a mut W,
@@ -91,7 +96,8 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 if i > 0 {
                     write!(self.writer, ", ")?;
                 }
-                write!(self.writer, "{}: {}", param_loc, param.ty)?;
+                self.print_loc(*param_loc)?;
+                write!(self.writer, ": {}", param.ty)?;
             }
         } else {
             for (i, param) in self.decl.params.iter().enumerate() {
@@ -125,7 +131,9 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             Alloc { loc, mutable } => {
                 self.indent()?;
                 let mut_str = if mutable { "mut " } else { "" };
-                writeln!(self.writer, "alloc {}{}: {};", mut_str, loc, loc.1)
+                write!(self.writer, "alloc {}", mut_str)?;
+                self.print_loc(loc)?;
+                writeln!(self.writer, ": {};", loc.1)
             }
             Assign { place, value } => {
                 self.indent()?;
@@ -235,11 +243,18 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
         }
     }
 
+    fn print_loc(&mut self, loc: mlr::Loc<'mlr>) -> Result<(), std::io::Error> {
+        match self.loc_names.get(&loc.index()) {
+            Some(name) => write!(self.writer, "%{name}#{loc}"),
+            None => write!(self.writer, "#{loc}"),
+        }
+    }
+
     fn print_place(&mut self, place: mlr::Place<'mlr>) -> Result<(), std::io::Error> {
         use mlr::PlaceDef::*;
 
         match *place {
-            Loc(loc) => write!(self.writer, "{}", loc),
+            Loc(loc) => self.print_loc(loc),
             FieldAccess { base, field_index, .. } => {
                 self.print_place(base)?;
                 write!(self.writer, ".{}", field_index)
