@@ -487,7 +487,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             self.builder.insert_assign_stmt(field_place, val);
         }
 
-        self.builder.copy_val(tuple_place).into()
+        tuple_place.into()
     }
 
     fn lower_assign(&mut self, target: hlr::Expr<'ctxt>, value: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
@@ -563,7 +563,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
         self.builder.insert_if_stmt(cond_op, then_block, else_block);
 
-        self.builder.copy_val(result_place).into()
+        result_place.into()
     }
 
     fn lower_loop(&mut self, body: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
@@ -634,7 +634,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.mlr_fns.extend(nested_mlr_fns);
         self.mlr_fns.push(closure_mlr_fn);
 
-        self.builder.copy_val(closure_place).into()
+        closure_place.into()
     }
 
     fn lower_block(&mut self, stmts: hlr::StmtSlice<'ctxt>, trailing: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {

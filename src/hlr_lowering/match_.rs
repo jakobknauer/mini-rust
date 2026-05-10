@@ -18,7 +18,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
 
         self.lower_match_arms(scrutinee_ty, arms, scrutinee_place, result_place);
 
-        self.builder.copy_val(result_place).into()
+        result_place.into()
     }
 
     fn lower_match_arms(
@@ -29,12 +29,13 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         result_place: mlr::Place<'ctxt>,
     ) {
         match arms {
-            [] => self.lower_match_exhausted(),
+            [] => self.builder.insert_unreachable_stmt(),
             [first_arm, remaining_arms @ ..] => {
                 let cond_op = self.lower_pattern_condition(first_arm.pattern, scrutinee_ty, scrutinee_place);
 
                 self.builder.start_block();
-                let arm_val = self.lower_match_arm(scrutinee_ty, first_arm, scrutinee_place);
+                self.lower_pattern_bindings(first_arm.pattern, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
+                let arm_val = self.lower_to_val(first_arm.body);
                 self.builder.insert_assign_stmt(result_place, arm_val);
                 let then_block = self.builder.end_block();
 
@@ -47,84 +48,69 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         }
     }
 
-    fn lower_match_exhausted(&mut self) {
-        self.builder.insert_unreachable_stmt();
-    }
-
-    fn lower_match_arm(
+    fn lower_pattern_bindings(
         &mut self,
-        scrutinee_ty: ty::Ty<'ctxt>,
-        arm: &hlr::MatchArm<'ctxt>,
-        scrutinee_place: mlr::Place<'ctxt>,
-    ) -> mlr::Val<'ctxt> {
-        match arm.pattern {
-            hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
+        pattern: hlr::Pattern<'ctxt>,
+        place: mlr::Place<'ctxt>,
+        place_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
+    ) {
+        match pattern {
             hlr::PatternKind::Or(alternatives) => {
-                self.lower_or_pattern_bindings(alternatives, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
+                self.lower_or_pattern_bindings(alternatives, place, place_ty, binding);
             }
-            hlr::PatternKind::Identifier { .. } => {
-                self.lower_pattern_bindings(arm.pattern, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
+            hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
+            hlr::PatternKind::Identifier { var_id, mutable } => {
+                self.lower_identifier_pattern_bindings(*var_id, *mutable, place, binding);
             }
-            hlr::PatternKind::Variant(pattern) => {
-                let binding = self.pattern_binding(arm.pattern);
-                self.lower_variant_pattern_arm(pattern, scrutinee_ty, scrutinee_place, binding);
+            hlr::PatternKind::Struct(nested_pattern) => {
+                self.lower_struct_pattern_bindings(pattern, nested_pattern, place, place_ty);
             }
-            hlr::PatternKind::Struct(pattern) => {
-                let binding = self.pattern_binding(arm.pattern);
-                self.lower_struct_pattern_arm(pattern, scrutinee_place, binding);
+            hlr::PatternKind::Variant(nested_pattern) => {
+                self.lower_variant_pattern_bindings(pattern, nested_pattern, place, place_ty);
             }
             hlr::PatternKind::Tuple(sub_patterns) => {
-                let binding = self.pattern_binding(arm.pattern);
-                self.lower_tuple_pattern_arm(sub_patterns, scrutinee_ty, scrutinee_place, binding);
+                self.lower_tuple_pattern_bindings(pattern, sub_patterns, place, place_ty);
             }
             hlr::PatternKind::Ref(inner) | hlr::PatternKind::RefMut(inner) => {
-                let (inner_ty, inner_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
+                let (inner_ty, inner_place) = self.deref_scrutinee_place(place_ty, place);
                 self.lower_pattern_bindings(inner, inner_place, inner_ty, MatchBinding::Direct);
             }
         }
-        self.lower_to_val(arm.body)
     }
 
-    fn lower_variant_pattern_arm(
+    fn lower_identifier_pattern_bindings(
         &mut self,
-        pattern: &hlr::VariantPattern<'ctxt>,
-        scrutinee_ty: ty::Ty<'ctxt>,
-        scrutinee_place: mlr::Place<'ctxt>,
+        var_id: hlr::VarId,
+        mutable: bool,
+        place: mlr::Place<'ctxt>,
         binding: MatchBinding,
     ) {
-        let hlr::Val::Variant(_, variant_idx, _) = &pattern.variant else {
-            panic!("match arm pattern must be Val::Variant")
+        let binding_ty = self.typing.var_types[&var_id];
+        let loc = if mutable {
+            self.builder.alloc_mut_loc(binding_ty)
+        } else {
+            self.builder.alloc_loc(binding_ty)
         };
-        let variant_idx = *variant_idx;
-
-        let (enum_ty, enum_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
-        let variant_ty = self.builder.ctxt.tys.get_enum_variant_ty(enum_ty, variant_idx).unwrap();
-        let variant_place = self
-            .builder
-            .insert_project_to_variant_place(enum_place, variant_idx, variant_ty);
-
-        for field in pattern.fields {
-            let field_ty = self
-                .builder
-                .ctxt
-                .tys
-                .get_struct_field_ty(variant_ty, field.field_index)
-                .unwrap();
-            let field_place = self
-                .builder
-                .insert_field_access_place(variant_place, field.field_index, field_ty);
-            self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
-        }
+        let val = match binding {
+            MatchBinding::Direct => self.builder.copy_val(place),
+            MatchBinding::ByRef => self.builder.insert_addr_of_val(place),
+            MatchBinding::ByRefMut => self.builder.insert_addr_of_mut_val(place),
+        };
+        self.builder.insert_assign_to_loc_stmt(loc, val);
+        self.var_locs.insert(var_id, loc);
     }
 
-    fn lower_struct_pattern_arm(
+    fn lower_struct_pattern_bindings(
         &mut self,
-        pattern: &hlr::StructPattern<'ctxt>,
-        scrutinee_place: mlr::Place<'ctxt>,
-        binding: MatchBinding,
+        pattern: hlr::Pattern<'ctxt>,
+        nested_pattern: &'ctxt hlr::StructPattern<'ctxt>,
+        place: mlr::Place<'ctxt>,
+        place_ty: ty::Ty<'ctxt>,
     ) {
-        let (struct_ty, struct_place) = self.deref_scrutinee_place(scrutinee_place.1, scrutinee_place);
-        for field in pattern.fields {
+        let binding = self.pattern_binding(pattern);
+        let (struct_ty, struct_place) = self.deref_scrutinee_place(place_ty, place);
+        for field in nested_pattern.fields {
             let field_ty = self
                 .builder
                 .ctxt
@@ -138,14 +124,48 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         }
     }
 
-    fn lower_tuple_pattern_arm(
+    fn lower_variant_pattern_bindings(
         &mut self,
-        sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
-        scrutinee_ty: ty::Ty<'ctxt>,
-        scrutinee_place: mlr::Place<'ctxt>,
-        binding: MatchBinding,
+        pattern: hlr::Pattern<'ctxt>,
+        nested_pattern: &'ctxt hlr::VariantPattern<'ctxt>,
+        place: mlr::Place<'ctxt>,
+        place_ty: ty::Ty<'ctxt>,
     ) {
-        let (tuple_ty, tuple_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
+        let binding = self.pattern_binding(pattern);
+        let hlr::Val::Variant(_, variant_idx, _) = &nested_pattern.variant else {
+            panic!("nested variant pattern must have Val::Variant")
+        };
+        let variant_idx = *variant_idx;
+
+        let (enum_ty, enum_place) = self.deref_scrutinee_place(place_ty, place);
+        let variant_ty = self.builder.ctxt.tys.get_enum_variant_ty(enum_ty, variant_idx).unwrap();
+        let variant_place = self
+            .builder
+            .insert_project_to_variant_place(enum_place, variant_idx, variant_ty);
+
+        for field in nested_pattern.fields {
+            let field_ty = self
+                .builder
+                .ctxt
+                .tys
+                .get_struct_field_ty(variant_ty, field.field_index)
+                .unwrap();
+            let field_place = self
+                .builder
+                .insert_field_access_place(variant_place, field.field_index, field_ty);
+            self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
+        }
+    }
+
+    fn lower_tuple_pattern_bindings(
+        &mut self,
+        pattern: hlr::Pattern<'ctxt>,
+        sub_patterns: &'ctxt [hlr::Pattern<'ctxt>],
+        place: mlr::Place<'ctxt>,
+        place_ty: ty::Ty<'ctxt>,
+    ) {
+        let binding = self.pattern_binding(pattern);
+        let (tuple_ty, tuple_place) = self.deref_scrutinee_place(place_ty, place);
         let field_tys = tuple_ty.tuple_field_tys().unwrap();
         for (i, (&sub_pattern, &field_ty)) in sub_patterns.iter().zip(field_tys).enumerate() {
             let field_place = self.builder.insert_field_access_place(tuple_place, i, field_ty);
@@ -174,91 +194,6 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
                 let else_block = self.builder.end_block();
 
                 self.builder.insert_if_stmt(cond, then_block, else_block);
-            }
-        }
-    }
-
-    fn lower_pattern_bindings(
-        &mut self,
-        pattern: hlr::Pattern<'ctxt>,
-        place: mlr::Place<'ctxt>,
-        place_ty: ty::Ty<'ctxt>,
-        binding: MatchBinding,
-    ) {
-        match pattern {
-            hlr::PatternKind::Or(alternatives) => {
-                self.lower_or_pattern_bindings(alternatives, place, place_ty, binding);
-            }
-            hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
-            hlr::PatternKind::Identifier { var_id, mutable } => {
-                let binding_ty = self.typing.var_types[var_id];
-                let loc = if *mutable {
-                    self.builder.alloc_mut_loc(binding_ty)
-                } else {
-                    self.builder.alloc_loc(binding_ty)
-                };
-                let val = match binding {
-                    MatchBinding::Direct => self.builder.copy_val(place),
-                    MatchBinding::ByRef => self.builder.insert_addr_of_val(place),
-                    MatchBinding::ByRefMut => self.builder.insert_addr_of_mut_val(place),
-                };
-                self.builder.insert_assign_to_loc_stmt(loc, val);
-                self.var_locs.insert(*var_id, loc);
-            }
-            hlr::PatternKind::Struct(nested_pattern) => {
-                for field in nested_pattern.fields {
-                    let field_ty = self
-                        .builder
-                        .ctxt
-                        .tys
-                        .get_struct_field_ty(place_ty, field.field_index)
-                        .unwrap();
-                    let field_place = self
-                        .builder
-                        .insert_field_access_place(place, field.field_index, field_ty);
-                    self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
-                }
-            }
-            hlr::PatternKind::Variant(nested_pattern) => {
-                let hlr::Val::Variant(_, variant_idx, _) = &nested_pattern.variant else {
-                    panic!("nested variant pattern must have Val::Variant")
-                };
-                let variant_idx = *variant_idx;
-
-                let variant_ty = self
-                    .builder
-                    .ctxt
-                    .tys
-                    .get_enum_variant_ty(place_ty, variant_idx)
-                    .unwrap();
-                let variant_place = self
-                    .builder
-                    .insert_project_to_variant_place(place, variant_idx, variant_ty);
-
-                for field in nested_pattern.fields {
-                    let field_ty = self
-                        .builder
-                        .ctxt
-                        .tys
-                        .get_struct_field_ty(variant_ty, field.field_index)
-                        .unwrap();
-                    let field_place =
-                        self.builder
-                            .insert_field_access_place(variant_place, field.field_index, field_ty);
-                    // binding propagates from the top-level arm unchanged
-                    self.lower_pattern_bindings(field.pattern, field_place, field_ty, binding);
-                }
-            }
-            hlr::PatternKind::Tuple(sub_patterns) => {
-                let field_tys = place_ty.tuple_field_tys().unwrap();
-                for (i, (&sub_pattern, &field_ty)) in sub_patterns.iter().zip(field_tys).enumerate() {
-                    let field_place = self.builder.insert_field_access_place(place, i, field_ty);
-                    self.lower_pattern_bindings(sub_pattern, field_place, field_ty, binding);
-                }
-            }
-            hlr::PatternKind::Ref(inner) | hlr::PatternKind::RefMut(inner) => {
-                let (inner_ty, inner_place) = self.deref_scrutinee_place(place_ty, place);
-                self.lower_pattern_bindings(inner, inner_place, inner_ty, MatchBinding::Direct);
             }
         }
     }
