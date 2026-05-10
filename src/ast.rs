@@ -494,6 +494,7 @@ pub type Pattern<'ast> = &'ast PatternKind<'ast>;
 
 #[derive(Debug)]
 pub enum PatternKind<'ast> {
+    Or(Vec<Pattern<'ast>>),
     Ref(Pattern<'ast>),
     RefMut(Pattern<'ast>),
     Struct(StructPattern<'ast>),

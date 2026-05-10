@@ -141,6 +141,7 @@ pub type Pattern<'hlr> = &'hlr PatternKind<'hlr>;
 
 #[derive(Debug)]
 pub enum PatternKind<'hlr> {
+    Or(&'hlr [Pattern<'hlr>]),
     Ref(Pattern<'hlr>),
     RefMut(Pattern<'hlr>),
     Variant(VariantPattern<'hlr>),

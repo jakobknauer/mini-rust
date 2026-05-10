@@ -295,6 +295,15 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
 
     fn print_pattern(&mut self, pattern: hlr::Pattern<'ctxt>) -> Result<(), std::io::Error> {
         match pattern {
+            hlr::PatternKind::Or(alternatives) => {
+                for (i, &alt) in alternatives.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.writer, " | ")?;
+                    }
+                    self.print_pattern(alt)?;
+                }
+                Ok(())
+            }
             hlr::PatternKind::Wildcard => write!(self.writer, "_"),
             hlr::PatternKind::Lit(lit) => self.print_lit(lit),
             hlr::PatternKind::Identifier { var_id, mutable } => {

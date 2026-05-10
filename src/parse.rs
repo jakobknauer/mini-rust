@@ -1081,8 +1081,20 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(expr)
     }
 
-    /// TODO use a switch-case etc. here
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
+        let first = self.parse_primary_pattern()?;
+        if !matches!(self.tokens.current(), Some(Token::Pipe)) {
+            return Ok(first);
+        }
+        let mut alternatives = vec![first];
+        while self.tokens.advance_if(Token::Pipe) {
+            alternatives.push(self.parse_primary_pattern()?);
+        }
+        Ok(self.builder.pattern(PatternKind::Or(alternatives)))
+    }
+
+    /// TODO use a switch-case etc. here
+    fn parse_primary_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
         match self.tokens.current() {
             Some(Token::AmpersandAmpersand) => {
                 self.tokens.advance();

@@ -11,6 +11,12 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         binding: MatchBinding,
     ) -> TypeckResult<'ctxt, ()> {
         match pattern {
+            hlr::PatternKind::Or(alternatives) => {
+                for alt in *alternatives {
+                    self.check_pattern(alt, scrutinee_ty, binding)?;
+                }
+                Ok(())
+            }
             hlr::PatternKind::Wildcard => Ok(()),
             hlr::PatternKind::Identifier { var_id, .. } => self.check_identifier_pattern(*var_id, scrutinee_ty),
             hlr::PatternKind::Variant(_) | hlr::PatternKind::Struct(_) | hlr::PatternKind::Tuple(_) => {

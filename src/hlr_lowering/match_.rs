@@ -54,11 +54,14 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
     fn lower_match_arm(
         &mut self,
         scrutinee_ty: ty::Ty<'ctxt>,
-        arm: &'ctxt hlr::MatchArm<'ctxt>,
+        arm: &hlr::MatchArm<'ctxt>,
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Val<'ctxt> {
         match arm.pattern {
             hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
+            hlr::PatternKind::Or(alternatives) => {
+                self.lower_or_pattern_bindings(alternatives, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
+            }
             hlr::PatternKind::Identifier { .. } => {
                 self.lower_pattern_bindings(arm.pattern, scrutinee_place, scrutinee_ty, MatchBinding::Direct);
             }
@@ -150,6 +153,31 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         }
     }
 
+    fn lower_or_pattern_bindings(
+        &mut self,
+        alternatives: &'ctxt [hlr::Pattern<'ctxt>],
+        place: mlr::Place<'ctxt>,
+        place_ty: ty::Ty<'ctxt>,
+        binding: MatchBinding,
+    ) {
+        match alternatives {
+            [] => self.builder.insert_unreachable_stmt(),
+            [first, rest @ ..] => {
+                let cond = self.lower_pattern_condition(first, place_ty, place);
+
+                self.builder.start_block();
+                self.lower_pattern_bindings(first, place, place_ty, binding);
+                let then_block = self.builder.end_block();
+
+                self.builder.start_block();
+                self.lower_or_pattern_bindings(rest, place, place_ty, binding);
+                let else_block = self.builder.end_block();
+
+                self.builder.insert_if_stmt(cond, then_block, else_block);
+            }
+        }
+    }
+
     fn lower_pattern_bindings(
         &mut self,
         pattern: hlr::Pattern<'ctxt>,
@@ -158,6 +186,9 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         binding: MatchBinding,
     ) {
         match pattern {
+            hlr::PatternKind::Or(alternatives) => {
+                self.lower_or_pattern_bindings(alternatives, place, place_ty, binding);
+            }
             hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
             hlr::PatternKind::Identifier { var_id, mutable } => {
                 let binding_ty = self.typing.var_types[var_id];
@@ -239,6 +270,23 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Op<'ctxt> {
         match pattern {
+            hlr::PatternKind::Or(alternatives) => {
+                let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
+                alternatives
+                    .iter()
+                    .fold(self.builder.insert_bool_const(false), |acc, &alt| {
+                        let alt_cond = self.lower_pattern_condition(alt, scrutinee_ty, scrutinee_place);
+                        let or_val = self.builder.insert_binary_prim_val(
+                            language_items::BinaryPrimOp::BitOrBool,
+                            acc,
+                            alt_cond,
+                            bool_ty,
+                        );
+                        let or_place = self.builder.alloc_place(bool_ty);
+                        self.builder.insert_assign_stmt(or_place, or_val);
+                        self.builder.insert_copy_op(or_place)
+                    })
+            }
             hlr::PatternKind::Wildcard | hlr::PatternKind::Identifier { .. } => self.builder.insert_bool_const(true),
             hlr::PatternKind::Variant(pattern) => {
                 self.lower_variant_pattern_condition(pattern, scrutinee_ty, scrutinee_place)

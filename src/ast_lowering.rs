@@ -863,6 +863,14 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         bound_names: &mut HashSet<String>,
     ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         match pattern {
+            ast::PatternKind::Or(alternatives) => {
+                let lowered: Vec<_> = alternatives
+                    .iter()
+                    .map(|&p| self.lower_pattern(p, &mut HashSet::new()))
+                    .collect::<AstLoweringResult<_>>()?;
+                let lowered = self.hlr.patterns(lowered);
+                Ok(self.hlr.pattern(hlr::PatternKind::Or(lowered)))
+            }
             ast::PatternKind::Ref(inner) => {
                 let inner = self.lower_pattern(inner, bound_names)?;
                 Ok(self.hlr.pattern(hlr::PatternKind::Ref(inner)))

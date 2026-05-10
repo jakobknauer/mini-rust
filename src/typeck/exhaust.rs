@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use itertools::Itertools;
+
 use crate::{
     ctxt::{self, ty},
     hlr,
@@ -21,7 +23,23 @@ enum Ctor {
 #[derive(Debug, Clone)]
 enum ExhPat {
     Wildcard,
+    Or(Vec<ExhPat>),
     Ctor(Ctor, Vec<ExhPat>),
+}
+
+impl ExhPat {
+    fn expand_alternatives(self) -> Vec<ExhPat> {
+        match self {
+            ExhPat::Or(alts) => alts.into_iter().flat_map(|a| a.expand_alternatives()).collect(),
+            ExhPat::Wildcard => vec![ExhPat::Wildcard],
+            ExhPat::Ctor(ctor, fields) => fields
+                .into_iter()
+                .map(|f| f.expand_alternatives())
+                .multi_cartesian_product()
+                .map(|fs| ExhPat::Ctor(ctor.clone(), fs))
+                .collect(),
+        }
+    }
 }
 
 pub(super) fn is_exhaustive<'ctxt>(
@@ -32,7 +50,12 @@ pub(super) fn is_exhaustive<'ctxt>(
 ) -> bool {
     let matrix: Matrix = arms
         .iter()
-        .map(|arm| vec![lower_pattern(arm.pattern, match_bindings)])
+        .flat_map(|arm| {
+            lower_pattern(arm.pattern, match_bindings)
+                .expand_alternatives()
+                .into_iter()
+                .map(|p| vec![p])
+        })
         .collect();
     !is_useful(&matrix, &[ExhPat::Wildcard], &[scrutinee_ty], ctxt)
 }
@@ -42,6 +65,9 @@ fn lower_pattern<'ctxt>(
     bindings: &HashMap<*const hlr::PatternKind<'ctxt>, MatchBinding>,
 ) -> ExhPat {
     match pattern {
+        hlr::PatternKind::Or(alternatives) => {
+            ExhPat::Or(alternatives.iter().map(|&alt| lower_pattern(alt, bindings)).collect())
+        }
         hlr::PatternKind::Wildcard | hlr::PatternKind::Identifier { .. } => ExhPat::Wildcard,
         hlr::PatternKind::Variant(vp) => {
             let hlr::Val::Variant(enum_, idx, _) = &vp.variant else {
@@ -107,6 +133,7 @@ fn is_useful<'ctxt>(matrix: &Matrix, row: &[ExhPat], tys: &[ty::Ty<'ctxt>], ctxt
     }
 
     match &row[0] {
+        ExhPat::Or(_) => unreachable!("Or patterns must be expanded before exhaustiveness check"),
         ExhPat::Ctor(ctor, _) => {
             let sub_tys = specialize_ty(tys[0], ctor, ctxt);
             let arity = sub_tys.len();
@@ -155,6 +182,7 @@ fn specialize_row(row: &[ExhPat], ctor: &Ctor, arity: usize) -> Option<Vec<ExhPa
         ),
         ExhPat::Ctor(c, fields) if c == ctor => Some(fields.iter().cloned().chain(tail.iter().cloned()).collect()),
         ExhPat::Ctor(_, _) => None,
+        ExhPat::Or(_) => unreachable!("Or patterns must be expanded before exhaustiveness check"),
     }
 }
 
@@ -175,6 +203,7 @@ fn as_ctor(pat: &ExhPat) -> Option<Ctor> {
     match pat {
         ExhPat::Wildcard => None,
         ExhPat::Ctor(c, _) => Some(c.clone()),
+        ExhPat::Or(_) => unreachable!("Or patterns must be expanded before exhaustiveness check"),
     }
 }
 
