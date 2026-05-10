@@ -842,8 +842,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             .iter()
             .map(|arm| {
                 self.scopes.push_back(Scope::default());
-                let mut seen = HashSet::new();
-                let pattern = self.lower_pattern(arm.pattern, &mut seen)?;
+                let pattern = self.lower_pattern(arm.pattern, &mut HashSet::new())?;
                 let body = self.lower_expr(arm.value)?;
                 self.scopes.pop_back();
                 Ok(hlr::MatchArm { pattern, body })
@@ -861,18 +860,18 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_pattern(
         &mut self,
         pattern: ast::Pattern,
-        seen: &mut HashSet<String>,
+        bound_names: &mut HashSet<String>,
     ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         match pattern {
             ast::PatternKind::Ref(inner) => {
-                let inner = self.lower_pattern(inner, seen)?;
+                let inner = self.lower_pattern(inner, bound_names)?;
                 Ok(self.hlr.pattern(hlr::PatternKind::Ref(inner)))
             }
             ast::PatternKind::RefMut(inner) => {
-                let inner = self.lower_pattern(inner, seen)?;
+                let inner = self.lower_pattern(inner, bound_names)?;
                 Ok(self.hlr.pattern(hlr::PatternKind::RefMut(inner)))
             }
-            ast::PatternKind::Struct(pattern) => self.lower_struct_pattern(pattern, seen),
+            ast::PatternKind::Struct(pattern) => self.lower_struct_pattern(pattern, bound_names),
             ast::PatternKind::Lit(lit) => {
                 let lit = match lit {
                     ast::Lit::Int(i) => hlr::Lit::Int(*i),
@@ -889,13 +888,13 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             ast::PatternKind::Tuple(sub_patterns) => {
                 let lowered: Vec<_> = sub_patterns
                     .iter()
-                    .map(|&p| self.lower_pattern(p, seen))
+                    .map(|&p| self.lower_pattern(p, bound_names))
                     .collect::<AstLoweringResult<_>>()?;
                 let lowered = self.hlr.patterns(lowered);
                 Ok(self.hlr.pattern(hlr::PatternKind::Tuple(lowered)))
             }
             ast::PatternKind::Identifier { name, mutable } => {
-                if !seen.insert(name.clone()) {
+                if !bound_names.insert(name.clone()) {
                     return Err(AstLoweringError {
                         msg: format!("identifier `{name}` is bound more than once in the same pattern"),
                     });
@@ -914,13 +913,14 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_struct_pattern(
         &mut self,
         pattern: &ast::StructPattern,
-        seen: &mut HashSet<String>,
+        bound_names: &mut HashSet<String>,
     ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         let constructor = self.resolve_path_to_constructor(&pattern.path)?;
         match constructor {
             hlr::Val::Variant(enum_, variant_index, ..) => {
                 let struct_ = enum_.get_variant(variant_index).struct_;
-                let fields = self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &enum_.name, seen)?;
+                let fields =
+                    self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &enum_.name, bound_names)?;
                 let fields = self.hlr.pattern_fields(fields);
                 Ok(self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
                     variant: constructor,
@@ -928,7 +928,8 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 })))
             }
             hlr::Val::Struct(struct_, ..) => {
-                let fields = self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &struct_.name, seen)?;
+                let fields =
+                    self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &struct_.name, bound_names)?;
                 let fields = self.hlr.pattern_fields(fields);
                 Ok(self
                     .hlr
@@ -945,7 +946,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         ast_fields: &[ast::StructPatternField],
         def_fields: &[ty::StructField],
         type_name: &str,
-        seen: &mut HashSet<String>,
+        bound_names: &mut HashSet<String>,
     ) -> AstLoweringResult<Vec<hlr::PatternField<'ctxt>>> {
         if ast_fields.len() != def_fields.len() {
             return Err(AstLoweringError {
@@ -966,7 +967,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                     .ok_or_else(|| AstLoweringError {
                         msg: format!("Unknown field '{}' in pattern for '{}'", field.field_name, type_name),
                     })?;
-                let pattern = self.lower_pattern(field.pattern, seen)?;
+                let pattern = self.lower_pattern(field.pattern, bound_names)?;
                 Ok(hlr::PatternField { field_index, pattern })
             })
             .collect()
