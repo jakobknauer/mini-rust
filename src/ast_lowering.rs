@@ -1,11 +1,12 @@
+mod match_;
 mod resolve_util;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ast,
     ast_lowering::resolve_util::TyResolution,
-    ctxt::{self, fns, ty},
+    ctxt::{self, fns},
     hlr,
 };
 
@@ -829,156 +830,6 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         let loop_expr = self.hlr.expr(hlr::ExprDef::Loop { body: match_expr });
 
         Ok(self.release_current_block(loop_expr))
-    }
-
-    fn lower_match_expr(
-        &mut self,
-        scrutinee: ast::Expr<'ast>,
-        arms: &[ast::MatchArm<'ast>],
-    ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
-        let scrutinee = self.lower_expr(scrutinee)?;
-
-        let hlr_arms: Vec<_> = arms
-            .iter()
-            .map(|arm| {
-                self.scopes.push_back(Scope::default());
-                let pattern = self.lower_pattern(arm.pattern, &mut HashSet::new())?;
-                let body = self.lower_expr(arm.value)?;
-                self.scopes.pop_back();
-                Ok(hlr::MatchArm { pattern, body })
-            })
-            .collect::<AstLoweringResult<_>>()?;
-        let hlr_arms = self.hlr.match_arms(hlr_arms);
-
-        let expr = hlr::ExprDef::Match {
-            scrutinee,
-            arms: hlr_arms,
-        };
-        Ok(self.hlr.expr(expr))
-    }
-
-    fn lower_pattern(
-        &mut self,
-        pattern: ast::Pattern,
-        bound_names: &mut HashSet<String>,
-    ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
-        match pattern {
-            ast::PatternKind::Or(alternatives) => {
-                let lowered: Vec<_> = alternatives
-                    .iter()
-                    .map(|&p| self.lower_pattern(p, &mut HashSet::new()))
-                    .collect::<AstLoweringResult<_>>()?;
-                let lowered = self.hlr.patterns(lowered);
-                Ok(self.hlr.pattern(hlr::PatternKind::Or(lowered)))
-            }
-            ast::PatternKind::Ref(inner) => {
-                let inner = self.lower_pattern(inner, bound_names)?;
-                Ok(self.hlr.pattern(hlr::PatternKind::Ref(inner)))
-            }
-            ast::PatternKind::RefMut(inner) => {
-                let inner = self.lower_pattern(inner, bound_names)?;
-                Ok(self.hlr.pattern(hlr::PatternKind::RefMut(inner)))
-            }
-            ast::PatternKind::Struct(pattern) => self.lower_struct_pattern(pattern, bound_names),
-            ast::PatternKind::Lit(lit) => {
-                let lit = match lit {
-                    ast::Lit::Int(i) => hlr::Lit::Int(*i),
-                    ast::Lit::Bool(b) => hlr::Lit::Bool(*b),
-                    ast::Lit::CChar(c) => hlr::Lit::CChar(*c),
-                    ast::Lit::CString(_) => {
-                        return Err(AstLoweringError {
-                            msg: "string literals are not supported in patterns".into(),
-                        });
-                    }
-                };
-                Ok(self.hlr.pattern(hlr::PatternKind::Lit(lit)))
-            }
-            ast::PatternKind::Tuple(sub_patterns) => {
-                let lowered: Vec<_> = sub_patterns
-                    .iter()
-                    .map(|&p| self.lower_pattern(p, bound_names))
-                    .collect::<AstLoweringResult<_>>()?;
-                let lowered = self.hlr.patterns(lowered);
-                Ok(self.hlr.pattern(hlr::PatternKind::Tuple(lowered)))
-            }
-            ast::PatternKind::Identifier { name, mutable } => {
-                if !bound_names.insert(name.clone()) {
-                    return Err(AstLoweringError {
-                        msg: format!("identifier `{name}` is bound more than once in the same pattern"),
-                    });
-                }
-                let var_id = self.hlr.named_var_id(name.as_str());
-                self.scopes.back_mut().unwrap().bindings.insert(name.clone(), var_id);
-                Ok(self.hlr.pattern(hlr::PatternKind::Identifier {
-                    var_id,
-                    mutable: *mutable,
-                }))
-            }
-            ast::PatternKind::Wildcard => Ok(self.hlr.pattern(hlr::PatternKind::Wildcard)),
-        }
-    }
-
-    fn lower_struct_pattern(
-        &mut self,
-        pattern: &ast::StructPattern,
-        bound_names: &mut HashSet<String>,
-    ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
-        let constructor = self.resolve_path_to_constructor(&pattern.path)?;
-        match constructor {
-            hlr::Val::Variant(enum_, variant_index, ..) => {
-                let struct_ = enum_.get_variant(variant_index).struct_;
-                let fields =
-                    self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &enum_.name, bound_names)?;
-                let fields = self.hlr.pattern_fields(fields);
-                Ok(self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
-                    variant: constructor,
-                    fields,
-                })))
-            }
-            hlr::Val::Struct(struct_, ..) => {
-                let fields =
-                    self.lower_pattern_fields(&pattern.fields, struct_.get_fields(), &struct_.name, bound_names)?;
-                let fields = self.hlr.pattern_fields(fields);
-                Ok(self
-                    .hlr
-                    .pattern(hlr::PatternKind::Struct(hlr::StructPattern { constructor, fields })))
-            }
-            _ => Err(AstLoweringError {
-                msg: format!("Expected struct or enum variant in pattern, found {:?}", constructor),
-            }),
-        }
-    }
-
-    fn lower_pattern_fields(
-        &mut self,
-        ast_fields: &[ast::StructPatternField],
-        def_fields: &[ty::StructField],
-        type_name: &str,
-        bound_names: &mut HashSet<String>,
-    ) -> AstLoweringResult<Vec<hlr::PatternField<'ctxt>>> {
-        if ast_fields.len() != def_fields.len() {
-            return Err(AstLoweringError {
-                msg: format!(
-                    "Pattern for '{}' has wrong number of fields: expected {}, found {}",
-                    type_name,
-                    def_fields.len(),
-                    ast_fields.len()
-                ),
-            });
-        }
-        ast_fields
-            .iter()
-            .map(|field| {
-                let field_index = def_fields
-                    .iter()
-                    .position(|f| f.name == field.field_name)
-                    .ok_or_else(|| AstLoweringError {
-                        msg: format!("Unknown field '{}' in pattern for '{}'", field.field_name, type_name),
-                    })?;
-                let pattern = self.lower_pattern(field.pattern, bound_names)?;
-                Ok(hlr::PatternField { field_index, pattern })
-            })
-            .collect()
     }
 
     fn lower_deref_expr(&mut self, base: ast::Expr<'ast>) -> AstLoweringResult<hlr::Expr<'ctxt>> {

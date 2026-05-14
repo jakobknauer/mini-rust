@@ -87,10 +87,16 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         binding: MatchBinding,
     ) {
         let binding_ty = self.typing.var_types[&var_id];
-        let loc = if mutable {
-            self.builder.alloc_mut_loc(binding_ty)
+        let loc = if let Some(&existing) = self.var_locs.get(&var_id) {
+            existing
         } else {
-            self.builder.alloc_loc(binding_ty)
+            let loc = if mutable {
+                self.builder.alloc_mut_loc(binding_ty)
+            } else {
+                self.builder.alloc_loc(binding_ty)
+            };
+            self.var_locs.insert(var_id, loc);
+            loc
         };
         let val = match binding {
             MatchBinding::Direct => self.builder.copy_val(place),
@@ -98,7 +104,6 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             MatchBinding::ByRefMut => self.builder.insert_addr_of_mut_val(place),
         };
         self.builder.insert_assign_to_loc_stmt(loc, val);
-        self.var_locs.insert(var_id, loc);
     }
 
     fn lower_struct_pattern_bindings(
@@ -185,6 +190,11 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
             [first, rest @ ..] => {
                 let cond = self.lower_pattern_condition(first, place_ty, place);
 
+                // Pre-allocate binding locs in the current (outer) block so all
+                // branches share the same locs. lower_identifier_pattern_bindings
+                // will reuse them rather than allocating new ones per branch.
+                self.pre_alloc_or_bindings(first);
+
                 self.builder.start_block();
                 self.lower_pattern_bindings(first, place, place_ty, binding);
                 let then_block = self.builder.end_block();
@@ -195,6 +205,46 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
 
                 self.builder.insert_if_stmt(cond, then_block, else_block);
             }
+        }
+    }
+
+    fn pre_alloc_or_bindings(&mut self, pattern: hlr::Pattern<'ctxt>) {
+        match pattern {
+            hlr::PatternKind::Identifier { var_id, mutable } => {
+                if !self.var_locs.contains_key(var_id) {
+                    let binding_ty = self.typing.var_types[var_id];
+                    let loc = if *mutable {
+                        self.builder.alloc_mut_loc(binding_ty)
+                    } else {
+                        self.builder.alloc_loc(binding_ty)
+                    };
+                    self.var_locs.insert(*var_id, loc);
+                }
+            }
+            hlr::PatternKind::Tuple(sub_patterns) => {
+                for sub in *sub_patterns {
+                    self.pre_alloc_or_bindings(sub);
+                }
+            }
+            hlr::PatternKind::Struct(nested) => {
+                for field in nested.fields {
+                    self.pre_alloc_or_bindings(field.pattern);
+                }
+            }
+            hlr::PatternKind::Variant(nested) => {
+                for field in nested.fields {
+                    self.pre_alloc_or_bindings(field.pattern);
+                }
+            }
+            hlr::PatternKind::Ref(inner) | hlr::PatternKind::RefMut(inner) => {
+                self.pre_alloc_or_bindings(inner);
+            }
+            hlr::PatternKind::Or(alternatives) => {
+                if let Some(&first) = alternatives.first() {
+                    self.pre_alloc_or_bindings(first);
+                }
+            }
+            hlr::PatternKind::Wildcard | hlr::PatternKind::Lit(_) => {}
         }
     }
 

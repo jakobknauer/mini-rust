@@ -43,6 +43,7 @@ impl<'mlr> Mutck<'mlr> {
         mutck.check_stmt(fn_.body)
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn check_stmt(&mut self, stmt: mlr::Stmt<'mlr>) -> Result<(), MutckError> {
         match *stmt {
             StmtDef::Alloc { loc, mutable } => {
@@ -65,8 +66,14 @@ impl<'mlr> Mutck<'mlr> {
                 Ok(())
             }
             StmtDef::If(if_) => {
+                let fresh_before = self.fresh_locs.clone();
                 self.check_stmt(if_.then)?;
-                self.check_stmt(if_.else_)
+                let fresh_after_then = self.fresh_locs.clone();
+                self.fresh_locs = fresh_before;
+                self.check_stmt(if_.else_)?;
+                // A loc remains fresh only if it was not yet assigned in either branch.
+                self.fresh_locs.retain(|loc| fresh_after_then.contains(loc));
+                Ok(())
             }
             StmtDef::Loop { body } => self.check_stmt(body),
             StmtDef::Break | StmtDef::Unreachable => Ok(()),

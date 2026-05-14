@@ -1,8 +1,7 @@
 fn main() -> i32 {
-    let opt: Option<i32> = Option::Some { item: 0 };
-    match opt {
-        Option::Some { item: 1 | 2 } | Option::None => 10,
-        _ => 20,
+    match (3, 2) {
+        (0 | 1, a) | (a, 0 | 2) => a,
+        _ => -5
     }
 }
 
