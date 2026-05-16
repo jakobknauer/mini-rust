@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     ast,
@@ -222,25 +222,29 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
         type_name: &str,
         ctxt: &mut PatternLoweringCtxt,
     ) -> AstLoweringResult<Vec<hlr::PatternField<'ctxt>>> {
-        if ast_fields.len() != def_fields.len() {
+        let expected_fields: HashSet<&str> = def_fields.iter().map(|f| f.name.as_str()).collect();
+        let provided_fields: HashSet<&str> = ast_fields.iter().map(|f| f.field_name.as_str()).collect();
+
+        let mut missing: Vec<&str> = expected_fields.difference(&provided_fields).copied().collect();
+        if !missing.is_empty() {
+            missing.sort_unstable();
             return Err(AstLoweringError {
-                msg: format!(
-                    "Pattern for '{}' has wrong number of fields: expected {}, found {}",
-                    type_name,
-                    def_fields.len(),
-                    ast_fields.len()
-                ),
+                msg: format!("Missing fields in `{}` pattern: {}", type_name, missing.join(", ")),
             });
         }
+
+        let mut extra: Vec<&str> = provided_fields.difference(&expected_fields).copied().collect();
+        if !extra.is_empty() {
+            extra.sort_unstable();
+            return Err(AstLoweringError {
+                msg: format!("Unknown fields in `{}` pattern: {}", type_name, extra.join(", ")),
+            });
+        }
+
         ast_fields
             .iter()
             .map(|field| {
-                let field_index = def_fields
-                    .iter()
-                    .position(|f| f.name == field.field_name)
-                    .ok_or_else(|| AstLoweringError {
-                        msg: format!("Unknown field '{}' in pattern for '{}'", field.field_name, type_name),
-                    })?;
+                let field_index = def_fields.iter().position(|f| f.name == field.field_name).unwrap();
                 let pattern = self.lower_pattern_inner(field.pattern, ctxt)?;
                 Ok(hlr::PatternField { field_index, pattern })
             })

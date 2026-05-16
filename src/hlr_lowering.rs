@@ -378,23 +378,17 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn lower_struct_val(&mut self, struct_ty: ty::Ty<'ctxt>, fields: hlr::StructFields<'ctxt>) -> mlr::Val<'ctxt> {
         let struct_place = self.builder.alloc_place(struct_ty);
 
-        for (field_spec, field_expr) in fields.iter() {
-            let field_index = match field_spec {
-                hlr::FieldSpec::Name(name) => struct_ty
-                    .struct_field_index_by_name(name)
-                    .unwrap_or_else(|_| panic!("struct field {name} should exist")),
-                hlr::FieldSpec::Index(idx) => *idx,
-            };
+        for field in fields {
             let field_ty = self
                 .builder
                 .ctxt
                 .tys
-                .get_struct_field_ty(struct_ty, field_index)
+                .get_struct_field_ty(struct_ty, field.field_index)
                 .unwrap();
             let field_place = self
                 .builder
-                .insert_field_access_place(struct_place, field_index, field_ty);
-            let val = self.lower_to_val(*field_expr);
+                .insert_field_access_place(struct_place, field.field_index, field_ty);
+            let val = self.lower_to_val(field.expr);
             self.builder.insert_assign_stmt(field_place, val);
         }
 
@@ -422,23 +416,17 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             .builder
             .insert_project_to_variant_place(enum_place, variant_idx, variant_ty);
 
-        for (field_spec, field_expr) in fields.iter() {
-            let field_index = match field_spec {
-                hlr::FieldSpec::Name(name) => variant_ty
-                    .struct_field_index_by_name(name)
-                    .unwrap_or_else(|_| panic!("variant field {name} should exist")),
-                hlr::FieldSpec::Index(idx) => *idx,
-            };
+        for field in fields {
             let field_ty = self
                 .builder
                 .ctxt
                 .tys
-                .get_struct_field_ty(variant_ty, field_index)
+                .get_struct_field_ty(variant_ty, field.field_index)
                 .unwrap();
             let field_place = self
                 .builder
-                .insert_field_access_place(variant_place, field_index, field_ty);
-            let val = self.lower_to_val(*field_expr);
+                .insert_field_access_place(variant_place, field.field_index, field_ty);
+            let val = self.lower_to_val(field.expr);
             self.builder.insert_assign_stmt(field_place, val);
         }
 

@@ -446,24 +446,13 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             _ => unreachable!("struct expression constructor must be Val::Struct or Val::Variant"),
         };
 
-        for (field_spec, field_expr) in fields {
-            let field_idx = match field_spec {
-                hlr::FieldSpec::Name(name) => {
-                    fields_ty
-                        .struct_field_index_by_name(name)
-                        .map_err(|_| TypeckError::StructFieldNotFound {
-                            struct_ty: fields_ty,
-                            field: name.clone(),
-                        })?
-                }
-                hlr::FieldSpec::Index(idx) => *idx,
-            };
-            let field_ty = self.ctxt.tys.get_struct_field_ty(fields_ty, field_idx).unwrap();
-            let expr_ty = self.check_expr(*field_expr, Some(field_ty))?;
+        for field in fields {
+            let field_ty = self.ctxt.tys.get_struct_field_ty(fields_ty, field.field_index).unwrap();
+            let expr_ty = self.check_expr(field.expr, Some(field_ty))?;
             if !self.unify(expr_ty, field_ty) {
                 return Err(TypeckError::StructFieldTypeMismatch {
                     struct_ty: fields_ty,
-                    field_idx,
+                    field_idx: field.field_index,
                     expected: field_ty,
                     actual: expr_ty,
                 });

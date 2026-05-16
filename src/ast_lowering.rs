@@ -1,7 +1,7 @@
 mod match_;
 mod resolve_util;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
     ast,
@@ -607,12 +607,43 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
         let constructor = self.resolve_path_to_constructor(ty_path)?;
 
+        let (def_fields, type_name) = match &constructor {
+            hlr::Val::Struct(struct_, _) => (struct_.get_fields(), struct_.name.clone()),
+            hlr::Val::Variant(enum_, variant_idx, _) => {
+                (enum_.get_variant(*variant_idx).struct_.get_fields(), enum_.name.clone())
+            }
+            other => {
+                return Err(AstLoweringError {
+                    msg: format!("Expected struct or enum variant in expression, found {:?}", other),
+                });
+            }
+        };
+
+        let expected_fields: HashSet<&str> = def_fields.iter().map(|f| f.name.as_str()).collect();
+        let provided_fields: HashSet<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
+
+        let mut missing: Vec<&str> = expected_fields.difference(&provided_fields).copied().collect();
+        if !missing.is_empty() {
+            missing.sort_unstable();
+            return Err(AstLoweringError {
+                msg: format!("Missing fields in `{}` expression: {}", type_name, missing.join(", ")),
+            });
+        }
+
+        let mut extra: Vec<&str> = provided_fields.difference(&expected_fields).copied().collect();
+        if !extra.is_empty() {
+            extra.sort_unstable();
+            return Err(AstLoweringError {
+                msg: format!("Unknown fields in `{}` expression: {}", type_name, extra.join(", ")),
+            });
+        }
+
         let fields: Vec<_> = fields
             .iter()
             .map(|(field_name, field_expr)| {
                 let expr = self.lower_expr(field_expr)?;
-                let field = hlr::FieldSpec::Name(field_name.clone());
-                Ok((field, expr))
+                let field_index = def_fields.iter().position(|f| f.name == *field_name).unwrap();
+                Ok(hlr::StructExprField { field_index, expr })
             })
             .collect::<AstLoweringResult<_>>()?;
         let fields = self.hlr.struct_expr_field_slice(fields);

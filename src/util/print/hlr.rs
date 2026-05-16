@@ -125,17 +125,12 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             Struct { constructor, fields } => {
                 self.print_val(constructor)?;
                 write!(self.writer, " {{")?;
-                for (i, (field, expr)) in fields.iter().enumerate() {
+                for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
                         write!(self.writer, ",")?;
                     }
-                    write!(self.writer, " ")?;
-                    match field {
-                        hlr::FieldSpec::Name(name) => write!(self.writer, "{}", name)?,
-                        hlr::FieldSpec::Index(idx) => write!(self.writer, "{}", idx)?,
-                    }
-                    write!(self.writer, ": ")?;
-                    self.print_expr(*expr)?;
+                    write!(self.writer, " {}: ", field.field_index)?;
+                    self.print_expr(field.expr)?;
                 }
                 write!(self.writer, " }}")
             }

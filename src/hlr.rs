@@ -89,7 +89,7 @@ impl<'hlr> Hlr<'hlr> {
 
     pub fn struct_expr_field_slice(
         &'hlr self,
-        fields: impl IntoIterator<Item = (FieldSpec, Expr<'hlr>), IntoIter: ExactSizeIterator>,
+        fields: impl IntoIterator<Item = StructExprField<'hlr>, IntoIter: ExactSizeIterator>,
     ) -> StructFields<'hlr> {
         self.arena.alloc_slice_fill_iter(fields)
     }

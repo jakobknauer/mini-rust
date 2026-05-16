@@ -124,7 +124,13 @@ pub enum FieldSpec {
     Index(usize),
 }
 
-pub type StructFields<'hlr> = &'hlr [(FieldSpec, Expr<'hlr>)];
+pub type StructFields<'hlr> = &'hlr [StructExprField<'hlr>];
+
+#[derive(Debug)]
+pub struct StructExprField<'hlr> {
+    pub field_index: usize,
+    pub expr: Expr<'hlr>,
+}
 
 #[derive(Debug)]
 pub struct ClosureParam<'hlr>(pub VarId, pub Option<TyAnnot<'hlr>>);
