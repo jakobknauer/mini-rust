@@ -371,6 +371,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
         let lit = match lit {
             &Int(i) => hlr::Lit::Int(i),
+            &Float(f) => hlr::Lit::Float(f),
             &Bool(b) => hlr::Lit::Bool(b),
             &CChar(c) => hlr::Lit::CChar(c),
             CString(items) => hlr::Lit::CString(items.clone()),

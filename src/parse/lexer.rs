@@ -143,11 +143,24 @@ impl<'a> Lexer<'a> {
         }
 
         let start = self.position;
-
         while let Some(next) = self.get_current_char()
             && next.is_ascii_digit()
         {
             self.position += 1;
+        }
+
+        if self.get_current_char() == Some('.') && self.input.get(self.position + 1).is_some_and(|c| c.is_ascii_digit())
+        {
+            let integer_part: String = self.input[start..self.position].iter().collect();
+            self.position += 1; // consume '.'
+            let frac_start = self.position;
+            while let Some(next) = self.get_current_char()
+                && next.is_ascii_digit()
+            {
+                self.position += 1;
+            }
+            let frac_part: String = self.input[frac_start..self.position].iter().collect();
+            return Some(Token::FloatLiteral(integer_part, frac_part));
         }
 
         let number_str: String = self.input[start..self.position].iter().collect();

@@ -119,6 +119,11 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
     fn lower_lit_pattern(&mut self, lit: &ast::Lit) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         let lit = match lit {
             ast::Lit::Int(i) => hlr::Lit::Int(*i),
+            ast::Lit::Float(_) => {
+                return Err(AstLoweringError {
+                    msg: "float literals are not supported in patterns".into(),
+                });
+            }
             ast::Lit::Bool(b) => hlr::Lit::Bool(*b),
             ast::Lit::CChar(c) => hlr::Lit::CChar(*c),
             ast::Lit::CString(_) => {

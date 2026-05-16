@@ -107,6 +107,7 @@ fn lower_pattern<'ctxt>(
         hlr::PatternKind::Lit(hlr::Lit::Int(n)) => ExhPat::Ctor(Ctor::Int(*n), vec![]),
         hlr::PatternKind::Lit(hlr::Lit::CChar(b)) => ExhPat::Ctor(Ctor::Int(*b as i64), vec![]),
         hlr::PatternKind::Lit(hlr::Lit::CString(_)) => ExhPat::Wildcard,
+        hlr::PatternKind::Lit(hlr::Lit::Float(_)) => unreachable!("float literals not supported in patterns"),
         hlr::PatternKind::Ref(inner) | hlr::PatternKind::RefMut(inner) => {
             ExhPat::Ctor(Ctor::Ref, vec![lower_pattern(inner, bindings)])
         }

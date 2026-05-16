@@ -1,8 +1,6 @@
 fn main() -> i32 {
-    let x = Bla;
-    match x {
-        Bla => 2,
-    }
+    let pi = 3.14;
+    0
 }
 
 struct Bla {}

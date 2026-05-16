@@ -454,6 +454,7 @@ pub struct ClosureParam<'ast> {
 #[derive(Debug)]
 pub enum Lit {
     Int(i64),
+    Float(f32),
     Bool(bool),
     CChar(u8),
     CString(Vec<u8>),

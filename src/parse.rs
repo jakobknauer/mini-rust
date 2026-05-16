@@ -800,6 +800,12 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let expr = self.builder.lit(Lit::Int(value));
                 Ok(expr)
             }
+            Token::FloatLiteral(int_part, frac_part) => {
+                let combined = format!("{int_part}.{frac_part}");
+                let value: f32 = combined.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                self.tokens.advance();
+                Ok(self.builder.lit(Lit::Float(value)))
+            }
             Token::BoolLiteral(b) => {
                 let value = *b;
                 self.tokens.advance();

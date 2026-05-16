@@ -381,6 +381,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
     ) -> mlr::Op<'ctxt> {
         let (const_, eq_op) = match lit {
             hlr::Lit::Int(n) => (mlr::Const::Int(*n), language_items::BinaryPrimOp::EqI32),
+            hlr::Lit::Float(_) => unreachable!("float literals not supported in patterns"),
             hlr::Lit::Bool(b) => (mlr::Const::Bool(*b), language_items::BinaryPrimOp::EqBool),
             hlr::Lit::CChar(c) => (mlr::Const::CChar(*c), language_items::BinaryPrimOp::EqCChar),
             hlr::Lit::CString(_) => unreachable!("CString not supported in patterns"),
