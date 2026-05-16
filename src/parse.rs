@@ -1093,7 +1093,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(self.builder.pattern(PatternKind::Or(alternatives)))
     }
 
-    /// TODO use a switch-case etc. here
     fn parse_primary_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
         match self.tokens.current() {
             Some(Token::AmpersandAmpersand) => {
@@ -1142,7 +1141,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Some(Token::Keyword(Keyword::Mut)) => {
                 self.tokens.advance();
                 let name = self.tokens.expect_identifier()?;
-                Ok(self.builder.pattern(PatternKind::Identifier { name, mutable: true }))
+                Ok(self.builder.pattern(PatternKind::MutBinding(name)))
             }
             Some(Token::Underscore) => {
                 self.tokens.advance();
@@ -1150,17 +1149,10 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Some(Token::Identifier(_) | Token::Keyword(Keyword::SelfTy)) => {
                 let path = self.parse_path(true)?;
-                let is_plain_ident = path.segments.len() == 1
-                    && path.segments[0].args.is_none()
-                    && !path.segments[0].is_self
-                    && !matches!(self.tokens.current(), Some(Token::LBrace));
-                if is_plain_ident {
-                    Ok(self.builder.pattern(PatternKind::Identifier {
-                        name: path.segments[0].ident.clone(),
-                        mutable: false,
-                    }))
+                if matches!(self.tokens.current(), Some(Token::LBrace)) {
+                    self.parse_struct_pattern(path)
                 } else {
-                    self.parse_struct_or_variant_pattern(path)
+                    Ok(self.builder.pattern(PatternKind::Path(path)))
                 }
             }
             Some(token) => Err(ParserErr::UnexpectedToken(token.clone())),
@@ -1181,37 +1173,39 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(self.builder.pattern(PatternKind::Tuple(fields)))
     }
 
-    fn parse_struct_or_variant_pattern(&mut self, path: Path<'ast>) -> Result<Pattern<'ast>, ParserErr> {
-        let fields = if self.tokens.advance_if(Token::LBrace) {
-            let mut fields = Vec::new();
-            while matches!(
-                self.tokens.current(),
-                Some(Token::Identifier(_)) | Some(Token::Keyword(Keyword::Mut))
-            ) {
-                let mutable_prefix = self.tokens.advance_if_keyword(Keyword::Mut);
-                let field_name = self.tokens.expect_identifier()?;
-                let has_colon = self.tokens.advance_if(Token::Colon);
-                if mutable_prefix && has_colon {
-                    return Err(ParserErr::UnexpectedToken(Token::Colon));
-                }
-                let pattern = if has_colon {
-                    self.parse_pattern()?
-                } else {
-                    self.builder.pattern(PatternKind::Identifier {
-                        name: field_name.clone(),
-                        mutable: mutable_prefix,
-                    })
-                };
-                fields.push(StructPatternField { field_name, pattern });
-                if !self.tokens.advance_if(Token::Comma) {
-                    break;
-                }
+    fn parse_struct_pattern(&mut self, path: Path<'ast>) -> Result<Pattern<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::LBrace)?;
+        let mut fields = Vec::new();
+        while matches!(
+            self.tokens.current(),
+            Some(Token::Identifier(_)) | Some(Token::Keyword(Keyword::Mut))
+        ) {
+            let mutable_prefix = self.tokens.advance_if_keyword(Keyword::Mut);
+            let field_name = self.tokens.expect_identifier()?;
+            let has_colon = self.tokens.advance_if(Token::Colon);
+            if mutable_prefix && has_colon {
+                return Err(ParserErr::UnexpectedToken(Token::Colon));
             }
-            self.tokens.expect_token(Token::RBrace)?;
-            fields
-        } else {
-            Vec::new()
-        };
+            let pattern = if has_colon {
+                self.parse_pattern()?
+            } else if mutable_prefix {
+                self.builder.pattern(PatternKind::MutBinding(field_name.clone()))
+            } else {
+                let segment = PathSegment {
+                    ident: field_name.clone(),
+                    args: None,
+                    is_self: false,
+                };
+                self.builder.pattern(PatternKind::Path(Path {
+                    segments: vec![segment],
+                }))
+            };
+            fields.push(StructPatternField { field_name, pattern });
+            if !self.tokens.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        self.tokens.expect_token(Token::RBrace)?;
         Ok(self
             .builder
             .pattern(PatternKind::Struct(StructPattern { path, fields })))

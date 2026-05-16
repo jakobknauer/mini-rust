@@ -497,10 +497,11 @@ pub enum PatternKind<'ast> {
     Or(Vec<Pattern<'ast>>),
     Ref(Pattern<'ast>),
     RefMut(Pattern<'ast>),
+    Path(Path<'ast>),
     Struct(StructPattern<'ast>),
     Tuple(Vec<Pattern<'ast>>),
     Lit(Lit),
-    Identifier { name: String, mutable: bool },
+    MutBinding(String),
     Wildcard,
 }
 

@@ -76,11 +76,43 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
                 let inner = self.lower_pattern_inner(inner, ctxt)?;
                 Ok(self.hlr.pattern(hlr::PatternKind::RefMut(inner)))
             }
+            ast::PatternKind::Path(path) => self.lower_path_pattern(path, ctxt),
             ast::PatternKind::Struct(pattern) => self.lower_struct_pattern(pattern, ctxt),
             ast::PatternKind::Lit(lit) => self.lower_lit_pattern(lit),
             ast::PatternKind::Tuple(sub_patterns) => self.lower_tuple_pattern(sub_patterns, ctxt),
-            ast::PatternKind::Identifier { name, mutable } => self.lower_identifier_pattern(name, *mutable, ctxt),
+            ast::PatternKind::MutBinding(name) => self.lower_identifier_pattern(name, true, ctxt),
             ast::PatternKind::Wildcard => Ok(self.hlr.pattern(hlr::PatternKind::Wildcard)),
+        }
+    }
+
+    fn lower_path_pattern(
+        &mut self,
+        path: &ast::Path,
+        ctxt: &mut PatternLoweringCtxt,
+    ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
+        if let Ok(constructor) = self.resolve_path_to_constructor(path) {
+            let fields = self.hlr.pattern_fields(vec![]);
+            return match constructor {
+                hlr::Val::Variant(..) => Ok(self.hlr.pattern(hlr::PatternKind::Variant(hlr::VariantPattern {
+                    variant: constructor,
+                    fields,
+                }))),
+                hlr::Val::Struct(..) => Ok(self
+                    .hlr
+                    .pattern(hlr::PatternKind::Struct(hlr::StructPattern { constructor, fields }))),
+                _ => Err(AstLoweringError {
+                    msg: format!("Expected struct or enum variant in pattern, found {:?}", constructor),
+                }),
+            };
+        }
+
+        match path.segments.as_slice() {
+            [segment] if !segment.is_self && segment.args.is_none() => {
+                self.lower_identifier_pattern(&segment.ident, false, ctxt)
+            }
+            _ => Err(AstLoweringError {
+                msg: format!("Unresolvable path in pattern: {:?}", path),
+            }),
         }
     }
 
