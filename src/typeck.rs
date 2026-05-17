@@ -339,6 +339,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let operand_ty = self.check_expr(operand, None)?;
 
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
+        let f32_ty = self.ctxt.tys.primitive(ty::Primitive::Float32);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
 
         use hlr::UnaryOperator::*;
@@ -346,6 +347,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
         let (prim, result_ty) = match operator {
             Negative if operand_ty == i32_ty => (NegI32, i32_ty),
+            Negative if operand_ty == f32_ty => (NegF32, f32_ty),
             Not if operand_ty == bool_ty => (NotBool, bool_ty),
             _ => return Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty }),
         };

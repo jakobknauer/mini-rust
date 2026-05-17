@@ -93,3 +93,38 @@ impl<T> Deref for &T {
         *self
     }
 }
+
+impl Add<f32> for f32 {
+    type Output = f32;
+    fn add(self, rhs: f32) -> f32 {
+        self + rhs
+    }
+}
+
+impl Sub<f32> for f32 {
+    type Output = f32;
+    fn sub(self, rhs: f32) -> f32 {
+        self - rhs
+    }
+}
+
+impl Mul<f32> for f32 {
+    type Output = f32;
+    fn mul(self, rhs: f32) -> f32 {
+        self * rhs
+    }
+}
+
+impl Div<f32> for f32 {
+    type Output = f32;
+    fn div(self, rhs: f32) -> f32 {
+        self / rhs
+    }
+}
+
+impl Rem<f32> for f32 {
+    type Output = f32;
+    fn rem(self, rhs: f32) -> f32 {
+        self % rhs
+    }
+}

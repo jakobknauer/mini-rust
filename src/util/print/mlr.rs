@@ -213,7 +213,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             UnaryPrim { op, operand } => {
                 use language_items::UnaryPrimOp::*;
                 let op_str = match op {
-                    NegI32 => "-",
+                    NegI32 | NegF32 => "-",
                     NotBool => "!",
                 };
                 write!(self.writer, "{op_str}")?;
@@ -222,19 +222,19 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             BinaryPrim { op, lhs, rhs } => {
                 use language_items::BinaryPrimOp::*;
                 let op_str = match op {
-                    AddI32 => "+",
-                    SubI32 => "-",
-                    MulI32 => "*",
-                    DivI32 => "/",
-                    RemI32 => "%",
-                    EqI32 | EqBool | EqCChar | EqUnit => "==",
-                    NeI32 | NeBool | NeCChar | NeUnit => "!=",
+                    AddI32 | AddF32 => "+",
+                    SubI32 | SubF32 => "-",
+                    MulI32 | MulF32 => "*",
+                    DivI32 | DivF32 => "/",
+                    RemI32 | RemF32 => "%",
+                    EqI32 | EqBool | EqCChar | EqUnit | EqF32 => "==",
+                    NeI32 | NeBool | NeCChar | NeUnit | NeF32 => "!=",
                     BitOrBool | BitOrI32 => "|",
                     BitAndBool | BitAndI32 => "&",
-                    LtI32 => "<",
-                    GtI32 => ">",
-                    LeI32 => "<=",
-                    GeI32 => ">=",
+                    LtI32 | LtF32 => "<",
+                    GtI32 | GtF32 => ">",
+                    LeI32 | LeF32 => "<=",
+                    GeI32 | GeF32 => ">=",
                 };
                 self.print_op(lhs)?;
                 write!(self.writer, " {op_str} ")?;

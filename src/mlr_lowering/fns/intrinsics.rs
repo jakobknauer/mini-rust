@@ -1,7 +1,7 @@
 use inkwell::{
-    AddressSpace, IntPredicate,
+    AddressSpace, FloatPredicate, IntPredicate,
     targets::TargetData,
-    values::{BasicValue, BasicValueEnum, IntValue},
+    values::{BasicValue, BasicValueEnum, FloatValue, IntValue},
 };
 
 use crate::{
@@ -45,45 +45,77 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         use language_items::BinaryPrimOp::*;
 
         match op {
-            EqUnit => {
-                return Ok(self
-                    .parent
-                    .iw_ctxt
-                    .bool_type()
-                    .const_int(1, false)
-                    .as_basic_value_enum());
+            EqUnit => Ok(self
+                .parent
+                .iw_ctxt
+                .bool_type()
+                .const_int(1, false)
+                .as_basic_value_enum()),
+            NeUnit => Ok(self
+                .parent
+                .iw_ctxt
+                .bool_type()
+                .const_int(0, false)
+                .as_basic_value_enum()),
+
+            AddF32 | SubF32 | MulF32 | DivF32 | RemF32 | EqF32 | NeF32 | LtF32 | GtF32 | LeF32 | GeF32 => {
+                let (lhs, rhs) = self.build_float_pair(lhs, rhs)?;
+                Ok(match op {
+                    AddF32 => self.iw_builder.build_float_add(lhs, rhs, "add")?.as_basic_value_enum(),
+                    SubF32 => self.iw_builder.build_float_sub(lhs, rhs, "sub")?.as_basic_value_enum(),
+                    MulF32 => self.iw_builder.build_float_mul(lhs, rhs, "mul")?.as_basic_value_enum(),
+                    DivF32 => self.iw_builder.build_float_div(lhs, rhs, "div")?.as_basic_value_enum(),
+                    RemF32 => self.iw_builder.build_float_rem(lhs, rhs, "rem")?.as_basic_value_enum(),
+                    EqF32 => self
+                        .iw_builder
+                        .build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq")?
+                        .as_basic_value_enum(),
+                    NeF32 => self
+                        .iw_builder
+                        .build_float_compare(FloatPredicate::UNE, lhs, rhs, "ne")?
+                        .as_basic_value_enum(),
+                    LtF32 => self
+                        .iw_builder
+                        .build_float_compare(FloatPredicate::OLT, lhs, rhs, "lt")?
+                        .as_basic_value_enum(),
+                    GtF32 => self
+                        .iw_builder
+                        .build_float_compare(FloatPredicate::OGT, lhs, rhs, "gt")?
+                        .as_basic_value_enum(),
+                    LeF32 => self
+                        .iw_builder
+                        .build_float_compare(FloatPredicate::OLE, lhs, rhs, "le")?
+                        .as_basic_value_enum(),
+                    GeF32 => self
+                        .iw_builder
+                        .build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge")?
+                        .as_basic_value_enum(),
+                    _ => unreachable!(),
+                })
             }
-            NeUnit => {
-                return Ok(self
-                    .parent
-                    .iw_ctxt
-                    .bool_type()
-                    .const_int(0, false)
-                    .as_basic_value_enum());
+
+            AddI32 | SubI32 | MulI32 | DivI32 | RemI32 | EqI32 | NeI32 | EqBool | NeBool | EqCChar | NeCChar
+            | BitOrBool | BitAndBool | BitOrI32 | BitAndI32 | LtI32 | GtI32 | LeI32 | GeI32 => {
+                let (lhs, rhs) = self.build_int_pair(lhs, rhs)?;
+                Ok(match op {
+                    AddI32 => self.iw_builder.build_int_add(lhs, rhs, "add")?,
+                    SubI32 => self.iw_builder.build_int_sub(lhs, rhs, "sub")?,
+                    MulI32 => self.iw_builder.build_int_mul(lhs, rhs, "mul")?,
+                    DivI32 => self.iw_builder.build_int_signed_div(lhs, rhs, "div")?,
+                    RemI32 => self.iw_builder.build_int_signed_rem(lhs, rhs, "rem")?,
+                    EqI32 | EqBool | EqCChar => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")?,
+                    NeI32 | NeBool | NeCChar => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne")?,
+                    BitOrBool | BitOrI32 => self.iw_builder.build_or(lhs, rhs, "bitor")?,
+                    BitAndBool | BitAndI32 => self.iw_builder.build_and(lhs, rhs, "bitand")?,
+                    LtI32 => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "lt")?,
+                    GtI32 => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
+                    LeI32 => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,
+                    GeI32 => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")?,
+                    _ => unreachable!(),
+                }
+                .as_basic_value_enum())
             }
-            _ => {}
         }
-
-        let (lhs, rhs) = self.build_int_pair(lhs, rhs)?;
-
-        let op = match op {
-            AddI32 => self.iw_builder.build_int_add(lhs, rhs, "add")?,
-            SubI32 => self.iw_builder.build_int_sub(lhs, rhs, "sub")?,
-            MulI32 => self.iw_builder.build_int_mul(lhs, rhs, "mul")?,
-            DivI32 => self.iw_builder.build_int_signed_div(lhs, rhs, "div")?,
-            RemI32 => self.iw_builder.build_int_signed_rem(lhs, rhs, "rem")?,
-            EqI32 | EqBool | EqCChar => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")?,
-            NeI32 | NeBool | NeCChar => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne")?,
-            BitOrBool | BitOrI32 => self.iw_builder.build_or(lhs, rhs, "bitor")?,
-            BitAndBool | BitAndI32 => self.iw_builder.build_and(lhs, rhs, "bitand")?,
-            LtI32 => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "lt")?,
-            GtI32 => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
-            LeI32 => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,
-            GeI32 => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")?,
-            EqUnit | NeUnit => unreachable!(),
-        };
-
-        Ok(op.as_basic_value_enum())
     }
 
     pub(super) fn build_unary_prim(
@@ -92,12 +124,21 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         operand: mlr::Op<'ctxt>,
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::UnaryPrimOp::*;
-        let operand = self.build_op(operand)?.into_int_value();
-        let result = match op {
-            NegI32 => self.iw_builder.build_int_neg(operand, "neg")?,
-            NotBool => self.iw_builder.build_not(operand, "not")?,
-        };
-        Ok(result.as_basic_value_enum())
+        match op {
+            NegF32 => {
+                let operand = self.build_op(operand)?.into_float_value();
+                Ok(self.iw_builder.build_float_neg(operand, "neg")?.as_basic_value_enum())
+            }
+            NegI32 | NotBool => {
+                let operand = self.build_op(operand)?.into_int_value();
+                let result = match op {
+                    NegI32 => self.iw_builder.build_int_neg(operand, "neg")?,
+                    NotBool => self.iw_builder.build_not(operand, "not")?,
+                    _ => unreachable!(),
+                };
+                Ok(result.as_basic_value_enum())
+            }
+        }
     }
 
     fn build_int_pair(
@@ -107,6 +148,16 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     ) -> MlrFnLoweringResult<(IntValue<'iw>, IntValue<'iw>)> {
         let lhs = self.build_op(lhs)?.into_int_value();
         let rhs = self.build_op(rhs)?.into_int_value();
+        Ok((lhs, rhs))
+    }
+
+    fn build_float_pair(
+        &mut self,
+        lhs: mlr::Op<'ctxt>,
+        rhs: mlr::Op<'ctxt>,
+    ) -> MlrFnLoweringResult<(FloatValue<'iw>, FloatValue<'iw>)> {
+        let lhs = self.build_op(lhs)?.into_float_value();
+        let rhs = self.build_op(rhs)?.into_float_value();
         Ok((lhs, rhs))
     }
 
