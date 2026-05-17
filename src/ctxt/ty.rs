@@ -74,6 +74,7 @@ pub enum TyDef<'ty> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Primitive {
     Integer32,
+    Float32,
     Boolean,
     CVoid,
     CChar,
@@ -351,6 +352,7 @@ impl std::fmt::Display for TyDef<'_> {
         match self {
             &Primitive(p) => match p {
                 Integer32 => write!(f, "i32"),
+                Float32 => write!(f, "f32"),
                 Boolean => write!(f, "bool"),
                 CVoid => write!(f, "c_void"),
                 CChar => write!(f, "c_char"),

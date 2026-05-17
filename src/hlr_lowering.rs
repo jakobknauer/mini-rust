@@ -167,7 +167,10 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
                 (mlr::Const::Int(*n), ty)
             }
-            hlr::Lit::Float(_) => todo!("f32 type not yet implemented"),
+            hlr::Lit::Float(f) => {
+                let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Float32);
+                (mlr::Const::Float(*f), ty)
+            }
             hlr::Lit::Bool(b) => {
                 let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
                 (mlr::Const::Bool(*b), ty)

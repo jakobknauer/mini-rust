@@ -211,7 +211,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let ty = match lit {
             hlr::Lit::Int(_) => self.ctxt.tys.primitive(ty::Primitive::Integer32),
-            hlr::Lit::Float(_) => todo!("f32 type not yet implemented"),
+            hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float32),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
             hlr::Lit::CChar(_) => self.ctxt.tys.primitive(ty::Primitive::CChar),
             hlr::Lit::CString(_) => {

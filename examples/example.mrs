@@ -1,5 +1,5 @@
 fn main() -> i32 {
-    let pi = 3.14;
+    let pi: f32 = 3.14;
     0
 }
 

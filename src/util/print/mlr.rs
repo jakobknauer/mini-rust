@@ -295,6 +295,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             ),
             Const(ref constant) => match *constant {
                 Int(i) => write!(self.writer, "const {}", i),
+                Float(f) => write!(self.writer, "const {}", f),
                 Bool(b) => write!(self.writer, "const {}", b),
                 CChar(c) => {
                     write!(

@@ -140,6 +140,7 @@ pub enum PlaceDef<'mlr> {
 #[derive(Debug)]
 pub enum Const {
     Int(i64),
+    Float(f32),
     Bool(bool),
     CChar(u8),
     CString(Vec<u8>),

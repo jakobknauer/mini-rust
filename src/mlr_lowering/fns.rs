@@ -310,6 +310,10 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 let int_ty = self.parent.iw_ctxt.i32_type();
                 int_ty.const_int(i as u64, false).as_basic_value_enum()
             }
+            &Float(f) => {
+                let float_ty = self.parent.iw_ctxt.f32_type();
+                float_ty.const_float(f as f64).as_basic_value_enum()
+            }
             &Bool(b) => {
                 let bool_ty = self.parent.iw_ctxt.bool_type();
                 bool_ty.const_int(b as u64, false).as_basic_value_enum()
