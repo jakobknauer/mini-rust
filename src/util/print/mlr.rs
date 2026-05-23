@@ -205,7 +205,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                 self.print_place(place)?;
                 write!(self.writer, ")")
             }
-            As { op, target_ty } => {
+            As { op, target_ty, .. } => {
                 write!(self.writer, "(")?;
                 self.print_op(op)?;
                 write!(self.writer, " as {})", target_ty)

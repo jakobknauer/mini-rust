@@ -178,6 +178,13 @@ pub struct PatternField<'hlr> {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub enum AsCastKind {
+    Never,
+    PtrLike,
+    Int,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum BinaryOperator {
     Add,
     Subtract,

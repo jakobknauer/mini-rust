@@ -63,6 +63,7 @@ pub enum ExprExtra<'ty> {
     Closure {
         captured_vars: Vec<hlr::VarId>,
     },
+    AsCast(hlr::AsCastKind),
 }
 
 pub fn typeck<'a, 'ctxt: 'a>(
@@ -175,7 +176,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             hlr::ExprDef::Deref(inner) => self.check_deref(expr.1, *inner),
             hlr::ExprDef::AddrOf(expr) => self.check_addr_of(*expr),
             hlr::ExprDef::AddrOfMut(expr) => self.check_addr_of_mut(*expr),
-            hlr::ExprDef::As { expr, ty } => self.check_as(*expr, ty),
+            hlr::ExprDef::As { expr: inner, ty } => self.check_as(expr.1, *inner, ty),
             hlr::ExprDef::Closure {
                 params,
                 return_ty,
@@ -644,6 +645,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
     fn check_as(
         &mut self,
+        as_expr_id: hlr::ExprId,
         expr: hlr::Expr<'ctxt>,
         target_ty: hlr::TyAnnot<'ctxt>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
@@ -653,26 +655,29 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let target_ty = self.resolve_ty_annot(target_ty)?;
         let target_ty = self.normalize(target_ty);
 
-        match (expr_ty.0, target_ty.0) {
-            (ty::TyDef::Never, _) => Ok(target_ty),
-            (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => Ok(target_ty),
+        let kind = match (expr_ty.0, target_ty.0) {
+            (ty::TyDef::Never, _) => hlr::AsCastKind::Never,
+            (ty::TyDef::Primitive(ty::Primitive::SignedInt(_)), ty::TyDef::Primitive(ty::Primitive::SignedInt(_))) => {
+                hlr::AsCastKind::Int
+            }
+            (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => hlr::AsCastKind::PtrLike,
             (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty))
             | (&ty::TyDef::RefMut(op_base_ty), &ty::TyDef::Ptr(target_base_ty))
-            | (&ty::TyDef::RefMut(op_base_ty), &ty::TyDef::Ref(target_base_ty)) => {
-                if self.unify(op_base_ty, target_base_ty) {
-                    Ok(target_ty)
-                } else {
-                    Err(TypeckError::InvalidAsConversion {
-                        op_ty: expr_ty,
-                        target_ty,
-                    })
-                }
+            | (&ty::TyDef::RefMut(op_base_ty), &ty::TyDef::Ref(target_base_ty))
+                if self.unify(op_base_ty, target_base_ty) =>
+            {
+                hlr::AsCastKind::PtrLike
             }
-            _ => Err(TypeckError::InvalidAsConversion {
-                op_ty: expr_ty,
-                target_ty,
-            }),
-        }
+            _ => {
+                return Err(TypeckError::InvalidAsConversion {
+                    op_ty: expr_ty,
+                    target_ty,
+                });
+            }
+        };
+
+        self.typing.expr_extra.insert(as_expr_id, ExprExtra::AsCast(kind));
+        Ok(target_ty)
     }
 
     fn check_if(

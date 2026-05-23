@@ -96,6 +96,13 @@ pub enum StmtDef<'mlr> {
     Unreachable,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum AsCastKind {
+    Never,
+    PtrLike,
+    Int,
+}
+
 #[derive(Debug)]
 pub enum ValDef<'mlr> {
     Call {
@@ -107,6 +114,7 @@ pub enum ValDef<'mlr> {
     As {
         op: Op<'mlr>,
         target_ty: Ty<'mlr>,
+        kind: AsCastKind,
     },
     BinaryPrim {
         op: BinaryPrimOp,

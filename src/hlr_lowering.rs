@@ -528,7 +528,16 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn lower_as(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
         let op = self.lower_to_op(inner);
         let target_ty = self.typing.expr_types[&expr_id];
-        self.builder.insert_as_val(op, target_ty).into()
+        let hlr_kind = match self.typing.expr_extra[&expr_id] {
+            ExprExtra::AsCast(kind) => kind,
+            _ => unreachable!(),
+        };
+        let kind = match hlr_kind {
+            hlr::AsCastKind::Never => mlr::AsCastKind::Never,
+            hlr::AsCastKind::PtrLike => mlr::AsCastKind::PtrLike,
+            hlr::AsCastKind::Int => mlr::AsCastKind::Int,
+        };
+        self.builder.insert_as_val(op, target_ty, kind).into()
     }
 
     fn lower_if(

@@ -174,8 +174,13 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
         self.mlr.insert_val(mlr::ValDef::AddrOf(place), ref_ty)
     }
 
-    pub fn insert_as_val(&self, op: mlr::Op<'ctxt>, target_ty: ty::Ty<'ctxt>) -> mlr::Val<'ctxt> {
-        self.mlr.insert_val(mlr::ValDef::As { op, target_ty }, target_ty)
+    pub fn insert_as_val(
+        &self,
+        op: mlr::Op<'ctxt>,
+        target_ty: ty::Ty<'ctxt>,
+        kind: mlr::AsCastKind,
+    ) -> mlr::Val<'ctxt> {
+        self.mlr.insert_val(mlr::ValDef::As { op, target_ty, kind }, target_ty)
     }
 
     pub fn insert_binary_prim_val(

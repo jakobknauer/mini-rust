@@ -218,18 +218,26 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 Ok(result)
             }
             AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
-            As { op, target_ty } => match op.1.0 {
-                mr_ty::TyDef::Never => {
+            As { op, target_ty, kind } => match kind {
+                mlr::AsCastKind::Never => {
                     let iw_ty = self
                         .parent
                         .get_ty_as_basic_type_enum(target_ty)
                         .ok_or(MlrFnLoweringError)?;
                     Ok(undef_of(iw_ty))
                 }
-                _ => {
-                    // since the only valid conversion atm is from ref to ptr of the same base type,
-                    // we can just build the op and return it
-                    self.build_op(op)
+                mlr::AsCastKind::PtrLike => self.build_op(op),
+                mlr::AsCastKind::Int => {
+                    let src = self.build_op(op)?.into_int_value();
+                    let tgt_ty = self
+                        .parent
+                        .get_ty_as_basic_type_enum(target_ty)
+                        .ok_or(MlrFnLoweringError)?
+                        .into_int_type();
+                    Ok(self
+                        .iw_builder
+                        .build_int_cast_sign_flag(src, tgt_ty, true, "cast")?
+                        .as_basic_value_enum())
                 }
             },
             BinaryPrim { op, lhs, rhs } => self.build_binary_prim(op, lhs, rhs),

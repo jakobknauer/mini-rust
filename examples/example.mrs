@@ -1,8 +1,5 @@
 fn main() -> i32 {
-    let x = 10i64;
-    let y: i64 = x + 1i64;
-    printf("%lld\n", y);
-    5
+    5 as i32 as i64 as i8 as i16 as i32
 }
 
 struct Bla {}
