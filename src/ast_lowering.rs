@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::{
     ast,
     ast_lowering::resolve_util::TyResolution,
-    ctxt::{self, fns},
+    ctxt::{self, fns, ty},
     hlr,
 };
 
@@ -370,7 +370,10 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         use ast::Lit::*;
 
         let lit = match lit {
-            &Int(i) => hlr::Lit::Int(i),
+            &Int(i, suffix) => hlr::Lit::Int(
+                i,
+                suffix.map(ast::IntSuffix::into_int_width).unwrap_or(ty::IntWidth::I32),
+            ),
             &Float(f) => hlr::Lit::Float(f),
             &Bool(b) => hlr::Lit::Bool(b),
             &CChar(c) => hlr::Lit::CChar(c),

@@ -724,10 +724,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Some(Token::Minus) => {
                 self.tokens.advance();
-                if let Some(Token::NumLiteral(s)) = self.tokens.current() {
+                if let Some(Token::NumLiteral(s, suffix)) = self.tokens.current() {
                     let value: i64 = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                    let suffix = suffix.as_deref().and_then(IntSuffix::from_str);
                     self.tokens.advance();
-                    Ok(self.builder.lit(Lit::Int(-value)))
+                    Ok(self.builder.lit(Lit::Int(-value, suffix)))
                 } else {
                     let base = self.parse_unary_expr(allow_top_level_struct_expr)?;
                     Ok(self.builder.unary_op(UnaryOperator::Negative, base))
@@ -758,7 +759,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 acc = self.builder.call(acc, &args);
             } else if self.tokens.advance_if(Token::Dot) {
                 // field access or method call
-                if let Some(Token::NumLiteral(n)) = self.tokens.current() {
+                if let Some(Token::NumLiteral(n, None)) = self.tokens.current() {
                     // indexed field access
                     let index = n.parse().unwrap();
                     self.tokens.advance();
@@ -794,11 +795,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let current = self.tokens.current().ok_or(ParserErr::UnexpectedEOF)?;
 
         match current {
-            Token::NumLiteral(value) => {
-                let value = value.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+            Token::NumLiteral(s, suffix) => {
+                let value = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                let suffix = suffix.as_deref().and_then(IntSuffix::from_str);
                 self.tokens.advance();
-                let expr = self.builder.lit(Lit::Int(value));
-                Ok(expr)
+                Ok(self.builder.lit(Lit::Int(value, suffix)))
             }
             Token::FloatLiteral(int_part, frac_part) => {
                 let combined = format!("{int_part}.{frac_part}");
@@ -1125,14 +1126,16 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Some(Token::LParen) => self.parse_tuple_pattern(),
             Some(Token::Minus) => {
                 self.tokens.advance();
-                let s = self.tokens.expect_num_literal()?;
+                let (s, suffix) = self.tokens.expect_num_literal()?;
                 let value: i64 = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
-                Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(-value))))
+                let suffix = suffix.as_deref().and_then(IntSuffix::from_str);
+                Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(-value, suffix))))
             }
-            Some(Token::NumLiteral(s)) => {
+            Some(Token::NumLiteral(s, suffix)) => {
                 let value = s.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                let suffix = suffix.as_deref().and_then(IntSuffix::from_str);
                 self.tokens.advance();
-                Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(value))))
+                Ok(self.builder.pattern(PatternKind::Lit(Lit::Int(value, suffix))))
             }
             Some(Token::BoolLiteral(b)) => {
                 let value = *b;

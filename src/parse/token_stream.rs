@@ -64,24 +64,24 @@ impl<'token> TokenStream<'token> {
     }
 
     pub(super) fn expect_identifier(&mut self) -> Result<String, ParserErr> {
-        let name = match self.current().ok_or(ParserErr::UnexpectedEOF)? {
-            Token::Identifier(name) => name.clone(),
-            token => return Err(ParserErr::UnexpectedToken(token.clone())),
-        };
-        match self.expect_token(Token::Identifier(name))? {
-            Token::Identifier(name) => Ok(name),
-            _ => unreachable!(),
+        match self.current().ok_or(ParserErr::UnexpectedEOF)? {
+            Token::Identifier(name) => {
+                let name = name.clone();
+                self.advance();
+                Ok(name)
+            }
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }
 
-    pub(super) fn expect_num_literal(&mut self) -> Result<String, ParserErr> {
-        let s = match self.current().ok_or(ParserErr::UnexpectedEOF)? {
-            Token::NumLiteral(s) => s.clone(),
-            token => return Err(ParserErr::UnexpectedToken(token.clone())),
-        };
-        match self.expect_token(Token::NumLiteral(s))? {
-            Token::NumLiteral(s) => Ok(s),
-            _ => unreachable!(),
+    pub(super) fn expect_num_literal(&mut self) -> Result<(String, Option<String>), ParserErr> {
+        match self.current().ok_or(ParserErr::UnexpectedEOF)? {
+            Token::NumLiteral(s, suffix) => {
+                let result = (s.clone(), suffix.clone());
+                self.advance();
+                Ok(result)
+            }
+            token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
     }
 }

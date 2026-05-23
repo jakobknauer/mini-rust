@@ -384,7 +384,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Op<'ctxt> {
         let (const_, eq_op) = match lit {
-            hlr::Lit::Int(n) => (mlr::Const::Int(*n), language_items::BinaryPrimOp::EqInt),
+            hlr::Lit::Int(n, _) => (mlr::Const::Int(*n), language_items::BinaryPrimOp::EqInt),
             hlr::Lit::Float(_) => unreachable!("float literals not supported in patterns"),
             hlr::Lit::Bool(b) => (mlr::Const::Bool(*b), language_items::BinaryPrimOp::EqBool),
             hlr::Lit::CChar(c) => (mlr::Const::CChar(*c), language_items::BinaryPrimOp::EqCChar),

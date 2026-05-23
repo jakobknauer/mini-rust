@@ -302,13 +302,17 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         Ok(())
     }
 
-    fn build_constant(&mut self, constant: &mlr::Const) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
+    fn build_constant(
+        &mut self,
+        constant: &mlr::Const,
+        ty: mr_ty::Ty<'ctxt>,
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use mlr::Const::*;
 
         let value = match constant {
             &Int(i) => {
-                let int_ty = self.parent.iw_ctxt.i32_type();
-                int_ty.const_int(i as u64, false).as_basic_value_enum()
+                let iw_ty = self.parent.get_or_define_ty(ty).unwrap().into_int_type();
+                iw_ty.const_int(i as u64, false).as_basic_value_enum()
             }
             &Float(f) => {
                 let float_ty = self.parent.iw_ctxt.f64_type();
@@ -334,7 +338,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         match *op {
             Fn(fn_inst) => self.build_global_function(fn_inst),
             TraitMthdCall(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
-            Const(ref constant) => self.build_constant(constant),
+            Const(ref constant) => self.build_constant(constant, op.1),
             Copy(place) => {
                 let place_ptr = self.build_place(place)?;
                 let iw_ty = self.get_iw_ty_of_place(place)?;

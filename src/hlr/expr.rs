@@ -112,7 +112,7 @@ pub enum Val<'hlr> {
 
 #[derive(Debug)]
 pub enum Lit {
-    Int(i64),
+    Int(i64, ty::IntWidth),
     Float(f64),
     Bool(bool),
     CChar(u8),

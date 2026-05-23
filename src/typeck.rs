@@ -210,7 +210,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
     fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let ty = match lit {
-            hlr::Lit::Int(_) => self.ctxt.tys.primitive(ty::Primitive::SignedInt(ty::IntWidth::I32)),
+            hlr::Lit::Int(_, w) => self.ctxt.tys.primitive(ty::Primitive::SignedInt(*w)),
             hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float64),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
             hlr::Lit::CChar(_) => self.ctxt.tys.primitive(ty::Primitive::CChar),

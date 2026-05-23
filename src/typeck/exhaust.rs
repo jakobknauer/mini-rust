@@ -104,7 +104,7 @@ fn lower_pattern<'ctxt>(
             wrap_if_ergonomics(ExhPat::Ctor(Ctor::Tuple, fields), pattern, bindings)
         }
         hlr::PatternKind::Lit(hlr::Lit::Bool(b)) => ExhPat::Ctor(Ctor::Bool(*b), vec![]),
-        hlr::PatternKind::Lit(hlr::Lit::Int(n)) => ExhPat::Ctor(Ctor::Int(*n), vec![]),
+        hlr::PatternKind::Lit(hlr::Lit::Int(n, _)) => ExhPat::Ctor(Ctor::Int(*n), vec![]),
         hlr::PatternKind::Lit(hlr::Lit::CChar(b)) => ExhPat::Ctor(Ctor::Int(*b as i64), vec![]),
         hlr::PatternKind::Lit(hlr::Lit::CString(_)) => ExhPat::Wildcard,
         hlr::PatternKind::Lit(hlr::Lit::Float(_)) => unreachable!("float literals not supported in patterns"),

@@ -451,9 +451,42 @@ pub struct ClosureParam<'ast> {
     pub ty: Option<TyAnnot<'ast>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum IntSuffix {
+    I8,
+    I16,
+    I32,
+    I64,
+    ISize,
+}
+
+impl IntSuffix {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "i8" => Some(IntSuffix::I8),
+            "i16" => Some(IntSuffix::I16),
+            "i32" => Some(IntSuffix::I32),
+            "i64" => Some(IntSuffix::I64),
+            "isize" => Some(IntSuffix::ISize),
+            _ => None,
+        }
+    }
+
+    pub fn into_int_width(self) -> crate::ctxt::ty::IntWidth {
+        use crate::ctxt::ty::IntWidth;
+        match self {
+            IntSuffix::I8 => IntWidth::I8,
+            IntSuffix::I16 => IntWidth::I16,
+            IntSuffix::I32 => IntWidth::I32,
+            IntSuffix::I64 => IntWidth::I64,
+            IntSuffix::ISize => IntWidth::ISize,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Lit {
-    Int(i64),
+    Int(i64, Option<IntSuffix>),
     Float(f64),
     Bool(bool),
     CChar(u8),

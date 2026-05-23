@@ -191,9 +191,9 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     }
 
     fn check_lit_pattern(&mut self, lit: &hlr::Lit, scrutinee_ty: ty::Ty<'ctxt>) -> TypeckResult<'ctxt, ()> {
-        use ty::{IntWidth, Primitive::*};
+        use ty::Primitive::*;
         let lit_ty = self.ctxt.tys.primitive(match lit {
-            hlr::Lit::Int(_) => SignedInt(IntWidth::I32),
+            hlr::Lit::Int(_, w) => SignedInt(*w),
             hlr::Lit::Float(_) => unreachable!("float literals not supported in patterns"),
             hlr::Lit::Bool(_) => Boolean,
             hlr::Lit::CChar(_) => CChar,

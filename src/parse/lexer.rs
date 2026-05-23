@@ -164,7 +164,29 @@ impl<'a> Lexer<'a> {
         }
 
         let number_str: String = self.input[start..self.position].iter().collect();
-        Some(Token::NumLiteral(number_str))
+        let suffix = self.try_consume_int_suffix().map(|s| s.to_string());
+        Some(Token::NumLiteral(number_str, suffix))
+    }
+
+    fn try_consume_int_suffix(&mut self) -> Option<&'static str> {
+        const SUFFIXES: &[(&str, &[char])] = &[
+            ("isize", &['i', 's', 'i', 'z', 'e']),
+            ("i64", &['i', '6', '4']),
+            ("i32", &['i', '3', '2']),
+            ("i16", &['i', '1', '6']),
+            ("i8", &['i', '8']),
+        ];
+        for &(name, chars) in SUFFIXES {
+            let end = self.position + chars.len();
+            if self.input.get(self.position..end) == Some(chars) {
+                let after = self.input.get(end).copied();
+                if !after.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                    self.position = end;
+                    return Some(name);
+                }
+            }
+        }
+        None
     }
 
     fn try_parse_three_char_token(&mut self) -> Option<Token> {
@@ -320,7 +342,7 @@ mod test {
         assert_eq!(
             tokens.unwrap(),
             vec![
-                super::Token::NumLiteral("1".to_string()),
+                super::Token::NumLiteral("1".to_string(), None),
                 super::Token::Identifier("abc".to_string())
             ]
         );
@@ -376,11 +398,11 @@ mod test {
             Token::LBrace,
             Token::Identifier("x".to_string()),
             Token::Colon,
-            Token::NumLiteral("10".to_string()),
+            Token::NumLiteral("10".to_string(), None),
             Token::Comma,
             Token::Identifier("y".to_string()),
             Token::Colon,
-            Token::NumLiteral("20".to_string()),
+            Token::NumLiteral("20".to_string(), None),
             Token::RBrace,
             Token::Semicolon,
             Token::Keyword(Keyword::Let),

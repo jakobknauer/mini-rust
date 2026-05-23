@@ -163,12 +163,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
 
     fn lower_lit(&mut self, lit: &hlr::Lit) -> LoweredExpr<'ctxt> {
         let (const_, ty) = match lit {
-            hlr::Lit::Int(n) => {
-                let ty = self
-                    .builder
-                    .ctxt
-                    .tys
-                    .primitive(ty::Primitive::SignedInt(ty::IntWidth::I32));
+            hlr::Lit::Int(n, w) => {
+                let ty = self.builder.ctxt.tys.primitive(ty::Primitive::SignedInt(*w));
                 (mlr::Const::Int(*n), ty)
             }
             hlr::Lit::Float(f) => {
