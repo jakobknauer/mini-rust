@@ -21,7 +21,7 @@ pub struct LanguageItems<'ctxt> {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum UnaryPrimOp {
     NegI32,
-    NegF32,
+    NegF64,
     NotBool,
 }
 
@@ -48,15 +48,15 @@ pub enum BinaryPrimOp {
     GtI32,
     LeI32,
     GeI32,
-    AddF32,
-    SubF32,
-    MulF32,
-    DivF32,
-    RemF32,
-    EqF32,
-    NeF32,
-    LtF32,
-    GtF32,
-    LeF32,
-    GeF32,
+    AddF64,
+    SubF64,
+    MulF64,
+    DivF64,
+    RemF64,
+    EqF64,
+    NeF64,
+    LtF64,
+    GtF64,
+    LeF64,
+    GeF64,
 }

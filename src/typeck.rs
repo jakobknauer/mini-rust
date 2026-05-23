@@ -211,7 +211,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let ty = match lit {
             hlr::Lit::Int(_) => self.ctxt.tys.primitive(ty::Primitive::Integer32),
-            hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float32),
+            hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float64),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
             hlr::Lit::CChar(_) => self.ctxt.tys.primitive(ty::Primitive::CChar),
             hlr::Lit::CString(_) => {
@@ -339,7 +339,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let operand_ty = self.check_expr(operand, None)?;
 
         let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
-        let f32_ty = self.ctxt.tys.primitive(ty::Primitive::Float32);
+        let f64_ty = self.ctxt.tys.primitive(ty::Primitive::Float64);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
 
         use hlr::UnaryOperator::*;
@@ -347,7 +347,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
         let (prim, result_ty) = match operator {
             Negative if operand_ty == i32_ty => (NegI32, i32_ty),
-            Negative if operand_ty == f32_ty => (NegF32, f32_ty),
+            Negative if operand_ty == f64_ty => (NegF64, f64_ty),
             Not if operand_ty == bool_ty => (NotBool, bool_ty),
             _ => return Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty }),
         };

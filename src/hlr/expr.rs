@@ -113,7 +113,7 @@ pub enum Val<'hlr> {
 #[derive(Debug)]
 pub enum Lit {
     Int(i64),
-    Float(f32),
+    Float(f64),
     Bool(bool),
     CChar(u8),
     CString(Vec<u8>),

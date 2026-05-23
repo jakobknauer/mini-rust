@@ -1,6 +1,7 @@
 fn main() -> i32 {
-    let pi: f32 = 3.14;
+    let pi: f64 = 3.14;
     let x = (pi * 2.0) + 1.0;
+    printf("%f\n", x);
     0
 }
 
