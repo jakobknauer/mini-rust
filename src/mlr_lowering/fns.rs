@@ -311,7 +311,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
         let value = match constant {
             &Int(i) => {
-                let iw_ty = self.parent.get_or_define_ty(ty).unwrap().into_int_type();
+                let iw_ty = self.parent.get_ty(ty).unwrap().into_int_type();
                 iw_ty.const_int(i as u64, false).as_basic_value_enum()
             }
             &Float(f) => {

@@ -114,7 +114,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
         Ok(())
     }
 
-    fn get_or_define_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<AnyTypeEnum<'iw>> {
+    fn get_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<AnyTypeEnum<'iw>> {
         use mr_tys::{Primitive::*, TyDef::*};
 
         let ty = self.mr_ctxt.normalize_ty(ty);
@@ -146,7 +146,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             Fn { .. } | Ref(..) | RefMut(..) | Ptr(..) => {
                 self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum()
             }
-            Closure { captures_ty, .. } => self.get_or_define_ty(captures_ty).unwrap(),
+            Closure { captures_ty, .. } => self.get_ty(captures_ty).unwrap(),
             GenVar(gen_var) => unreachable!(
                 "generic type variable '{}' should be substituted before this point",
                 gen_var.name()
@@ -154,7 +154,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
             AssocTy { .. } => {
                 let ty = self.mr_ctxt.normalize_ty(ty);
-                self.get_or_define_ty(ty).unwrap()
+                self.get_ty(ty).unwrap()
             }
             Opaque { opaque, gen_args } => {
                 let resolved = self
@@ -164,7 +164,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                     .expect("opaque type must be resolved before MLR lowering");
                 let subst = mr_tys::GenVarSubst::new(&opaque.gen_params, gen_args).unwrap();
                 let instantiated = self.mr_ctxt.tys.substitute_gen_vars(resolved, &subst);
-                self.get_or_define_ty(instantiated).unwrap()
+                self.get_ty(instantiated).unwrap()
             }
             Never => self.iw_ctxt.i8_type().as_any_type_enum(),
             InfVar(_) => unreachable!(),
@@ -174,11 +174,11 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
     }
 
     fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<BasicTypeEnum<'iw>> {
-        self.get_or_define_ty(ty)?.try_into().ok()
+        self.get_ty(ty)?.try_into().ok()
     }
 
     fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<BasicMetadataTypeEnum<'iw>> {
-        self.get_or_define_ty(ty)?.try_into().ok()
+        self.get_ty(ty)?.try_into().ok()
     }
 
     fn define_struct(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
