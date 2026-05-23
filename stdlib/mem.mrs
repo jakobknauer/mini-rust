@@ -1,17 +1,17 @@
-fn malloc(size: i32) -> *c_void;
+fn malloc(size: isize) -> *c_void;
 fn free(alloc: *c_void);
 
-fn size_of<T>() -> i32;
+fn size_of<T>() -> isize;
 
 impl<T> *T {
-    fn offset(&self, offset: i32) -> *T;
+    fn offset(&self, offset: isize) -> *T;
 }
 
 fn alloc<T>() -> *T {
     malloc(size_of::<T>()) as *T
 }
 
-fn alloc_n<T>(n: i32) -> *T {
+fn alloc_n<T>(n: isize) -> *T {
     malloc(n * size_of::<T>()) as *T
 }
 

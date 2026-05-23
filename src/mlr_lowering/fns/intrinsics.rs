@@ -5,7 +5,7 @@ use inkwell::{
 };
 
 use crate::{
-    ctxt::{fns as mr_fns, language_items},
+    ctxt::{fns as mr_fns, language_items, ty as mr_ty},
     mlr,
 };
 
@@ -31,9 +31,14 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let gen_args = self.substitute_slice(fn_inst.gen_args);
         let ty = gen_args[0];
         let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(MlrFnLoweringError)?;
-        let size = TargetData::create("").get_store_size(&iw_ty) as u32;
-        let int_ty = self.parent.iw_ctxt.i32_type();
-        Ok(int_ty.const_int(size as u64, false).as_basic_value_enum())
+        let size = TargetData::create("").get_store_size(&iw_ty);
+        let isize_mr_ty = self
+            .parent
+            .mr_ctxt
+            .tys
+            .primitive(mr_ty::Primitive::SignedInt(mr_ty::IntWidth::ISize));
+        let int_ty = self.parent.get_ty(isize_mr_ty).unwrap().into_int_type();
+        Ok(int_ty.const_int(size, false).as_basic_value_enum())
     }
 
     pub(super) fn build_binary_prim(

@@ -132,7 +132,11 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                         I16 => self.iw_ctxt.i16_type().as_any_type_enum(),
                         I32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                         I64 => self.iw_ctxt.i64_type().as_any_type_enum(),
-                        ISize => todo!("isize depends on target pointer width"),
+                        ISize => {
+                            let layout = self.iw_module.get_data_layout();
+                            let target_data = TargetData::create(layout.as_str().to_str().unwrap_or(""));
+                            self.iw_ctxt.ptr_sized_int_type(&target_data, None).as_any_type_enum()
+                        }
                     }
                 }
                 Float64 => self.iw_ctxt.f64_type().as_any_type_enum(),

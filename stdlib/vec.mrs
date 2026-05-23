@@ -1,31 +1,31 @@
 struct Vec<T> {
     ptr: *T,
-    len: i32,
-    cap: i32,
+    len: isize,
+    cap: isize,
 }
 
-fn copy_n<T>(src: *T, dst: *T, n: i32) {
-    let mut i = 0;
+fn copy_n<T>(src: *T, dst: *T, n: isize) {
+    let mut i = 0isize;
     while i < n {
         *dst.offset(i) = *src.offset(i);
-        i = i + 1;
+        i = i + 1isize;
     }
 }
 
 impl<T> Vec<T> {
     fn new() -> Vec<T> {
-        let init_cap = 8;
+        let init_cap = 8isize;
         let ptr = alloc_n::<T>(init_cap);
         Vec {
             ptr: ptr,
-            len: 0,
+            len: 0isize,
             cap: init_cap,
         }
     }
 
     fn push(&mut self, val: T) {
         if self.len == self.cap {
-            self.cap = self.cap * 2;
+            self.cap = self.cap * 2isize;
 
             let new_ptr = alloc_n(self.cap);
             copy_n(self.ptr, new_ptr, self.len);
@@ -35,21 +35,21 @@ impl<T> Vec<T> {
         }
 
         *self.ptr.offset(self.len) = val;
-        self.len = self.len + 1;
+        self.len = self.len + 1isize;
     }
 
-    fn len(&self) -> i32 { self.len }
+    fn len(&self) -> isize { self.len }
 
-    fn get(&self, idx: i32) -> Option<&T> {
-        if idx >= self.len || idx < 0 {
+    fn get(&self, idx: isize) -> Option<&T> {
+        if idx >= self.len || idx < 0isize {
             Option::None
         } else {
             Option::Some { item: &*self.ptr.offset(idx) }
         }
     }
 
-    fn get_mut(&mut self, idx: i32) -> Option<&mut T> {
-        if idx >= self.len || idx < 0 {
+    fn get_mut(&mut self, idx: isize) -> Option<&mut T> {
+        if idx >= self.len || idx < 0isize {
             Option::None
         } else {
             Option::Some { item: &mut*self.ptr.offset(idx) }
@@ -57,26 +57,26 @@ impl<T> Vec<T> {
     }
 
     fn pop(&mut self) -> Option<T> {
-        if self.len == 0 {
+        if self.len == 0isize {
             Option::None
         } else {
-            self.len = self.len - 1;
+            self.len = self.len - 1isize;
             Option::Some { item: *self.ptr.offset(self.len) }
         }
     }
 
     fn drop(&mut self) {
-        self.len = 0;
-        self.cap = 0;
+        self.len = 0isize;
+        self.cap = 0isize;
         delete(self.ptr);
     }
 
     fn iter(&self) -> RefVecIter<T> {
-        RefVecIter { vec: self, idx: 0 }
+        RefVecIter { vec: self, idx: 0isize }
     }
 
     fn iter_mut(&mut self) -> RefMutVecIter<T> {
-        RefMutVecIter { vec: self, idx: 0 }
+        RefMutVecIter { vec: self, idx: 0isize }
     }
 }
 
@@ -88,12 +88,12 @@ where
         if self.len != other.len {
             return false;
         }
-        let mut i = 0;
+        let mut i = 0isize;
         while i < self.len {
             if !(*self.ptr.offset(i) == *other.ptr.offset(i)) {
                 return false;
             }
-            i = i + 1;
+            i = i + 1isize;
         }
         true
     }
@@ -104,13 +104,13 @@ impl<T> IntoIterator for Vec<T> {
     type IntoIter = VecIter<T>;
 
     fn into_iter(self) -> VecIter<T> {
-        VecIter { vec: self, idx: 0 }
+        VecIter { vec: self, idx: 0isize }
     }
 }
 
 struct VecIter<T> {
     vec: Vec<T>,
-    idx: i32,
+    idx: isize,
 }
 
 impl<T> Iterator for VecIter<T> {
@@ -121,7 +121,7 @@ impl<T> Iterator for VecIter<T> {
             Option::None
         } else {
             let item = *self.vec.ptr.offset(self.idx);
-            self.idx = self.idx + 1;
+            self.idx = self.idx + 1isize;
             Option::Some { item }
         }
     }
@@ -132,13 +132,13 @@ impl<T> IntoIterator for &Vec<T> {
     type IntoIter = RefVecIter<T>;
 
     fn into_iter(self) -> RefVecIter<T> {
-        RefVecIter { vec: self, idx: 0 }
+        RefVecIter { vec: self, idx: 0isize }
     }
 }
 
 struct RefVecIter<T> {
     vec: &Vec<T>,
-    idx: i32,
+    idx: isize,
 }
 
 impl<T> Iterator for RefVecIter<T> {
@@ -146,7 +146,7 @@ impl<T> Iterator for RefVecIter<T> {
 
     fn next(&mut self) -> Option<&T> {
         let next = self.vec.get(self.idx);
-        self.idx = self.idx + 1;
+        self.idx = self.idx + 1isize;
         next
     }
 }
@@ -156,13 +156,13 @@ impl<T> IntoIterator for &mut Vec<T> {
     type IntoIter = RefMutVecIter<T>;
 
     fn into_iter(self) -> RefMutVecIter<T> {
-        RefMutVecIter { vec: self, idx: 0 }
+        RefMutVecIter { vec: self, idx: 0isize }
     }
 }
 
 struct RefMutVecIter<T> {
     vec: &mut Vec<T>,
-    idx: i32,
+    idx: isize,
 }
 
 impl<T> Iterator for RefMutVecIter<T> {
@@ -170,7 +170,7 @@ impl<T> Iterator for RefMutVecIter<T> {
 
     fn next(&mut self) -> Option<&mut T> {
         let next = self.vec.get_mut(self.idx);
-        self.idx = self.idx + 1;
+        self.idx = self.idx + 1isize;
         next
     }
 }
