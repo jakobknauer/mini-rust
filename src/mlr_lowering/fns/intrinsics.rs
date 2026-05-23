@@ -94,23 +94,23 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 })
             }
 
-            AddI32 | SubI32 | MulI32 | DivI32 | RemI32 | EqI32 | NeI32 | EqBool | NeBool | EqCChar | NeCChar
-            | BitOrBool | BitAndBool | BitOrI32 | BitAndI32 | LtI32 | GtI32 | LeI32 | GeI32 => {
+            AddInt | SubInt | MulInt | DivInt | RemInt | EqInt | NeInt | EqBool | NeBool | EqCChar | NeCChar
+            | BitOrBool | BitAndBool | BitOrInt | BitAndInt | LtInt | GtInt | LeInt | GeInt => {
                 let (lhs, rhs) = self.build_int_pair(lhs, rhs)?;
                 Ok(match op {
-                    AddI32 => self.iw_builder.build_int_add(lhs, rhs, "add")?,
-                    SubI32 => self.iw_builder.build_int_sub(lhs, rhs, "sub")?,
-                    MulI32 => self.iw_builder.build_int_mul(lhs, rhs, "mul")?,
-                    DivI32 => self.iw_builder.build_int_signed_div(lhs, rhs, "div")?,
-                    RemI32 => self.iw_builder.build_int_signed_rem(lhs, rhs, "rem")?,
-                    EqI32 | EqBool | EqCChar => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")?,
-                    NeI32 | NeBool | NeCChar => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne")?,
-                    BitOrBool | BitOrI32 => self.iw_builder.build_or(lhs, rhs, "bitor")?,
-                    BitAndBool | BitAndI32 => self.iw_builder.build_and(lhs, rhs, "bitand")?,
-                    LtI32 => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "lt")?,
-                    GtI32 => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
-                    LeI32 => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,
-                    GeI32 => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")?,
+                    AddInt => self.iw_builder.build_int_add(lhs, rhs, "add")?,
+                    SubInt => self.iw_builder.build_int_sub(lhs, rhs, "sub")?,
+                    MulInt => self.iw_builder.build_int_mul(lhs, rhs, "mul")?,
+                    DivInt => self.iw_builder.build_int_signed_div(lhs, rhs, "div")?,
+                    RemInt => self.iw_builder.build_int_signed_rem(lhs, rhs, "rem")?,
+                    EqInt | EqBool | EqCChar => self.iw_builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")?,
+                    NeInt | NeBool | NeCChar => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne")?,
+                    BitOrBool | BitOrInt => self.iw_builder.build_or(lhs, rhs, "bitor")?,
+                    BitAndBool | BitAndInt => self.iw_builder.build_and(lhs, rhs, "bitand")?,
+                    LtInt => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "lt")?,
+                    GtInt => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
+                    LeInt => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,
+                    GeInt => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")?,
                     _ => unreachable!(),
                 }
                 .as_basic_value_enum())
@@ -129,10 +129,10 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 let operand = self.build_op(operand)?.into_float_value();
                 Ok(self.iw_builder.build_float_neg(operand, "neg")?.as_basic_value_enum())
             }
-            NegI32 | NotBool => {
+            NegInt | NotBool => {
                 let operand = self.build_op(operand)?.into_int_value();
                 let result = match op {
-                    NegI32 => self.iw_builder.build_int_neg(operand, "neg")?,
+                    NegInt => self.iw_builder.build_int_neg(operand, "neg")?,
                     NotBool => self.iw_builder.build_not(operand, "not")?,
                     _ => unreachable!(),
                 };

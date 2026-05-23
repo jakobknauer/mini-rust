@@ -125,7 +125,16 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
 
         let inkwell_type = match *ty.0 {
             Primitive(ref primitive_type) => match primitive_type {
-                Integer32 => self.iw_ctxt.i32_type().as_any_type_enum(),
+                SignedInt(w) => {
+                    use mr_tys::IntWidth::*;
+                    match w {
+                        I8 => self.iw_ctxt.i8_type().as_any_type_enum(),
+                        I16 => self.iw_ctxt.i16_type().as_any_type_enum(),
+                        I32 => self.iw_ctxt.i32_type().as_any_type_enum(),
+                        I64 => self.iw_ctxt.i64_type().as_any_type_enum(),
+                        ISize => todo!("isize depends on target pointer width"),
+                    }
+                }
                 Float64 => self.iw_ctxt.f64_type().as_any_type_enum(),
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                 CVoid => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),

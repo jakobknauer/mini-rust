@@ -96,7 +96,7 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
     }
 
     pub fn insert_enum_discriminant_place(&mut self, base: mlr::Place<'ctxt>) -> mlr::Place<'ctxt> {
-        let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
+        let i32_ty = self.ctxt.tys.primitive(ty::Primitive::SignedInt(ty::IntWidth::I32));
         self.mlr.insert_place(mlr::PlaceDef::EnumDiscriminant { base }, i32_ty)
     }
 

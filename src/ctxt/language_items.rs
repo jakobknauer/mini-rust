@@ -20,20 +20,20 @@ pub struct LanguageItems<'ctxt> {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum UnaryPrimOp {
-    NegI32,
+    NegInt,
     NegF64,
     NotBool,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum BinaryPrimOp {
-    AddI32,
-    SubI32,
-    MulI32,
-    DivI32,
-    RemI32,
-    EqI32,
-    NeI32,
+    AddInt,
+    SubInt,
+    MulInt,
+    DivInt,
+    RemInt,
+    EqInt,
+    NeInt,
     EqBool,
     NeBool,
     EqCChar,
@@ -42,12 +42,12 @@ pub enum BinaryPrimOp {
     NeUnit,
     BitOrBool,
     BitAndBool,
-    BitOrI32,
-    BitAndI32,
-    LtI32,
-    GtI32,
-    LeI32,
-    GeI32,
+    BitOrInt,
+    BitAndInt,
+    LtInt,
+    GtInt,
+    LeInt,
+    GeInt,
     AddF64,
     SubF64,
     MulF64,

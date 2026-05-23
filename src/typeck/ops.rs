@@ -57,50 +57,56 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         use hlr::BinaryOperator::*;
         use language_items::BinaryPrimOp::*;
 
-        let i32_ty = self.ctxt.tys.primitive(ty::Primitive::Integer32);
         let f64_ty = self.ctxt.tys.primitive(ty::Primitive::Float64);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         let unit_ty = self.ctxt.tys.unit();
         let c_char_ty = self.ctxt.tys.primitive(ty::Primitive::CChar);
 
-        let i32 = left_ty == i32_ty && right_ty == i32_ty;
+        let sint_ty = match (left_ty.0, right_ty.0) {
+            (
+                ty::TyDef::Primitive(ty::Primitive::SignedInt(lw)),
+                ty::TyDef::Primitive(ty::Primitive::SignedInt(rw)),
+            ) if lw == rw => Some(left_ty),
+            _ => None,
+        };
+        let sint = sint_ty.is_some();
         let f64 = left_ty == f64_ty && right_ty == f64_ty;
         let bool = left_ty == bool_ty && right_ty == bool_ty;
         let unit = left_ty == unit_ty && right_ty == unit_ty;
         let c_char = left_ty == c_char_ty && right_ty == c_char_ty;
 
         match operator {
-            Add if i32 => Some((AddI32, i32_ty)),
+            Add if sint => Some((AddInt, sint_ty.unwrap())),
             Add if f64 => Some((AddF64, f64_ty)),
-            Subtract if i32 => Some((SubI32, i32_ty)),
+            Subtract if sint => Some((SubInt, sint_ty.unwrap())),
             Subtract if f64 => Some((SubF64, f64_ty)),
-            Multiply if i32 => Some((MulI32, i32_ty)),
+            Multiply if sint => Some((MulInt, sint_ty.unwrap())),
             Multiply if f64 => Some((MulF64, f64_ty)),
-            Divide if i32 => Some((DivI32, i32_ty)),
+            Divide if sint => Some((DivInt, sint_ty.unwrap())),
             Divide if f64 => Some((DivF64, f64_ty)),
-            Remainder if i32 => Some((RemI32, i32_ty)),
+            Remainder if sint => Some((RemInt, sint_ty.unwrap())),
             Remainder if f64 => Some((RemF64, f64_ty)),
-            Equal if i32 => Some((EqI32, bool_ty)),
+            Equal if sint => Some((EqInt, bool_ty)),
             Equal if f64 => Some((EqF64, bool_ty)),
             Equal if bool => Some((EqBool, bool_ty)),
             Equal if unit => Some((EqUnit, bool_ty)),
             Equal if c_char => Some((EqCChar, bool_ty)),
-            NotEqual if i32 => Some((NeI32, bool_ty)),
+            NotEqual if sint => Some((NeInt, bool_ty)),
             NotEqual if f64 => Some((NeF64, bool_ty)),
             NotEqual if bool => Some((NeBool, bool_ty)),
             NotEqual if unit => Some((NeUnit, bool_ty)),
             NotEqual if c_char => Some((NeCChar, bool_ty)),
             BitOr if bool => Some((BitOrBool, bool_ty)),
             BitAnd if bool => Some((BitAndBool, bool_ty)),
-            BitOr if i32 => Some((BitOrI32, i32_ty)),
-            BitAnd if i32 => Some((BitAndI32, i32_ty)),
-            LessThan if i32 => Some((LtI32, bool_ty)),
+            BitOr if sint => Some((BitOrInt, sint_ty.unwrap())),
+            BitAnd if sint => Some((BitAndInt, sint_ty.unwrap())),
+            LessThan if sint => Some((LtInt, bool_ty)),
             LessThan if f64 => Some((LtF64, bool_ty)),
-            GreaterThan if i32 => Some((GtI32, bool_ty)),
+            GreaterThan if sint => Some((GtInt, bool_ty)),
             GreaterThan if f64 => Some((GtF64, bool_ty)),
-            LessThanOrEqual if i32 => Some((LeI32, bool_ty)),
+            LessThanOrEqual if sint => Some((LeInt, bool_ty)),
             LessThanOrEqual if f64 => Some((LeF64, bool_ty)),
-            GreaterThanOrEqual if i32 => Some((GeI32, bool_ty)),
+            GreaterThanOrEqual if sint => Some((GeInt, bool_ty)),
             GreaterThanOrEqual if f64 => Some((GeF64, bool_ty)),
             _ => None,
         }

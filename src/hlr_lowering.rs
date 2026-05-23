@@ -164,7 +164,11 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     fn lower_lit(&mut self, lit: &hlr::Lit) -> LoweredExpr<'ctxt> {
         let (const_, ty) = match lit {
             hlr::Lit::Int(n) => {
-                let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
+                let ty = self
+                    .builder
+                    .ctxt
+                    .tys
+                    .primitive(ty::Primitive::SignedInt(ty::IntWidth::I32));
                 (mlr::Const::Int(*n), ty)
             }
             hlr::Lit::Float(f) => {
@@ -408,7 +412,11 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         let enum_place = self.builder.alloc_place(enum_ty);
 
         let discriminant_place = self.builder.insert_enum_discriminant_place(enum_place);
-        let i32_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
+        let i32_ty = self
+            .builder
+            .ctxt
+            .tys
+            .primitive(ty::Primitive::SignedInt(ty::IntWidth::I32));
         let disc_op = self
             .builder
             .insert_const_op(mlr::Const::Int(variant_idx as i64), i32_ty);

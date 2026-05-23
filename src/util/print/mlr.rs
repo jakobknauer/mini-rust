@@ -213,7 +213,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             UnaryPrim { op, operand } => {
                 use language_items::UnaryPrimOp::*;
                 let op_str = match op {
-                    NegI32 | NegF64 => "-",
+                    NegInt | NegF64 => "-",
                     NotBool => "!",
                 };
                 write!(self.writer, "{op_str}")?;
@@ -222,19 +222,19 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             BinaryPrim { op, lhs, rhs } => {
                 use language_items::BinaryPrimOp::*;
                 let op_str = match op {
-                    AddI32 | AddF64 => "+",
-                    SubI32 | SubF64 => "-",
-                    MulI32 | MulF64 => "*",
-                    DivI32 | DivF64 => "/",
-                    RemI32 | RemF64 => "%",
-                    EqI32 | EqBool | EqCChar | EqUnit | EqF64 => "==",
-                    NeI32 | NeBool | NeCChar | NeUnit | NeF64 => "!=",
-                    BitOrBool | BitOrI32 => "|",
-                    BitAndBool | BitAndI32 => "&",
-                    LtI32 | LtF64 => "<",
-                    GtI32 | GtF64 => ">",
-                    LeI32 | LeF64 => "<=",
-                    GeI32 | GeF64 => ">=",
+                    AddInt | AddF64 => "+",
+                    SubInt | SubF64 => "-",
+                    MulInt | MulF64 => "*",
+                    DivInt | DivF64 => "/",
+                    RemInt | RemF64 => "%",
+                    EqInt | EqBool | EqCChar | EqUnit | EqF64 => "==",
+                    NeInt | NeBool | NeCChar | NeUnit | NeF64 => "!=",
+                    BitOrBool | BitOrInt => "|",
+                    BitAndBool | BitAndInt => "&",
+                    LtInt | LtF64 => "<",
+                    GtInt | GtF64 => ">",
+                    LeInt | LeF64 => "<=",
+                    GeInt | GeF64 => ">=",
                 };
                 self.print_op(lhs)?;
                 write!(self.writer, " {op_str} ")?;

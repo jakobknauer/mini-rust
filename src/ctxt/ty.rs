@@ -72,8 +72,30 @@ pub enum TyDef<'ty> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[allow(dead_code)]
+pub enum IntWidth {
+    I8,
+    I16,
+    I32,
+    I64,
+    ISize,
+}
+
+impl std::fmt::Display for IntWidth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IntWidth::I8 => write!(f, "i8"),
+            IntWidth::I16 => write!(f, "i16"),
+            IntWidth::I32 => write!(f, "i32"),
+            IntWidth::I64 => write!(f, "i64"),
+            IntWidth::ISize => write!(f, "isize"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Primitive {
-    Integer32,
+    SignedInt(IntWidth),
     Float64,
     Boolean,
     CVoid,
@@ -351,7 +373,7 @@ impl std::fmt::Display for TyDef<'_> {
         use TyDef::*;
         match self {
             &Primitive(p) => match p {
-                Integer32 => write!(f, "i32"),
+                SignedInt(w) => write!(f, "{}", w),
                 Float64 => write!(f, "f64"),
                 Boolean => write!(f, "bool"),
                 CVoid => write!(f, "c_void"),

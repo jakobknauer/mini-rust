@@ -306,13 +306,17 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         let (enum_ty, enum_place) = self.deref_scrutinee_place(scrutinee_ty, scrutinee_place);
         let disc_place = self.builder.insert_enum_discriminant_place(enum_place);
         let discriminant_op = self.builder.insert_copy_op(disc_place);
-        let i32_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Integer32);
+        let i32_ty = self
+            .builder
+            .ctxt
+            .tys
+            .primitive(ty::Primitive::SignedInt(ty::IntWidth::I32));
         let variant_idx_op = self
             .builder
             .insert_const_op(mlr::Const::Int(variant_idx as i64), i32_ty);
         let bool_ty = self.builder.ctxt.tys.primitive(ty::Primitive::Boolean);
         let disc_cond_val = self.builder.insert_binary_prim_val(
-            language_items::BinaryPrimOp::EqI32,
+            language_items::BinaryPrimOp::EqInt,
             discriminant_op,
             variant_idx_op,
             bool_ty,
@@ -380,7 +384,7 @@ impl<'a, 'ctxt: 'a> super::HlrLowerer<'a, 'ctxt> {
         scrutinee_place: mlr::Place<'ctxt>,
     ) -> mlr::Op<'ctxt> {
         let (const_, eq_op) = match lit {
-            hlr::Lit::Int(n) => (mlr::Const::Int(*n), language_items::BinaryPrimOp::EqI32),
+            hlr::Lit::Int(n) => (mlr::Const::Int(*n), language_items::BinaryPrimOp::EqInt),
             hlr::Lit::Float(_) => unreachable!("float literals not supported in patterns"),
             hlr::Lit::Bool(b) => (mlr::Const::Bool(*b), language_items::BinaryPrimOp::EqBool),
             hlr::Lit::CChar(c) => (mlr::Const::CChar(*c), language_items::BinaryPrimOp::EqCChar),
