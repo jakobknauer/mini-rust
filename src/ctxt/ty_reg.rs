@@ -110,7 +110,11 @@ impl<'ty> TyReg<'ty> {
     }
 
     pub fn register_primitive_tys(&self) -> Result<(), ()> {
+        self.register_named_ty("i8", TyDef::Primitive(Primitive::SignedInt(IntWidth::I8)))?;
+        self.register_named_ty("i16", TyDef::Primitive(Primitive::SignedInt(IntWidth::I16)))?;
         self.register_named_ty("i32", TyDef::Primitive(Primitive::SignedInt(IntWidth::I32)))?;
+        self.register_named_ty("i64", TyDef::Primitive(Primitive::SignedInt(IntWidth::I64)))?;
+        self.register_named_ty("isize", TyDef::Primitive(Primitive::SignedInt(IntWidth::ISize)))?;
         self.register_named_ty("f64", TyDef::Primitive(Primitive::Float64))?;
         self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?;
         self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?;

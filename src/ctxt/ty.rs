@@ -72,7 +72,6 @@ pub enum TyDef<'ty> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-#[allow(dead_code)]
 pub enum IntWidth {
     I8,
     I16,
