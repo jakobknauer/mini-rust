@@ -15,7 +15,7 @@ Supported features include:
 - Operator overloading:
     - Binary arithmetic/logical/bit operations: `+`, `-`, `*`, `/`, `%`, `&`, `|` via `Add`, `Sub` etc. traits
     - `==` and `!=` via the `Eq` trait, providing a default impl for `!=`
-    - Unary `-` via the `Neg` trait
+    - Unary `-` and `!` via the `Neg` and `Not` traits, respectively
     - Unary `*` via the `Deref` trait, also used for deref coercion
 
 As backend LLVM is used via the [inkwell](https://github.com/TheDan64/inkwell) library.
