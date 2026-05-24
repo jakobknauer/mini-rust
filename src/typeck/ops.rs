@@ -164,28 +164,28 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         Ok(result_ty)
     }
 
-    pub(super) fn check_overloaded_neg(
+    pub(super) fn check_overloaded_unary_op(
         &mut self,
         expr_id: hlr::ExprId,
         operand_ty: ty::Ty<'ctxt>,
+        operator: hlr::UnaryOperator,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let trait_ = self
-            .ctxt
-            .language_items
-            .neg_trait
-            .ok_or(TypeckError::UnaryOpTypeMismatch {
-                operator: hlr::UnaryOperator::Negative,
-                operand_ty,
-            })?;
+        use hlr::UnaryOperator::*;
+
+        let (trait_, mthd_name) = match operator {
+            Negative => (self.ctxt.language_items.neg_trait, "neg"),
+            Not => (self.ctxt.language_items.not_trait, "not"),
+        };
+        let trait_ = trait_.ok_or(TypeckError::UnaryOpTypeMismatch { operator, operand_ty })?;
 
         let gen_args = self.ctxt.tys.ty_slice(&[]);
         let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
         self.pending_obligations
             .push((operand_ty, ty::ConstraintRequirement::Trait(trait_inst)));
 
-        let mthd = self.ctxt.traits.resolve_trait_method(trait_, "neg").unwrap();
+        let mthd = self.ctxt.traits.resolve_trait_method(trait_, mthd_name).unwrap();
         let found = super::mthd::FoundMthd::Trait { trait_inst, mthd };
-        let resolution = self.instantiate_mthd(found, operand_ty, "neg", None)?;
+        let resolution = self.instantiate_mthd(found, operand_ty, mthd_name, None)?;
         self.typing
             .expr_extra
             .insert(expr_id, ExprExtra::UnaryOpMthd(resolution));

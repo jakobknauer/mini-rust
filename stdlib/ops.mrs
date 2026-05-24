@@ -38,6 +38,11 @@ trait Neg {
     fn neg(self) -> <Self as Neg>::Output;
 }
 
+trait Not {
+    type Output;
+    fn not(self) -> <Self as Not>::Output;
+}
+
 trait Deref {
     type Target;
     fn deref(&self) -> &<Self as Deref>::Target;
@@ -251,6 +256,11 @@ impl BitOr<bool> for bool {
 impl BitAnd<bool> for bool {
     type Output = bool;
     fn bitand(self, rhs: bool) -> bool { self & rhs }
+}
+
+impl Not for bool {
+    type Output = bool;
+    fn not(self) -> bool { !self }
 }
 
 impl Add<f64> for f64 {

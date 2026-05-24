@@ -360,11 +360,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             return Ok(result_ty);
         }
 
-        if matches!(operator, Negative) {
-            return self.check_overloaded_neg(expr_id, operand_ty);
-        }
-
-        Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty })
+        self.check_overloaded_unary_op(expr_id, operand_ty, operator)
     }
 
     fn check_field_access(

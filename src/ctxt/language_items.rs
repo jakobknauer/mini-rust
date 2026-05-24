@@ -13,6 +13,7 @@ pub struct LanguageItems<'ctxt> {
     pub bit_and_trait: Option<Trait<'ctxt>>,
     pub rem_trait: Option<Trait<'ctxt>>,
     pub neg_trait: Option<Trait<'ctxt>>,
+    pub not_trait: Option<Trait<'ctxt>>,
     pub deref_trait: Option<Trait<'ctxt>>,
     pub eq_trait: Option<Trait<'ctxt>>,
     pub into_iterator_trait: Option<Trait<'ctxt>>,
