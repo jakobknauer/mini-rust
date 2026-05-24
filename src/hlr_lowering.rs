@@ -304,13 +304,31 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         operand: hlr::Expr<'ctxt>,
         _operator: hlr::UnaryOperator,
     ) -> LoweredExpr<'ctxt> {
-        let prim = match self.typing.expr_extra[&expr_id] {
-            ExprExtra::UnaryPrim(p) => p,
-            _ => panic!("expected UnaryPrim extra"),
-        };
-        let result_ty = self.typing.expr_types[&expr_id];
-        let operand_op = self.lower_to_op(operand);
-        self.builder.insert_unary_prim_val(prim, operand_op, result_ty).into()
+        match &self.typing.expr_extra[&expr_id] {
+            ExprExtra::UnaryPrim(prim) => {
+                let result_ty = self.typing.expr_types[&expr_id];
+                let operand_op = self.lower_to_op(operand);
+                self.builder.insert_unary_prim_val(*prim, operand_op, result_ty).into()
+            }
+            ExprExtra::UnaryOpMthd(resolution) => {
+                let (callee_op, receiver_mode) = self.mthd_resolution_to_op(resolution);
+                let operand_op = match receiver_mode {
+                    ReceiverMode::Direct => self.lower_to_op(operand),
+                    ReceiverMode::ByRef => {
+                        let place = self.lower_to_place(operand);
+                        let addr = self.builder.insert_addr_of_val(place);
+                        LoweredExpr::from(addr).into_op(&mut self.builder)
+                    }
+                    ReceiverMode::ByRefMut => {
+                        let place = self.lower_to_place(operand);
+                        let addr = self.builder.insert_addr_of_mut_val(place);
+                        LoweredExpr::from(addr).into_op(&mut self.builder)
+                    }
+                };
+                self.builder.insert_call_val(callee_op, vec![operand_op]).into()
+            }
+            _ => panic!("expected UnaryPrim or UnaryOpMthd extra"),
+        }
     }
 
     fn lower_call(&mut self, callee: hlr::Expr<'ctxt>, args: hlr::ExprSlice<'ctxt>) -> LoweredExpr<'ctxt> {

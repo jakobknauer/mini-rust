@@ -326,6 +326,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         self.ctxt.language_items.rem_trait = Some(self.ctxt.traits.resolve_trait_name("Rem").ok_or_else(err)?);
         self.ctxt.language_items.bit_or_trait = Some(self.ctxt.traits.resolve_trait_name("BitOr").ok_or_else(err)?);
         self.ctxt.language_items.bit_and_trait = Some(self.ctxt.traits.resolve_trait_name("BitAnd").ok_or_else(err)?);
+        self.ctxt.language_items.neg_trait = Some(self.ctxt.traits.resolve_trait_name("Neg").ok_or_else(err)?);
         self.ctxt.language_items.deref_trait = Some(self.ctxt.traits.resolve_trait_name("Deref").ok_or_else(err)?);
         self.ctxt.language_items.eq_trait = self.ctxt.traits.resolve_trait_name("Eq");
         self.ctxt.language_items.into_iterator_trait = self.ctxt.traits.resolve_trait_name("IntoIterator");

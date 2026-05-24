@@ -22,7 +22,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             self.typing.expr_extra.insert(expr_id, ExprExtra::BinaryPrim(prim));
             Ok(result_ty)
         } else {
-            self.check_overloaded_op(expr_id, left_ty, right_ty, operator)
+            self.check_overloaded_binary_op(expr_id, left_ty, right_ty, operator)
         }
     }
 
@@ -112,7 +112,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
     }
 
-    fn check_overloaded_op(
+    fn check_overloaded_binary_op(
         &mut self,
         expr_id: hlr::ExprId,
         left_ty: ty::Ty<'ctxt>,
@@ -162,5 +162,34 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             _ => self.ctxt.tys.assoc_ty(left_ty, trait_inst, 0),
         };
         Ok(result_ty)
+    }
+
+    pub(super) fn check_overloaded_neg(
+        &mut self,
+        expr_id: hlr::ExprId,
+        operand_ty: ty::Ty<'ctxt>,
+    ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
+        let trait_ = self
+            .ctxt
+            .language_items
+            .neg_trait
+            .ok_or(TypeckError::UnaryOpTypeMismatch {
+                operator: hlr::UnaryOperator::Negative,
+                operand_ty,
+            })?;
+
+        let gen_args = self.ctxt.tys.ty_slice(&[]);
+        let trait_inst = TraitInst::new(trait_, gen_args).unwrap();
+        self.pending_obligations
+            .push((operand_ty, ty::ConstraintRequirement::Trait(trait_inst)));
+
+        let mthd = self.ctxt.traits.resolve_trait_method(trait_, "neg").unwrap();
+        let found = super::mthd::FoundMthd::Trait { trait_inst, mthd };
+        let resolution = self.instantiate_mthd(found, operand_ty, "neg", None)?;
+        self.typing
+            .expr_extra
+            .insert(expr_id, ExprExtra::UnaryOpMthd(resolution));
+
+        Ok(self.ctxt.tys.assoc_ty(operand_ty, trait_inst, 0))
     }
 }

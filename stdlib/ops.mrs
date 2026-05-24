@@ -33,6 +33,11 @@ trait BitAnd<Rhs> {
     fn bitand(self, rhs: Rhs) -> <Self as BitAnd<Rhs>>::Output;
 }
 
+trait Neg {
+    type Output;
+    fn neg(self) -> <Self as Neg>::Output;
+}
+
 trait Deref {
     type Target;
     fn deref(&self) -> &<Self as Deref>::Target;
@@ -73,6 +78,11 @@ impl BitAnd<i8> for i8 {
     fn bitand(self, rhs: i8) -> i8 { self & rhs }
 }
 
+impl Neg for i8 {
+    type Output = i8;
+    fn neg(self) -> i8 { -self }
+}
+
 impl Add<i16> for i16 {
     type Output = i16;
     fn add(self, rhs: i16) -> i16 { self + rhs }
@@ -106,6 +116,11 @@ impl BitOr<i16> for i16 {
 impl BitAnd<i16> for i16 {
     type Output = i16;
     fn bitand(self, rhs: i16) -> i16 { self & rhs }
+}
+
+impl Neg for i16 {
+    type Output = i16;
+    fn neg(self) -> i16 { -self }
 }
 
 impl Add<i32> for i32 {
@@ -143,6 +158,11 @@ impl BitAnd<i32> for i32 {
     fn bitand(self, rhs: i32) -> i32 { self & rhs }
 }
 
+impl Neg for i32 {
+    type Output = i32;
+    fn neg(self) -> i32 { -self }
+}
+
 impl Add<i64> for i64 {
     type Output = i64;
     fn add(self, rhs: i64) -> i64 { self + rhs }
@@ -176,6 +196,11 @@ impl BitOr<i64> for i64 {
 impl BitAnd<i64> for i64 {
     type Output = i64;
     fn bitand(self, rhs: i64) -> i64 { self & rhs }
+}
+
+impl Neg for i64 {
+    type Output = i64;
+    fn neg(self) -> i64 { -self }
 }
 
 impl Add<isize> for isize {
@@ -213,6 +238,11 @@ impl BitAnd<isize> for isize {
     fn bitand(self, rhs: isize) -> isize { self & rhs }
 }
 
+impl Neg for isize {
+    type Output = isize;
+    fn neg(self) -> isize { -self }
+}
+
 impl BitOr<bool> for bool {
     type Output = bool;
     fn bitor(self, rhs: bool) -> bool { self | rhs }
@@ -246,6 +276,11 @@ impl Div<f64> for f64 {
 impl Rem<f64> for f64 {
     type Output = f64;
     fn rem(self, rhs: f64) -> f64 { self % rhs }
+}
+
+impl Neg for f64 {
+    type Output = f64;
+    fn neg(self) -> f64 { -self }
 }
 
 impl<T> Deref for &T {

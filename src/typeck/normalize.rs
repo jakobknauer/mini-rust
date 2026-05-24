@@ -174,6 +174,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 steps: self.normalize_deref_steps(steps),
                 index,
             },
+            ExprExtra::UnaryOpMthd(resolution) => ExprExtra::UnaryOpMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::BinaryPrim(_) | ExprExtra::UnaryPrim(_) | ExprExtra::AsCast(_) => extra,
         }
     }

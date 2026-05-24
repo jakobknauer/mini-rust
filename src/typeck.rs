@@ -51,6 +51,7 @@ pub enum ExprExtra<'ty> {
     BinaryPrim(language_items::BinaryPrimOp),
     BinaryOpMthd(MthdResolution<'ty>),
     UnaryPrim(language_items::UnaryPrimOp),
+    UnaryOpMthd(MthdResolution<'ty>),
     DerefMthd(MthdResolution<'ty>),
     MthdCall {
         resolution: MthdResolution<'ty>,
@@ -345,17 +346,25 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         use hlr::UnaryOperator::*;
         use language_items::UnaryPrimOp::*;
 
-        let (prim, result_ty) = match operator {
+        let builtin = match operator {
             Negative if matches!(operand_ty.0, ty::TyDef::Primitive(ty::Primitive::SignedInt(_))) => {
-                (NegInt, operand_ty)
+                Some((NegInt, operand_ty))
             }
-            Negative if operand_ty == f64_ty => (NegF64, f64_ty),
-            Not if operand_ty == bool_ty => (NotBool, bool_ty),
-            _ => return Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty }),
+            Negative if operand_ty == f64_ty => Some((NegF64, f64_ty)),
+            Not if operand_ty == bool_ty => Some((NotBool, bool_ty)),
+            _ => None,
         };
 
-        self.typing.expr_extra.insert(expr_id, ExprExtra::UnaryPrim(prim));
-        Ok(result_ty)
+        if let Some((prim, result_ty)) = builtin {
+            self.typing.expr_extra.insert(expr_id, ExprExtra::UnaryPrim(prim));
+            return Ok(result_ty);
+        }
+
+        if matches!(operator, Negative) {
+            return self.check_overloaded_neg(expr_id, operand_ty);
+        }
+
+        Err(TypeckError::UnaryOpTypeMismatch { operator, operand_ty })
     }
 
     fn check_field_access(
