@@ -31,6 +31,7 @@ const ONE_CHAR_TOKENS: &[(char, Token)] = &[
     ('/', Token::Slash),
     ('%', Token::Percent),
     ('|', Token::Pipe),
+    ('^', Token::Caret),
     ('&', Token::Ampersand),
     ('<', Token::Smaller),
     ('>', Token::Greater),

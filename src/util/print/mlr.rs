@@ -231,6 +231,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
                     NeInt | NeBool | NeCChar | NeUnit | NeF64 => "!=",
                     BitOrBool | BitOrInt => "|",
                     BitAndBool | BitAndInt => "&",
+                    BitXorBool | BitXorInt => "^",
                     LtInt | LtF64 => "<",
                     GtInt | GtF64 => ">",
                     LeInt | LeF64 => "<=",

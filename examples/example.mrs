@@ -1,6 +1,5 @@
 fn main() -> i32 {
-    printf("%d %d\n", triple_not(true), triple_not(false));
-    0
+    3 ^ 6
 }
 
 fn negate_vec<T>(v: &mut Vec<T>) 

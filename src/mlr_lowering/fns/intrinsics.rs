@@ -100,7 +100,8 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             }
 
             AddInt | SubInt | MulInt | DivInt | RemInt | EqInt | NeInt | EqBool | NeBool | EqCChar | NeCChar
-            | BitOrBool | BitAndBool | BitOrInt | BitAndInt | LtInt | GtInt | LeInt | GeInt => {
+            | BitOrBool | BitAndBool | BitXorBool | BitOrInt | BitAndInt | BitXorInt | LtInt | GtInt | LeInt
+            | GeInt => {
                 let (lhs, rhs) = self.build_int_pair(lhs, rhs)?;
                 Ok(match op {
                     AddInt => self.iw_builder.build_int_add(lhs, rhs, "add")?,
@@ -112,6 +113,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     NeInt | NeBool | NeCChar => self.iw_builder.build_int_compare(IntPredicate::NE, lhs, rhs, "ne")?,
                     BitOrBool | BitOrInt => self.iw_builder.build_or(lhs, rhs, "bitor")?,
                     BitAndBool | BitAndInt => self.iw_builder.build_and(lhs, rhs, "bitand")?,
+                    BitXorBool | BitXorInt => self.iw_builder.build_xor(lhs, rhs, "bitxor")?,
                     LtInt => self.iw_builder.build_int_compare(IntPredicate::SLT, lhs, rhs, "lt")?,
                     GtInt => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
                     LeInt => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,

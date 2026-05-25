@@ -13,7 +13,7 @@ Supported features include:
 - Closures capturing local variables
 - Pattern matching with recursive patterns (structs, enum variants, tuples, constants, variables (bindings), references, alternatives, and wilcards) with exhaustiveness check at compile time
 - Operator overloading:
-    - Binary arithmetic/logical/bit operations: `+`, `-`, `*`, `/`, `%`, `&`, `|` via `Add`, `Sub` etc. traits
+    - Binary arithmetic/logical/bit operations: `+`, `-`, `*`, `/`, `%`, `&`, `^`, `|` via `Add`, `Sub` etc. traits
     - `==` and `!=` via the `Eq` trait, providing a default impl for `!=`
     - Unary `-` and `!` via the `Neg` and `Not` traits, respectively
     - Unary `*` via the `Deref` trait, also used for deref coercion

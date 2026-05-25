@@ -199,6 +199,7 @@ pub enum BinaryOperator {
     Remainder,
     BitOr,
     BitAnd,
+    BitXor,
     LogicalAnd,
     LogicalOr,
 }
@@ -219,6 +220,7 @@ impl From<ast::BinaryOperator> for BinaryOperator {
             ast::BinaryOperator::Remainder => Self::Remainder,
             ast::BinaryOperator::BitOr => Self::BitOr,
             ast::BinaryOperator::BitAnd => Self::BitAnd,
+            ast::BinaryOperator::BitXor => Self::BitXor,
             ast::BinaryOperator::LogicalAnd => Self::LogicalAnd,
             ast::BinaryOperator::LogicalOr => Self::LogicalOr,
         }
@@ -256,6 +258,7 @@ impl std::fmt::Display for BinaryOperator {
             Self::GreaterThanOrEqual => ">=",
             Self::BitOr => "|",
             Self::BitAnd => "&",
+            Self::BitXor => "^",
             Self::LogicalAnd => "&&",
             Self::LogicalOr => "||",
         };

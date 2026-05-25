@@ -656,9 +656,13 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(expr)
     }
 
-    parse_left_associative!(parse_disjunction, parse_conjunction, [
+    parse_left_associative!(parse_disjunction, parse_xor_expr, [
         Token::Pipe => BinaryOperator::BitOr,
         Token::PipePipe => BinaryOperator::LogicalOr
+    ]);
+
+    parse_left_associative!(parse_xor_expr, parse_conjunction, [
+        Token::Caret => BinaryOperator::BitXor
     ]);
 
     parse_left_associative!(parse_conjunction, parse_equality_expr, [

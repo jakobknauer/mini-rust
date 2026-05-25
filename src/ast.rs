@@ -508,6 +508,7 @@ pub enum BinaryOperator {
     Remainder,
     BitOr,
     BitAnd,
+    BitXor,
     LogicalAnd,
     LogicalOr,
 }

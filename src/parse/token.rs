@@ -24,6 +24,7 @@ pub enum Token {
     AmpersandAmpersand, // &&
     Pipe,               // |
     PipePipe,           // ||
+    Caret,              // ^
     Arrow,              // ->
     BoldArrow,          // =>
     Plus,               // +
