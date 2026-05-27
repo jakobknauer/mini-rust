@@ -100,9 +100,7 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
                 hlr::Val::Struct(..) => Ok(self
                     .hlr
                     .pattern(hlr::PatternKind::Struct(hlr::StructPattern { constructor, fields }))),
-                _ => Err(AstLoweringError {
-                    msg: format!("Expected struct or enum variant in pattern, found {:?}", constructor),
-                }),
+                _ => Err(AstLoweringError::ExpectedConstructor),
             };
         }
 
@@ -110,8 +108,13 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
             [segment] if !segment.is_self && segment.args.is_none() => {
                 self.lower_identifier_pattern(&segment.ident, false, ctxt)
             }
-            _ => Err(AstLoweringError {
-                msg: format!("Unresolvable path in pattern: {:?}", path),
+            _ => Err(AstLoweringError::UnresolvedPath {
+                path: path
+                    .segments
+                    .iter()
+                    .map(|s| s.ident.as_str())
+                    .collect::<Vec<_>>()
+                    .join("::"),
             }),
         }
     }
@@ -123,16 +126,12 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
                 suffix.map(ast::IntSuffix::into_int_width).unwrap_or(ty::IntWidth::I32),
             ),
             ast::Lit::Float(_) => {
-                return Err(AstLoweringError {
-                    msg: "float literals are not supported in patterns".into(),
-                });
+                return Err(AstLoweringError::FloatLiteralInPattern);
             }
             ast::Lit::Bool(b) => hlr::Lit::Bool(*b),
             ast::Lit::CChar(c) => hlr::Lit::CChar(*c),
             ast::Lit::CString(_) => {
-                return Err(AstLoweringError {
-                    msg: "string literals are not supported in patterns".into(),
-                });
+                return Err(AstLoweringError::StringLiteralInPattern);
             }
         };
         Ok(self.hlr.pattern(hlr::PatternKind::Lit(lit)))
@@ -158,17 +157,13 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
         ctxt: &mut PatternLoweringCtxt,
     ) -> AstLoweringResult<hlr::Pattern<'ctxt>> {
         if ctxt.previously_bound.contains_key(name) {
-            return Err(AstLoweringError {
-                msg: format!("identifier `{name}` is bound more than once in the same pattern"),
-            });
+            return Err(AstLoweringError::IdentifierBoundMoreThanOnce { name: name.to_owned() });
         }
         let var_id = match &ctxt.bound_in_siblings {
             Some(bound_in_siblings) => match bound_in_siblings.get(name) {
                 Some(&id) => id,
                 None => {
-                    return Err(AstLoweringError {
-                        msg: format!("variable `{name}` is not bound in all alternatives"),
-                    });
+                    return Err(AstLoweringError::VariableNotBoundInAllAlternatives { name: name.to_owned() });
                 }
             },
             None => self.hlr.named_var_id(name),
@@ -205,9 +200,7 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
             let hlr_alt = self.lower_pattern_inner(alt, &mut alt_ctxt)?;
             for name in canonical.keys() {
                 if !alt_ctxt.previously_bound.contains_key(name) {
-                    return Err(AstLoweringError {
-                        msg: format!("variable `{name}` is not bound in all alternatives"),
-                    });
+                    return Err(AstLoweringError::VariableNotBoundInAllAlternatives { name: name.clone() });
                 }
             }
             lowered.push(hlr_alt);
@@ -215,9 +208,7 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
 
         for (name, &var_id) in &canonical {
             if outer_ctxt.previously_bound.contains_key(name) {
-                return Err(AstLoweringError {
-                    msg: format!("identifier `{name}` is bound more than once in the same pattern"),
-                });
+                return Err(AstLoweringError::IdentifierBoundMoreThanOnce { name: name.clone() });
             }
             outer_ctxt.previously_bound.insert(name.clone(), var_id);
         }
@@ -249,9 +240,7 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
                     .hlr
                     .pattern(hlr::PatternKind::Struct(hlr::StructPattern { constructor, fields })))
             }
-            _ => Err(AstLoweringError {
-                msg: format!("Expected struct or enum variant in pattern, found {:?}", constructor),
-            }),
+            _ => Err(AstLoweringError::ExpectedConstructor),
         }
     }
 
@@ -268,16 +257,18 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
         let mut missing: Vec<&str> = expected_fields.difference(&provided_fields).copied().collect();
         if !missing.is_empty() {
             missing.sort_unstable();
-            return Err(AstLoweringError {
-                msg: format!("Missing fields in `{}` pattern: {}", type_name, missing.join(", ")),
+            return Err(AstLoweringError::MissingFields {
+                type_name: type_name.to_owned(),
+                fields: missing.iter().map(|s| s.to_string()).collect(),
             });
         }
 
         let mut extra: Vec<&str> = provided_fields.difference(&expected_fields).copied().collect();
         if !extra.is_empty() {
             extra.sort_unstable();
-            return Err(AstLoweringError {
-                msg: format!("Unknown fields in `{}` pattern: {}", type_name, extra.join(", ")),
+            return Err(AstLoweringError::ExtraFields {
+                type_name: type_name.to_owned(),
+                fields: extra.iter().map(|s| s.to_string()).collect(),
             });
         }
 

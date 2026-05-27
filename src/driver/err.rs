@@ -25,7 +25,7 @@ pub fn format_driver_error<'ctxt>(err: DriverError<'ctxt>) -> String {
         DriverError::ContextBuild(msg) => format!("Compilation failed: {msg}"),
         DriverError::NoMainFunction => "Compilation failed: no 'main' function found".to_string(),
         DriverError::ImplCheck(e) => format!("Compilation failed: {}", format_impl_check_error(e)),
-        DriverError::AstLowering(e) => format!("Compilation failed: {}", e.msg),
+        DriverError::AstLowering(e) => format!("Compilation failed: {e}"),
         DriverError::Typeck { fn_name, error } => {
             format!("Type error in '{}': {}", fn_name, format_typeck_error(&error))
         }

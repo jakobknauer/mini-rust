@@ -9,26 +9,22 @@ impl<'a, 'ctxt> super::AstLowerer<'a, 'ctxt> {
         match ty_path.segments.as_slice() {
             [segment] => self.resolve_path_segment_to_struct(segment),
             [enum_seg, variant_seg] => self.resolve_path_segments_to_variant(enum_seg, variant_seg),
-            _ => Err(AstLoweringError {
-                msg: format!("Complex paths in struct literals are not supported yet: {:#?}", ty_path),
-            }),
+            _ => Err(AstLoweringError::UnexpectedComplexPath),
         }
     }
 
     fn resolve_path_segment_to_struct(&mut self, segment: &ast::PathSegment) -> AstLoweringResult<hlr::Val<'ctxt>> {
         if segment.is_self {
-            return Err(AstLoweringError {
-                msg: "Invalid use of 'Self' as struct literal constructor".to_string(),
-            });
+            return Err(AstLoweringError::UnexpectedSelf);
         }
 
-        let struct_ = self
-            .ctxt
-            .tys
-            .get_struct_by_name(&segment.ident)
-            .ok_or_else(|| AstLoweringError {
-                msg: format!("Unknown struct name in struct literal: {}", &segment.ident),
-            })?;
+        let struct_ =
+            self.ctxt
+                .tys
+                .get_struct_by_name(&segment.ident)
+                .ok_or_else(|| AstLoweringError::UnknownStruct {
+                    name: segment.ident.clone(),
+                })?;
 
         let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
@@ -41,35 +37,30 @@ impl<'a, 'ctxt> super::AstLowerer<'a, 'ctxt> {
         variant_seg: &ast::PathSegment,
     ) -> AstLoweringResult<hlr::Val<'ctxt>> {
         if enum_seg.is_self || variant_seg.is_self {
-            return Err(AstLoweringError {
-                msg: "Invalid use of 'Self' in enum variant path".to_string(),
-            });
+            return Err(AstLoweringError::UnexpectedSelf);
         }
 
         if variant_seg.args.is_some() {
-            return Err(AstLoweringError {
-                msg: "Generic arguments on enum variants are not supported yet".to_string(),
-            });
+            return Err(AstLoweringError::UnexpectedGenArgs);
         }
 
         let enum_ = self
             .ctxt
             .tys
             .get_enum_by_name(&enum_seg.ident)
-            .ok_or_else(|| AstLoweringError {
-                msg: format!("Unknown enum name in enum variant path: {}", &enum_seg.ident),
+            .ok_or_else(|| AstLoweringError::UnknownEnum {
+                name: enum_seg.ident.clone(),
             })?;
 
         let args = enum_seg.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
-        let (variant_index, _) = enum_
-            .resolve_variant_by_name(&variant_seg.ident)
-            .ok_or_else(|| AstLoweringError {
-                msg: format!(
-                    "Unknown variant '{}' for enum '{}' in enum variant path",
-                    variant_seg.ident, enum_.name
-                ),
-            })?;
+        let (variant_index, _) =
+            enum_
+                .resolve_variant_by_name(&variant_seg.ident)
+                .ok_or_else(|| AstLoweringError::UnknownVariant {
+                    enum_name: enum_.name.clone(),
+                    variant_name: variant_seg.ident.clone(),
+                })?;
 
         Ok(hlr::Val::Variant(enum_, variant_index, args))
     }
@@ -91,9 +82,13 @@ impl<'a, 'ctxt> super::AstLowerer<'a, 'ctxt> {
         }
 
         // Resolve to named type (struct/enum/primitive)
-        let named_ty = self.ctxt.tys.get_ty_by_name(ident).map_err(|_| AstLoweringError {
-            msg: format!("Unknown type name in type annotation: {}", ident),
-        })?;
+        let named_ty = self
+            .ctxt
+            .tys
+            .get_ty_by_name(ident)
+            .map_err(|_| AstLoweringError::UnknownType {
+                name: ident.to_string(),
+            })?;
 
         Ok(TyResolution::NamedTy(named_ty))
     }

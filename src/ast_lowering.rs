@@ -33,9 +33,69 @@ struct AstLowerer<'a, 'ctxt> {
 }
 
 pub type AstLoweringResult<T> = Result<T, AstLoweringError>;
+
 #[derive(Debug)]
-pub struct AstLoweringError {
-    pub msg: String,
+pub enum AstLoweringError {
+    VarargsNotSupported,
+    ImplTraitInArgPosition,
+    GenericAssocTypeNotSupported,
+    FloatLiteralInPattern,
+    StringLiteralInPattern,
+    UnexpectedComplexPath,
+    UnexpectedSelf,
+    ExpectedConstructor,
+    ExpectedFnInGenericPath,
+    UnexpectedGenArgs,
+    UnresolvedPath { path: String },
+    UnknownTrait { name: String },
+    UnknownType { name: String },
+    UnknownStruct { name: String },
+    UnknownEnum { name: String },
+    UnknownVariant { enum_name: String, variant_name: String },
+    MissingFields { type_name: String, fields: Vec<String> },
+    ExtraFields { type_name: String, fields: Vec<String> },
+    IdentifierBoundMoreThanOnce { name: String },
+    VariableNotBoundInAllAlternatives { name: String },
+}
+
+impl std::fmt::Display for AstLoweringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::VarargsNotSupported => write!(f, "varargs functions are not supported"),
+            Self::ImplTraitInArgPosition => write!(f, "impl Trait is only valid in return position"),
+            Self::GenericAssocTypeNotSupported => write!(f, "generic associated types are not supported"),
+            Self::FloatLiteralInPattern => write!(f, "float literals are not supported in patterns"),
+            Self::StringLiteralInPattern => write!(f, "string literals are not supported in patterns"),
+            Self::UnexpectedComplexPath => write!(f, "complex path not supported here"),
+            Self::UnexpectedSelf => write!(f, "invalid use of 'Self'"),
+            Self::ExpectedConstructor => write!(f, "expected struct or enum variant constructor"),
+            Self::ExpectedFnInGenericPath => write!(f, "only functions can be used in generic paths"),
+            Self::UnexpectedGenArgs => write!(f, "generic arguments not allowed here"),
+            Self::UnresolvedPath { path } => write!(f, "unresolvable path: {path}"),
+            Self::UnknownTrait { name } => write!(f, "unknown trait: '{name}'"),
+            Self::UnknownType { name } => write!(f, "unknown type: '{name}'"),
+            Self::UnknownStruct { name } => write!(f, "unknown struct: '{name}'"),
+            Self::UnknownEnum { name } => write!(f, "unknown enum: '{name}'"),
+            Self::UnknownVariant {
+                enum_name,
+                variant_name,
+            } => {
+                write!(f, "unknown variant '{variant_name}' for enum '{enum_name}'")
+            }
+            Self::MissingFields { type_name, fields } => {
+                write!(f, "missing fields in `{type_name}`: {}", fields.join(", "))
+            }
+            Self::ExtraFields { type_name, fields } => {
+                write!(f, "unknown fields in `{type_name}`: {}", fields.join(", "))
+            }
+            Self::IdentifierBoundMoreThanOnce { name } => {
+                write!(f, "identifier `{name}` is bound more than once in the same pattern")
+            }
+            Self::VariableNotBoundInAllAlternatives { name } => {
+                write!(f, "variable `{name}` is not bound in all alternatives")
+            }
+        }
+    }
 }
 
 impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
@@ -55,9 +115,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
     fn lower_function_body(mut self, block: ast::Block) -> AstLoweringResult<hlr::Fn<'ctxt>> {
         if self.fn_.var_args {
-            return Err(AstLoweringError {
-                msg: "Varargs functions are not supported in HLR".to_string(),
-            });
+            return Err(AstLoweringError::VarargsNotSupported);
         }
 
         self.scopes.push_back(Scope::default());
@@ -248,9 +306,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             ast::TyAnnotKind::Wildcard => hlr::TyAnnotDef::Infer,
             ast::TyAnnotKind::Never => hlr::TyAnnotDef::Never,
             ast::TyAnnotKind::ImplTrait(_) => {
-                return Err(AstLoweringError {
-                    msg: "impl Trait is only valid in return position".to_string(),
-                });
+                return Err(AstLoweringError::ImplTraitInArgPosition);
             }
         };
 
@@ -266,15 +322,11 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             }
             [parent, sub] => {
                 if sub.is_self {
-                    return Err(AstLoweringError {
-                        msg: "Invalid use of 'Self' in type annotation".to_string(),
-                    });
+                    return Err(AstLoweringError::UnexpectedSelf);
                 }
 
                 if sub.args.is_some() {
-                    return Err(AstLoweringError {
-                        msg: "Generic associated types are not supported".to_string(),
-                    });
+                    return Err(AstLoweringError::GenericAssocTypeNotSupported);
                 }
 
                 let base = self.lower_path_segment_to_ty_annot(parent)?;
@@ -284,9 +336,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                     name: sub.ident.clone(),
                 })
             }
-            _ => Err(AstLoweringError {
-                msg: format!("Complex path type annotations are not supported yet: {:#?}", path),
-            }),
+            _ => Err(AstLoweringError::UnexpectedComplexPath),
         }
     }
 
@@ -295,15 +345,11 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         qual_path: &ast::QualifiedPath,
     ) -> AstLoweringResult<hlr::TyAnnotDef<'ctxt>> {
         let [assoc_seg] = qual_path.path.segments.as_slice() else {
-            return Err(AstLoweringError {
-                msg: "Qualified path type annotations must have exactly one segment after '::'".to_string(),
-            });
+            return Err(AstLoweringError::UnexpectedComplexPath);
         };
 
         if assoc_seg.args.is_some() {
-            return Err(AstLoweringError {
-                msg: "Generic arguments on associated types in qualified paths are not supported".to_string(),
-            });
+            return Err(AstLoweringError::UnexpectedGenArgs);
         }
 
         let base = self.lower_ty_annot(qual_path.ty)?;
@@ -312,13 +358,11 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             .trait_
             .as_ref()
             .map(|trait_annot| {
-                let trait_ =
-                    self.ctxt
-                        .traits
-                        .resolve_trait_name(&trait_annot.name)
-                        .ok_or_else(|| AstLoweringError {
-                            msg: format!("Unknown trait name in qualified path: '{}'", trait_annot.name),
-                        })?;
+                let trait_ = self.ctxt.traits.resolve_trait_name(&trait_annot.name).ok_or_else(|| {
+                    AstLoweringError::UnknownTrait {
+                        name: trait_annot.name.clone(),
+                    }
+                })?;
                 let gen_args = trait_annot.args.map(|args| self.lower_ty_annots(args)).transpose()?;
                 Ok((trait_, gen_args))
             })
@@ -349,12 +393,9 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             (TyResolution::NamedTy(ctxt::Named::Struct(struct_)), args) => Ok(hlr::TyAnnotDef::Struct(struct_, args)),
             (TyResolution::NamedTy(ctxt::Named::Enum(enum_)), args) => Ok(hlr::TyAnnotDef::Enum(enum_, args)),
 
-            (TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_)) => Err(AstLoweringError {
-                msg: format!(
-                    "Type '{}' cannot have generic arguments in type annotation",
-                    segment.ident
-                ),
-            }),
+            (TyResolution::GenVar(..) | TyResolution::NamedTy(ctxt::Named::Ty(..)), Some(_)) => {
+                Err(AstLoweringError::UnexpectedGenArgs)
+            }
         }
     }
 
@@ -387,9 +428,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     fn lower_path(&mut self, path: &ast::Path) -> AstLoweringResult<hlr::Expr<'ctxt>> {
         let expr: hlr::ExprDef = match path.segments.as_slice() {
             [segment] if segment.is_self => {
-                return Err(AstLoweringError {
-                    msg: "Invalid use of 'Self' as value".to_string(),
-                });
+                return Err(AstLoweringError::UnexpectedSelf);
             }
             [segment] => {
                 // Try fieldless struct construction before erroring (e.g. `MyUnit`)
@@ -404,29 +443,25 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                     }
                 }
 
-                let val = self
-                    .resolve_ident_to_val_def(&segment.ident)
-                    .ok_or_else(|| AstLoweringError {
-                        msg: format!("Unresolvable path: {}", segment.ident),
-                    })?;
+                let val =
+                    self.resolve_ident_to_val_def(&segment.ident)
+                        .ok_or_else(|| AstLoweringError::UnresolvedPath {
+                            path: segment.ident.clone(),
+                        })?;
                 let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
 
                 match (val, args) {
                     (val, None) => hlr::ExprDef::Val(val),
                     (hlr::Val::Fn(fn_, _), args) => hlr::ExprDef::Val(hlr::Val::Fn(fn_, args)),
 
-                    (other_val, Some(_)) => {
-                        return Err(AstLoweringError {
-                            msg: format!("Only functions can be used in generic paths, found {:?}", other_val),
-                        });
+                    (_, Some(_)) => {
+                        return Err(AstLoweringError::ExpectedFnInGenericPath);
                     }
                 }
             }
             [ty_path, mthd] => {
                 if mthd.is_self {
-                    return Err(AstLoweringError {
-                        msg: "Invalid use of 'Self' as method name".to_string(),
-                    });
+                    return Err(AstLoweringError::UnexpectedSelf);
                 }
 
                 // Try to resolve as a fieldless enum variant first (e.g. `Option::None`)
@@ -449,9 +484,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 hlr::ExprDef::Val(hlr::Val::Mthd(ty, mthd.ident.clone(), args))
             }
             _ => {
-                return Err(AstLoweringError {
-                    msg: format!("Complex paths are not supported yet: {:#?}", path),
-                });
+                return Err(AstLoweringError::UnexpectedComplexPath);
             }
         };
 
@@ -469,8 +502,8 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 self.ctxt
                     .traits
                     .resolve_trait_name(&trait_annot.name)
-                    .ok_or_else(|| AstLoweringError {
-                        msg: format!("Unknown trait '{}'", trait_annot.name),
+                    .ok_or_else(|| AstLoweringError::UnknownTrait {
+                        name: trait_annot.name.clone(),
                     })
             })
             .transpose()?;
@@ -483,12 +516,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             .transpose()?;
 
         let [segment] = qualified_path.path.segments.as_slice() else {
-            return Err(AstLoweringError {
-                msg: format!(
-                    "Only simple qualified paths are supported, found: {:#?}",
-                    qualified_path.path
-                ),
-            });
+            return Err(AstLoweringError::UnexpectedComplexPath);
         };
 
         let args = segment.args.map(|args| self.lower_ty_annots(args)).transpose()?;
@@ -587,9 +615,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         let args = self.hlr.expr_slice(&args);
 
         if mthd.is_self {
-            return Err(AstLoweringError {
-                msg: "Invalid use of 'Self' as method name".to_string(),
-            });
+            return Err(AstLoweringError::UnexpectedSelf);
         }
 
         let gen_args = mthd.args.map(|args| self.lower_ty_annots(args)).transpose()?;
@@ -616,10 +642,8 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             hlr::Val::Variant(enum_, variant_idx, _) => {
                 (enum_.get_variant(*variant_idx).struct_.get_fields(), enum_.name.clone())
             }
-            other => {
-                return Err(AstLoweringError {
-                    msg: format!("Expected struct or enum variant in expression, found {:?}", other),
-                });
+            _ => {
+                return Err(AstLoweringError::ExpectedConstructor);
             }
         };
 
@@ -629,16 +653,18 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         let mut missing: Vec<&str> = expected_fields.difference(&provided_fields).copied().collect();
         if !missing.is_empty() {
             missing.sort_unstable();
-            return Err(AstLoweringError {
-                msg: format!("Missing fields in `{}` expression: {}", type_name, missing.join(", ")),
+            return Err(AstLoweringError::MissingFields {
+                type_name,
+                fields: missing.iter().map(|s| s.to_string()).collect(),
             });
         }
 
         let mut extra: Vec<&str> = provided_fields.difference(&expected_fields).copied().collect();
         if !extra.is_empty() {
             extra.sort_unstable();
-            return Err(AstLoweringError {
-                msg: format!("Unknown fields in `{}` expression: {}", type_name, extra.join(", ")),
+            return Err(AstLoweringError::ExtraFields {
+                type_name,
+                fields: extra.iter().map(|s| s.to_string()).collect(),
             });
         }
 
@@ -666,14 +692,10 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         let field_spec = match field {
             ast::FieldDescriptor::Named(name) => {
                 if name.is_self {
-                    return Err(AstLoweringError {
-                        msg: "Invalid use of 'Self' as field name".to_string(),
-                    });
+                    return Err(AstLoweringError::UnexpectedSelf);
                 }
                 if name.args.is_some() {
-                    return Err(AstLoweringError {
-                        msg: "Generic field names are not valid".to_string(),
-                    });
+                    return Err(AstLoweringError::UnexpectedGenArgs);
                 }
                 hlr::FieldSpec::Name(name.ident.clone())
             }
@@ -893,9 +915,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
     }
 
     fn lower_self_expr(&mut self) -> AstLoweringResult<hlr::Expr<'ctxt>> {
-        let self_var_id = self.self_var_id.ok_or_else(|| AstLoweringError {
-            msg: "Cannot use 'self' outside of a method".to_string(),
-        })?;
+        let self_var_id = self.self_var_id.ok_or(AstLoweringError::UnexpectedSelf)?;
         let expr = hlr::ExprDef::Val(hlr::Val::Var(self_var_id));
         Ok(self.hlr.expr(expr))
     }
