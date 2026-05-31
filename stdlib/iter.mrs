@@ -73,6 +73,13 @@ where
     {
         self.fold(init, |acc, item| acc + item)
     }
+
+    fn prod<P>(self, init: P) -> P
+    where
+        P: Mul<<I as Iterator>::Item, Output=P>
+    {
+        self.fold(init, |acc, item| acc * item)
+    }
 }
 
 struct Filter<I, P> {
