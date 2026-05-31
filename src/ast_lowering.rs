@@ -281,7 +281,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 return_ty,
                 body,
             } => self.lower_closure_expr(params, return_ty, body),
-            &Range { .. } => unimplemented!("range expressions not yet lowered"),
+            &Range { start, end } => self.lower_range_expr(start, end),
         }
     }
 
@@ -681,6 +681,30 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
 
         let expr = hlr::ExprDef::Struct { constructor, fields };
         Ok(self.hlr.expr(expr))
+    }
+
+    fn lower_range_expr(
+        &mut self,
+        start: ast::Expr<'ast>,
+        end: ast::Expr<'ast>,
+    ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
+        let range_struct = self.ctxt.language_items.range_struct.unwrap();
+        let start_expr = self.lower_expr(start)?;
+        let end_expr = self.lower_expr(end)?;
+        let fields = self.hlr.struct_expr_field_slice(vec![
+            hlr::StructExprField {
+                field_index: 0,
+                expr: start_expr,
+            },
+            hlr::StructExprField {
+                field_index: 1,
+                expr: end_expr,
+            },
+        ]);
+        Ok(self.hlr.expr(hlr::ExprDef::Struct {
+            constructor: hlr::Val::Struct(range_struct, None),
+            fields,
+        }))
     }
 
     fn lower_field_access_expr(

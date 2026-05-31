@@ -6,10 +6,8 @@ fn printf(format: *c_char, ...) -> i32;
 fn scanf(format: *c_char, ...) -> i32;
 
 fn fac(mut n: i32) -> i32 {
-    let range = Range { start: 1, end: n+1 };
-
     let mut result: i32 = 1;
-    for m in range {
+    for m in 1..n+1 {
         result = result * m;
     }
     result
