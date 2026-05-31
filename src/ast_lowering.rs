@@ -281,6 +281,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 return_ty,
                 body,
             } => self.lower_closure_expr(params, return_ty, body),
+            &Range { .. } => unimplemented!("range expressions not yet lowered"),
         }
     }
 

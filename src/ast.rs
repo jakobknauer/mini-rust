@@ -437,6 +437,11 @@ pub enum ExprKind<'ast> {
         return_ty: Option<TyAnnot<'ast>>,
         body: Block<'ast>,
     },
+    #[allow(dead_code)]
+    Range {
+        start: Expr<'ast>,
+        end: Expr<'ast>,
+    },
 }
 
 #[derive(Debug)]

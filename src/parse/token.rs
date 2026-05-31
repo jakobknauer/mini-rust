@@ -36,7 +36,8 @@ pub enum Token {
     Greater,            // >
     SmallerEqual,       // <=
     GreaterEqual,       // >=
-    Dots,               // ...
+    DotDot,             // ..
+    DotDotDot,          // ...
     Underscore,         // _
     Bang,               // !
 }

@@ -131,7 +131,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     fn parse_fn_params(&mut self, allow_receiver: bool) -> Result<(Vec<Param<'ast>>, bool), ParserErr> {
         let mut params = Vec::new();
         let mut first = true;
-        while !matches!(self.tokens.current(), Some(&Token::RParen | &Token::Dots)) {
+        while !matches!(self.tokens.current(), Some(&Token::RParen | &Token::DotDotDot)) {
             params.push(self.parse_fn_param(first && allow_receiver)?);
             first = false;
 
@@ -140,7 +140,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
         }
 
-        let var_args = self.tokens.advance_if(Token::Dots);
+        let var_args = self.tokens.advance_if(Token::DotDotDot);
         Ok((params, var_args))
     }
 
@@ -637,13 +637,23 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_assign_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
-        let target = self.parse_conversion_expr(allow_top_level_struct_expr)?;
+        let target = self.parse_range_expr(allow_top_level_struct_expr)?;
         if self.tokens.advance_if(Token::Equal) {
-            let value = self.parse_conversion_expr(allow_top_level_struct_expr)?;
+            let value = self.parse_range_expr(allow_top_level_struct_expr)?;
             let expr = self.builder.assign(target, value);
             Ok(expr)
         } else {
             Ok(target)
+        }
+    }
+
+    fn parse_range_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
+        let start = self.parse_conversion_expr(allow_top_level_struct_expr)?;
+        if self.tokens.advance_if(Token::DotDot) {
+            let end = self.parse_conversion_expr(allow_top_level_struct_expr)?;
+            Ok(self.builder.range(start, end))
+        } else {
+            Ok(start)
         }
     }
 
