@@ -1,0 +1,55 @@
+struct Range<T> {
+    start: T,
+    end: T,
+}
+
+struct RangeIter<T> {
+    current: T,
+    end: T,
+}
+
+impl IntoIterator for Range<i32> {
+    type Item = i32;
+    type IntoIter = RangeIter<i32>;
+
+    fn into_iter(self) -> RangeIter<i32> {
+        RangeIter { current: self.start, end: self.end }
+    }
+}
+
+impl Iterator for RangeIter<i32> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<i32> {
+        if self.current < self.end {
+            let item = self.current;
+            self.current = self.current + 1;
+            Option::Some { item }
+        } else {
+            Option::None
+        }
+    }
+}
+
+impl IntoIterator for Range<isize> {
+    type Item = isize;
+    type IntoIter = RangeIter<isize>;
+
+    fn into_iter(self) -> RangeIter<isize> {
+        RangeIter { current: self.start, end: self.end }
+    }
+}
+
+impl Iterator for RangeIter<isize> {
+    type Item = isize;
+
+    fn next(&mut self) -> Option<isize> {
+        if self.current < self.end {
+            let item = self.current;
+            self.current = self.current + 1isize;
+            Option::Some { item }
+        } else {
+            Option::None
+        }
+    }
+}

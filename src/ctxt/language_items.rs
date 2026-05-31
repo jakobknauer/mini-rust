@@ -1,4 +1,4 @@
-use crate::ctxt::{fns::Fn, traits::Trait};
+use crate::ctxt::{fns::Fn, traits::Trait, ty::Struct};
 
 #[derive(Default)]
 pub struct LanguageItems<'ctxt> {
@@ -19,6 +19,7 @@ pub struct LanguageItems<'ctxt> {
     pub eq_trait: Option<Trait<'ctxt>>,
     pub into_iterator_trait: Option<Trait<'ctxt>>,
     pub iterator_trait: Option<Trait<'ctxt>>,
+    pub range_struct: Option<Struct<'ctxt>>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
