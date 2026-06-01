@@ -194,7 +194,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             Some(ret) => self.resolve_ty_annot(ret)?,
             None => self.ctxt.tys.unit(),
         };
-        Ok(self.ctxt.tys.fn_(&param_tys, ret_ty, false))
+        Ok(self.ctxt.tys.fn_ptr(&param_tys, ret_ty, false))
     }
 
     fn resolve_tuple_ty_annot(&mut self, elems: hlr::TyAnnotSlice<'ctxt>) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {

@@ -83,14 +83,14 @@ impl<'ctxt> Ctxt<'ctxt> {
                 let gen_args: Vec<_> = gen_args.iter().map(|&ty| norm(ty)).collect();
                 self.tys.inst_enum(enum_, &gen_args).unwrap()
             }
-            &Fn {
+            &FnPtr {
                 param_tys,
                 return_ty,
                 var_args,
             } => {
                 let param_tys: Vec<_> = param_tys.iter().map(|&ty| norm(ty)).collect();
                 let return_ty = norm(return_ty);
-                self.tys.fn_(&param_tys, return_ty, var_args)
+                self.tys.fn_ptr(&param_tys, return_ty, var_args)
             }
             &Ref(ty) => self.tys.ref_(norm(ty)),
             &RefMut(ty) => self.tys.ref_mut(norm(ty)),

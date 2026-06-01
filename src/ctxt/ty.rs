@@ -35,7 +35,7 @@ pub enum TyDef<'ty> {
         enum_: Enum<'ty>,
         gen_args: TySlice<'ty>,
     },
-    Fn {
+    FnPtr {
         param_tys: TySlice<'ty>,
         return_ty: Ty<'ty>,
         var_args: bool,
@@ -392,7 +392,7 @@ impl std::fmt::Display for TyDef<'_> {
                     write!(f, ")")
                 }
             },
-            &Fn {
+            &FnPtr {
                 param_tys,
                 return_ty,
                 var_args,

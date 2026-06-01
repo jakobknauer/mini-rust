@@ -59,14 +59,14 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.ctxt.tys.inst_enum_from_ty_slice(enum_, gen_args).unwrap()
             }
 
-            Fn {
+            FnPtr {
                 param_tys,
                 return_ty,
                 var_args,
             } => {
                 let param_tys = self.normalize_slice(param_tys);
                 let return_ty = self.normalize(return_ty);
-                self.ctxt.tys.fn_(param_tys, return_ty, var_args)
+                self.ctxt.tys.fn_ptr(param_tys, return_ty, var_args)
             }
 
             Ref(inner) => {

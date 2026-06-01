@@ -77,12 +77,12 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
             }
 
             (
-                &ty::TyDef::Fn {
+                &ty::TyDef::FnPtr {
                     param_tys: param_tys_1,
                     return_ty: return_ty_1,
                     var_args: var_args_1,
                 },
-                &ty::TyDef::Fn {
+                &ty::TyDef::FnPtr {
                     param_tys: param_tys_2,
                     return_ty: return_ty_2,
                     var_args: var_args_2,

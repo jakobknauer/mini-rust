@@ -206,9 +206,9 @@ impl<'ty> TyReg<'ty> {
         Ok(enum_)
     }
 
-    pub fn fn_(&self, param_tys: &[Ty<'ty>], return_ty: Ty<'ty>, var_args: bool) -> Ty<'ty> {
+    pub fn fn_ptr(&self, param_tys: &[Ty<'ty>], return_ty: Ty<'ty>, var_args: bool) -> Ty<'ty> {
         let param_tys = self.ty_slice(param_tys);
-        let fn_ty = TyDef::Fn {
+        let fn_ty = TyDef::FnPtr {
             param_tys,
             var_args,
             return_ty,
@@ -359,14 +359,14 @@ impl<'ty> TyReg<'ty> {
                 let gen_args: Vec<_> = gen_args.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
                 self.inst_enum(enum_, &gen_args).unwrap()
             }
-            Fn {
+            FnPtr {
                 param_tys,
                 return_ty,
                 var_args,
             } => {
                 let param_tys: Vec<_> = param_tys.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
                 let return_ty = self.resolve_opaque_in_ty(return_ty);
-                self.fn_(&param_tys, return_ty, var_args)
+                self.fn_ptr(&param_tys, return_ty, var_args)
             }
             Closure {
                 ref name,
@@ -490,14 +490,14 @@ impl<'ty> TyReg<'ty> {
                 let gen_args = self.substitute_on_slice(gen_args, gen_vars, self_ty);
                 self.register_ty(TyDef::Opaque { opaque, gen_args })
             }
-            Fn {
+            FnPtr {
                 param_tys,
                 return_ty,
                 var_args,
             } => {
                 let param_tys = self.substitute_on_slice(param_tys, gen_vars, self_ty);
                 let return_ty = self.substitute(return_ty, gen_vars, self_ty);
-                self.fn_(param_tys, return_ty, var_args)
+                self.fn_ptr(param_tys, return_ty, var_args)
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);

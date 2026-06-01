@@ -147,7 +147,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             Struct { .. } => self.define_struct(ty),
             Enum { .. } => self.define_enum(ty),
             Tuple(..) => self.define_tuple_ty(ty),
-            Fn { .. } | Ref(..) | RefMut(..) | Ptr(..) => {
+            FnPtr { .. } | Ref(..) | RefMut(..) | Ptr(..) => {
                 self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum()
             }
             Closure { captures_ty, .. } => self.get_ty(captures_ty).unwrap(),

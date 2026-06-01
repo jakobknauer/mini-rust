@@ -203,29 +203,29 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
     }
 
-    pub(super) fn fn_ty_of_mthd_resolution(&mut self, resolution: &MthdResolution<'ctxt>) -> ty::Ty<'ctxt> {
+    pub(super) fn fn_ptr_ty_of_mthd_resolution(&mut self, resolution: &MthdResolution<'ctxt>) -> ty::Ty<'ctxt> {
         match resolution {
-            MthdResolution::Inherent(fn_inst) => self.fn_ty_of_inherent_resolution(*fn_inst),
-            MthdResolution::Trait(trait_mthd_inst) => self.fn_ty_of_trait_mthd_resolution(*trait_mthd_inst),
+            MthdResolution::Inherent(fn_inst) => self.fn_ptr_ty_of_inherent_resolution(*fn_inst),
+            MthdResolution::Trait(trait_mthd_inst) => self.fn_ptr_ty_of_trait_mthd_resolution(*trait_mthd_inst),
         }
     }
 
-    fn fn_ty_of_inherent_resolution(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
+    fn fn_ptr_ty_of_inherent_resolution(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
         let param_tys: Vec<_> = fn_inst.fn_.params.iter().map(|p| p.ty).collect();
         let return_ty = fn_inst.fn_.return_ty;
         let var_args = fn_inst.fn_.var_args;
         let _ = fn_inst.fn_;
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
+        let fn_ty = self.ctxt.tys.fn_ptr(&param_tys, return_ty, var_args);
         let subst = fn_inst.get_subst();
         self.ctxt.tys.substitute_gen_vars(fn_ty, &subst)
     }
 
-    fn fn_ty_of_trait_mthd_resolution(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
+    fn fn_ptr_ty_of_trait_mthd_resolution(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
         let param_tys: Vec<_> = inst.mthd.fn_.params.iter().map(|p| p.ty).collect();
         let fn_ty = self
             .ctxt
             .tys
-            .fn_(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
+            .fn_ptr(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
 
         let all_gen_var_subst = inst.get_subst();
 

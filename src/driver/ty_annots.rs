@@ -48,7 +48,7 @@ impl<'arena> Driver<'_, 'arena> {
                     None => Some(self.ctxt.tys.unit()),
                 }?;
 
-                Some(self.ctxt.tys.fn_(&param_tys, return_ty, false))
+                Some(self.ctxt.tys.fn_ptr(&param_tys, return_ty, false))
             }
             &Tuple(ty_annots) => {
                 let tys: Vec<ty::Ty<'arena>> = ty_annots

@@ -28,7 +28,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             &Ref(inner) | &RefMut(inner) | &Ptr(inner) => self.contains_inf_var(inner),
             &Struct { gen_args, .. } => self.slice_contains_inf_var(gen_args),
             &Enum { gen_args, .. } => self.slice_contains_inf_var(gen_args),
-            &Fn {
+            &FnPtr {
                 param_tys, return_ty, ..
             } => self.slice_contains_inf_var(param_tys) || self.contains_inf_var(return_ty),
             &Closure {

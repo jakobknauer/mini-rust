@@ -261,7 +261,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let param_tys: Vec<_> = fn_.params.iter().map(|param| param.ty).collect();
         self.add_constraint_obligations(fn_, &subst);
 
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, fn_.return_ty, fn_.var_args);
+        let fn_ty = self.ctxt.tys.fn_ptr(&param_tys, fn_.return_ty, fn_.var_args);
 
         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
         let empty = self.ctxt.tys.ty_slice(&[]);
@@ -283,7 +283,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let base_ty = self.resolve_ty_annot(base_ty)?;
         let found = self.resolve_mthd(base_ty, mthd_name, false)?;
         let resolution = self.instantiate_mthd(found, base_ty, mthd_name, gen_args)?;
-        let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
+        let fn_ty = self.fn_ptr_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
         Ok(fn_ty)
     }
@@ -327,7 +327,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         };
 
         let resolution = self.instantiate_mthd(found, base_ty, mthd_name, args)?;
-        let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
+        let fn_ty = self.fn_ptr_ty_of_mthd_resolution(&resolution);
         self.typing.expr_extra.insert(expr_id, ExprExtra::ValMthd(resolution));
         Ok(fn_ty)
     }
@@ -485,7 +485,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
         let (found, steps, base_ty) = self.resolve_mthd_with_deref(receiver_ty, mthd_name)?;
         let resolution = self.instantiate_mthd(found, base_ty, mthd_name, gen_args)?;
-        let fn_ty = self.fn_ty_of_mthd_resolution(&resolution);
+        let fn_ty = self.fn_ptr_ty_of_mthd_resolution(&resolution);
         self.typing
             .expr_extra
             .insert(expr_id, ExprExtra::MthdCall { resolution, steps });

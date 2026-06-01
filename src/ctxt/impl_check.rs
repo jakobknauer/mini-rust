@@ -165,7 +165,7 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         constraints: &[ty::Constraint<'ctxt>],
         ty: ty::Ty<'ctxt>,
     ) -> Option<(ty::TySlice<'ctxt>, ty::Ty<'ctxt>, bool)> {
-        if let &ty::TyDef::Fn {
+        if let &ty::TyDef::FnPtr {
             param_tys,
             return_ty,
             var_args,

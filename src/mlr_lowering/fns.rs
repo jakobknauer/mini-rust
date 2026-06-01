@@ -87,7 +87,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         Ok(iw_ty)
     }
 
-    fn get_fn_ty_of_loc(&mut self, op: mlr::Op<'ctxt>) -> MlrFnLoweringResult<FunctionType<'iw>> {
+    fn get_fn_ptr_ty_of_loc(&mut self, op: mlr::Op<'ctxt>) -> MlrFnLoweringResult<FunctionType<'iw>> {
         let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
@@ -433,7 +433,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             Ok(output)
         } else {
             let fn_ptr = self.build_op(callable)?.into_pointer_value();
-            let fn_ty = self.get_fn_ty_of_loc(callable)?;
+            let fn_ty = self.get_fn_ptr_ty_of_loc(callable)?;
 
             let args = args
                 .iter()

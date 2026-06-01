@@ -61,12 +61,12 @@ fn try_find_instantiation_internal<'ty>(
         (&Primitive(a), &Primitive(b)) => a == b,
 
         (
-            &Fn {
+            &FnPtr {
                 param_tys: params1,
                 return_ty: ret1,
                 var_args: var_args1,
             },
-            &Fn {
+            &FnPtr {
                 param_tys: params2,
                 return_ty: ret2,
                 var_args: var_args2,

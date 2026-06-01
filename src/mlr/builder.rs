@@ -126,13 +126,13 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
 
     pub fn insert_fn_inst_op(&mut self, fn_inst: fns::FnInst<'ctxt>) -> mlr::Op<'ctxt> {
         self.ctxt.fns.register_fn_call(self.fn_, fn_inst);
-        let ty = self.fn_ty_of_fn_inst(fn_inst);
+        let ty = self.fn_ptr_ty_of_fn_inst(fn_inst);
         self.mlr.insert_op(mlr::OpDef::Fn(fn_inst), ty)
     }
 
     pub fn insert_trait_mthd_op(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> mlr::Op<'ctxt> {
         self.ctxt.fns.register_trait_mthd_call(self.fn_, inst);
-        let ty = self.trait_mthd_fn_ty(inst);
+        let ty = self.fn_ptr_ty_of_trait_mthd(inst);
         self.mlr.insert_op(mlr::OpDef::TraitMthdCall(inst), ty)
     }
 
@@ -248,21 +248,21 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
         self.push_stmt(stmt);
     }
 
-    fn fn_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
+    fn fn_ptr_ty_of_fn_inst(&mut self, fn_inst: fns::FnInst<'ctxt>) -> ty::Ty<'ctxt> {
         let param_tys: Vec<_> = fn_inst.fn_.params.iter().map(|p| p.ty).collect();
         let return_ty = fn_inst.fn_.return_ty;
         let var_args = fn_inst.fn_.var_args;
-        let fn_ty = self.ctxt.tys.fn_(&param_tys, return_ty, var_args);
+        let fn_ty = self.ctxt.tys.fn_ptr(&param_tys, return_ty, var_args);
         let subst = fn_inst.get_subst();
         self.ctxt.tys.substitute(fn_ty, &subst, fn_inst.self_ty)
     }
 
-    fn trait_mthd_fn_ty(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
+    fn fn_ptr_ty_of_trait_mthd(&mut self, inst: fns::TraitMthdInst<'ctxt>) -> ty::Ty<'ctxt> {
         let param_tys: Vec<_> = inst.mthd.fn_.params.iter().map(|p| p.ty).collect();
         let fn_ty = self
             .ctxt
             .tys
-            .fn_(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
+            .fn_ptr(&param_tys, inst.mthd.fn_.return_ty, inst.mthd.fn_.var_args);
 
         let all_subst = inst.get_subst();
 
