@@ -281,7 +281,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 return_ty,
                 body,
             } => self.lower_closure_expr(params, return_ty, body),
-            &Range { start, end } => self.lower_range_expr(start, end),
+            &Range { start, end, inclusive } => self.lower_range_expr(start, end, inclusive),
         }
     }
 
@@ -687,8 +687,13 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
         &mut self,
         start: ast::Expr<'ast>,
         end: ast::Expr<'ast>,
+        inclusive: bool,
     ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
-        let range_struct = self.ctxt.language_items.range_struct.unwrap();
+        let range_struct = if inclusive {
+            self.ctxt.language_items.inclusive_range_struct.unwrap()
+        } else {
+            self.ctxt.language_items.range_struct.unwrap()
+        };
         let start_expr = self.lower_expr(start)?;
         let end_expr = self.lower_expr(end)?;
         let fields = self.hlr.struct_expr_field_slice(vec![

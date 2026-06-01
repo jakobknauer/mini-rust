@@ -52,7 +52,8 @@ const TWO_CHAR_TOKENS: &[(char, char, Token)] = &[
     ('.', '.', Token::DotDot),
 ];
 
-const THREE_CHAR_TOKENS: &[(char, char, char, Token)] = &[('.', '.', '.', Token::DotDotDot)];
+const THREE_CHAR_TOKENS: &[(char, char, char, Token)] =
+    &[('.', '.', '.', Token::DotDotDot), ('.', '.', '=', Token::DotDotEqual)];
 
 const KEYWORDS: &[(&str, Token)] = &[
     ("Fn", Token::Keyword(Keyword::FnTrait)),

@@ -20,6 +20,7 @@ pub struct LanguageItems<'ctxt> {
     pub into_iterator_trait: Option<Trait<'ctxt>>,
     pub iterator_trait: Option<Trait<'ctxt>>,
     pub range_struct: Option<Struct<'ctxt>>,
+    pub inclusive_range_struct: Option<Struct<'ctxt>>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

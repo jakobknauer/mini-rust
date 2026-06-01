@@ -1,3 +1,59 @@
+struct InclusiveRange<T> {
+    start: T,
+    end: T,
+}
+
+struct InclusiveRangeIter<T> {
+    current: T,
+    end: T,
+}
+
+impl IntoIterator for InclusiveRange<i32> {
+    type Item = i32;
+    type IntoIter = InclusiveRangeIter<i32>;
+
+    fn into_iter(self) -> InclusiveRangeIter<i32> {
+        InclusiveRangeIter { current: self.start, end: self.end }
+    }
+}
+
+impl Iterator for InclusiveRangeIter<i32> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<i32> {
+        if self.current <= self.end {
+            let item = self.current;
+            self.current = self.current + 1;
+            Option::Some { item }
+        } else {
+            Option::None
+        }
+    }
+}
+
+impl IntoIterator for InclusiveRange<isize> {
+    type Item = isize;
+    type IntoIter = InclusiveRangeIter<isize>;
+
+    fn into_iter(self) -> InclusiveRangeIter<isize> {
+        InclusiveRangeIter { current: self.start, end: self.end }
+    }
+}
+
+impl Iterator for InclusiveRangeIter<isize> {
+    type Item = isize;
+
+    fn next(&mut self) -> Option<isize> {
+        if self.current <= self.end {
+            let item = self.current;
+            self.current = self.current + 1isize;
+            Option::Some { item }
+        } else {
+            Option::None
+        }
+    }
+}
+
 struct Range<T> {
     start: T,
     end: T,

@@ -441,6 +441,7 @@ pub enum ExprKind<'ast> {
     Range {
         start: Expr<'ast>,
         end: Expr<'ast>,
+        inclusive: bool,
     },
 }
 

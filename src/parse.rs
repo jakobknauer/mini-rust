@@ -649,12 +649,19 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     fn parse_range_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {
         let start = self.parse_conversion_expr(allow_top_level_struct_expr)?;
-        if self.tokens.advance_if(Token::DotDot) {
-            let end = self.parse_conversion_expr(allow_top_level_struct_expr)?;
-            Ok(self.builder.range(start, end))
-        } else {
-            Ok(start)
-        }
+        let inclusive = match self.tokens.current() {
+            Some(Token::DotDotEqual) => {
+                self.tokens.advance();
+                true
+            }
+            Some(Token::DotDot) => {
+                self.tokens.advance();
+                false
+            }
+            _ => return Ok(start),
+        };
+        let end = self.parse_conversion_expr(allow_top_level_struct_expr)?;
+        Ok(self.builder.range(start, end, inclusive))
     }
 
     fn parse_conversion_expr(&mut self, allow_top_level_struct_expr: bool) -> Result<Expr<'ast>, ParserErr> {

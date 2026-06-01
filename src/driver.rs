@@ -334,6 +334,7 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         self.ctxt.language_items.into_iterator_trait = self.ctxt.traits.resolve_trait_name("IntoIterator");
         self.ctxt.language_items.iterator_trait = self.ctxt.traits.resolve_trait_name("Iterator");
         self.ctxt.language_items.range_struct = self.ctxt.tys.get_struct_by_name("Range");
+        self.ctxt.language_items.inclusive_range_struct = self.ctxt.tys.get_struct_by_name("InclusiveRange");
         Ok(())
     }
 

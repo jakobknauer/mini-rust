@@ -70,8 +70,8 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.expr(ExprKind::Assign { target, value })
     }
 
-    pub fn range(&self, start: Expr<'ast>, end: Expr<'ast>) -> Expr<'ast> {
-        self.ast.expr(ExprKind::Range { start, end })
+    pub fn range(&self, start: Expr<'ast>, end: Expr<'ast>, inclusive: bool) -> Expr<'ast> {
+        self.ast.expr(ExprKind::Range { start, end, inclusive })
     }
 
     pub fn call(&self, callee: Expr<'ast>, args: &[Expr<'ast>]) -> Expr<'ast> {
