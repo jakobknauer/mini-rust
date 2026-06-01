@@ -1,0 +1,55 @@
+trait Zero {
+    fn zero() -> Self;
+}
+
+trait One {
+    fn one() -> Self;
+}
+
+impl Zero for i8 {
+    fn zero() -> i8 { 0i8 }
+}
+
+impl One for i8 {
+    fn one() -> i8 { 1i8 }
+}
+
+impl Zero for i16 {
+    fn zero() -> i16 { 0i16 }
+}
+
+impl One for i16 {
+    fn one() -> i16 { 1i16 }
+}
+
+impl Zero for i32 {
+    fn zero() -> i32 { 0 }
+}
+
+impl One for i32 {
+    fn one() -> i32 { 1 }
+}
+
+impl Zero for i64 {
+    fn zero() -> i64 { 0i64 }
+}
+
+impl One for i64 {
+    fn one() -> i64 { 1i64 }
+}
+
+impl Zero for isize {
+    fn zero() -> isize { 0isize }
+}
+
+impl One for isize {
+    fn one() -> isize { 1isize }
+}
+
+impl Zero for f64 {
+    fn zero() -> f64 { 0.0 }
+}
+
+impl One for f64 {
+    fn one() -> f64 { 1.0 }
+}

@@ -1,12 +1,17 @@
 fn main() -> i32 {
-    fac(3)
+    let x: i32 = (1..5).into_iter().sum();
+    let y: i32 = (1..5).into_iter().prod();
+
+    printf("%d %d\n", x, y);
+
+    0
 }
 
 fn printf(format: *c_char, ...) -> i32;
 fn scanf(format: *c_char, ...) -> i32;
 
 fn fac(n: i32) -> i32 {
-    (1..n+1).into_iter().prod(1)
+    (1..n+1).into_iter().prod()
 }
 
 fn make_linear(a: i32, b: i32) -> impl Fn(i32) -> i32 {

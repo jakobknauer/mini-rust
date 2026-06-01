@@ -67,18 +67,20 @@ where
         Map { iter: self, f }
     }
 
-    fn sum<S>(self, init: S) -> S
+    fn sum<S>(self) -> S
     where
+        S: Zero,
         S: Add<<I as Iterator>::Item, Output=S>
     {
-        self.fold(init, |acc, item| acc + item)
+        self.fold(<S as Zero>::zero(), |acc, item| acc + item)
     }
 
-    fn prod<P>(self, init: P) -> P
+    fn prod<P>(self) -> P
     where
+        P: One,
         P: Mul<<I as Iterator>::Item, Output=P>
     {
-        self.fold(init, |acc, item| acc * item)
+        self.fold(<P as One>::one(), |acc, item| acc * item)
     }
 }
 
