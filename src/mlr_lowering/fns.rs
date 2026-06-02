@@ -227,6 +227,13 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     Ok(undef_of(iw_ty))
                 }
                 mlr::AsCastKind::PtrLike => self.build_op(op),
+                mlr::AsCastKind::FnInst => {
+                    let ty = self.substitute(op.1);
+                    let mr_ty::TyDef::FnInst(fn_inst) = *ty.0 else {
+                        return Err(MlrFnLoweringError);
+                    };
+                    self.build_global_function(fn_inst)
+                }
                 mlr::AsCastKind::Int => {
                     let src = self.build_op(op)?.into_int_value();
                     let tgt_ty = self
@@ -344,7 +351,19 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         use mlr::OpDef::*;
 
         match *op {
-            Fn(fn_inst) => self.build_global_function(fn_inst),
+            Fn(fn_inst) => {
+                let ty = self.substitute(op.1);
+                if matches!(*ty.0, mr_ty::TyDef::FnInst(_)) {
+                    Ok(self
+                        .parent
+                        .iw_ctxt
+                        .struct_type(&[], false)
+                        .get_undef()
+                        .as_basic_value_enum())
+                } else {
+                    self.build_global_function(fn_inst)
+                }
+            }
             TraitMthdCall(trait_mthd_inst) => self.build_trait_mthd_inst(trait_mthd_inst),
             Const(ref constant) => self.build_constant(constant, op.1),
             Copy(place) => {
@@ -429,6 +448,20 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             let call_site = self
                 .iw_builder
                 .build_indirect_call(fn_ty, fn_ptr, &args, "closure_call_site")?;
+            let output = call_site.try_as_basic_value().unwrap_basic();
+            Ok(output)
+        } else if let mr_ty::TyDef::FnInst(fn_inst) = *callable_ty.0 {
+            let fn_ptr = self.build_global_function(fn_inst)?.into_pointer_value();
+            let fn_ty = self.get_fn_ptr_ty_of_loc(callable)?;
+
+            let args = args
+                .iter()
+                .map(|&arg| self.build_op(arg).unwrap().into())
+                .collect::<Vec<_>>();
+
+            let call_site = self
+                .iw_builder
+                .build_indirect_call(fn_ty, fn_ptr, &args, "fn_inst_call")?;
             let output = call_site.try_as_basic_value().unwrap_basic();
             Ok(output)
         } else {

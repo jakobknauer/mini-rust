@@ -174,7 +174,6 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     fn normalize_expr_extra(&mut self, extra: ExprExtra<'ctxt>) -> ExprExtra<'ctxt> {
         match extra {
             ExprExtra::Closure { .. } => extra,
-            ExprExtra::ValFn(fn_inst) => ExprExtra::ValFn(self.normalize_fn_inst(fn_inst)),
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::BinaryOpMthd(resolution) => ExprExtra::BinaryOpMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::DerefMthd(resolution) => ExprExtra::DerefMthd(self.normalize_mthd_resolution(resolution)),

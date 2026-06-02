@@ -172,6 +172,9 @@ impl<'ctxt> super::Ctxt<'ctxt> {
         } = ty.0
         {
             Some((param_tys, return_ty, var_args))
+        } else if let &ty::TyDef::FnInst(fn_inst) = ty.0 {
+            let (param_tys, return_ty, var_args) = self.get_fn_inst_sig(fn_inst);
+            Some((param_tys, return_ty, var_args))
         } else if let Some((param_tys, return_ty)) = try_get_callable_constraint(constraints, ty) {
             Some((param_tys, return_ty, false))
         } else if let &ty::TyDef::Closure {

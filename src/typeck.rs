@@ -46,7 +46,6 @@ pub enum DerefStep<'ty> {
 }
 
 pub enum ExprExtra<'ty> {
-    ValFn(fns::FnInst<'ty>),
     ValMthd(MthdResolution<'ty>),
     BinaryPrim(language_items::BinaryPrimOp),
     BinaryOpMthd(MthdResolution<'ty>),
@@ -177,7 +176,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             hlr::ExprDef::Deref(inner) => self.check_deref(expr.1, *inner),
             hlr::ExprDef::AddrOf(expr) => self.check_addr_of(*expr),
             hlr::ExprDef::AddrOfMut(expr) => self.check_addr_of_mut(*expr),
-            hlr::ExprDef::As { expr: inner, ty } => self.check_as(expr.1, *inner, ty),
+            hlr::ExprDef::As { expr: inner, ty } => self.check_as(expr.1, *inner, ty, hint),
             hlr::ExprDef::Closure {
                 params,
                 return_ty,
@@ -235,7 +234,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     .copied()
                     .ok_or(TypeckError::VarTypeNotSet { var_id, expr_id })
             }
-            &hlr::Val::Fn(fn_, args) => self.check_fn(expr_id, fn_, args),
+            &hlr::Val::Fn(fn_, args) => self.check_fn(fn_, args),
             hlr::Val::Struct(..) => unreachable!("raw struct values are not supported"),
             hlr::Val::Variant(..) => unreachable!("raw variant values are not supported"),
             hlr::Val::Mthd(base_ty, mthd_name, gen_args) => self.check_mthd(expr_id, base_ty, mthd_name, *gen_args),
@@ -244,7 +243,6 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
     fn check_fn(
         &mut self,
-        expr_id: hlr::ExprId,
         fn_: fns::Fn<'ctxt>,
         args: Option<hlr::TyAnnotSlice<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
@@ -258,19 +256,15 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             })?;
 
         let subst = ty::GenVarSubst::new(&fn_.gen_params, &gen_args).unwrap();
-        let param_tys: Vec<_> = fn_.params.iter().map(|param| param.ty).collect();
         self.add_constraint_obligations(fn_, &subst);
-
-        let fn_ty = self.ctxt.tys.fn_ptr(&param_tys, fn_.return_ty, fn_.var_args);
 
         let gen_args = self.ctxt.tys.ty_slice(&gen_args);
         let empty = self.ctxt.tys.ty_slice(&[]);
         let fn_inst = FnInst::new(fn_, gen_args, empty)
             .unwrap()
             .with_self_ty(fn_.associated_ty);
-        self.typing.expr_extra.insert(expr_id, ExprExtra::ValFn(fn_inst));
 
-        Ok(self.ctxt.tys.substitute_gen_vars(fn_ty, &subst))
+        Ok(self.ctxt.tys.fn_inst(fn_inst))
     }
 
     fn check_mthd(
@@ -653,11 +647,15 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         as_expr_id: hlr::ExprId,
         expr: hlr::Expr<'ctxt>,
         target_ty: hlr::TyAnnot<'ctxt>,
+        hint: Option<ty::Ty<'ctxt>>,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let expr_ty = self.check_expr(expr, None)?;
         let expr_ty = self.normalize(expr_ty);
 
         let target_ty = self.resolve_ty_annot(target_ty)?;
+        if let Some(hint) = hint {
+            self.unify(target_ty, hint);
+        }
         let target_ty = self.normalize(target_ty);
 
         let kind = match (expr_ty.0, target_ty.0) {
@@ -672,6 +670,27 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 if self.unify(op_base_ty, target_base_ty) =>
             {
                 hlr::AsCastKind::PtrLike
+            }
+            (
+                &ty::TyDef::FnInst(fn_inst),
+                &ty::TyDef::FnPtr {
+                    param_tys: target_params,
+                    return_ty: target_ret,
+                    var_args: target_var_args,
+                },
+            ) => {
+                let (param_tys, return_ty, var_args) = self.ctxt.get_fn_inst_sig(fn_inst);
+                if var_args != target_var_args
+                    || param_tys.len() != target_params.len()
+                    || !param_tys.iter().zip(target_params).all(|(&t1, &t2)| self.unify(t1, t2))
+                    || !self.unify(return_ty, target_ret)
+                {
+                    return Err(TypeckError::InvalidAsConversion {
+                        op_ty: expr_ty,
+                        target_ty,
+                    });
+                }
+                hlr::AsCastKind::FnInst
             }
             _ => {
                 return Err(TypeckError::InvalidAsConversion {

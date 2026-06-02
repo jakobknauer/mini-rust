@@ -1,5 +1,10 @@
 fn main() -> i32 {
-    fac(4)
+    call_int_to_int_fn_via_ptr(fac as _);
+    apply(fac, 4)
+}
+
+fn call_int_to_int_fn_via_ptr(f: fn(i32) -> i32) -> i32 {
+    (f)(4)
 }
 
 fn printf(format: *c_char, ...) -> i32;

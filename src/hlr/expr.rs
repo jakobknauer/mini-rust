@@ -182,6 +182,7 @@ pub enum AsCastKind {
     Never,
     PtrLike,
     Int,
+    FnInst,
 }
 
 #[derive(Clone, Copy, Debug)]

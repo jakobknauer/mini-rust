@@ -195,9 +195,9 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 self.builder.insert_loc_place(loc).into()
             }
             hlr::Val::Fn(..) => {
-                let fn_inst = match self.typing.expr_extra[&expr_id] {
-                    ExprExtra::ValFn(fi) => fi,
-                    _ => panic!("expected ValFn extra"),
+                let expr_ty = self.typing.expr_types[&expr_id];
+                let ty::TyDef::FnInst(fn_inst) = *expr_ty.0 else {
+                    panic!("expected FnInst type for Val::Fn");
                 };
                 self.builder.insert_fn_inst_op(fn_inst).into()
             }
@@ -554,6 +554,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             hlr::AsCastKind::Never => mlr::AsCastKind::Never,
             hlr::AsCastKind::PtrLike => mlr::AsCastKind::PtrLike,
             hlr::AsCastKind::Int => mlr::AsCastKind::Int,
+            hlr::AsCastKind::FnInst => mlr::AsCastKind::FnInst,
         };
         self.builder.insert_as_val(op, target_ty, kind).into()
     }
