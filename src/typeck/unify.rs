@@ -172,6 +172,23 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
                     && gen_args1.iter().zip(gen_args2).all(|(t1, t2)| self.unify(*t1, *t2))
             }
 
+            (&ty::TyDef::FnInst(fi1), &ty::TyDef::FnInst(fi2)) => {
+                fi1.fn_ == fi2.fn_
+                    && fi1.self_ty == fi2.self_ty
+                    && fi1.gen_args.len() == fi2.gen_args.len()
+                    && fi1
+                        .gen_args
+                        .iter()
+                        .zip(fi2.gen_args)
+                        .all(|(t1, t2)| self.unify(*t1, *t2))
+                    && fi1.env_gen_args.len() == fi2.env_gen_args.len()
+                    && fi1
+                        .env_gen_args
+                        .iter()
+                        .zip(fi2.env_gen_args)
+                        .all(|(t1, t2)| self.unify(*t1, *t2))
+            }
+
             _ => false,
         }
     }

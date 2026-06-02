@@ -122,6 +122,22 @@ fn try_find_instantiation_internal<'ty>(
         }
 
         (Closure { .. }, Closure { .. }) => target == generic,
+        // FnInst can never appear in an impl header, so this arm is unreachable in practice.
+        (&FnInst(fi1), &FnInst(fi2)) => {
+            fi1.fn_ == fi2.fn_
+                && fi1.gen_args.len() == fi2.gen_args.len()
+                && fi1
+                    .gen_args
+                    .iter()
+                    .zip(fi2.gen_args)
+                    .all(|(&t1, &t2)| try_find_instantiation_internal(t1, t2, instantiation))
+                && fi1.env_gen_args.len() == fi2.env_gen_args.len()
+                && fi1
+                    .env_gen_args
+                    .iter()
+                    .zip(fi2.env_gen_args)
+                    .all(|(&t1, &t2)| try_find_instantiation_internal(t1, t2, instantiation))
+        }
 
         (&Tuple(items1), &Tuple(items2)) => {
             items1.len() == items2.len()

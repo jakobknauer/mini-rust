@@ -2,6 +2,7 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::ctxt::{
+    fns,
     traits::{self, Trait},
     ty::*,
 };
@@ -206,6 +207,10 @@ impl<'ty> TyReg<'ty> {
         Ok(enum_)
     }
 
+    pub fn fn_inst(&self, fn_inst: fns::FnInst<'ty>) -> Ty<'ty> {
+        self.register_ty(TyDef::FnInst(fn_inst))
+    }
+
     pub fn fn_ptr(&self, param_tys: &[Ty<'ty>], return_ty: Ty<'ty>, var_args: bool) -> Ty<'ty> {
         let param_tys = self.ty_slice(param_tys);
         let fn_ty = TyDef::FnPtr {
@@ -368,6 +373,23 @@ impl<'ty> TyReg<'ty> {
                 let return_ty = self.resolve_opaque_in_ty(return_ty);
                 self.fn_ptr(&param_tys, return_ty, var_args)
             }
+            FnInst(fn_inst) => {
+                let gen_args: Vec<_> = fn_inst.gen_args.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
+                let env_gen_args: Vec<_> = fn_inst
+                    .env_gen_args
+                    .iter()
+                    .map(|&t| self.resolve_opaque_in_ty(t))
+                    .collect();
+                let gen_args = self.ty_slice(&gen_args);
+                let env_gen_args = self.ty_slice(&env_gen_args);
+                let self_ty = fn_inst.self_ty.map(|t| self.resolve_opaque_in_ty(t));
+                self.fn_inst(
+                    fn_inst
+                        .with_gen_args(gen_args, env_gen_args)
+                        .unwrap()
+                        .with_self_ty(self_ty),
+                )
+            }
             Closure {
                 ref name,
                 captures_ty,
@@ -498,6 +520,17 @@ impl<'ty> TyReg<'ty> {
                 let param_tys = self.substitute_on_slice(param_tys, gen_vars, self_ty);
                 let return_ty = self.substitute(return_ty, gen_vars, self_ty);
                 self.fn_ptr(param_tys, return_ty, var_args)
+            }
+            FnInst(fn_inst) => {
+                let new_gen_args = self.substitute_on_slice(fn_inst.gen_args, gen_vars, self_ty);
+                let new_env_gen_args = self.substitute_on_slice(fn_inst.env_gen_args, gen_vars, self_ty);
+                let new_self_ty = fn_inst.self_ty.map(|t| self.substitute(t, gen_vars, self_ty));
+                self.fn_inst(
+                    fn_inst
+                        .with_gen_args(new_gen_args, new_env_gen_args)
+                        .unwrap()
+                        .with_self_ty(new_self_ty),
+                )
             }
             Ref(inner_ty) => {
                 let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);

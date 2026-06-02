@@ -98,6 +98,19 @@ impl<'ctxt> Ctxt<'ctxt> {
             GenVar(_) => ty,
             TraitSelf(_) => ty,
             Closure { .. } => ty,
+            &FnInst(fn_inst) => {
+                let gen_args: Vec<_> = fn_inst.gen_args.iter().map(|&ty| norm(ty)).collect();
+                let env_gen_args: Vec<_> = fn_inst.env_gen_args.iter().map(|&ty| norm(ty)).collect();
+                let gen_args = self.tys.ty_slice(&gen_args);
+                let env_gen_args = self.tys.ty_slice(&env_gen_args);
+                let self_ty = fn_inst.self_ty.map(norm);
+                self.tys.fn_inst(
+                    fn_inst
+                        .with_gen_args(gen_args, env_gen_args)
+                        .unwrap()
+                        .with_self_ty(self_ty),
+                )
+            }
             &AssocTy {
                 base_ty,
                 trait_inst,

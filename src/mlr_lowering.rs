@@ -170,6 +170,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                 let instantiated = self.mr_ctxt.tys.substitute_gen_vars(resolved, &subst);
                 self.get_ty(instantiated).unwrap()
             }
+            FnInst(_) => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             Never => self.iw_ctxt.i8_type().as_any_type_enum(),
             InfVar(_) => unreachable!(),
         };

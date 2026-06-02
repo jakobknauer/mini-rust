@@ -40,6 +40,7 @@ pub enum TyDef<'ty> {
         return_ty: Ty<'ty>,
         var_args: bool,
     },
+    FnInst(fns::FnInst<'ty>),
     Ref(Ty<'ty>),
     RefMut(Ty<'ty>),
     Ptr(Ty<'ty>),
@@ -412,6 +413,7 @@ impl std::fmt::Display for TyDef<'_> {
                 }
                 write!(f, ") -> {}", return_ty)
             }
+            FnInst(fn_inst) => write!(f, "{}", fn_inst),
             &Ref(ty) => write!(f, "&{}", ty),
             &RefMut(ty) => write!(f, "&mut {}", ty),
             &Ptr(ty) => write!(f, "*{}", ty),

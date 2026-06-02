@@ -31,6 +31,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             &FnPtr {
                 param_tys, return_ty, ..
             } => self.slice_contains_inf_var(param_tys) || self.contains_inf_var(return_ty),
+            &FnInst(fn_inst) => {
+                self.slice_contains_inf_var(fn_inst.gen_args)
+                    || self.slice_contains_inf_var(fn_inst.env_gen_args)
+                    || fn_inst.self_ty.is_some_and(|t| self.contains_inf_var(t))
+            }
             &Closure {
                 captures_ty,
                 param_tys,

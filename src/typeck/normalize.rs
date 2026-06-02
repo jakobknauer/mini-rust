@@ -69,6 +69,18 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.ctxt.tys.fn_ptr(param_tys, return_ty, var_args)
             }
 
+            FnInst(fn_inst) => {
+                let new_gen_args = self.normalize_slice(fn_inst.gen_args);
+                let new_env_gen_args = self.normalize_slice(fn_inst.env_gen_args);
+                let new_self_ty = fn_inst.self_ty.map(|t| self.normalize(t));
+                self.ctxt.tys.fn_inst(
+                    fn_inst
+                        .with_gen_args(new_gen_args, new_env_gen_args)
+                        .unwrap()
+                        .with_self_ty(new_self_ty),
+                )
+            }
+
             Ref(inner) => {
                 let inner = self.normalize(inner);
                 self.ctxt.tys.ref_(inner)
