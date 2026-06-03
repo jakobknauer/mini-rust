@@ -11,9 +11,9 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         right: hlr::Expr<'ctxt>,
         operator: hlr::BinaryOperator,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
-        let left_ty = self.check_expr(left, None)?;
+        let left_ty = self.check_expr(left, None, false)?;
         let left_ty = self.normalize(left_ty);
-        let right_ty = self.check_expr(right, None)?;
+        let right_ty = self.check_expr(right, None, false)?;
         let right_ty = self.normalize(right_ty);
 
         if let Some(result) = self.try_check_short_circuit_op(left_ty, right_ty, operator) {

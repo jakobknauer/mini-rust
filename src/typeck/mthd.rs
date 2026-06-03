@@ -26,22 +26,17 @@ pub(super) enum FoundMthd<'ty> {
 }
 
 impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
-    fn build_deref_chain(&mut self, receiver_ty: ty::Ty<'ctxt>) -> (Vec<ty::Ty<'ctxt>>, Vec<DerefStep<'ctxt>>) {
-        let mut levels = vec![receiver_ty];
-        let mut steps = vec![];
-        while let Some((next, step)) = self.try_deref_step(*levels.last().unwrap()) {
-            levels.push(next);
-            steps.push(step);
-        }
-        (levels, steps)
-    }
-
     pub(super) fn resolve_mthd_with_deref(
         &mut self,
         receiver_ty: ty::Ty<'ctxt>,
         mthd_name: &str,
     ) -> TypeckResult<'ctxt, (FoundMthd<'ctxt>, Vec<DerefStep<'ctxt>>, ty::Ty<'ctxt>)> {
-        let (levels, mut steps) = self.build_deref_chain(receiver_ty);
+        let mut levels = vec![receiver_ty];
+        let mut steps = vec![];
+        for (step, ty) in self.deref_chain(receiver_ty) {
+            levels.push(ty);
+            steps.push(step);
+        }
 
         // Pass 1: inherent methods across all deref levels.
         for (i, &ty) in levels.iter().enumerate() {

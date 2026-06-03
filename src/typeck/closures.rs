@@ -216,7 +216,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         }
 
         self.return_ty_stack.push(return_ty);
-        let body_ty = self.check_expr(body, Some(return_ty));
+        let body_ty = self.check_expr(body, Some(return_ty), true);
         self.return_ty_stack.pop();
         let body_ty = body_ty?;
 

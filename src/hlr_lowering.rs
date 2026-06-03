@@ -9,7 +9,7 @@ use crate::{
     ctxt::{self, fns, ty},
     hlr,
     mlr::{self, builder::MlrBuilder},
-    typeck::{DerefStep, ExprExtra, HlrTyping, MthdResolution},
+    typeck::{Coercion, DerefStep, ExprExtra, HlrTyping, MthdResolution},
 };
 
 #[derive(Clone, Copy)]
@@ -125,7 +125,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         let (expr_def, expr_id) = (expr.0, expr.1);
 
         use hlr::ExprDef::*;
-        match expr_def {
+        let result = match expr_def {
             Lit(lit) => self.lower_lit(lit),
             Val(val) => self.lower_val(val, expr_id),
             BinaryOp { left, right, operator } => self.lower_binary_op(expr_id, *left, *right, *operator),
@@ -146,6 +146,21 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             Match { scrutinee, arms } => self.lower_match(expr_id, *scrutinee, arms),
             Block { stmts, trailing } => self.lower_block(stmts, *trailing),
             QualifiedMthd { .. } => self.lower_qualified_mthd(expr_id),
+        };
+
+        self.apply_coercion(expr_id, result)
+    }
+
+    fn apply_coercion(&mut self, expr_id: hlr::ExprId, lowered: LoweredExpr<'ctxt>) -> LoweredExpr<'ctxt> {
+        let Some(coercion) = self.typing.coercions.get(&expr_id).cloned() else {
+            return lowered;
+        };
+        match coercion {
+            Coercion::Deref(steps) => {
+                let place = lowered.into_place(&mut self.builder);
+                let derefed = self.apply_deref_steps(place, &steps);
+                self.builder.copy_val(derefed).into()
+            }
         }
     }
 
@@ -459,8 +474,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.copy_val(enum_place)
     }
 
-    fn lower_deref_chain_to_place(&mut self, expr: hlr::Expr<'ctxt>, steps: &[DerefStep<'ctxt>]) -> mlr::Place<'ctxt> {
-        steps.iter().fold(self.lower_to_place(expr), |place, step| match step {
+    fn apply_deref_steps(&mut self, place: mlr::Place<'ctxt>, steps: &[DerefStep<'ctxt>]) -> mlr::Place<'ctxt> {
+        steps.iter().fold(place, |place, step| match step {
             DerefStep::Builtin => {
                 let op = self.builder.insert_copy_op(place);
                 self.builder.insert_deref_place(op)
@@ -474,6 +489,11 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 self.builder.insert_deref_place(call_op)
             }
         })
+    }
+
+    fn lower_deref_chain_to_place(&mut self, expr: hlr::Expr<'ctxt>, steps: &[DerefStep<'ctxt>]) -> mlr::Place<'ctxt> {
+        let place = self.lower_to_place(expr);
+        self.apply_deref_steps(place, steps)
     }
 
     fn lower_field_access(&mut self, expr_id: hlr::ExprId, base: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
