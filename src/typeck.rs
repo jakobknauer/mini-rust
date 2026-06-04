@@ -190,10 +190,10 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 return_ty,
                 body,
             } => self.check_closure(expr.1, params, *return_ty, *body, hint),
-            hlr::ExprDef::If { cond, then, else_ } => self.check_if(*cond, *then, *else_, hint),
+            hlr::ExprDef::If { cond, then, else_ } => self.check_if(*cond, *then, *else_, hint, coerce),
             hlr::ExprDef::Loop { body } => self.check_loop(*body),
-            hlr::ExprDef::Match { scrutinee, arms } => self.check_match(*scrutinee, arms, hint),
-            hlr::ExprDef::Block { stmts, trailing } => self.check_block(stmts, *trailing, hint),
+            hlr::ExprDef::Match { scrutinee, arms } => self.check_match(*scrutinee, arms, hint, coerce),
+            hlr::ExprDef::Block { stmts, trailing } => self.check_block(stmts, *trailing, hint, coerce),
             hlr::ExprDef::QualifiedMthd {
                 ty,
                 trait_,
@@ -759,6 +759,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         then: hlr::Expr<'ctxt>,
         else_: Option<hlr::Expr<'ctxt>>,
         hint: Option<ty::Ty<'ctxt>>,
+        coerce: bool,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let cond_ty = self.check_expr(cond, None, false)?;
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
@@ -767,13 +768,10 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             return Err(TypeckError::IfConditionNotBoolean);
         }
 
-        let then_ty = self.check_expr(then, hint, false)?;
-        if let Some(hint) = hint {
-            self.unify(then_ty, hint);
-        }
+        let then_ty = self.check_expr(then, hint, coerce)?;
         let else_hint = Some(self.normalize(then_ty));
         let else_ty = else_
-            .map(|expr| self.check_expr(expr, else_hint, false))
+            .map(|expr| self.check_expr(expr, else_hint, coerce))
             .transpose()?
             .unwrap_or(self.ctxt.tys.unit());
 
@@ -793,17 +791,20 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         &mut self,
         scrutinee: hlr::Expr<'ctxt>,
         arms: &[hlr::MatchArm<'ctxt>],
-        mut hint: Option<ty::Ty<'ctxt>>,
+        hint: Option<ty::Ty<'ctxt>>,
+        coerce: bool,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let scrutinee_ty = self.check_expr(scrutinee, None, false)?;
         let scrutinee_ty = self.normalize(scrutinee_ty);
 
+        let mut result_ty: Option<ty::Ty<'ctxt>> = None;
+
         for arm in arms {
             self.check_pattern(arm.pattern, scrutinee_ty, MatchBinding::Direct)?;
 
-            let arm_ty = self.check_expr(arm.body, hint, false)?;
+            let arm_ty = self.check_expr(arm.body, hint, coerce)?;
 
-            if let Some(ty) = hint {
+            if let Some(ty) = result_ty {
                 if !self.unify(arm_ty, ty) {
                     return Err(TypeckError::MatchArmTypeMismatch {
                         expected: ty,
@@ -811,7 +812,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     });
                 }
             } else {
-                hint = Some(arm_ty);
+                result_ty = Some(arm_ty);
             }
         }
 
@@ -820,7 +821,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             return Err(TypeckError::NonExhaustiveMatch { scrutinee_ty });
         }
 
-        Ok(hint.unwrap()) // arms must be non-empty, so result_ty is guaranteed to be Some
+        Ok(result_ty.unwrap()) // arms must be non-empty, so result_ty is guaranteed to be Some
     }
 
     fn check_block(
@@ -828,11 +829,12 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         stmts: hlr::StmtSlice<'ctxt>,
         trailing: hlr::Expr<'ctxt>,
         hint: Option<ty::Ty<'ctxt>>,
+        coerce: bool,
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         for stmt in stmts {
             self.check_stmt(stmt)?;
         }
-        self.check_expr(trailing, hint, false)
+        self.check_expr(trailing, hint, coerce)
     }
 
     fn check_let_stmt(
