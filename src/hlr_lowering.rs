@@ -575,7 +575,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             hlr::AsCastKind::Identity => mlr::AsCastKind::Identity,
             hlr::AsCastKind::PtrLike => mlr::AsCastKind::PtrLike,
             hlr::AsCastKind::Int => mlr::AsCastKind::Int,
-            hlr::AsCastKind::FnInst => mlr::AsCastKind::FnInst,
+            hlr::AsCastKind::FnInstToFnPtr => mlr::AsCastKind::FnInstToFnPtr,
         };
         self.builder.insert_as_val(op, target_ty, kind).into()
     }

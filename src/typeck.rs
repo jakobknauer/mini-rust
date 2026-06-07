@@ -740,7 +740,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                         target_ty,
                     });
                 }
-                hlr::AsCastKind::FnInst
+                hlr::AsCastKind::FnInstToFnPtr
             }
             _ => {
                 return Err(TypeckError::InvalidAsConversion {

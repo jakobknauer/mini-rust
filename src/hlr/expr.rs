@@ -183,7 +183,7 @@ pub enum AsCastKind {
     Identity,
     PtrLike,
     Int,
-    FnInst,
+    FnInstToFnPtr,
 }
 
 #[derive(Clone, Copy, Debug)]

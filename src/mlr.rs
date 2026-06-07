@@ -102,7 +102,7 @@ pub enum AsCastKind {
     Identity,
     PtrLike,
     Int,
-    FnInst,
+    FnInstToFnPtr,
 }
 
 #[derive(Debug)]
