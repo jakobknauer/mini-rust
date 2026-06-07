@@ -708,6 +708,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         let target_ty = self.normalize(target_ty);
 
         let kind = match (expr_ty.0, target_ty.0) {
+            _ if expr_ty == target_ty => hlr::AsCastKind::Identity,
             (ty::TyDef::Never, _) => hlr::AsCastKind::Never,
             (ty::TyDef::Primitive(ty::Primitive::SignedInt(_)), ty::TyDef::Primitive(ty::Primitive::SignedInt(_))) => {
                 hlr::AsCastKind::Int

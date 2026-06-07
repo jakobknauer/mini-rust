@@ -226,7 +226,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                         .ok_or(MlrFnLoweringError)?;
                     Ok(undef_of(iw_ty))
                 }
-                mlr::AsCastKind::PtrLike => self.build_op(op),
+                mlr::AsCastKind::Identity | mlr::AsCastKind::PtrLike => self.build_op(op),
                 mlr::AsCastKind::FnInst => {
                     let ty = self.substitute(op.1);
                     let mr_ty::TyDef::FnInst(fn_inst) = *ty.0 else {

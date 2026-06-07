@@ -99,6 +99,7 @@ pub enum StmtDef<'mlr> {
 #[derive(Debug, Clone, Copy)]
 pub enum AsCastKind {
     Never,
+    Identity,
     PtrLike,
     Int,
     FnInst,

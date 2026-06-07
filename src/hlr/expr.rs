@@ -180,6 +180,7 @@ pub struct PatternField<'hlr> {
 #[derive(Clone, Copy, Debug)]
 pub enum AsCastKind {
     Never,
+    Identity,
     PtrLike,
     Int,
     FnInst,

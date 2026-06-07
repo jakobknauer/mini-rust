@@ -1,7 +1,7 @@
 fn main() -> i32 {
-    let x = 4;
-    let y = &x;
-    fac(y)
+    let p = Point::new(1, 2);
+    let q = p as Point;
+    q.x
 }
 
 fn printf(format: *c_char, ...) -> i32;

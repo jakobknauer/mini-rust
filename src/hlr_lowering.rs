@@ -572,6 +572,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         };
         let kind = match hlr_kind {
             hlr::AsCastKind::Never => mlr::AsCastKind::Never,
+            hlr::AsCastKind::Identity => mlr::AsCastKind::Identity,
             hlr::AsCastKind::PtrLike => mlr::AsCastKind::PtrLike,
             hlr::AsCastKind::Int => mlr::AsCastKind::Int,
             hlr::AsCastKind::FnInst => mlr::AsCastKind::FnInst,
