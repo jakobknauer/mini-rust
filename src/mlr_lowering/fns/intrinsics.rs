@@ -63,35 +63,36 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 .const_int(0, false)
                 .as_basic_value_enum()),
 
-            AddF64 | SubF64 | MulF64 | DivF64 | RemF64 | EqF64 | NeF64 | LtF64 | GtF64 | LeF64 | GeF64 => {
+            AddFloat | SubFloat | MulFloat | DivFloat | RemFloat | EqFloat | NeFloat | LtFloat | GtFloat | LeFloat
+            | GeFloat => {
                 let (lhs, rhs) = self.build_float_pair(lhs, rhs)?;
                 Ok(match op {
-                    AddF64 => self.iw_builder.build_float_add(lhs, rhs, "add")?.as_basic_value_enum(),
-                    SubF64 => self.iw_builder.build_float_sub(lhs, rhs, "sub")?.as_basic_value_enum(),
-                    MulF64 => self.iw_builder.build_float_mul(lhs, rhs, "mul")?.as_basic_value_enum(),
-                    DivF64 => self.iw_builder.build_float_div(lhs, rhs, "div")?.as_basic_value_enum(),
-                    RemF64 => self.iw_builder.build_float_rem(lhs, rhs, "rem")?.as_basic_value_enum(),
-                    EqF64 => self
+                    AddFloat => self.iw_builder.build_float_add(lhs, rhs, "add")?.as_basic_value_enum(),
+                    SubFloat => self.iw_builder.build_float_sub(lhs, rhs, "sub")?.as_basic_value_enum(),
+                    MulFloat => self.iw_builder.build_float_mul(lhs, rhs, "mul")?.as_basic_value_enum(),
+                    DivFloat => self.iw_builder.build_float_div(lhs, rhs, "div")?.as_basic_value_enum(),
+                    RemFloat => self.iw_builder.build_float_rem(lhs, rhs, "rem")?.as_basic_value_enum(),
+                    EqFloat => self
                         .iw_builder
                         .build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq")?
                         .as_basic_value_enum(),
-                    NeF64 => self
+                    NeFloat => self
                         .iw_builder
                         .build_float_compare(FloatPredicate::UNE, lhs, rhs, "ne")?
                         .as_basic_value_enum(),
-                    LtF64 => self
+                    LtFloat => self
                         .iw_builder
                         .build_float_compare(FloatPredicate::OLT, lhs, rhs, "lt")?
                         .as_basic_value_enum(),
-                    GtF64 => self
+                    GtFloat => self
                         .iw_builder
                         .build_float_compare(FloatPredicate::OGT, lhs, rhs, "gt")?
                         .as_basic_value_enum(),
-                    LeF64 => self
+                    LeFloat => self
                         .iw_builder
                         .build_float_compare(FloatPredicate::OLE, lhs, rhs, "le")?
                         .as_basic_value_enum(),
-                    GeF64 => self
+                    GeFloat => self
                         .iw_builder
                         .build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge")?
                         .as_basic_value_enum(),
@@ -132,7 +133,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         use language_items::UnaryPrimOp::*;
         match op {
-            NegF64 => {
+            NegFloat => {
                 let operand = self.build_op(operand)?.into_float_value();
                 Ok(self.iw_builder.build_float_neg(operand, "neg")?.as_basic_value_enum())
             }

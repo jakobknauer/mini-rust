@@ -248,7 +248,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let ty = match lit {
             hlr::Lit::Int(_, w) => self.ctxt.tys.primitive(ty::Primitive::SignedInt(*w)),
-            hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float64),
+            hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float(ty::FloatWidth::F64)),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
             hlr::Lit::CChar(_) => self.ctxt.tys.primitive(ty::Primitive::CChar),
             hlr::Lit::CString(_) => {
@@ -370,7 +370,6 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     ) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let operand_ty = self.check_expr(operand, None, false)?;
 
-        let f64_ty = self.ctxt.tys.primitive(ty::Primitive::Float64);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
 
         use hlr::UnaryOperator::*;
@@ -380,7 +379,9 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             Negative if matches!(operand_ty.0, ty::TyDef::Primitive(ty::Primitive::SignedInt(_))) => {
                 Some((NegInt, operand_ty))
             }
-            Negative if operand_ty == f64_ty => Some((NegF64, f64_ty)),
+            Negative if matches!(operand_ty.0, ty::TyDef::Primitive(ty::Primitive::Float(_))) => {
+                Some((NegFloat, operand_ty))
+            }
             Not if operand_ty == bool_ty => Some((NotBool, bool_ty)),
             _ => None,
         };

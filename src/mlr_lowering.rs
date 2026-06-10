@@ -139,7 +139,12 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                         }
                     }
                 }
-                Float64 => self.iw_ctxt.f64_type().as_any_type_enum(),
+                Float(w) => {
+                    use mr_tys::FloatWidth::*;
+                    match w {
+                        F64 => self.iw_ctxt.f64_type().as_any_type_enum(),
+                    }
+                }
                 Boolean => self.iw_ctxt.bool_type().as_any_type_enum(),
                 CVoid => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 CChar => self.iw_ctxt.i8_type().as_any_type_enum(),

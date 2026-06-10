@@ -183,7 +183,11 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 (mlr::Const::Int(*n), ty)
             }
             hlr::Lit::Float(f) => {
-                let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Float64);
+                let ty = self
+                    .builder
+                    .ctxt
+                    .tys
+                    .primitive(ty::Primitive::Float(ty::FloatWidth::F64));
                 (mlr::Const::Float(*f), ty)
             }
             hlr::Lit::Bool(b) => {

@@ -57,7 +57,6 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         use hlr::BinaryOperator::*;
         use language_items::BinaryPrimOp::*;
 
-        let f64_ty = self.ctxt.tys.primitive(ty::Primitive::Float64);
         let bool_ty = self.ctxt.tys.primitive(ty::Primitive::Boolean);
         let unit_ty = self.ctxt.tys.unit();
         let c_char_ty = self.ctxt.tys.primitive(ty::Primitive::CChar);
@@ -69,30 +68,38 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             ) if lw == rw => Some(left_ty),
             _ => None,
         };
+        let float_ty = match (left_ty.0, right_ty.0) {
+            (ty::TyDef::Primitive(ty::Primitive::Float(lw)), ty::TyDef::Primitive(ty::Primitive::Float(rw)))
+                if lw == rw =>
+            {
+                Some(left_ty)
+            }
+            _ => None,
+        };
         let sint = sint_ty.is_some();
-        let f64 = left_ty == f64_ty && right_ty == f64_ty;
+        let float = float_ty.is_some();
         let bool = left_ty == bool_ty && right_ty == bool_ty;
         let unit = left_ty == unit_ty && right_ty == unit_ty;
         let c_char = left_ty == c_char_ty && right_ty == c_char_ty;
 
         match operator {
             Add if sint => Some((AddInt, sint_ty.unwrap())),
-            Add if f64 => Some((AddF64, f64_ty)),
+            Add if float => Some((AddFloat, float_ty.unwrap())),
             Subtract if sint => Some((SubInt, sint_ty.unwrap())),
-            Subtract if f64 => Some((SubF64, f64_ty)),
+            Subtract if float => Some((SubFloat, float_ty.unwrap())),
             Multiply if sint => Some((MulInt, sint_ty.unwrap())),
-            Multiply if f64 => Some((MulF64, f64_ty)),
+            Multiply if float => Some((MulFloat, float_ty.unwrap())),
             Divide if sint => Some((DivInt, sint_ty.unwrap())),
-            Divide if f64 => Some((DivF64, f64_ty)),
+            Divide if float => Some((DivFloat, float_ty.unwrap())),
             Remainder if sint => Some((RemInt, sint_ty.unwrap())),
-            Remainder if f64 => Some((RemF64, f64_ty)),
+            Remainder if float => Some((RemFloat, float_ty.unwrap())),
             Equal if sint => Some((EqInt, bool_ty)),
-            Equal if f64 => Some((EqF64, bool_ty)),
+            Equal if float => Some((EqFloat, bool_ty)),
             Equal if bool => Some((EqBool, bool_ty)),
             Equal if unit => Some((EqUnit, bool_ty)),
             Equal if c_char => Some((EqCChar, bool_ty)),
             NotEqual if sint => Some((NeInt, bool_ty)),
-            NotEqual if f64 => Some((NeF64, bool_ty)),
+            NotEqual if float => Some((NeFloat, bool_ty)),
             NotEqual if bool => Some((NeBool, bool_ty)),
             NotEqual if unit => Some((NeUnit, bool_ty)),
             NotEqual if c_char => Some((NeCChar, bool_ty)),
@@ -103,13 +110,13 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             BitAnd if sint => Some((BitAndInt, sint_ty.unwrap())),
             BitXor if sint => Some((BitXorInt, sint_ty.unwrap())),
             LessThan if sint => Some((LtInt, bool_ty)),
-            LessThan if f64 => Some((LtF64, bool_ty)),
+            LessThan if float => Some((LtFloat, bool_ty)),
             GreaterThan if sint => Some((GtInt, bool_ty)),
-            GreaterThan if f64 => Some((GtF64, bool_ty)),
+            GreaterThan if float => Some((GtFloat, bool_ty)),
             LessThanOrEqual if sint => Some((LeInt, bool_ty)),
-            LessThanOrEqual if f64 => Some((LeF64, bool_ty)),
+            LessThanOrEqual if float => Some((LeFloat, bool_ty)),
             GreaterThanOrEqual if sint => Some((GeInt, bool_ty)),
-            GreaterThanOrEqual if f64 => Some((GeF64, bool_ty)),
+            GreaterThanOrEqual if float => Some((GeFloat, bool_ty)),
             _ => None,
         }
     }

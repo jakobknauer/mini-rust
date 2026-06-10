@@ -330,7 +330,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 iw_ty.const_int(i as u64, false).as_basic_value_enum()
             }
             &Float(f) => {
-                let float_ty = self.parent.iw_ctxt.f64_type();
+                let float_ty = self.parent.get_ty(ty).unwrap().into_float_type();
                 float_ty.const_float(f).as_basic_value_enum()
             }
             &Bool(b) => {

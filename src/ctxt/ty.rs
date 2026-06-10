@@ -94,9 +94,22 @@ impl std::fmt::Display for IntWidth {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum FloatWidth {
+    F64,
+}
+
+impl std::fmt::Display for FloatWidth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FloatWidth::F64 => write!(f, "f64"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Primitive {
     SignedInt(IntWidth),
-    Float64,
+    Float(FloatWidth),
     Boolean,
     CVoid,
     CChar,
@@ -374,7 +387,7 @@ impl std::fmt::Display for TyDef<'_> {
         match self {
             &Primitive(p) => match p {
                 SignedInt(w) => write!(f, "{}", w),
-                Float64 => write!(f, "f64"),
+                Float(w) => write!(f, "{}", w),
                 Boolean => write!(f, "bool"),
                 CVoid => write!(f, "c_void"),
                 CChar => write!(f, "c_char"),

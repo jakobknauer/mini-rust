@@ -213,7 +213,7 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             UnaryPrim { op, operand } => {
                 use language_items::UnaryPrimOp::*;
                 let op_str = match op {
-                    NegInt | NegF64 => "-",
+                    NegInt | NegFloat => "-",
                     NotBool => "!",
                 };
                 write!(self.writer, "{op_str}")?;
@@ -222,20 +222,20 @@ impl<'a, 'mlr, W: Write> MlrPrinter<'a, 'mlr, W> {
             BinaryPrim { op, lhs, rhs } => {
                 use language_items::BinaryPrimOp::*;
                 let op_str = match op {
-                    AddInt | AddF64 => "+",
-                    SubInt | SubF64 => "-",
-                    MulInt | MulF64 => "*",
-                    DivInt | DivF64 => "/",
-                    RemInt | RemF64 => "%",
-                    EqInt | EqBool | EqCChar | EqUnit | EqF64 => "==",
-                    NeInt | NeBool | NeCChar | NeUnit | NeF64 => "!=",
+                    AddInt | AddFloat => "+",
+                    SubInt | SubFloat => "-",
+                    MulInt | MulFloat => "*",
+                    DivInt | DivFloat => "/",
+                    RemInt | RemFloat => "%",
+                    EqInt | EqBool | EqCChar | EqUnit | EqFloat => "==",
+                    NeInt | NeBool | NeCChar | NeUnit | NeFloat => "!=",
                     BitOrBool | BitOrInt => "|",
                     BitAndBool | BitAndInt => "&",
                     BitXorBool | BitXorInt => "^",
-                    LtInt | LtF64 => "<",
-                    GtInt | GtF64 => ">",
-                    LeInt | LeF64 => "<=",
-                    GeInt | GeF64 => ">=",
+                    LtInt | LtFloat => "<",
+                    GtInt | GtFloat => ">",
+                    LeInt | LeFloat => "<=",
+                    GeInt | GeFloat => ">=",
                 };
                 self.print_op(lhs)?;
                 write!(self.writer, " {op_str} ")?;
