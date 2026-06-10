@@ -248,7 +248,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
     fn check_lit(&mut self, lit: &hlr::Lit) -> TypeckResult<'ctxt, ty::Ty<'ctxt>> {
         let ty = match lit {
             hlr::Lit::Int(_, w) => self.ctxt.tys.primitive(ty::Primitive::SignedInt(*w)),
-            hlr::Lit::Float(_) => self.ctxt.tys.primitive(ty::Primitive::Float(ty::FloatWidth::F64)),
+            hlr::Lit::Float(_, w) => self.ctxt.tys.primitive(ty::Primitive::Float(*w)),
             hlr::Lit::Bool(_) => self.ctxt.tys.primitive(ty::Primitive::Boolean),
             hlr::Lit::CChar(_) => self.ctxt.tys.primitive(ty::Primitive::CChar),
             hlr::Lit::CString(_) => {
@@ -713,6 +713,9 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             (ty::TyDef::Never, _) => hlr::AsCastKind::Never,
             (ty::TyDef::Primitive(ty::Primitive::SignedInt(_)), ty::TyDef::Primitive(ty::Primitive::SignedInt(_))) => {
                 hlr::AsCastKind::Int
+            }
+            (ty::TyDef::Primitive(ty::Primitive::Float(_)), ty::TyDef::Primitive(ty::Primitive::Float(_))) => {
+                hlr::AsCastKind::Float
             }
             (ty::TyDef::Ptr(_), ty::TyDef::Ptr(_)) => hlr::AsCastKind::PtrLike,
             (&ty::TyDef::Ref(op_base_ty), &ty::TyDef::Ptr(target_base_ty))

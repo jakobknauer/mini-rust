@@ -246,6 +246,18 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                         .build_int_cast_sign_flag(src, tgt_ty, true, "cast")?
                         .as_basic_value_enum())
                 }
+                mlr::AsCastKind::Float => {
+                    let src = self.build_op(op)?.into_float_value();
+                    let tgt_ty = self
+                        .parent
+                        .get_ty_as_basic_type_enum(target_ty)
+                        .ok_or(MlrFnLoweringError)?
+                        .into_float_type();
+                    Ok(self
+                        .iw_builder
+                        .build_float_cast(src, tgt_ty, "cast")?
+                        .as_basic_value_enum())
+                }
             },
             BinaryPrim { op, lhs, rhs } => self.build_binary_prim(op, lhs, rhs),
             UnaryPrim { op, operand } => self.build_unary_prim(op, operand),

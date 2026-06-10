@@ -194,7 +194,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
         use ty::Primitive::*;
         let lit_ty = self.ctxt.tys.primitive(match lit {
             hlr::Lit::Int(_, w) => SignedInt(*w),
-            hlr::Lit::Float(_) => unreachable!("float literals not supported in patterns"),
+            hlr::Lit::Float(_, _) => unreachable!("float literals not supported in patterns"),
             hlr::Lit::Bool(_) => Boolean,
             hlr::Lit::CChar(_) => CChar,
             hlr::Lit::CString(_) => unreachable!("CString not supported in patterns"),

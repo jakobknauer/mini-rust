@@ -3,7 +3,7 @@ pub enum Token {
     Keyword(Keyword),
     Identifier(String),
     NumLiteral(String, Option<String>),
-    FloatLiteral(String, String),
+    FloatLiteral(String, String, Option<String>),
     BoolLiteral(bool),
     CCharLiteral(u8),
     CStringLiteral(Vec<u8>),

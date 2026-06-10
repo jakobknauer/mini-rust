@@ -102,6 +102,7 @@ pub enum AsCastKind {
     Identity,
     PtrLike,
     Int,
+    Float,
     FnInstToFnPtr,
 }
 

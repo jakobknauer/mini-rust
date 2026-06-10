@@ -113,7 +113,7 @@ pub enum Val<'hlr> {
 #[derive(Debug)]
 pub enum Lit {
     Int(i64, ty::IntWidth),
-    Float(f64),
+    Float(f64, ty::FloatWidth),
     Bool(bool),
     CChar(u8),
     CString(Vec<u8>),
@@ -183,6 +183,7 @@ pub enum AsCastKind {
     Identity,
     PtrLike,
     Int,
+    Float,
     FnInstToFnPtr,
 }
 

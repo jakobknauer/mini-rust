@@ -116,6 +116,7 @@ impl<'ty> TyReg<'ty> {
         self.register_named_ty("i32", TyDef::Primitive(Primitive::SignedInt(IntWidth::I32)))?;
         self.register_named_ty("i64", TyDef::Primitive(Primitive::SignedInt(IntWidth::I64)))?;
         self.register_named_ty("isize", TyDef::Primitive(Primitive::SignedInt(IntWidth::ISize)))?;
+        self.register_named_ty("f32", TyDef::Primitive(Primitive::Float(FloatWidth::F32)))?;
         self.register_named_ty("f64", TyDef::Primitive(Primitive::Float(FloatWidth::F64)))?;
         self.register_named_ty("bool", TyDef::Primitive(Primitive::Boolean))?;
         self.register_named_ty("c_void", TyDef::Primitive(Primitive::CVoid))?;

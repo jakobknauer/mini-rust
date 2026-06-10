@@ -25,6 +25,10 @@ impl Eq<isize> for isize {
     fn eq(&self, other: &isize) -> bool { *self == *other }
 }
 
+impl Eq<f32> for f32 {
+    fn eq(&self, other: &f32) -> bool { *self == *other }
+}
+
 impl Eq<f64> for f64 {
     fn eq(&self, other: &f64) -> bool { *self == *other }
 }

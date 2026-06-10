@@ -416,7 +416,12 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 i,
                 suffix.map(ast::IntSuffix::into_int_width).unwrap_or(ty::IntWidth::I32),
             ),
-            &Float(f) => hlr::Lit::Float(f),
+            &Float(f, suffix) => hlr::Lit::Float(
+                f,
+                suffix
+                    .map(ast::FloatSuffix::into_float_width)
+                    .unwrap_or(ty::FloatWidth::F64),
+            ),
             &Bool(b) => hlr::Lit::Bool(b),
             &CChar(c) => hlr::Lit::CChar(c),
             CString(items) => hlr::Lit::CString(items.clone()),

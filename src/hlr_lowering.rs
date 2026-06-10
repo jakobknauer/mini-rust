@@ -182,12 +182,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let ty = self.builder.ctxt.tys.primitive(ty::Primitive::SignedInt(*w));
                 (mlr::Const::Int(*n), ty)
             }
-            hlr::Lit::Float(f) => {
-                let ty = self
-                    .builder
-                    .ctxt
-                    .tys
-                    .primitive(ty::Primitive::Float(ty::FloatWidth::F64));
+            hlr::Lit::Float(f, w) => {
+                let ty = self.builder.ctxt.tys.primitive(ty::Primitive::Float(*w));
                 (mlr::Const::Float(*f), ty)
             }
             hlr::Lit::Bool(b) => {
@@ -579,6 +575,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             hlr::AsCastKind::Identity => mlr::AsCastKind::Identity,
             hlr::AsCastKind::PtrLike => mlr::AsCastKind::PtrLike,
             hlr::AsCastKind::Int => mlr::AsCastKind::Int,
+            hlr::AsCastKind::Float => mlr::AsCastKind::Float,
             hlr::AsCastKind::FnInstToFnPtr => mlr::AsCastKind::FnInstToFnPtr,
         };
         self.builder.insert_as_val(op, target_ty, kind).into()

@@ -142,6 +142,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                 Float(w) => {
                     use mr_tys::FloatWidth::*;
                     match w {
+                        F32 => self.iw_ctxt.f32_type().as_any_type_enum(),
                         F64 => self.iw_ctxt.f64_type().as_any_type_enum(),
                     }
                 }

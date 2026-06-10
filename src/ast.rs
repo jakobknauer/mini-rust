@@ -490,10 +490,34 @@ impl IntSuffix {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum FloatSuffix {
+    F32,
+    F64,
+}
+
+impl FloatSuffix {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "f32" => Some(FloatSuffix::F32),
+            "f64" => Some(FloatSuffix::F64),
+            _ => None,
+        }
+    }
+
+    pub fn into_float_width(self) -> crate::ctxt::ty::FloatWidth {
+        use crate::ctxt::ty::FloatWidth;
+        match self {
+            FloatSuffix::F32 => FloatWidth::F32,
+            FloatSuffix::F64 => FloatWidth::F64,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Lit {
     Int(i64, Option<IntSuffix>),
-    Float(f64),
+    Float(f64, Option<FloatSuffix>),
     Bool(bool),
     CChar(u8),
     CString(Vec<u8>),

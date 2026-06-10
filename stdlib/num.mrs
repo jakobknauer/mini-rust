@@ -46,6 +46,14 @@ impl One for isize {
     fn one() -> isize { 1isize }
 }
 
+impl Zero for f32 {
+    fn zero() -> f32 { 0.0f32 }
+}
+
+impl One for f32 {
+    fn one() -> f32 { 1.0f32 }
+}
+
 impl Zero for f64 {
     fn zero() -> f64 { 0.0 }
 }

@@ -95,12 +95,14 @@ impl std::fmt::Display for IntWidth {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FloatWidth {
+    F32,
     F64,
 }
 
 impl std::fmt::Display for FloatWidth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            FloatWidth::F32 => write!(f, "f32"),
             FloatWidth::F64 => write!(f, "f64"),
         }
     }

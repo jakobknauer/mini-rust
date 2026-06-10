@@ -822,11 +822,12 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 self.tokens.advance();
                 Ok(self.builder.lit(Lit::Int(value, suffix)))
             }
-            Token::FloatLiteral(int_part, frac_part) => {
+            Token::FloatLiteral(int_part, frac_part, suffix) => {
                 let combined = format!("{int_part}.{frac_part}");
                 let value: f64 = combined.parse().map_err(|_| ParserErr::InvalidLiteral)?;
+                let suffix = suffix.as_deref().and_then(FloatSuffix::from_str);
                 self.tokens.advance();
-                Ok(self.builder.lit(Lit::Float(value)))
+                Ok(self.builder.lit(Lit::Float(value, suffix)))
             }
             Token::BoolLiteral(b) => {
                 let value = *b;

@@ -552,7 +552,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
     fn print_lit(&mut self, lit: &hlr::Lit) -> Result<(), std::io::Error> {
         match lit {
             hlr::Lit::Int(i, _) => write!(self.writer, "{}", i),
-            hlr::Lit::Float(f) => write!(self.writer, "{}", f),
+            hlr::Lit::Float(f, _) => write!(self.writer, "{}", f),
             hlr::Lit::Bool(b) => write!(self.writer, "{}", b),
             hlr::Lit::CChar(c) => {
                 let s = super::reinsert_escape_sequences(&(*c as char).to_string());

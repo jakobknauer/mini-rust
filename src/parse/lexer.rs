@@ -163,12 +163,28 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
             }
             let frac_part: String = self.input[frac_start..self.position].iter().collect();
-            return Some(Token::FloatLiteral(integer_part, frac_part));
+            let suffix = self.try_consume_float_suffix().map(|s| s.to_string());
+            return Some(Token::FloatLiteral(integer_part, frac_part, suffix));
         }
 
         let number_str: String = self.input[start..self.position].iter().collect();
         let suffix = self.try_consume_int_suffix().map(|s| s.to_string());
         Some(Token::NumLiteral(number_str, suffix))
+    }
+
+    fn try_consume_float_suffix(&mut self) -> Option<&'static str> {
+        const SUFFIXES: &[(&str, &[char])] = &[("f64", &['f', '6', '4']), ("f32", &['f', '3', '2'])];
+        for &(name, chars) in SUFFIXES {
+            let end = self.position + chars.len();
+            if self.input.get(self.position..end) == Some(chars) {
+                let after = self.input.get(end).copied();
+                if !after.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                    self.position = end;
+                    return Some(name);
+                }
+            }
+        }
+        None
     }
 
     fn try_consume_int_suffix(&mut self) -> Option<&'static str> {

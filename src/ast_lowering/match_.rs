@@ -125,7 +125,7 @@ impl<'a, 'ctxt, 'ast> super::AstLowerer<'a, 'ctxt> {
                 *i,
                 suffix.map(ast::IntSuffix::into_int_width).unwrap_or(ty::IntWidth::I32),
             ),
-            ast::Lit::Float(_) => {
+            ast::Lit::Float(_, _) => {
                 return Err(AstLoweringError::FloatLiteralInPattern);
             }
             ast::Lit::Bool(b) => hlr::Lit::Bool(*b),
