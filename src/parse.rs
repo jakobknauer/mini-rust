@@ -413,7 +413,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let mut assoc_bindings = Vec::new();
         if self.tokens.advance_if(Token::Smaller) {
             while self.tokens.current() != Some(&Token::Greater) {
-                if let Some(Token::Identifier(_)) = self.tokens.current() {
+                if matches!(self.tokens.current(), Some(Token::Identifier(_))) {
                     if self.tokens.next() == Some(&Token::Equal) {
                         let name = self.tokens.expect_identifier()?;
                         self.tokens.expect_token(Token::Equal)?;
@@ -530,11 +530,10 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     fn parse_return_stmt(&mut self) -> Result<Stmt<'ast>, ParserErr> {
         self.tokens.expect_keyword(Keyword::Return)?;
-        let return_expr = if let Some(Token::Semicolon) = self.tokens.current() {
+        let return_expr = if self.tokens.current() == Some(&Token::Semicolon) {
             None
         } else {
-            let expr = self.parse_expr(true)?;
-            Some(expr)
+            Some(self.parse_expr(true)?)
         };
         let stmt = self.builder.return_stmt(return_expr);
         Ok(stmt)
@@ -736,22 +735,19 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 Ok(self.builder.lit(Lit::Float(value, suffix)))
             }
             Token::BoolLiteral(b) => {
-                let value = *b;
+                let lit = Lit::Bool(*b);
                 self.tokens.advance();
-                let expr = self.builder.lit(Lit::Bool(value));
-                Ok(expr)
+                Ok(self.builder.lit(lit))
             }
             Token::CCharLiteral(c) => {
-                let value = *c;
+                let lit = Lit::CChar(*c);
                 self.tokens.advance();
-                let expr = self.builder.lit(Lit::CChar(value));
-                Ok(expr)
+                Ok(self.builder.lit(lit))
             }
             Token::CStringLiteral(s) => {
-                let value = s.clone();
+                let lit = Lit::CString(s.clone());
                 self.tokens.advance();
-                let expr = self.builder.lit(Lit::CString(value));
-                Ok(expr)
+                Ok(self.builder.lit(lit))
             }
             Token::Identifier(..) => {
                 let path = self.parse_path(true)?;
@@ -861,7 +857,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         loop {
             while self.tokens.advance_if(Token::Semicolon) {}
 
-            if let Some(Token::RBrace) = self.tokens.current() {
+            if self.tokens.current() == Some(&Token::RBrace) {
                 break;
             }
 
@@ -1033,7 +1029,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
         let first = self.parse_primary_pattern()?;
-        if !matches!(self.tokens.current(), Some(Token::Pipe)) {
+        if self.tokens.current() != Some(&Token::Pipe) {
             return Ok(first);
         }
         let mut alternatives = vec![first];
@@ -1101,7 +1097,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Some(Token::Identifier(_) | Token::Keyword(Keyword::SelfTy)) => {
                 let path = self.parse_path(true)?;
-                if matches!(self.tokens.current(), Some(Token::LBrace)) {
+                if self.tokens.current() == Some(&Token::LBrace) {
                     self.parse_struct_pattern(path)
                 } else {
                     Ok(self.builder.pattern(PatternKind::Path(path)))
