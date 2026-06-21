@@ -1052,9 +1052,9 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         match self.tokens.current() {
             Some(Token::AmpersandAmpersand) => {
                 self.tokens.advance();
-                let is_mut = self.tokens.advance_if_keyword(Keyword::Mut);
+                let inner_mutable = self.tokens.advance_if_keyword(Keyword::Mut);
                 let inner = self.parse_pattern()?;
-                let inner = if is_mut {
+                let inner = if inner_mutable {
                     self.builder.pattern(PatternKind::RefMut(inner))
                 } else {
                     self.builder.pattern(PatternKind::Ref(inner))
@@ -1063,9 +1063,9 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Some(Token::Ampersand) => {
                 self.tokens.advance();
-                let is_mut = self.tokens.advance_if_keyword(Keyword::Mut);
+                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
                 let inner = self.parse_pattern()?;
-                if is_mut {
+                if mutable {
                     Ok(self.builder.pattern(PatternKind::RefMut(inner)))
                 } else {
                     Ok(self.builder.pattern(PatternKind::Ref(inner)))
