@@ -202,88 +202,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         }
     }
 
-    fn parse_generic_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
-        let mut constraints = Vec::new();
-        while let Some(Token::Identifier(_)) = self.tokens.current() {
-            constraints.push(self.parse_constraint()?);
-            if !self.tokens.advance_if(Token::Comma) {
-                break;
-            }
-        }
-        Ok(constraints)
-    }
-
-    fn parse_constraint(&mut self) -> Result<Constraint<'ast>, ParserErr> {
-        let subject = self.parse_ty_annot()?;
-        self.tokens.expect_token(Token::Colon)?;
-        let requirement = self.parse_constraint_requirement()?;
-        Ok(Constraint { subject, requirement })
-    }
-
-    fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
-        match self.tokens.current() {
-            Some(Token::Keyword(Keyword::FnTrait)) => self.parse_callable_constraint(),
-            Some(Token::Identifier(_)) => self.parse_trait_constraint(),
-            Some(token) => Err(ParserErr::UnexpectedToken(token.clone())),
-            None => Err(ParserErr::UnexpectedEOF),
-        }
-    }
-
-    fn parse_callable_constraint(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
-        self.tokens.expect_keyword(Keyword::FnTrait)?;
-        self.tokens.expect_token(Token::LParen)?;
-        let params = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
-        self.tokens.expect_token(Token::RParen)?;
-        let params = self.builder.ty_annot_slice(&params);
-        let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
-        Ok(ConstraintRequirement::Callable { params, return_ty })
-    }
-
-    fn parse_trait_constraint(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
-        let trait_name = self.tokens.expect_identifier()?;
-
-        let mut trait_args = Vec::new();
-        let mut assoc_bindings = Vec::new();
-        if self.tokens.advance_if(Token::Smaller) {
-            while self.tokens.current() != Some(&Token::Greater) {
-                if let Some(Token::Identifier(_)) = self.tokens.current() {
-                    if self.tokens.next() == Some(&Token::Equal) {
-                        let name = self.tokens.expect_identifier()?;
-                        self.tokens.expect_token(Token::Equal)?;
-                        let ty = self.parse_ty_annot()?;
-                        assoc_bindings.push(AssocBinding::Eq { name, ty });
-                        if !self.tokens.advance_if(Token::Comma) {
-                            break;
-                        }
-                        continue;
-                    }
-                    if self.tokens.next() == Some(&Token::Colon) {
-                        let name = self.tokens.expect_identifier()?;
-                        self.tokens.expect_token(Token::Colon)?;
-                        let requirement = self.parse_constraint_requirement()?;
-                        assoc_bindings.push(AssocBinding::Bound { name, requirement });
-                        if !self.tokens.advance_if(Token::Comma) {
-                            break;
-                        }
-                        continue;
-                    }
-                }
-                trait_args.push(self.parse_ty_annot()?);
-                if !self.tokens.advance_if(Token::Comma) {
-                    break;
-                }
-            }
-            self.tokens.expect_token(Token::Greater)?;
-        }
-        let trait_args = self.builder.ty_annot_slice(&trait_args);
-        let assoc_bindings = self.builder.assoc_binding_slice(&assoc_bindings);
-        Ok(ConstraintRequirement::Trait {
-            trait_name,
-            trait_args,
-            assoc_bindings,
-        })
-    }
-
     fn parse_struct(&mut self) -> Result<StructDef<'ast>, ParserErr> {
         self.tokens.expect_keyword(Keyword::Struct)?;
         let name = self.tokens.expect_identifier()?;
@@ -455,47 +373,86 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(params)
     }
 
-    fn parse_block(&mut self) -> Result<Block<'ast>, ParserErr> {
-        let mut stmts = Vec::new();
-        let mut return_expr = None;
-
-        self.tokens.expect_token(Token::LBrace)?;
-
-        loop {
-            while self.tokens.advance_if(Token::Semicolon) {}
-
-            if let Some(Token::RBrace) = self.tokens.current() {
+    fn parse_generic_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
+        let mut constraints = Vec::new();
+        while let Some(Token::Identifier(_)) = self.tokens.current() {
+            constraints.push(self.parse_constraint()?);
+            if !self.tokens.advance_if(Token::Comma) {
                 break;
-            }
-
-            let (stmt, stmt_kind) = self.parse_stmt()?;
-
-            if stmt_kind == StmtType::UndelimitedExpr {
-                // expect that we are at the end of the block
-                if self.tokens.current() != Some(&Token::RBrace) {
-                    return Err(ParserErr::UndelimitedStmt);
-                }
-            }
-
-            if self.tokens.current() == Some(&Token::RBrace) {
-                if stmt_kind == StmtType::UndelimitedExpr || stmt_kind == StmtType::BlockExpr {
-                    let &StmtKind::Expr(expr) = stmt else {
-                        unreachable!();
-                    };
-                    return_expr = Some(expr);
-                } else {
-                    stmts.push(stmt);
-                }
-                break;
-            } else {
-                stmts.push(stmt);
             }
         }
+        Ok(constraints)
+    }
 
-        self.tokens.expect_token(Token::RBrace)?;
+    fn parse_constraint(&mut self) -> Result<Constraint<'ast>, ParserErr> {
+        let subject = self.parse_ty_annot()?;
+        self.tokens.expect_token(Token::Colon)?;
+        let requirement = self.parse_constraint_requirement()?;
+        Ok(Constraint { subject, requirement })
+    }
 
-        let stmts = self.builder.stmt_slice(&stmts);
-        Ok(Block { stmts, return_expr })
+    fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
+        match self.tokens.current() {
+            Some(Token::Keyword(Keyword::FnTrait)) => self.parse_callable_constraint(),
+            Some(Token::Identifier(_)) => self.parse_trait_constraint(),
+            Some(token) => Err(ParserErr::UnexpectedToken(token.clone())),
+            None => Err(ParserErr::UnexpectedEOF),
+        }
+    }
+
+    fn parse_callable_constraint(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
+        self.tokens.expect_keyword(Keyword::FnTrait)?;
+        self.tokens.expect_token(Token::LParen)?;
+        let params = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
+        self.tokens.expect_token(Token::RParen)?;
+        let params = self.builder.ty_annot_slice(&params);
+        let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
+        Ok(ConstraintRequirement::Callable { params, return_ty })
+    }
+
+    fn parse_trait_constraint(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
+        let trait_name = self.tokens.expect_identifier()?;
+
+        let mut trait_args = Vec::new();
+        let mut assoc_bindings = Vec::new();
+        if self.tokens.advance_if(Token::Smaller) {
+            while self.tokens.current() != Some(&Token::Greater) {
+                if let Some(Token::Identifier(_)) = self.tokens.current() {
+                    if self.tokens.next() == Some(&Token::Equal) {
+                        let name = self.tokens.expect_identifier()?;
+                        self.tokens.expect_token(Token::Equal)?;
+                        let ty = self.parse_ty_annot()?;
+                        assoc_bindings.push(AssocBinding::Eq { name, ty });
+                        if !self.tokens.advance_if(Token::Comma) {
+                            break;
+                        }
+                        continue;
+                    }
+                    if self.tokens.next() == Some(&Token::Colon) {
+                        let name = self.tokens.expect_identifier()?;
+                        self.tokens.expect_token(Token::Colon)?;
+                        let requirement = self.parse_constraint_requirement()?;
+                        assoc_bindings.push(AssocBinding::Bound { name, requirement });
+                        if !self.tokens.advance_if(Token::Comma) {
+                            break;
+                        }
+                        continue;
+                    }
+                }
+                trait_args.push(self.parse_ty_annot()?);
+                if !self.tokens.advance_if(Token::Comma) {
+                    break;
+                }
+            }
+            self.tokens.expect_token(Token::Greater)?;
+        }
+        let trait_args = self.builder.ty_annot_slice(&trait_args);
+        let assoc_bindings = self.builder.assoc_binding_slice(&assoc_bindings);
+        Ok(ConstraintRequirement::Trait {
+            trait_name,
+            trait_args,
+            assoc_bindings,
+        })
     }
 
     fn parse_stmt(&mut self) -> Result<(Stmt<'ast>, StmtType), ParserErr> {
@@ -899,6 +856,49 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok((field_name, field_value))
     }
 
+    fn parse_block(&mut self) -> Result<Block<'ast>, ParserErr> {
+        let mut stmts = Vec::new();
+        let mut return_expr = None;
+
+        self.tokens.expect_token(Token::LBrace)?;
+
+        loop {
+            while self.tokens.advance_if(Token::Semicolon) {}
+
+            if let Some(Token::RBrace) = self.tokens.current() {
+                break;
+            }
+
+            let (stmt, stmt_kind) = self.parse_stmt()?;
+
+            if stmt_kind == StmtType::UndelimitedExpr {
+                // expect that we are at the end of the block
+                if self.tokens.current() != Some(&Token::RBrace) {
+                    return Err(ParserErr::UndelimitedStmt);
+                }
+            }
+
+            if self.tokens.current() == Some(&Token::RBrace) {
+                if stmt_kind == StmtType::UndelimitedExpr || stmt_kind == StmtType::BlockExpr {
+                    let &StmtKind::Expr(expr) = stmt else {
+                        unreachable!();
+                    };
+                    return_expr = Some(expr);
+                } else {
+                    stmts.push(stmt);
+                }
+                break;
+            } else {
+                stmts.push(stmt);
+            }
+        }
+
+        self.tokens.expect_token(Token::RBrace)?;
+
+        let stmts = self.builder.stmt_slice(&stmts);
+        Ok(Block { stmts, return_expr })
+    }
+
     fn parse_closure(&mut self, params: Vec<ClosureParam<'ast>>) -> Result<Expr<'ast>, ParserErr> {
         let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
         let body = self.parse_closure_body(return_ty.is_some())?;
@@ -922,51 +922,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             };
             Ok(block)
         }
-    }
-
-    fn parse_path(&mut self, in_expression: bool) -> Result<Path<'ast>, ParserErr> {
-        let mut segments = Vec::new();
-
-        loop {
-            let segment = self.parse_path_segment(in_expression)?;
-            segments.push(segment);
-
-            if !self.tokens.advance_if(Token::ColonColon) {
-                break;
-            }
-        }
-
-        Ok(Path { segments })
-    }
-
-    // in_expression: in expression position, `<` is ambiguous (could be less-than), so generic args
-    // require turbofish (`::<`). In type position, bare `<` always starts generic args.
-    fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment<'ast>, ParserErr> {
-        if self.tokens.advance_if(Token::Keyword(Keyword::SelfTy)) {
-            return Ok(PathSegment {
-                ident: "Self".to_string(),
-                args: None,
-                is_self: true,
-            });
-        }
-
-        let ident = self.tokens.expect_identifier()?;
-
-        let has_generic_args =
-            self.tokens.advance_if_turbofish() || (!in_expression && self.tokens.advance_if(Token::Smaller));
-        let args = if has_generic_args {
-            let args = self.parse_comma_separated(&Token::Greater, Self::parse_ty_annot)?;
-            self.tokens.expect_token(Token::Greater)?;
-            Some(self.builder.ty_annot_slice(&args))
-        } else {
-            None
-        };
-
-        Ok(PathSegment {
-            ident,
-            args,
-            is_self: false,
-        })
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr<'ast>, ParserErr> {
@@ -1033,6 +988,51 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
         let expr = self.builder.match_(scrutinee, arms);
         Ok(expr)
+    }
+
+    fn parse_path(&mut self, in_expression: bool) -> Result<Path<'ast>, ParserErr> {
+        let mut segments = Vec::new();
+
+        loop {
+            let segment = self.parse_path_segment(in_expression)?;
+            segments.push(segment);
+
+            if !self.tokens.advance_if(Token::ColonColon) {
+                break;
+            }
+        }
+
+        Ok(Path { segments })
+    }
+
+    // in_expression: in expression position, `<` is ambiguous (could be less-than), so generic args
+    // require turbofish (`::<`). In type position, bare `<` always starts generic args.
+    fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment<'ast>, ParserErr> {
+        if self.tokens.advance_if(Token::Keyword(Keyword::SelfTy)) {
+            return Ok(PathSegment {
+                ident: "Self".to_string(),
+                args: None,
+                is_self: true,
+            });
+        }
+
+        let ident = self.tokens.expect_identifier()?;
+
+        let has_generic_args =
+            self.tokens.advance_if_turbofish() || (!in_expression && self.tokens.advance_if(Token::Smaller));
+        let args = if has_generic_args {
+            let args = self.parse_comma_separated(&Token::Greater, Self::parse_ty_annot)?;
+            self.tokens.expect_token(Token::Greater)?;
+            Some(self.builder.ty_annot_slice(&args))
+        } else {
+            None
+        };
+
+        Ok(PathSegment {
+            ident,
+            args,
+            is_self: false,
+        })
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
