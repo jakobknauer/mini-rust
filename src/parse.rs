@@ -119,7 +119,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn<'ast>, ParserErr> {
         self.tokens.expect_keyword(Keyword::Fn)?;
         let name = self.tokens.expect_identifier()?;
-
         let gen_params = self.parse_gen_params()?;
 
         self.tokens.expect_token(Token::LParen)?;
@@ -127,12 +126,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         self.tokens.expect_token(Token::RParen)?;
 
         let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
-
-        let constraints = if self.tokens.advance_if(Token::Keyword(Keyword::Where)) {
-            self.parse_generic_constraints()?
-        } else {
-            Vec::new()
-        };
+        let constraints = self.parse_where_clause()?;
 
         let body = if self.tokens.current() == Some(&Token::LBrace) {
             Some(self.parse_block()?)
@@ -277,11 +271,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             (None, ty)
         };
 
-        let constraints = if self.tokens.advance_if(Token::Keyword(Keyword::Where)) {
-            self.parse_generic_constraints()?
-        } else {
-            Vec::new()
-        };
+        let constraints = self.parse_where_clause()?;
 
         let mut mthds = Vec::new();
         let mut assoc_tys = Vec::new();
@@ -371,6 +361,12 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let params = self.parse_comma_separated(&Token::Greater, |p| p.tokens.expect_identifier())?;
         self.tokens.expect_token(Token::Greater)?;
         Ok(params)
+    }
+
+    fn parse_where_clause(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
+        Ok(self
+            .parse_if(Token::Keyword(Keyword::Where), Self::parse_generic_constraints)?
+            .unwrap_or_default())
     }
 
     fn parse_generic_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
