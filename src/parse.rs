@@ -1167,72 +1167,13 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         match current {
             Token::Identifier(_) | Token::Keyword(Keyword::SelfTy) => {
                 let path = self.parse_path(false)?;
-                let annot = self.builder.path_annot(path);
-                Ok(annot)
+                Ok(self.builder.path_annot(path))
             }
-            Token::Ampersand => {
-                self.tokens.advance();
-                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
-                let inner_ty = self.parse_ty_annot()?;
-                let annot = if mutable {
-                    self.builder.ref_mut_annot(inner_ty)
-                } else {
-                    self.builder.ref_annot(inner_ty)
-                };
-                Ok(annot)
-            }
-            Token::AmpersandAmpersand => {
-                // Two levels of reference
-                self.tokens.advance();
-                let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
-                let inner_ty = self.parse_ty_annot()?;
-                let inner = if mutable {
-                    self.builder.ref_mut_annot(inner_ty)
-                } else {
-                    self.builder.ref_annot(inner_ty)
-                };
-                let annot = self.builder.ref_annot(inner);
-                Ok(annot)
-            }
-            Token::Asterisk => {
-                self.tokens.advance();
-                let inner_ty = self.parse_ty_annot()?;
-                let annot = self.builder.ptr_annot(inner_ty);
-                Ok(annot)
-            }
-            Token::LParen => {
-                self.tokens.advance();
-
-                let mut inner_tys = Vec::new();
-                let mut trailing_comma = true;
-                while self.tokens.current() != Some(&Token::RParen) {
-                    let inner_ty = self.parse_ty_annot()?;
-                    inner_tys.push(inner_ty);
-                    if !self.tokens.advance_if(Token::Comma) {
-                        trailing_comma = false;
-                        break;
-                    }
-                }
-                self.tokens.expect_token(Token::RParen)?;
-
-                if inner_tys.len() == 1 && !trailing_comma {
-                    Ok(inner_tys.remove(0))
-                } else {
-                    let annot = self.builder.tuple_annot(&inner_tys);
-                    Ok(annot)
-                }
-            }
-            Token::Keyword(Keyword::Fn) => {
-                self.tokens.advance();
-                self.tokens.expect_token(Token::LParen)?;
-                let param_tys = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
-                self.tokens.expect_token(Token::RParen)?;
-
-                let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
-
-                let annot = self.builder.fn_annot(&param_tys, return_ty);
-                Ok(annot)
-            }
+            Token::Ampersand => self.parse_ref_annot(),
+            Token::AmpersandAmpersand => self.parse_double_ref_annot(),
+            Token::Asterisk => self.parse_ptr_annot(),
+            Token::LParen => self.parse_tuple_annot(),
+            Token::Keyword(Keyword::Fn) => self.parse_fn_annot(),
             Token::Keyword(Keyword::Impl) => {
                 self.tokens.advance();
                 let req = self.parse_constraint_requirement()?;
@@ -1240,25 +1181,83 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Token::Underscore => {
                 self.tokens.advance();
-                let annot = self.builder.wildcard_annot();
-                Ok(annot)
+                Ok(self.builder.wildcard_annot())
             }
             Token::Bang => {
                 self.tokens.advance();
                 Ok(self.builder.never_annot())
             }
-            Token::Smaller => {
-                self.tokens.advance();
-                let ty = self.parse_ty_annot()?;
-                let trait_ = self.parse_if(Token::Keyword(Keyword::As), Self::parse_trait_annot)?;
-                self.tokens.expect_token(Token::Greater)?;
-                self.tokens.expect_token(Token::ColonColon)?;
-                let path = self.parse_path(false)?;
-                let qual_path = QualifiedPath { ty, trait_, path };
-                Ok(self.builder.qualified_path_annot(qual_path))
-            }
+            Token::Smaller => self.parse_qualified_ty(),
             token => Err(ParserErr::UnexpectedToken(token.clone())),
         }
+    }
+
+    fn parse_ref_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::Ampersand)?;
+        let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
+        let inner_ty = self.parse_ty_annot()?;
+        if mutable {
+            Ok(self.builder.ref_mut_annot(inner_ty))
+        } else {
+            Ok(self.builder.ref_annot(inner_ty))
+        }
+    }
+
+    fn parse_double_ref_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        // `&&T` is two levels of reference
+        self.tokens.expect_token(Token::AmpersandAmpersand)?;
+        let inner_mutable = self.tokens.advance_if_keyword(Keyword::Mut);
+        let inner_ty = self.parse_ty_annot()?;
+        let inner = if inner_mutable {
+            self.builder.ref_mut_annot(inner_ty)
+        } else {
+            self.builder.ref_annot(inner_ty)
+        };
+        Ok(self.builder.ref_annot(inner))
+    }
+
+    fn parse_ptr_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::Asterisk)?;
+        let inner_ty = self.parse_ty_annot()?;
+        Ok(self.builder.ptr_annot(inner_ty))
+    }
+
+    fn parse_tuple_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::LParen)?;
+        let mut inner_tys = Vec::new();
+        let mut trailing_comma = true;
+        while self.tokens.current() != Some(&Token::RParen) {
+            inner_tys.push(self.parse_ty_annot()?);
+            if !self.tokens.advance_if(Token::Comma) {
+                trailing_comma = false;
+                break;
+            }
+        }
+        self.tokens.expect_token(Token::RParen)?;
+        if inner_tys.len() == 1 && !trailing_comma {
+            Ok(inner_tys.remove(0))
+        } else {
+            Ok(self.builder.tuple_annot(&inner_tys))
+        }
+    }
+
+    fn parse_fn_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        self.tokens.expect_keyword(Keyword::Fn)?;
+        self.tokens.expect_token(Token::LParen)?;
+        let param_tys = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
+        self.tokens.expect_token(Token::RParen)?;
+        let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
+        Ok(self.builder.fn_annot(&param_tys, return_ty))
+    }
+
+    fn parse_qualified_ty(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::Smaller)?;
+        let ty = self.parse_ty_annot()?;
+        let trait_ = self.parse_if(Token::Keyword(Keyword::As), Self::parse_trait_annot)?;
+        self.tokens.expect_token(Token::Greater)?;
+        self.tokens.expect_token(Token::ColonColon)?;
+        let path = self.parse_path(false)?;
+        Ok(self.builder.qualified_path_annot(QualifiedPath { ty, trait_, path }))
     }
 
     fn parse_trait_annot(&mut self) -> Result<TraitAnnot<'ast>, ParserErr> {
