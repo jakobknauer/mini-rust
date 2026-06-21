@@ -107,6 +107,15 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(items)
     }
 
+    // If `token` is next, advances past it and calls `f`. Otherwise returns None. Replaces the
+    // common pattern `if advance_if(T) { Some(parse_x()?) } else { None }`.
+    fn parse_if<T, F>(&mut self, token: Token, parse_inner: F) -> Result<Option<T>, ParserErr>
+    where
+        F: FnOnce(&mut Self) -> Result<T, ParserErr>,
+    {
+        self.tokens.advance_if(token).then(|| parse_inner(self)).transpose()
+    }
+
     fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn<'ast>, ParserErr> {
         self.tokens.expect_keyword(Keyword::Fn)?;
         let name = self.tokens.expect_identifier()?;
@@ -117,7 +126,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let (params, var_args) = self.parse_fn_params(allow_receiver_param)?;
         self.tokens.expect_token(Token::RParen)?;
 
-        let return_ty = self.parse_function_return_type()?;
+        let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
 
         let constraints = if self.tokens.advance_if(Token::Keyword(Keyword::Where)) {
             self.parse_generic_constraints()?
@@ -193,15 +202,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         }
     }
 
-    fn parse_function_return_type(&mut self) -> Result<Option<TyAnnot<'ast>>, ParserErr> {
-        if self.tokens.advance_if(Token::Arrow) {
-            let return_type = self.parse_ty_annot()?;
-            Ok(Some(return_type))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn parse_generic_constraints(&mut self) -> Result<Vec<Constraint<'ast>>, ParserErr> {
         let mut constraints = Vec::new();
         while let Some(Token::Identifier(_)) = self.tokens.current() {
@@ -230,11 +230,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 self.tokens.expect_token(Token::RParen)?;
                 let params = self.builder.ty_annot_slice(&params);
 
-                let return_ty = if self.tokens.advance_if(Token::Arrow) {
-                    Some(self.parse_ty_annot()?)
-                } else {
-                    None
-                };
+                let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
 
                 ConstraintRequirement::Callable { params, return_ty }
             }
@@ -573,11 +569,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         self.tokens.expect_keyword(Keyword::Let)?;
         let mutable = self.tokens.advance_if_keyword(Keyword::Mut);
         let name = self.tokens.expect_identifier()?;
-        let ty_annot = if self.tokens.advance_if(Token::Colon) {
-            Some(self.parse_ty_annot()?)
-        } else {
-            None
-        };
+        let ty_annot = self.parse_if(Token::Colon, Self::parse_ty_annot)?;
         self.tokens.expect_token(Token::Equal)?;
         let value = self.parse_expr(true)?;
         let stmt = self.builder.let_stmt(name, mutable, ty_annot, value);
@@ -859,11 +851,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     fn parse_qualified_expr(&mut self) -> Result<Expr<'ast>, ParserErr> {
         let ty = self.parse_ty_annot()?;
-        let trait_ = if self.tokens.advance_if(Token::Keyword(Keyword::As)) {
-            Some(self.parse_trait_annot()?)
-        } else {
-            None
-        };
+        let trait_ = self.parse_if(Token::Keyword(Keyword::As), Self::parse_trait_annot)?;
         self.tokens.expect_token(Token::Greater)?;
         self.tokens.expect_token(Token::ColonColon)?;
         let path = self.parse_path(true)?;
@@ -913,22 +901,14 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_closure(&mut self, params: Vec<ClosureParam<'ast>>) -> Result<Expr<'ast>, ParserErr> {
-        let return_ty = if self.tokens.advance_if(Token::Arrow) {
-            Some(self.parse_ty_annot()?)
-        } else {
-            None
-        };
+        let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
         let body = self.parse_closure_body(return_ty.is_some())?;
         Ok(self.builder.closure(params, return_ty, body))
     }
 
     fn parse_closure_param(&mut self) -> Result<ClosureParam<'ast>, ParserErr> {
         let name = self.tokens.expect_identifier()?;
-        let ty = if self.tokens.advance_if(Token::Colon) {
-            Some(self.parse_ty_annot()?)
-        } else {
-            None
-        };
+        let ty = self.parse_if(Token::Colon, Self::parse_ty_annot)?;
         Ok(ClosureParam { name, ty })
     }
 
@@ -994,11 +974,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         self.tokens.expect_keyword(Keyword::If)?;
         let cond = self.parse_expr(false)?; // Don't allow top-level struct in if condition
         let then_block = self.parse_block()?;
-        let else_block = if self.tokens.advance_if(Token::Keyword(Keyword::Else)) {
-            Some(self.parse_block()?)
-        } else {
-            None
-        };
+        let else_block = self.parse_if(Token::Keyword(Keyword::Else), Self::parse_block)?;
         let expr = self.builder.if_(cond, then_block, else_block);
         Ok(expr)
     }
@@ -1252,11 +1228,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                 let param_tys = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
                 self.tokens.expect_token(Token::RParen)?;
 
-                let return_ty = if self.tokens.advance_if(Token::Arrow) {
-                    Some(self.parse_ty_annot()?)
-                } else {
-                    None
-                };
+                let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
 
                 let annot = self.builder.fn_annot(&param_tys, return_ty);
                 Ok(annot)
@@ -1278,11 +1250,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Token::Smaller => {
                 self.tokens.advance();
                 let ty = self.parse_ty_annot()?;
-                let trait_ = if self.tokens.advance_if(Token::Keyword(Keyword::As)) {
-                    Some(self.parse_trait_annot()?)
-                } else {
-                    None
-                };
+                let trait_ = self.parse_if(Token::Keyword(Keyword::As), Self::parse_trait_annot)?;
                 self.tokens.expect_token(Token::Greater)?;
                 self.tokens.expect_token(Token::ColonColon)?;
                 let path = self.parse_path(false)?;
