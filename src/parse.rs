@@ -221,68 +221,67 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_constraint_requirement(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
-        let requirement = match self.tokens.current() {
-            Some(Token::Keyword(Keyword::FnTrait)) => {
-                self.tokens.advance();
+        match self.tokens.current() {
+            Some(Token::Keyword(Keyword::FnTrait)) => self.parse_callable_constraint(),
+            Some(Token::Identifier(_)) => self.parse_trait_constraint(),
+            Some(token) => Err(ParserErr::UnexpectedToken(token.clone())),
+            None => Err(ParserErr::UnexpectedEOF),
+        }
+    }
 
-                self.tokens.expect_token(Token::LParen)?;
-                let params = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
-                self.tokens.expect_token(Token::RParen)?;
-                let params = self.builder.ty_annot_slice(&params);
+    fn parse_callable_constraint(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
+        self.tokens.expect_keyword(Keyword::FnTrait)?;
+        self.tokens.expect_token(Token::LParen)?;
+        let params = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
+        self.tokens.expect_token(Token::RParen)?;
+        let params = self.builder.ty_annot_slice(&params);
+        let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
+        Ok(ConstraintRequirement::Callable { params, return_ty })
+    }
 
-                let return_ty = self.parse_if(Token::Arrow, Self::parse_ty_annot)?;
+    fn parse_trait_constraint(&mut self) -> Result<ConstraintRequirement<'ast>, ParserErr> {
+        let trait_name = self.tokens.expect_identifier()?;
 
-                ConstraintRequirement::Callable { params, return_ty }
-            }
-            Some(Token::Identifier(trait_)) => {
-                let trait_name = trait_.clone();
-                self.tokens.advance();
-
-                let mut trait_args = Vec::new();
-                let mut assoc_bindings = Vec::new();
-                if self.tokens.advance_if(Token::Smaller) {
-                    while self.tokens.current() != Some(&Token::Greater) {
-                        if let Some(Token::Identifier(_)) = self.tokens.current() {
-                            if self.tokens.next() == Some(&Token::Equal) {
-                                let name = self.tokens.expect_identifier()?;
-                                self.tokens.expect_token(Token::Equal)?;
-                                let ty = self.parse_ty_annot()?;
-                                assoc_bindings.push(AssocBinding::Eq { name, ty });
-                                if !self.tokens.advance_if(Token::Comma) {
-                                    break;
-                                }
-                                continue;
-                            }
-                            if self.tokens.next() == Some(&Token::Colon) {
-                                let name = self.tokens.expect_identifier()?;
-                                self.tokens.expect_token(Token::Colon)?;
-                                let requirement = self.parse_constraint_requirement()?;
-                                assoc_bindings.push(AssocBinding::Bound { name, requirement });
-                                if !self.tokens.advance_if(Token::Comma) {
-                                    break;
-                                }
-                                continue;
-                            }
-                        }
-                        trait_args.push(self.parse_ty_annot()?);
+        let mut trait_args = Vec::new();
+        let mut assoc_bindings = Vec::new();
+        if self.tokens.advance_if(Token::Smaller) {
+            while self.tokens.current() != Some(&Token::Greater) {
+                if let Some(Token::Identifier(_)) = self.tokens.current() {
+                    if self.tokens.next() == Some(&Token::Equal) {
+                        let name = self.tokens.expect_identifier()?;
+                        self.tokens.expect_token(Token::Equal)?;
+                        let ty = self.parse_ty_annot()?;
+                        assoc_bindings.push(AssocBinding::Eq { name, ty });
                         if !self.tokens.advance_if(Token::Comma) {
                             break;
                         }
+                        continue;
                     }
-                    self.tokens.expect_token(Token::Greater)?;
+                    if self.tokens.next() == Some(&Token::Colon) {
+                        let name = self.tokens.expect_identifier()?;
+                        self.tokens.expect_token(Token::Colon)?;
+                        let requirement = self.parse_constraint_requirement()?;
+                        assoc_bindings.push(AssocBinding::Bound { name, requirement });
+                        if !self.tokens.advance_if(Token::Comma) {
+                            break;
+                        }
+                        continue;
+                    }
                 }
-                let trait_args = self.builder.ty_annot_slice(&trait_args);
-                let assoc_bindings = self.builder.assoc_binding_slice(&assoc_bindings);
-
-                ConstraintRequirement::Trait {
-                    trait_name,
-                    trait_args,
-                    assoc_bindings,
+                trait_args.push(self.parse_ty_annot()?);
+                if !self.tokens.advance_if(Token::Comma) {
+                    break;
                 }
             }
-            _ => return Err(ParserErr::UnexpectedToken(self.tokens.current().unwrap().clone())),
-        };
-        Ok(requirement)
+            self.tokens.expect_token(Token::Greater)?;
+        }
+        let trait_args = self.builder.ty_annot_slice(&trait_args);
+        let assoc_bindings = self.builder.assoc_binding_slice(&assoc_bindings);
+        Ok(ConstraintRequirement::Trait {
+            trait_name,
+            trait_args,
+            assoc_bindings,
+        })
     }
 
     fn parse_struct(&mut self) -> Result<StructDef<'ast>, ParserErr> {
