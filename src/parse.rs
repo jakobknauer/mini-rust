@@ -91,6 +91,22 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(())
     }
 
+    // Parses a comma-separated list until `stop` is seen. Trailing commas are allowed. The stop
+    // token is not consumed - the caller is responsible for advancing past it.
+    fn parse_comma_separated<T, F>(&mut self, stop: &Token, mut parse_item: F) -> Result<Vec<T>, ParserErr>
+    where
+        F: FnMut(&mut Self) -> Result<T, ParserErr>,
+    {
+        let mut items = Vec::new();
+        while self.tokens.current() != Some(stop) {
+            items.push(parse_item(self)?);
+            if !self.tokens.advance_if(Token::Comma) {
+                break;
+            }
+        }
+        Ok(items)
+    }
+
     fn parse_function(&mut self, allow_receiver_param: bool) -> Result<Fn<'ast>, ParserErr> {
         self.tokens.expect_keyword(Keyword::Fn)?;
         let name = self.tokens.expect_identifier()?;
@@ -208,16 +224,9 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let requirement = match self.tokens.current() {
             Some(Token::Keyword(Keyword::FnTrait)) => {
                 self.tokens.advance();
-                self.tokens.expect_token(Token::LParen)?;
 
-                let mut params = Vec::new();
-                while self.tokens.current() != Some(&Token::RParen) {
-                    let param = self.parse_ty_annot()?;
-                    params.push(param);
-                    if !self.tokens.advance_if(Token::Comma) {
-                        break;
-                    }
-                }
+                self.tokens.expect_token(Token::LParen)?;
+                let params = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
                 self.tokens.expect_token(Token::RParen)?;
                 let params = self.builder.ty_annot_slice(&params);
 
@@ -286,7 +295,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let gen_params = self.parse_gen_params()?;
 
         self.tokens.expect_token(Token::LBrace)?;
-        let fields = self.parse_struct_fields()?;
+        let fields = self.parse_comma_separated(&Token::RBrace, Self::parse_struct_field)?;
         self.tokens.expect_token(Token::RBrace)?;
 
         Ok(StructDef {
@@ -294,18 +303,6 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             gen_params,
             fields,
         })
-    }
-
-    fn parse_struct_fields(&mut self) -> Result<Vec<StructField<'ast>>, ParserErr> {
-        let mut fields = Vec::new();
-        while let Some(Token::Identifier(_)) = self.tokens.current() {
-            fields.push(self.parse_struct_field()?);
-
-            if !self.tokens.advance_if(Token::Comma) {
-                break;
-            }
-        }
-        Ok(fields)
     }
 
     fn parse_struct_field(&mut self) -> Result<StructField<'ast>, ParserErr> {
@@ -321,7 +318,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         let gen_params = self.parse_gen_params()?;
 
         self.tokens.expect_token(Token::LBrace)?;
-        let variants = self.parse_enum_variants()?;
+        let variants = self.parse_comma_separated(&Token::RBrace, Self::parse_enum_variant)?;
         self.tokens.expect_token(Token::RBrace)?;
 
         Ok(EnumDef {
@@ -331,22 +328,10 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         })
     }
 
-    fn parse_enum_variants(&mut self) -> Result<Vec<EnumVariant<'ast>>, ParserErr> {
-        let mut variants = Vec::new();
-        while let Some(Token::Identifier(_)) = self.tokens.current() {
-            variants.push(self.parse_enum_variant()?);
-
-            if !self.tokens.advance_if(Token::Comma) {
-                break;
-            }
-        }
-        Ok(variants)
-    }
-
     fn parse_enum_variant(&mut self) -> Result<EnumVariant<'ast>, ParserErr> {
         let name = self.tokens.expect_identifier()?;
         let fields = if self.tokens.advance_if(Token::LBrace) {
-            let fields = self.parse_struct_fields()?;
+            let fields = self.parse_comma_separated(&Token::RBrace, Self::parse_struct_field)?;
             self.tokens.expect_token(Token::RBrace)?;
             fields
         } else {
@@ -470,16 +455,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             return Ok(Vec::new());
         }
         self.tokens.expect_token(Token::Smaller)?;
-
-        let mut params = Vec::new();
-        while let Some(Token::Identifier(_)) = self.tokens.current() {
-            let arg = self.tokens.expect_identifier()?;
-            params.push(arg);
-
-            if !self.tokens.advance_if(Token::Comma) {
-                break;
-            }
-        }
+        let params = self.parse_comma_separated(&Token::Greater, |p| p.tokens.expect_identifier())?;
         self.tokens.expect_token(Token::Greater)?;
         Ok(params)
     }
@@ -768,14 +744,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         loop {
             if self.tokens.advance_if(Token::LParen) {
                 // function call
-                let mut args = Vec::new();
-                while self.tokens.current() != Some(&Token::RParen) {
-                    let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
-                    args.push(argument);
-                    if !self.tokens.advance_if(Token::Comma) {
-                        break;
-                    }
-                }
+                let args = self.parse_comma_separated(&Token::RParen, |p| p.parse_expr(true))?;
                 self.tokens.expect_token(Token::RParen)?;
                 acc = self.builder.call(acc, &args);
             } else if self.tokens.advance_if(Token::Dot) {
@@ -789,14 +758,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                     let member = self.parse_path_segment(true)?;
                     if self.tokens.advance_if(Token::LParen) {
                         // method call
-                        let mut args = Vec::new();
-                        while self.tokens.current() != Some(&Token::RParen) {
-                            let argument = self.parse_expr(true)?; // Allow top-level struct expression in argument
-                            args.push(argument);
-                            if !self.tokens.advance_if(Token::Comma) {
-                                break;
-                            }
-                        }
+                        let args = self.parse_comma_separated(&Token::RParen, |p| p.parse_expr(true))?;
                         self.tokens.expect_token(Token::RParen)?;
                         acc = self.builder.mthd_call(acc, member, &args);
                     } else {
@@ -849,7 +811,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             }
             Token::Identifier(..) => {
                 let path = self.parse_path(true)?;
-                if allow_top_level_struct_expr && self.tokens.advance_if(Token::LBrace) {
+                if allow_top_level_struct_expr && self.tokens.current() == Some(&Token::LBrace) {
                     self.parse_struct_expr(path)
                 } else {
                     Ok(self.builder.path(path))
@@ -877,14 +839,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Token::Pipe => {
                 self.tokens.advance();
 
-                let mut params = Vec::new();
-                while self.tokens.current() != Some(&Token::Pipe) {
-                    let param = self.parse_closure_param()?;
-                    params.push(param);
-                    if !self.tokens.advance_if(Token::Comma) {
-                        break;
-                    }
-                }
+                let params = self.parse_comma_separated(&Token::Pipe, Self::parse_closure_param)?;
                 self.tokens.expect_token(Token::Pipe)?;
 
                 self.parse_closure(params)
@@ -934,29 +889,27 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
     }
 
     fn parse_struct_expr(&mut self, path: Path<'ast>) -> Result<Expr<'ast>, ParserErr> {
-        let mut fields = Vec::new();
-        while let Some(Token::Identifier(field_name)) = self.tokens.current() {
-            let field_name = field_name.clone();
-            self.tokens.advance();
-            let field_value = if self.tokens.advance_if(Token::Colon) {
-                self.parse_expr(true)?
-            } else {
-                let segment = PathSegment {
-                    ident: field_name.clone(),
-                    args: None,
-                    is_self: false,
-                };
-                self.builder.path(Path {
-                    segments: vec![segment],
-                })
-            };
-            fields.push((field_name, field_value));
-            if !self.tokens.advance_if(Token::Comma) {
-                break;
-            }
-        }
+        self.tokens.expect_token(Token::LBrace)?;
+        let fields = self.parse_comma_separated(&Token::RBrace, Self::parse_struct_expr_field)?;
         self.tokens.expect_token(Token::RBrace)?;
         Ok(self.builder.struct_expr(path, fields))
+    }
+
+    fn parse_struct_expr_field(&mut self) -> Result<(String, Expr<'ast>), ParserErr> {
+        let field_name = self.tokens.expect_identifier()?;
+        let field_value = if self.tokens.advance_if(Token::Colon) {
+            self.parse_expr(true)?
+        } else {
+            let segment = PathSegment {
+                ident: field_name.clone(),
+                args: None,
+                is_self: false,
+            };
+            self.builder.path(Path {
+                segments: vec![segment],
+            })
+        };
+        Ok((field_name, field_value))
     }
 
     fn parse_closure(&mut self, params: Vec<ClosureParam<'ast>>) -> Result<Expr<'ast>, ParserErr> {
@@ -1007,6 +960,8 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         Ok(Path { segments })
     }
 
+    // in_expression: in expression position, `<` is ambiguous (could be less-than), so generic args
+    // require turbofish (`::<`). In type position, bare `<` always starts generic args.
     fn parse_path_segment(&mut self, in_expression: bool) -> Result<PathSegment<'ast>, ParserErr> {
         if self.tokens.advance_if(Token::Keyword(Keyword::SelfTy)) {
             return Ok(PathSegment {
@@ -1018,15 +973,10 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
         let ident = self.tokens.expect_identifier()?;
 
-        let args = if (!in_expression && self.tokens.advance_if(Token::Smaller)) || self.tokens.advance_if_turbofish() {
-            let mut args = Vec::new();
-            while self.tokens.current() != Some(&Token::Greater) {
-                let gen_arg = self.parse_ty_annot()?;
-                args.push(gen_arg);
-                if !self.tokens.advance_if(Token::Comma) {
-                    break;
-                }
-            }
+        let has_generic_args =
+            self.tokens.advance_if_turbofish() || (!in_expression && self.tokens.advance_if(Token::Smaller));
+        let args = if has_generic_args {
+            let args = self.parse_comma_separated(&Token::Greater, Self::parse_ty_annot)?;
             self.tokens.expect_token(Token::Greater)?;
             Some(self.builder.ty_annot_slice(&args))
         } else {
@@ -1193,13 +1143,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
 
     fn parse_tuple_pattern(&mut self) -> Result<Pattern<'ast>, ParserErr> {
         self.tokens.expect_token(Token::LParen)?;
-        let mut fields = Vec::new();
-        while !matches!(self.tokens.current(), Some(Token::RParen)) {
-            fields.push(self.parse_pattern()?);
-            if !self.tokens.advance_if(Token::Comma) {
-                break;
-            }
-        }
+        let fields = self.parse_comma_separated(&Token::RParen, Self::parse_pattern)?;
         self.tokens.expect_token(Token::RParen)?;
         Ok(self.builder.pattern(PatternKind::Tuple(fields)))
     }
@@ -1305,14 +1249,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Token::Keyword(Keyword::Fn) => {
                 self.tokens.advance();
                 self.tokens.expect_token(Token::LParen)?;
-                let mut param_tys = Vec::new();
-                while self.tokens.current() != Some(&Token::RParen) {
-                    let param_type = self.parse_ty_annot()?;
-                    param_tys.push(param_type);
-                    if !self.tokens.advance_if(Token::Comma) {
-                        break;
-                    }
-                }
+                let param_tys = self.parse_comma_separated(&Token::RParen, Self::parse_ty_annot)?;
                 self.tokens.expect_token(Token::RParen)?;
 
                 let return_ty = if self.tokens.advance_if(Token::Arrow) {
