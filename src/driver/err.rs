@@ -1,7 +1,7 @@
 use crate::{
     ast_lowering::AstLoweringError,
     driver::impl_check::{ImplCheckError, ImplCheckErrorKind},
-    mlr_lowering::MlrLoweringError,
+    mlr_lowering::{MlrFnLoweringError, MlrLoweringError},
     mutck::MutckError,
     parse,
     typeck::TypeckError,
@@ -29,11 +29,28 @@ pub fn format_driver_error<'ctxt>(err: DriverError<'ctxt>) -> String {
         DriverError::Typeck { fn_name, error } => {
             format!("Type error in '{}': {}", fn_name, format_typeck_error(&error))
         }
-        DriverError::MlrLowering(MlrLoweringError::FnLowering { fn_inst, .. }) => {
-            format!("Failed to lower function '{}' to LLVM IR", fn_inst)
+        DriverError::MlrLowering(MlrLoweringError::FnLowering { fn_inst, error }) => {
+            format!(
+                "Failed to lower function '{}' to LLVM IR: {}",
+                fn_inst,
+                format_mlr_fn_lowering_error(&error)
+            )
+        }
+        DriverError::MlrLowering(MlrLoweringError::FnSigLowering { fn_inst, error }) => {
+            format!(
+                "Failed to lower signature of function '{}' to LLVM IR: {}",
+                fn_inst, error
+            )
         }
         DriverError::Mutck(e) => format!("Mutability error: {:?}", e),
         DriverError::Io(msg) => format!("IO error: {msg}"),
+    }
+}
+
+fn format_mlr_fn_lowering_error(error: &MlrFnLoweringError) -> String {
+    match error {
+        MlrFnLoweringError::Builder(e) => format!("LLVM builder error: {e}"),
+        MlrFnLoweringError::Bug(msg) => format!("internal error: {msg}"),
     }
 }
 

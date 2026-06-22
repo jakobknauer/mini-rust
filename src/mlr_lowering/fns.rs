@@ -30,11 +30,14 @@ pub struct MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 }
 
 #[derive(Debug)]
-pub struct MlrFnLoweringError;
+pub enum MlrFnLoweringError {
+    Builder(BuilderError),
+    Bug(String),
+}
 
 impl From<BuilderError> for MlrFnLoweringError {
-    fn from(_: BuilderError) -> Self {
-        MlrFnLoweringError
+    fn from(error: BuilderError) -> Self {
+        MlrFnLoweringError::Builder(error)
     }
 }
 
@@ -45,16 +48,18 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         parent: &'parent mut super::MlrLowerer<'iw, 'a, 'ctxt>,
         fn_inst: mr_fns::FnInst<'ctxt>,
         mlr_fn: mlr::Fn<'ctxt>,
-    ) -> Self {
+    ) -> MlrFnLoweringResult<Self> {
         let builder = parent.iw_ctxt.create_builder();
         #[allow(clippy::mutable_key_type)]
         let locs = HashMap::new();
-        let iw_fn = parent.get_fn(fn_inst).unwrap();
+        let iw_fn = parent
+            .get_fn(fn_inst)
+            .ok_or_else(|| MlrFnLoweringError::Bug(format!("function '{fn_inst}' was not declared")))?;
         let after_loop_blocks = VecDeque::new();
         let subst = fn_inst.get_subst();
         let self_ty = fn_inst.self_ty;
 
-        Self {
+        Ok(Self {
             parent,
             mlr_fn,
             iw_fn,
@@ -64,7 +69,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             after_loop_blocks,
             subst,
             self_ty,
-        }
+        })
     }
 
     pub fn build_fn(&mut self) -> MlrFnLoweringResult<()> {
@@ -78,27 +83,25 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     }
 
     fn get_iw_ty_of_loc(&mut self, loc: mlr::Loc<'ctxt>) -> MlrFnLoweringResult<BasicTypeEnum<'iw>> {
-        let iw_ty = self.get_ty_as_basic_type_enum(loc.1).ok_or(MlrFnLoweringError)?;
-        Ok(iw_ty)
+        self.get_ty_as_basic_type_enum(loc.1)
     }
 
     fn get_iw_ty_of_place(&mut self, place: mlr::Place<'ctxt>) -> MlrFnLoweringResult<BasicTypeEnum<'iw>> {
-        let iw_ty = self.get_ty_as_basic_type_enum(place.1).ok_or(MlrFnLoweringError)?;
-        Ok(iw_ty)
+        self.get_ty_as_basic_type_enum(place.1)
     }
 
     fn get_fn_ptr_ty_of_loc(&mut self, op: mlr::Op<'ctxt>) -> MlrFnLoweringResult<FunctionType<'iw>> {
         let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
-            return Err(MlrFnLoweringError);
+            return Err(MlrFnLoweringError::Bug(format!("type '{mr_ty}' is not callable")));
         };
 
-        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrFnLoweringError)?;
+        let return_ty = self.get_ty_as_basic_type_enum(return_ty)?;
 
         let param_tys: Vec<_> = param_tys
             .iter()
-            .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError))
+            .map(|&param| self.get_ty_as_basic_metadata_type_enum(param))
             .collect::<MlrFnLoweringResult<_>>()?;
 
         Ok(return_ty.fn_type(&param_tys, var_args))
@@ -112,20 +115,17 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let mr_ty = self.substitute(op.1);
 
         let Some((param_tys, return_ty, var_args)) = self.parent.mr_ctxt.ty_is_callable(&[], mr_ty) else {
-            return Err(MlrFnLoweringError);
+            return Err(MlrFnLoweringError::Bug(format!("type '{mr_ty}' is not callable")));
         };
 
-        let return_ty = self.get_ty_as_basic_type_enum(return_ty).ok_or(MlrFnLoweringError)?;
+        let return_ty = self.get_ty_as_basic_type_enum(return_ty)?;
+        let captures_ty = self.get_ty_as_basic_metadata_type_enum(captures_ty)?;
 
-        let captures_ty = self
-            .get_ty_as_basic_metadata_type_enum(captures_ty)
-            .ok_or(MlrFnLoweringError);
-
-        let param_tys: Vec<_> = std::iter::once(captures_ty)
+        let param_tys: Vec<_> = std::iter::once(Ok(captures_ty))
             .chain(
                 param_tys
                     .iter()
-                    .map(|&param| self.get_ty_as_basic_metadata_type_enum(param).ok_or(MlrFnLoweringError)),
+                    .map(|&param| self.get_ty_as_basic_metadata_type_enum(param)),
             )
             .collect::<MlrFnLoweringResult<_>>()?;
 
@@ -142,9 +142,14 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
     fn build_alloca(&mut self, iw_ty: BasicTypeEnum<'iw>, name: &str) -> MlrFnLoweringResult<PointerValue<'iw>> {
         // Remember current block to restore later
-        let current_block = self.iw_builder.get_insert_block().ok_or(MlrFnLoweringError)?;
+        let current_block = self
+            .iw_builder
+            .get_insert_block()
+            .ok_or_else(|| MlrFnLoweringError::Bug("builder has no current insertion block".to_string()))?;
         // Position builder at the entry block to ensure allocations are at the start
-        let entry_block = self.entry_block.ok_or(MlrFnLoweringError)?;
+        let entry_block = self
+            .entry_block
+            .ok_or_else(|| MlrFnLoweringError::Bug("entry block not set when building alloca".to_string()))?;
         self.iw_builder.position_at_end(entry_block);
         // Allocate
         let address = self.iw_builder.build_alloca(iw_ty, name)?;
@@ -163,8 +168,11 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
         for (param_index, &param_loc) in param_locs.iter().enumerate() {
             let param_address = self.build_alloca_for_loc(param_loc)?;
-            self.iw_builder
-                .build_store(param_address, self.iw_fn.get_nth_param(param_index as u32).unwrap())?;
+            let param_value = self
+                .iw_fn
+                .get_nth_param(param_index as u32)
+                .ok_or_else(|| MlrFnLoweringError::Bug(format!("function has no parameter at index {param_index}")))?;
+            self.iw_builder.build_store(param_address, param_value)?;
         }
 
         Ok(entry_block)
@@ -194,7 +202,10 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 self.iw_builder.build_return(Some(&ret_value))?;
             }
             Break => {
-                let after_loop_block = self.after_loop_blocks.back().ok_or(MlrFnLoweringError)?;
+                let after_loop_block = self
+                    .after_loop_blocks
+                    .back()
+                    .ok_or_else(|| MlrFnLoweringError::Bug("'break' statement outside of a loop".to_string()))?;
                 self.iw_builder.build_unconditional_branch(*after_loop_block)?;
             }
             Block(stmts) => self.build_block(stmts)?,
@@ -223,14 +234,16 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     let iw_ty = self
                         .parent
                         .get_ty_as_basic_type_enum(target_ty)
-                        .ok_or(MlrFnLoweringError)?;
+                        .map_err(MlrFnLoweringError::Bug)?;
                     Ok(undef_of(iw_ty))
                 }
                 mlr::AsCastKind::Identity | mlr::AsCastKind::PtrLike => self.build_op(op),
                 mlr::AsCastKind::FnInstToFnPtr => {
                     let ty = self.substitute(op.1);
                     let mr_ty::TyDef::FnInst(fn_inst) = *ty.0 else {
-                        return Err(MlrFnLoweringError);
+                        return Err(MlrFnLoweringError::Bug(format!(
+                            "expected FnInst type for fn-to-fn-ptr cast, found '{ty}'"
+                        )));
                     };
                     self.build_global_function(fn_inst)
                 }
@@ -239,7 +252,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     let tgt_ty = self
                         .parent
                         .get_ty_as_basic_type_enum(target_ty)
-                        .ok_or(MlrFnLoweringError)?
+                        .map_err(MlrFnLoweringError::Bug)?
                         .into_int_type();
                     Ok(self
                         .iw_builder
@@ -251,7 +264,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     let tgt_ty = self
                         .parent
                         .get_ty_as_basic_type_enum(target_ty)
-                        .ok_or(MlrFnLoweringError)?
+                        .map_err(MlrFnLoweringError::Bug)?
                         .into_float_type();
                     Ok(self
                         .iw_builder
@@ -268,12 +281,15 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         use mlr::PlaceDef::*;
 
         match *place {
-            Loc(loc) => self.locs.get(&loc).ok_or(MlrFnLoweringError).cloned(),
+            Loc(loc) => self
+                .locs
+                .get(&loc)
+                .ok_or_else(|| MlrFnLoweringError::Bug(format!("local '{loc}' has no allocated address")))
+                .cloned(),
             FieldAccess { base, field_index, .. } => {
-                let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(base)?
-                    .try_into()
-                    .map_err(|_| MlrFnLoweringError)?;
+                let iw_base_struct_type: StructType<'iw> = self.get_iw_ty_of_place(base)?.try_into().map_err(|_| {
+                    MlrFnLoweringError::Bug(format!("expected struct type for place of type '{}'", base.1))
+                })?;
 
                 let base_address = self.build_place(base)?;
 
@@ -287,10 +303,9 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 Ok(field_ptr)
             }
             EnumDiscriminant { base, .. } => {
-                let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(base)?
-                    .try_into()
-                    .map_err(|_| MlrFnLoweringError)?;
+                let iw_base_struct_type: StructType<'iw> = self.get_iw_ty_of_place(base)?.try_into().map_err(|_| {
+                    MlrFnLoweringError::Bug(format!("expected struct type for place of type '{}'", base.1))
+                })?;
 
                 let base_address = self.build_place(base)?;
 
@@ -301,10 +316,9 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 Ok(discrim_ptr)
             }
             ProjectToVariant { base, .. } => {
-                let iw_base_struct_type: StructType<'iw> = self
-                    .get_iw_ty_of_place(base)?
-                    .try_into()
-                    .map_err(|_| MlrFnLoweringError)?;
+                let iw_base_struct_type: StructType<'iw> = self.get_iw_ty_of_place(base)?.try_into().map_err(|_| {
+                    MlrFnLoweringError::Bug(format!("expected struct type for place of type '{}'", base.1))
+                })?;
 
                 let base_address = self.build_place(base)?;
 
@@ -338,11 +352,15 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
         let value = match constant {
             &Int(i) => {
-                let iw_ty = self.parent.get_ty(ty).unwrap().into_int_type();
+                let iw_ty = self.parent.get_ty(ty).map_err(MlrFnLoweringError::Bug)?.into_int_type();
                 iw_ty.const_int(i as u64, false).as_basic_value_enum()
             }
             &Float(f) => {
-                let float_ty = self.parent.get_ty(ty).unwrap().into_float_type();
+                let float_ty = self
+                    .parent
+                    .get_ty(ty)
+                    .map_err(MlrFnLoweringError::Bug)?
+                    .into_float_type();
                 float_ty.const_float(f).as_basic_value_enum()
             }
             &Bool(b) => {
@@ -353,7 +371,7 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 let char_ty = self.parent.iw_ctxt.i8_type();
                 char_ty.const_int(c as u64, false).as_basic_value_enum()
             }
-            CString(c_string) => self.build_c_string(c_string.clone()),
+            CString(c_string) => return self.build_c_string(c_string.clone()),
         };
 
         Ok(value)
@@ -393,14 +411,14 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let substituted_self_ty = fn_inst.self_ty.map(|ty| self.substitute(ty));
         let substituted_fn_inst = fn_inst
             .with_gen_args(substituted_gen_args, substituted_env_gen_args)
-            .unwrap()
+            .map_err(|e| MlrFnLoweringError::Bug(format!("failed to substitute gen args of '{fn_inst}': {e:?}")))?
             .with_self_ty(substituted_self_ty);
 
         let result = self
             .parent
             .get_fn(substituted_fn_inst)
             .map(|fn_value| fn_value.as_global_value().as_pointer_value().as_basic_value_enum())
-            .ok_or(MlrFnLoweringError)?;
+            .ok_or_else(|| MlrFnLoweringError::Bug(format!("function '{substituted_fn_inst}' was not declared")))?;
         Ok(result)
     }
 
@@ -437,25 +455,30 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
             ref fn_, captures_ty, ..
         } = *callable_ty.0
         {
-            let closure_fn = fn_.get().expect("closure fn not set");
+            let closure_fn = fn_
+                .get()
+                .ok_or_else(|| MlrFnLoweringError::Bug("closure fn not set".to_string()))?;
             let fn_inst = {
                 let mr_ty::TyDef::Struct {
                     gen_args: env_gen_args, ..
                 } = *captures_ty.0
                 else {
-                    panic!("closure captures_ty is not a struct");
+                    return Err(MlrFnLoweringError::Bug(format!(
+                        "closure captures_ty '{captures_ty}' is not a struct"
+                    )));
                 };
                 let gen_args = self.parent.mr_ctxt.tys.ty_slice(&[]);
-                FnInst::new(closure_fn, gen_args, env_gen_args).unwrap()
+                FnInst::new(closure_fn, gen_args, env_gen_args)
+                    .map_err(|e| MlrFnLoweringError::Bug(format!("failed to construct closure FnInst: {e:?}")))?
             };
             let fn_ptr = self.build_global_function(fn_inst)?.into_pointer_value();
             let captures: BasicMetadataValueEnum<'iw> = self.build_op(callable)?.into();
 
             let fn_ty = self.get_closure_fn_ty(callable, captures_ty)?;
 
-            let args = std::iter::once(captures)
-                .chain(args.iter().map(|&arg| self.build_op(arg).unwrap().into()))
-                .collect::<Vec<_>>();
+            let args = std::iter::once(Ok(captures))
+                .chain(args.iter().map(|&arg| self.build_op(arg).map(Into::into)))
+                .collect::<MlrFnLoweringResult<Vec<_>>>()?;
 
             let call_site = self
                 .iw_builder
@@ -468,8 +491,8 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
             let args = args
                 .iter()
-                .map(|&arg| self.build_op(arg).unwrap().into())
-                .collect::<Vec<_>>();
+                .map(|&arg| self.build_op(arg).map(Into::into))
+                .collect::<MlrFnLoweringResult<Vec<_>>>()?;
 
             let call_site = self
                 .iw_builder
@@ -482,8 +505,8 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
             let args = args
                 .iter()
-                .map(|&arg| self.build_op(arg).unwrap().into())
-                .collect::<Vec<_>>();
+                .map(|&arg| self.build_op(arg).map(Into::into))
+                .collect::<MlrFnLoweringResult<Vec<_>>>()?;
 
             let call_site = self.iw_builder.build_indirect_call(fn_ty, fn_ptr, &args, "call_site")?;
             let output = call_site.try_as_basic_value().unwrap_basic();
@@ -534,24 +557,28 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         Ok(())
     }
 
-    fn build_c_string(&self, c_string: Vec<u8>) -> BasicValueEnum<'iw> {
-        let c_string = String::from_utf8(c_string).unwrap();
-        unsafe {
-            self.iw_builder
-                .build_global_string(&c_string, "c_string_lit")
-                .unwrap()
-                .as_basic_value_enum()
-        }
+    fn build_c_string(&self, c_string: Vec<u8>) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
+        let c_string = String::from_utf8(c_string)
+            .map_err(|_| MlrFnLoweringError::Bug("C string literal is not valid UTF-8".to_string()))?;
+        let value = unsafe { self.iw_builder.build_global_string(&c_string, "c_string_lit")? };
+        Ok(value.as_basic_value_enum())
     }
 
-    fn get_ty_as_basic_type_enum(&mut self, ty: mr_ty::Ty<'ctxt>) -> Option<BasicTypeEnum<'iw>> {
+    fn get_ty_as_basic_type_enum(&mut self, ty: mr_ty::Ty<'ctxt>) -> MlrFnLoweringResult<BasicTypeEnum<'iw>> {
         let ty = self.substitute(ty);
-        self.parent.get_ty_as_basic_type_enum(ty)
+        self.parent
+            .get_ty_as_basic_type_enum(ty)
+            .map_err(MlrFnLoweringError::Bug)
     }
 
-    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_ty::Ty<'ctxt>) -> Option<BasicMetadataTypeEnum<'iw>> {
+    fn get_ty_as_basic_metadata_type_enum(
+        &mut self,
+        ty: mr_ty::Ty<'ctxt>,
+    ) -> MlrFnLoweringResult<BasicMetadataTypeEnum<'iw>> {
         let ty = self.substitute(ty);
-        self.parent.get_ty_as_basic_metadata_type_enum(ty)
+        self.parent
+            .get_ty_as_basic_metadata_type_enum(ty)
+            .map_err(MlrFnLoweringError::Bug)
     }
 
     fn substitute(&mut self, ty: mr_ty::Ty<'ctxt>) -> mr_ty::Ty<'ctxt> {

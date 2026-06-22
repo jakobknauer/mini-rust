@@ -1,5 +1,7 @@
 mod fns;
 
+pub use fns::MlrFnLoweringError;
+
 use std::collections::HashMap;
 
 use inkwell::{
@@ -21,8 +23,11 @@ use crate::{
 pub enum MlrLoweringError<'ctxt> {
     FnLowering {
         fn_inst: mr_fns::FnInst<'ctxt>,
-        #[allow(unused)]
         error: fns::MlrFnLoweringError,
+    },
+    FnSigLowering {
+        fn_inst: mr_fns::FnInst<'ctxt>,
+        error: String,
     },
 }
 
@@ -35,7 +40,7 @@ pub fn mlr_to_llvm_ir<'ctxt>(
     let mut generator = MlrLowerer::new(&iw_ctxt, mr_ctxt, mlr_fns, fn_insts);
 
     generator.set_target_triple();
-    generator.declare_functions();
+    generator.declare_functions()?;
     generator.define_functions()?;
 
     Ok(generator.iw_module.print_to_string().to_string())
@@ -84,21 +89,25 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
         self.iw_module.set_triple(&target_triple);
     }
 
-    fn declare_functions(&mut self) {
+    fn declare_functions(&mut self) -> Result<(), MlrLoweringError<'ctxt>> {
         for fn_inst in self.fn_insts.clone() {
             let (param_tys, return_ty, var_args) = self.mr_ctxt.get_fn_inst_sig(fn_inst);
 
             let param_types: Vec<_> = param_tys
                 .iter()
-                .map(|&ty| self.get_ty_as_basic_metadata_type_enum(ty).unwrap())
-                .collect();
-            let return_type = self.get_ty_as_basic_type_enum(return_ty).unwrap();
+                .map(|&ty| self.get_ty_as_basic_metadata_type_enum(ty))
+                .collect::<Result<_, _>>()
+                .map_err(|error| MlrLoweringError::FnSigLowering { fn_inst, error })?;
+            let return_type = self
+                .get_ty_as_basic_type_enum(return_ty)
+                .map_err(|error| MlrLoweringError::FnSigLowering { fn_inst, error })?;
             let iw_fn_type = return_type.fn_type(&param_types, var_args);
 
             let fn_name = fn_inst.to_string();
             let fn_value = self.iw_module.add_function(&fn_name, iw_fn_type, None);
             self.functions.insert(fn_inst, fn_value);
         }
+        Ok(())
     }
 
     fn define_functions(&mut self) -> Result<(), MlrLoweringError<'ctxt>> {
@@ -106,7 +115,8 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             let Some(mlr_fn) = self.mlr_fns.get(&fn_inst.fn_).cloned() else {
                 continue;
             };
-            let mut fn_gen = MlrFnLowerer::new(self, fn_inst, mlr_fn);
+            let mut fn_gen = MlrFnLowerer::new(self, fn_inst, mlr_fn)
+                .map_err(|error| MlrLoweringError::FnLowering { fn_inst, error })?;
             fn_gen
                 .build_fn()
                 .map_err(|error| MlrLoweringError::FnLowering { fn_inst, error })?;
@@ -114,13 +124,13 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
         Ok(())
     }
 
-    fn get_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<AnyTypeEnum<'iw>> {
+    fn get_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> Result<AnyTypeEnum<'iw>, String> {
         use mr_tys::{Primitive::*, TyDef::*};
 
         let ty = self.mr_ctxt.normalize_ty(ty);
 
-        if self.types.contains_key(&ty) {
-            return self.types.get(&ty).cloned();
+        if let Some(&cached) = self.types.get(&ty) {
+            return Ok(cached);
         }
 
         let inkwell_type = match *ty.0 {
@@ -150,52 +160,62 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                 CVoid => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
                 CChar => self.iw_ctxt.i8_type().as_any_type_enum(),
             },
-            Struct { .. } => self.define_struct(ty),
-            Enum { .. } => self.define_enum(ty),
-            Tuple(..) => self.define_tuple_ty(ty),
+            Struct { .. } => self.define_struct(ty)?,
+            Enum { .. } => self.define_enum(ty)?,
+            Tuple(..) => self.define_tuple_ty(ty)?,
             FnPtr { .. } | Ref(..) | RefMut(..) | Ptr(..) => {
                 self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum()
             }
-            Closure { captures_ty, .. } => self.get_ty(captures_ty).unwrap(),
-            GenVar(gen_var) => unreachable!(
-                "generic type variable '{}' should be substituted before this point",
-                gen_var.name()
-            ),
-            TraitSelf(_) => unreachable!("TraitSelf types should not occur in actual functions"),
+            Closure { captures_ty, .. } => self.get_ty(captures_ty)?,
+            GenVar(gen_var) => {
+                return Err(format!(
+                    "generic type variable '{}' should be substituted before this point",
+                    gen_var.name()
+                ));
+            }
+            TraitSelf(_) => return Err("TraitSelf types should not occur in actual functions".to_string()),
             AssocTy { .. } => {
                 let ty = self.mr_ctxt.normalize_ty(ty);
-                self.get_ty(ty).unwrap()
+                self.get_ty(ty)?
             }
             Opaque { opaque, gen_args } => {
                 let resolved = self
                     .mr_ctxt
                     .tys
                     .get_opaque_resolution(opaque)
-                    .expect("opaque type must be resolved before MLR lowering");
-                let subst = mr_tys::GenVarSubst::new(&opaque.gen_params, gen_args).unwrap();
+                    .ok_or_else(|| "opaque type must be resolved before MLR lowering".to_string())?;
+                let subst = mr_tys::GenVarSubst::new(&opaque.gen_params, gen_args)
+                    .ok_or_else(|| "gen arg count mismatch when substituting opaque type".to_string())?;
                 let instantiated = self.mr_ctxt.tys.substitute_gen_vars(resolved, &subst);
-                self.get_ty(instantiated).unwrap()
+                self.get_ty(instantiated)?
             }
             FnInst(_) => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             Never => self.iw_ctxt.i8_type().as_any_type_enum(),
-            InfVar(_) => unreachable!(),
+            InfVar(_) => return Err("InfVar type should not occur at MLR lowering".to_string()),
         };
 
-        Some(*self.types.entry(ty).or_insert(inkwell_type))
+        Ok(*self.types.entry(ty).or_insert(inkwell_type))
     }
 
-    fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<BasicTypeEnum<'iw>> {
-        self.get_ty(ty)?.try_into().ok()
+    fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Result<BasicTypeEnum<'iw>, String> {
+        self.get_ty(ty)?
+            .try_into()
+            .map_err(|_| format!("type '{ty}' has no corresponding LLVM basic type"))
     }
 
-    fn get_ty_as_basic_metadata_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Option<BasicMetadataTypeEnum<'iw>> {
-        self.get_ty(ty)?.try_into().ok()
+    fn get_ty_as_basic_metadata_type_enum(
+        &mut self,
+        ty: mr_tys::Ty<'ctxt>,
+    ) -> Result<BasicMetadataTypeEnum<'iw>, String> {
+        self.get_ty(ty)?
+            .try_into()
+            .map_err(|_| format!("type '{ty}' has no corresponding LLVM metadata type"))
     }
 
-    fn define_struct(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
+    fn define_struct(&mut self, ty: mr_tys::Ty<'ctxt>) -> Result<AnyTypeEnum<'iw>, String> {
         for &(ty_2, iw_type) in &self.structs {
             if ty == ty_2 {
-                return iw_type.as_any_type_enum();
+                return Ok(iw_type.as_any_type_enum());
             }
         }
 
@@ -203,20 +223,24 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
         self.types.insert(ty, iw_struct.as_any_type_enum());
         self.structs.push((ty, iw_struct));
 
-        let mr_field_tys = self.mr_ctxt.tys.get_struct_field_tys(ty).unwrap();
+        let mr_field_tys = self
+            .mr_ctxt
+            .tys
+            .get_struct_field_tys(ty)
+            .map_err(|e| format!("type '{}' is not a struct", e.0))?;
         let iw_field_tys: Vec<BasicTypeEnum> = mr_field_tys
             .into_iter()
-            .map(|field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())
-            .collect();
+            .map(|field_ty| self.get_ty_as_basic_type_enum(field_ty))
+            .collect::<Result<_, _>>()?;
 
         iw_struct.set_body(&iw_field_tys, false);
-        iw_struct.as_any_type_enum()
+        Ok(iw_struct.as_any_type_enum())
     }
 
-    fn define_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
+    fn define_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Result<AnyTypeEnum<'iw>, String> {
         for &(ty_2, iw_type) in &self.enums {
             if ty == ty_2 {
-                return iw_type.as_any_type_enum();
+                return Ok(iw_type.as_any_type_enum());
             }
         }
 
@@ -227,28 +251,33 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
         let discrim_bits = 32;
         let discrim_type = self.iw_ctxt.custom_width_int_type(discrim_bits).as_basic_type_enum();
 
-        let mr_variant_tys = self.mr_ctxt.tys.get_enum_variant_tys(ty).unwrap();
+        let mr_variant_tys = self
+            .mr_ctxt
+            .tys
+            .get_enum_variant_tys(ty)
+            .map_err(|e| format!("type '{}' is not an enum", e.0))?;
         let max_variant_size = mr_variant_tys
             .into_iter()
-            .map(|variant_ty| self.get_ty_as_basic_type_enum(variant_ty).unwrap())
-            .map(|variant_ty| TargetData::create("").get_store_size(&variant_ty) as u32)
-            .max()
-            .unwrap_or(0);
+            .map(|variant_ty| {
+                let iw_ty = self.get_ty_as_basic_type_enum(variant_ty)?;
+                Ok(TargetData::create("").get_store_size(&iw_ty) as u32)
+            })
+            .try_fold(0u32, |max, size: Result<u32, String>| size.map(|size| max.max(size)))?;
 
         let data_array_type = self.iw_ctxt.i8_type().array_type(max_variant_size).as_basic_type_enum();
 
         iw_enum_struct.set_body(&[discrim_type, data_array_type], false);
-        iw_enum_struct.as_any_type_enum()
+        Ok(iw_enum_struct.as_any_type_enum())
     }
 
-    fn define_tuple_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> AnyTypeEnum<'iw> {
+    fn define_tuple_ty(&mut self, ty: mr_tys::Ty<'ctxt>) -> Result<AnyTypeEnum<'iw>, String> {
         let iw_field_tys: Vec<BasicTypeEnum> = ty
             .tuple_field_tys()
-            .unwrap()
+            .map_err(|()| format!("type '{ty}' is not a tuple"))?
             .iter()
-            .map(|&field_ty| self.get_ty_as_basic_type_enum(field_ty).unwrap())
-            .collect();
-        self.iw_ctxt.struct_type(&iw_field_tys, false).as_any_type_enum()
+            .map(|&field_ty| self.get_ty_as_basic_type_enum(field_ty))
+            .collect::<Result<_, _>>()?;
+        Ok(self.iw_ctxt.struct_type(&iw_field_tys, false).as_any_type_enum())
     }
 
     fn get_fn(&self, fn_inst: mr_fns::FnInst<'ctxt>) -> Option<FunctionValue<'iw>> {

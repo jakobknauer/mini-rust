@@ -30,14 +30,18 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
     fn build_size_of_intrinsic(&mut self, fn_inst: mr_fns::FnInst<'ctxt>) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let gen_args = self.substitute_slice(fn_inst.gen_args);
         let ty = gen_args[0];
-        let iw_ty = self.get_ty_as_basic_type_enum(ty).ok_or(MlrFnLoweringError)?;
+        let iw_ty = self.get_ty_as_basic_type_enum(ty)?;
         let size = TargetData::create("").get_store_size(&iw_ty);
         let isize_mr_ty = self
             .parent
             .mr_ctxt
             .tys
             .primitive(mr_ty::Primitive::SignedInt(mr_ty::IntWidth::ISize));
-        let int_ty = self.parent.get_ty(isize_mr_ty).unwrap().into_int_type();
+        let int_ty = self
+            .parent
+            .get_ty(isize_mr_ty)
+            .map_err(MlrFnLoweringError::Bug)?
+            .into_int_type();
         Ok(int_ty.const_int(size, false).as_basic_value_enum())
     }
 
@@ -96,7 +100,11 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                         .iw_builder
                         .build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge")?
                         .as_basic_value_enum(),
-                    _ => unreachable!(),
+                    _ => {
+                        return Err(MlrFnLoweringError::Bug(format!(
+                            "unexpected op in float dispatch: {op:?}"
+                        )));
+                    }
                 })
             }
 
@@ -119,7 +127,11 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                     GtInt => self.iw_builder.build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")?,
                     LeInt => self.iw_builder.build_int_compare(IntPredicate::SLE, lhs, rhs, "le")?,
                     GeInt => self.iw_builder.build_int_compare(IntPredicate::SGE, lhs, rhs, "ge")?,
-                    _ => unreachable!(),
+                    _ => {
+                        return Err(MlrFnLoweringError::Bug(format!(
+                            "unexpected op in int dispatch: {op:?}"
+                        )));
+                    }
                 }
                 .as_basic_value_enum())
             }
@@ -142,7 +154,11 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 let result = match op {
                     NegInt => self.iw_builder.build_int_neg(operand, "neg")?,
                     NotBool => self.iw_builder.build_not(operand, "not")?,
-                    _ => unreachable!(),
+                    _ => {
+                        return Err(MlrFnLoweringError::Bug(format!(
+                            "unexpected op in unary int dispatch: {op:?}"
+                        )));
+                    }
                 };
                 Ok(result.as_basic_value_enum())
             }
@@ -175,12 +191,15 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         args: &[mlr::Op<'ctxt>],
     ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
         let &[ptr, offset] = args else {
-            return Err(MlrFnLoweringError);
+            return Err(MlrFnLoweringError::Bug(format!(
+                "intrinsic 'ptr_offset' expects 2 arguments, got {}",
+                args.len()
+            )));
         };
 
         let env_gen_args = self.substitute_slice(fn_inst.env_gen_args);
         let pointee_ty = env_gen_args[0];
-        let iw_pointee_ty = self.get_ty_as_basic_type_enum(pointee_ty).ok_or(MlrFnLoweringError)?;
+        let iw_pointee_ty = self.get_ty_as_basic_type_enum(pointee_ty)?;
 
         let ptr_ty = self.parent.iw_ctxt.ptr_type(AddressSpace::default());
 
