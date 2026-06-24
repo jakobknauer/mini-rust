@@ -50,6 +50,7 @@ pub enum DerefStep<'ty> {
 #[derive(Clone)]
 pub enum Coercion<'ty> {
     Deref(Vec<DerefStep<'ty>>),
+    FnPtr(ty::Ty<'ty>),
 }
 
 pub enum ExprExtra<'ty> {
@@ -216,6 +217,10 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 self.typing.coercions.insert(expr.1, coercion);
                 return Ok(hint_norm);
             }
+            if let Some(coercion) = self.try_fn_ptr_coercion(ty_norm, hint_norm) {
+                self.typing.coercions.insert(expr.1, coercion);
+                return Ok(hint_norm);
+            }
         }
 
         Ok(ty)
@@ -234,6 +239,26 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             }
         }
         None
+    }
+
+    fn try_fn_ptr_coercion(&mut self, ty: ty::Ty<'ctxt>, hint: ty::Ty<'ctxt>) -> Option<Coercion<'ctxt>> {
+        let &ty::TyDef::FnInst(fn_inst) = ty.0 else {
+            return None;
+        };
+        if !matches!(hint.0, ty::TyDef::FnPtr { .. }) {
+            return None;
+        }
+
+        let (param_tys, return_ty, var_args) = self.ctxt.get_fn_inst_sig(fn_inst);
+        let fn_ptr_ty = self.ctxt.tys.fn_ptr(param_tys, return_ty, var_args);
+
+        // Single `unify` call so the per-param/return-type bindings are atomic:
+        // if any part fails to match, nothing from this attempt is committed.
+        if !self.unify(fn_ptr_ty, hint) {
+            return None;
+        }
+
+        Some(Coercion::FnPtr(hint))
     }
 
     fn check_stmt(&mut self, stmt: hlr::Stmt<'ctxt>) -> TypeckResult<'ctxt, ()> {

@@ -161,6 +161,12 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let derefed = self.apply_deref_steps(place, &steps);
                 self.builder.copy_val(derefed).into()
             }
+            Coercion::FnPtr(target_ty) => {
+                let op = lowered.into_op(&mut self.builder);
+                self.builder
+                    .insert_as_val(op, target_ty, mlr::AsCastKind::FnInstToFnPtr)
+                    .into()
+            }
         }
     }
 
