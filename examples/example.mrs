@@ -1,6 +1,9 @@
 fn main() -> i32 {
-    let func: fn(i32) -> i32 = fac;
-    func(3)
+    let x = apply::<i32, i32, _>(fac, 3);  // calls fac statically
+    let y = apply::<i32, i32, fn(i32) -> i32>(fac, 3);  // coerces fac to fn ptr and calls dynamically
+    let z = apply::<i32, i32, fn(_) -> _>(fac, 3);  // coerces fac to fn ptr, inferring the exact signature, and calls dynamically
+    printf("x = %d; y = %d; z = %d\n", x, y, z);
+    x
 }
 
 fn printf(format: *c_char, ...) -> i32;

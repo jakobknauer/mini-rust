@@ -1,6 +1,6 @@
 use crate::ctxt::{fns, ty};
 
-use super::{DerefStep, ExprExtra, MthdResolution};
+use super::{Coercion, DerefStep, ExprExtra, MthdResolution};
 
 impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     pub(super) fn normalize_all(&mut self) {
@@ -158,6 +158,20 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             let extra = self.typing.expr_extra.remove(&expr_id).unwrap();
             let extra = self.normalize_expr_extra(extra);
             self.typing.expr_extra.insert(expr_id, extra);
+        }
+
+        let expr_ids: Vec<_> = self.typing.coercions.keys().copied().collect();
+        for expr_id in expr_ids {
+            let coercion = self.typing.coercions.remove(&expr_id).unwrap();
+            let coercion = self.normalize_coercion(coercion);
+            self.typing.coercions.insert(expr_id, coercion);
+        }
+    }
+
+    fn normalize_coercion(&mut self, coercion: Coercion<'ctxt>) -> Coercion<'ctxt> {
+        match coercion {
+            Coercion::Deref(steps) => Coercion::Deref(self.normalize_deref_steps(steps)),
+            Coercion::FnPtr(target_ty) => Coercion::FnPtr(self.normalize(target_ty)),
         }
     }
 
