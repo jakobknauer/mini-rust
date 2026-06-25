@@ -171,7 +171,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
     fn normalize_coercion(&mut self, coercion: Coercion<'ctxt>) -> Coercion<'ctxt> {
         match coercion {
             Coercion::Deref(steps) => Coercion::Deref(self.normalize_deref_steps(steps)),
-            Coercion::FnPtr(target_ty) => Coercion::FnPtr(self.normalize(target_ty)),
+            Coercion::AsCast { target_ty, kind } => Coercion::AsCast {
+                target_ty: self.normalize(target_ty),
+                kind,
+            },
         }
     }
 

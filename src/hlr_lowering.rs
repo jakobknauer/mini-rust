@@ -161,11 +161,10 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 let derefed = self.apply_deref_steps(place, &steps);
                 self.builder.copy_val(derefed).into()
             }
-            Coercion::FnPtr(target_ty) => {
+            Coercion::AsCast { target_ty, kind } => {
                 let op = lowered.into_op(&mut self.builder);
-                self.builder
-                    .insert_as_val(op, target_ty, mlr::AsCastKind::FnInstToFnPtr)
-                    .into()
+                let mlr_kind = self.lower_as_cast_kind(kind);
+                self.builder.insert_as_val(op, target_ty, mlr_kind).into()
             }
         }
     }
@@ -576,15 +575,19 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             ExprExtra::AsCast(kind) => kind,
             _ => unreachable!(),
         };
-        let kind = match hlr_kind {
+        let kind = self.lower_as_cast_kind(hlr_kind);
+        self.builder.insert_as_val(op, target_ty, kind).into()
+    }
+
+    fn lower_as_cast_kind(&self, kind: hlr::AsCastKind) -> mlr::AsCastKind {
+        match kind {
             hlr::AsCastKind::Never => mlr::AsCastKind::Never,
             hlr::AsCastKind::Identity => mlr::AsCastKind::Identity,
             hlr::AsCastKind::PtrLike => mlr::AsCastKind::PtrLike,
             hlr::AsCastKind::Int => mlr::AsCastKind::Int,
             hlr::AsCastKind::Float => mlr::AsCastKind::Float,
             hlr::AsCastKind::FnInstToFnPtr => mlr::AsCastKind::FnInstToFnPtr,
-        };
-        self.builder.insert_as_val(op, target_ty, kind).into()
+        }
     }
 
     fn lower_if(

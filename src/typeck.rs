@@ -50,7 +50,10 @@ pub enum DerefStep<'ty> {
 #[derive(Clone)]
 pub enum Coercion<'ty> {
     Deref(Vec<DerefStep<'ty>>),
-    FnPtr(ty::Ty<'ty>),
+    AsCast {
+        target_ty: ty::Ty<'ty>,
+        kind: hlr::AsCastKind,
+    },
 }
 
 pub enum ExprExtra<'ty> {
@@ -221,6 +224,10 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 self.typing.coercions.insert(expr.1, coercion);
                 return Ok(hint_norm);
             }
+            if let Some(coercion) = self.try_ptr_weaken_coercion(ty_norm, hint_norm) {
+                self.typing.coercions.insert(expr.1, coercion);
+                return Ok(hint_norm);
+            }
         }
 
         Ok(ty)
@@ -258,7 +265,30 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             return None;
         }
 
-        Some(Coercion::FnPtr(hint))
+        Some(Coercion::AsCast {
+            target_ty: hint,
+            kind: hlr::AsCastKind::FnInstToFnPtr,
+        })
+    }
+
+    /// Pointer-weakening coercions: `&mut T -> &T`, `&T -> *T`, `&mut T -> *T`.
+    /// All lower identically to a `PtrLike` as-cast (a no-op at the LLVM level).
+    fn try_ptr_weaken_coercion(&mut self, ty: ty::Ty<'ctxt>, hint: ty::Ty<'ctxt>) -> Option<Coercion<'ctxt>> {
+        let pointee_pair = match (ty.0, hint.0) {
+            (&ty::TyDef::RefMut(src), &ty::TyDef::Ref(tgt))
+            | (&ty::TyDef::Ref(src), &ty::TyDef::Ptr(tgt))
+            | (&ty::TyDef::RefMut(src), &ty::TyDef::Ptr(tgt)) => (src, tgt),
+            _ => return None,
+        };
+
+        if !self.unify(pointee_pair.0, pointee_pair.1) {
+            return None;
+        }
+
+        Some(Coercion::AsCast {
+            target_ty: hint,
+            kind: hlr::AsCastKind::PtrLike,
+        })
     }
 
     fn check_stmt(&mut self, stmt: hlr::Stmt<'ctxt>) -> TypeckResult<'ctxt, ()> {
