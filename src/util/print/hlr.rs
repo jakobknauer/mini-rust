@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::io::Write;
 
-use crate::{hlr, typeck::HlrTyping};
+use crate::{
+    hlr,
+    typeck::{Coercion, HlrTyping},
+};
 
 pub fn print_hlr<'ctxt, W: Write>(
     hlr_fn: &hlr::Fn<'ctxt>,
@@ -71,6 +74,26 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
     }
 
     fn print_expr(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), std::io::Error> {
+        let coercion = self.typing.and_then(|t| t.coercions.get(&expr.1)).cloned();
+        match coercion {
+            None => self.print_expr_inner(expr),
+            // Coercions are implicit, so we render them with the syntax the user
+            // would write to perform them explicitly: a deref coercion as one `*`
+            // per deref step, an as-coercion as a trailing `as <target>`.
+            Some(Coercion::Deref(steps)) => {
+                for _ in &steps {
+                    write!(self.writer, "*")?;
+                }
+                self.print_expr_inner(expr)
+            }
+            Some(Coercion::AsCast { target_ty, .. }) => {
+                self.print_expr_inner(expr)?;
+                write!(self.writer, " as {}", target_ty)
+            }
+        }
+    }
+
+    fn print_expr_inner(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), std::io::Error> {
         use hlr::ExprDef::*;
         match expr.0 {
             Lit(lit) => self.print_lit(lit),
