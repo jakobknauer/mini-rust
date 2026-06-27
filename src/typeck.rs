@@ -216,21 +216,27 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         if coerce && let Some(hint_ty) = hint {
             let ty_norm = self.normalize(ty);
             let hint_norm = self.normalize(hint_ty);
-            if let Some(coercion) = self.try_deref_coercion(ty_norm, hint_norm) {
-                self.typing.coercions.insert(expr.1, coercion);
-                return Ok(hint_norm);
-            }
-            if let Some(coercion) = self.try_fn_ptr_coercion(ty_norm, hint_norm) {
-                self.typing.coercions.insert(expr.1, coercion);
-                return Ok(hint_norm);
-            }
-            if let Some(coercion) = self.try_ptr_weaken_coercion(ty_norm, hint_norm) {
+            if let Some(coercion) = self.try_coercion(ty_norm, hint_norm) {
                 self.typing.coercions.insert(expr.1, coercion);
                 return Ok(hint_norm);
             }
         }
 
         Ok(ty)
+    }
+
+    /// Attempts each coercion in priority order, returning the first that applies.
+    fn try_coercion(&mut self, ty: ty::Ty<'ctxt>, hint: ty::Ty<'ctxt>) -> Option<Coercion<'ctxt>> {
+        if let Some(c) = self.try_deref_coercion(ty, hint) {
+            return Some(c);
+        }
+        if let Some(c) = self.try_fn_ptr_coercion(ty, hint) {
+            return Some(c);
+        }
+        if let Some(c) = self.try_ptr_weaken_coercion(ty, hint) {
+            return Some(c);
+        }
+        self.try_never_coercion(ty, hint)
     }
 
     fn try_deref_coercion(&mut self, ty: ty::Ty<'ctxt>, hint: ty::Ty<'ctxt>) -> Option<Coercion<'ctxt>> {
@@ -288,6 +294,18 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         Some(Coercion::AsCast {
             target_ty: hint,
             kind: hlr::AsCastKind::PtrLike,
+        })
+    }
+
+    /// Never coercion: a diverging expression of type `!` coerces to any type.
+    fn try_never_coercion(&mut self, ty: ty::Ty<'ctxt>, hint: ty::Ty<'ctxt>) -> Option<Coercion<'ctxt>> {
+        if !matches!(ty.0, ty::TyDef::Never) {
+            return None;
+        }
+
+        Some(Coercion::AsCast {
+            target_ty: hint,
+            kind: hlr::AsCastKind::Never,
         })
     }
 
