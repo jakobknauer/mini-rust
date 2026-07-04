@@ -116,6 +116,9 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             self.print_hlr_fns(hlr_path, &hlr_fns, &hlr_typings)?;
         }
 
+        self.print_pretty("Checking mutability");
+        mutck::mutck(&hlr_fns, &hlr_typings).map_err(DriverError::Mutck)?;
+
         self.print_pretty("Lowering HLR to MLR");
         let mlr_fns = self.hlr_lowering(&hlr_fns, &hlr_typings);
 
@@ -123,9 +126,6 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
             self.print_mlr_fns(mlr_path, &mlr_fns)?;
         }
-
-        self.print_pretty("Checking mutability");
-        mutck::mutck(&mlr_fns).map_err(DriverError::Mutck)?;
 
         self.print_pretty("Monomorphizing functions");
         #[allow(clippy::mutable_key_type)]

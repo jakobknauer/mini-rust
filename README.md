@@ -56,8 +56,8 @@ The compilation process takes the following steps:
 - Build the `Ctxt` object defined in [ctxt](src/ctxt.rs) from the AST. This serves as a central registry for types, functions, traits etc..
 - Lower the AST to [High-Level Representation (HLR)](src/hlr.rs) in [ast_lowering](src/ast_lowering.rs). This includes resolution of most names, e.g. variables and functions, but not e.g. method calls, as this requires typechecking the receiver. Syntax desugaring (e.g. `while` and `for` to `loop`) also takes place here.
 - Typecheck the HLR in [typeck](src/typeck.rs).
-- Lower the HLR to [Mid-Level Representation (MLR)](src/mlr.rs) in [hlr_lowering](src/hlr_lowering.rs).
 - Check mutability in [mutck](src/mutck.rs): verify that only mutable bindings are assigned to, and that `&mut` references are only taken of mutable places.
+- Lower the HLR to [Mid-Level Representation (MLR)](src/mlr.rs) in [hlr_lowering](src/hlr_lowering.rs).
 - Monomorphization: Using information recorded during the previous pass, recursively determine all instantiations of functions with respective generic arguments.
 - Lower the MLR to LLVM Immediate Representation (IR) in [mlr_lowering](src/mlr_lowering.rs). This is done for all function instantiations, i.e. this is where the actual monomorphization happens.
 - Write the LLVM IR in (textual representation) to disk.
