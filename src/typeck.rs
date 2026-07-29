@@ -44,7 +44,14 @@ pub enum MatchBinding {
 #[derive(Clone)]
 pub enum DerefStep<'ty> {
     Builtin,
-    Trait(MthdResolution<'ty>),
+    Trait {
+        mthd: MthdResolution<'ty>,
+        /// The `DerefMut::deref_mut` resolution, if the type also implements `DerefMut`
+        /// with the same `Target`. Mutck decides per use site which one is lowered.
+        mthd_mut: Option<MthdResolution<'ty>>,
+        /// The `Deref::Target` type this step dereferences to.
+        target_ty: ty::Ty<'ty>,
+    },
 }
 
 #[derive(Clone)]
@@ -62,7 +69,11 @@ pub enum ExprExtra<'ty> {
     BinaryOpMthd(MthdResolution<'ty>),
     UnaryPrim(language_items::UnaryPrimOp),
     UnaryOpMthd(MthdResolution<'ty>),
-    DerefMthd(MthdResolution<'ty>),
+    DerefMthd {
+        mthd: MthdResolution<'ty>,
+        /// See [`DerefStep::Trait::mthd_mut`].
+        mthd_mut: Option<MthdResolution<'ty>>,
+    },
     MthdCall {
         resolution: MthdResolution<'ty>,
         steps: Vec<DerefStep<'ty>>,
@@ -716,10 +727,45 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                 let target_ty = self.normalize(target_assoc);
                 let mthd = self.ctxt.traits.resolve_trait_method(deref_trait, "deref").unwrap();
                 let found = mthd::FoundMthd::Trait { trait_inst, mthd };
-                let resolution = self.instantiate_mthd(found, ty, "deref", None).ok()?;
-                Some((target_ty, DerefStep::Trait(resolution)))
+                let mthd = self.instantiate_mthd(found, ty, "deref", None).ok()?;
+                let mthd_mut = self.try_deref_mut_resolution(ty, target_ty);
+                Some((
+                    target_ty,
+                    DerefStep::Trait {
+                        mthd,
+                        mthd_mut,
+                        target_ty,
+                    },
+                ))
             }
         }
+    }
+
+    /// Resolves `DerefMut::deref_mut` for `ty` if it implements `DerefMut` with the same
+    /// `Target` as its `Deref` impl (`deref_target`); mismatching targets are treated as
+    /// not implementing `DerefMut`.
+    fn try_deref_mut_resolution(
+        &mut self,
+        ty: ty::Ty<'ctxt>,
+        deref_target: ty::Ty<'ctxt>,
+    ) -> Option<MthdResolution<'ctxt>> {
+        let deref_mut_trait = self.ctxt.language_items.deref_mut_trait?;
+        let gen_args = self.ctxt.tys.ty_slice(&[]);
+        let trait_inst = TraitInst::new(deref_mut_trait, gen_args).unwrap();
+        if !self.ctxt.ty_implements_trait_inst(&self.constraints, ty, trait_inst) {
+            return None;
+        }
+        let target_assoc = self.ctxt.tys.assoc_ty(ty, trait_inst, 0);
+        if self.normalize(target_assoc) != deref_target {
+            return None;
+        }
+        let mthd = self
+            .ctxt
+            .traits
+            .resolve_trait_method(deref_mut_trait, "deref_mut")
+            .unwrap();
+        let found = mthd::FoundMthd::Trait { trait_inst, mthd };
+        self.instantiate_mthd(found, ty, "deref_mut", None).ok()
     }
 
     fn deref_chain<'s>(
@@ -747,8 +793,10 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
                     Ok(target_ty)
                 }
             }
-            Some((target_ty, DerefStep::Trait(resolution))) => {
-                self.typing.expr_extra.insert(expr_id, ExprExtra::DerefMthd(resolution));
+            Some((target_ty, DerefStep::Trait { mthd, mthd_mut, .. })) => {
+                self.typing
+                    .expr_extra
+                    .insert(expr_id, ExprExtra::DerefMthd { mthd, mthd_mut });
                 Ok(target_ty)
             }
             None => Err(TypeckError::DereferenceOfNonRef { ty: expr_ty }),

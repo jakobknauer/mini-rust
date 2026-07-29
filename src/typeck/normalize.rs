@@ -183,7 +183,15 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             .into_iter()
             .map(|step| match step {
                 DerefStep::Builtin => DerefStep::Builtin,
-                DerefStep::Trait(r) => DerefStep::Trait(self.normalize_mthd_resolution(r)),
+                DerefStep::Trait {
+                    mthd,
+                    mthd_mut,
+                    target_ty,
+                } => DerefStep::Trait {
+                    mthd: self.normalize_mthd_resolution(mthd),
+                    mthd_mut: mthd_mut.map(|r| self.normalize_mthd_resolution(r)),
+                    target_ty: self.normalize(target_ty),
+                },
             })
             .collect()
     }
@@ -193,7 +201,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
             ExprExtra::Closure { .. } => extra,
             ExprExtra::ValMthd(resolution) => ExprExtra::ValMthd(self.normalize_mthd_resolution(resolution)),
             ExprExtra::BinaryOpMthd(resolution) => ExprExtra::BinaryOpMthd(self.normalize_mthd_resolution(resolution)),
-            ExprExtra::DerefMthd(resolution) => ExprExtra::DerefMthd(self.normalize_mthd_resolution(resolution)),
+            ExprExtra::DerefMthd { mthd, mthd_mut } => ExprExtra::DerefMthd {
+                mthd: self.normalize_mthd_resolution(mthd),
+                mthd_mut: mthd_mut.map(|r| self.normalize_mthd_resolution(r)),
+            },
             ExprExtra::MthdCall { resolution, steps } => ExprExtra::MthdCall {
                 resolution: self.normalize_mthd_resolution(resolution),
                 steps: self.normalize_deref_steps(steps),
