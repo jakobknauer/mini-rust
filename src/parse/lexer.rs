@@ -20,6 +20,8 @@ const ONE_CHAR_TOKENS: &[(char, Token)] = &[
     ('}', Token::RBrace),
     ('(', Token::LParen),
     (')', Token::RParen),
+    ('[', Token::LBracket),
+    (']', Token::RBracket),
     (';', Token::Semicolon),
     (',', Token::Comma),
     ('=', Token::Equal),

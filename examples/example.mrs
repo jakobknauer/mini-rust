@@ -37,3 +37,5 @@ impl Point {
         Point { x, y }
     }
 }
+
+fn consume_slice(slice: &[i32]) {}

@@ -216,6 +216,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.ty_annot(TyAnnotKind::Tuple(ty_annots))
     }
 
+    pub fn slice_annot(&self, ty_annot: TyAnnot<'ast>) -> TyAnnot<'ast> {
+        self.ast.ty_annot(TyAnnotKind::Slice(ty_annot))
+    }
+
     pub fn ref_annot(&self, ty_annot: TyAnnot<'ast>) -> TyAnnot<'ast> {
         self.ast.ty_annot(TyAnnotKind::Ref(ty_annot))
     }

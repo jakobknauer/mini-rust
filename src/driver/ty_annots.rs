@@ -117,6 +117,7 @@ impl<'arena> Driver<'_, 'arena> {
             }
             Wildcard => panic!("wildcard type annotation not supported at this position"),
             Never => Some(self.ctxt.tys.never()),
+            &Slice(_) => unimplemented!("slice types"),
         }
     }
 

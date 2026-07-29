@@ -1164,6 +1164,7 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
             Token::AmpersandAmpersand => self.parse_double_ref_annot(),
             Token::Asterisk => self.parse_ptr_annot(),
             Token::LParen => self.parse_tuple_annot(),
+            Token::LBracket => self.parse_slice_annot(),
             Token::Keyword(Keyword::Fn) => self.parse_fn_annot(),
             Token::Keyword(Keyword::Impl) => {
                 self.tokens.advance();
@@ -1230,6 +1231,13 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
         } else {
             Ok(self.builder.tuple_annot(&inner_tys))
         }
+    }
+
+    fn parse_slice_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
+        self.tokens.expect_token(Token::LBracket)?;
+        let inner_ty = self.parse_ty_annot()?;
+        self.tokens.expect_token(Token::RBracket)?;
+        Ok(self.builder.slice_annot(inner_ty))
     }
 
     fn parse_fn_annot(&mut self) -> Result<TyAnnot<'ast>, ParserErr> {
