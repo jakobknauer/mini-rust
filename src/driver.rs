@@ -117,10 +117,10 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         }
 
         self.print_pretty("Checking mutability");
-        mutck::mutck(&hlr_fns, &hlr_typings).map_err(DriverError::Mutck)?;
+        let deref_mut_marks = mutck::mutck(&hlr_fns, &hlr_typings).map_err(DriverError::Mutck)?;
 
         self.print_pretty("Lowering HLR to MLR");
-        let mlr_fns = self.hlr_lowering(&hlr_fns, &hlr_typings);
+        let mlr_fns = self.hlr_lowering(&hlr_fns, &hlr_typings, &deref_mut_marks);
 
         if let Some(mlr_path) = self.output_paths.mlr {
             self.print_detail(&format!("Saving MLR to {}", mlr_path.display()));
@@ -330,6 +330,8 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         self.ctxt.language_items.neg_trait = Some(self.ctxt.traits.resolve_trait_name("Neg").ok_or_else(err)?);
         self.ctxt.language_items.not_trait = Some(self.ctxt.traits.resolve_trait_name("Not").ok_or_else(err)?);
         self.ctxt.language_items.deref_trait = Some(self.ctxt.traits.resolve_trait_name("Deref").ok_or_else(err)?);
+        self.ctxt.language_items.deref_mut_trait =
+            Some(self.ctxt.traits.resolve_trait_name("DerefMut").ok_or_else(err)?);
         self.ctxt.language_items.eq_trait = self.ctxt.traits.resolve_trait_name("Eq");
         self.ctxt.language_items.into_iterator_trait = self.ctxt.traits.resolve_trait_name("IntoIterator");
         self.ctxt.language_items.iterator_trait = self.ctxt.traits.resolve_trait_name("Iterator");
@@ -710,11 +712,14 @@ impl<'a, 'arena> Driver<'a, 'arena> {
         &mut self,
         hlr_fns: &[hlr::Fn<'arena>],
         typings: &HashMap<fns::Fn<'arena>, typeck::HlrTyping<'arena>>,
+        deref_mut_marks: &mutck::DerefMutMarks,
     ) -> Vec<mlr::Fn<'arena>> {
         hlr_fns
             .iter()
             .filter_map(|hlr_fn| typings.get(&hlr_fn.fn_).map(|typing| (hlr_fn, typing)))
-            .flat_map(|(hlr_fn, typing)| hlr_lowering::hlr_to_mlr(&mut self.ctxt, self.mlr, hlr_fn, typing))
+            .flat_map(|(hlr_fn, typing)| {
+                hlr_lowering::hlr_to_mlr(&mut self.ctxt, self.mlr, hlr_fn, typing, deref_mut_marks)
+            })
             .collect()
     }
 

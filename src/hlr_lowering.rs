@@ -9,6 +9,7 @@ use crate::{
     ctxt::{self, fns, ty},
     hlr,
     mlr::{self, builder::MlrBuilder},
+    mutck::DerefMutMarks,
     typeck::{Coercion, DerefStep, ExprExtra, HlrTyping, MthdResolution},
 };
 
@@ -24,8 +25,9 @@ pub fn hlr_to_mlr<'a, 'ctxt>(
     mlr: &'a mlr::Mlr<'ctxt>,
     fn_: &'a hlr::Fn<'ctxt>,
     typing: &'a HlrTyping<'ctxt>,
+    deref_mut_marks: &'a DerefMutMarks,
 ) -> Vec<mlr::Fn<'ctxt>> {
-    let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing, &fn_.var_names);
+    let mut lowerer = HlrLowerer::new(ctxt, mlr, fn_.fn_, typing, &fn_.var_names, deref_mut_marks);
     lowerer.lower_fn(fn_)
 }
 
@@ -37,6 +39,7 @@ struct HlrLowerer<'a, 'ctxt> {
     var_names: &'a HashMap<hlr::VarId, String>,
     loc_names: HashMap<usize, String>,
     mlr_fns: Vec<mlr::Fn<'ctxt>>,
+    deref_mut_marks: &'a DerefMutMarks,
 }
 
 impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
@@ -46,6 +49,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         fn_: fns::Fn<'ctxt>,
         typing: &'a HlrTyping<'ctxt>,
         var_names: &'a HashMap<hlr::VarId, String>,
+        deref_mut_marks: &'a DerefMutMarks,
     ) -> Self {
         Self {
             fn_,
@@ -55,6 +59,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             var_names,
             loc_names: HashMap::new(),
             mlr_fns: Vec::new(),
+            deref_mut_marks,
         }
     }
 
@@ -158,7 +163,8 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         match coercion {
             Coercion::Deref(steps) => {
                 let place = lowered.into_place(&mut self.builder);
-                let derefed = self.apply_deref_steps(place, &steps);
+                // Deref coercions are value coercions and never mutate their target.
+                let derefed = self.apply_deref_steps(place, &steps, None);
                 self.builder.copy_val(derefed).into()
             }
             Coercion::AsCast { target_ty, kind } => {
@@ -371,7 +377,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         };
         let (callee_op, receiver_mode) = self.mthd_resolution_to_op(resolution);
 
-        let derefed_receiver = self.lower_deref_chain_to_place(receiver, steps);
+        let derefed_receiver = self.lower_deref_chain_to_place(expr_id, receiver, steps);
 
         let receiver_op = match receiver_mode {
             ReceiverMode::Direct => self.builder.insert_copy_op(derefed_receiver),
@@ -479,16 +485,30 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         self.builder.copy_val(enum_place)
     }
 
-    fn apply_deref_steps(&mut self, place: mlr::Place<'ctxt>, steps: &[DerefStep<'ctxt>]) -> mlr::Place<'ctxt> {
-        steps.iter().fold(place, |place, step| match step {
+    /// Walks `steps` from `place`; trait steps at index >= `deref_mut_from` (the mark
+    /// recorded by mutck for the owning expression) call `deref_mut` on a `&mut` of the
+    /// source place instead of `deref` on a `&`.
+    fn apply_deref_steps(
+        &mut self,
+        place: mlr::Place<'ctxt>,
+        steps: &[DerefStep<'ctxt>],
+        deref_mut_from: Option<usize>,
+    ) -> mlr::Place<'ctxt> {
+        steps.iter().enumerate().fold(place, |place, (i, step)| match step {
             DerefStep::Builtin => {
                 let op = self.builder.insert_copy_op(place);
                 self.builder.insert_deref_place(op)
             }
-            DerefStep::Trait(resolution) => {
+            DerefStep::Trait { mthd, mthd_mut, .. } => {
+                let use_mut = deref_mut_from.is_some_and(|from| i >= from);
+                let (resolution, ref_val) = if use_mut {
+                    let mthd_mut = mthd_mut.as_ref().expect("deref_mut resolution missing for marked step");
+                    (mthd_mut, self.builder.insert_addr_of_mut_val(place))
+                } else {
+                    (mthd, self.builder.insert_addr_of_val(place))
+                };
                 let callee_op = self.lower_mthd_resolution_to_op(resolution);
-                let ref_place = self.builder.insert_addr_of_val(place);
-                let ref_op = LoweredExpr::from(ref_place).into_op(&mut self.builder);
+                let ref_op = LoweredExpr::from(ref_val).into_op(&mut self.builder);
                 let call_val = self.builder.insert_call_val(callee_op, vec![ref_op]);
                 let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
                 self.builder.insert_deref_place(call_op)
@@ -496,9 +516,15 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
         })
     }
 
-    fn lower_deref_chain_to_place(&mut self, expr: hlr::Expr<'ctxt>, steps: &[DerefStep<'ctxt>]) -> mlr::Place<'ctxt> {
+    fn lower_deref_chain_to_place(
+        &mut self,
+        expr_id: hlr::ExprId,
+        expr: hlr::Expr<'ctxt>,
+        steps: &[DerefStep<'ctxt>],
+    ) -> mlr::Place<'ctxt> {
         let place = self.lower_to_place(expr);
-        self.apply_deref_steps(place, steps)
+        let deref_mut_from = self.deref_mut_marks.get(&expr_id).copied();
+        self.apply_deref_steps(place, steps, deref_mut_from)
     }
 
     fn lower_field_access(&mut self, expr_id: hlr::ExprId, base: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
@@ -506,7 +532,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             panic!("expected FieldAccess extra")
         };
 
-        let base = self.lower_deref_chain_to_place(base, steps);
+        let base = self.lower_deref_chain_to_place(expr_id, base, steps);
 
         let field_ty = self.typing.expr_types[&expr_id];
         self.builder.insert_field_access_place(base, index, field_ty).into()
@@ -537,15 +563,26 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
     }
 
     fn lower_deref(&mut self, expr_id: hlr::ExprId, inner: hlr::Expr<'ctxt>) -> LoweredExpr<'ctxt> {
+        let use_mut = self.deref_mut_marks.contains_key(&expr_id);
         let deref_mthd = match self.typing.expr_extra.get(&expr_id) {
-            Some(ExprExtra::DerefMthd(resolution)) => Some(resolution.clone()),
+            Some(ExprExtra::DerefMthd { mthd, mthd_mut }) => {
+                if use_mut {
+                    Some(mthd_mut.clone().expect("deref_mut resolution missing for marked deref"))
+                } else {
+                    Some(mthd.clone())
+                }
+            }
             _ => None,
         };
         match deref_mthd {
             Some(resolution) => {
                 let callee_op = self.lower_mthd_resolution_to_op(&resolution);
                 let inner_place = self.lower_to_place(inner);
-                let ref_inner = self.builder.insert_addr_of_val(inner_place);
+                let ref_inner = if use_mut {
+                    self.builder.insert_addr_of_mut_val(inner_place)
+                } else {
+                    self.builder.insert_addr_of_val(inner_place)
+                };
                 let ref_inner_op = LoweredExpr::from(ref_inner).into_op(&mut self.builder);
                 let call_val = self.builder.insert_call_val(callee_op, vec![ref_inner_op]);
                 let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
@@ -681,6 +718,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
                 closure_fn,
                 self.typing,
                 self.var_names,
+                self.deref_mut_marks,
             );
             let mlr_fn = closure_lowerer.lower_body(&param_var_ids, Some(&captured_vars), body);
             let nested_mlr_fns = closure_lowerer.mlr_fns;

@@ -53,6 +53,11 @@ trait Deref {
     fn deref(&self) -> &<Self as Deref>::Target;
 }
 
+trait DerefMut {
+    type Target;
+    fn deref_mut(&mut self) -> &mut <Self as DerefMut>::Target;
+}
+
 impl Add<i8> for i8 {
     type Output = i8;
     fn add(self, rhs: i8) -> i8 { self + rhs }
@@ -361,6 +366,13 @@ impl Neg for f64 {
 impl<T> Deref for &T {
     type Target = T;
     fn deref(&self) -> &T {
+        *self
+    }
+}
+
+impl<T> DerefMut for &mut T {
+    type Target = T;
+    fn deref_mut(&mut self) -> &mut T {
         *self
     }
 }

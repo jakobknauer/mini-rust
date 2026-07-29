@@ -15,31 +15,52 @@ pub enum MutckError {
     AddrOfMutOfImmutablePlace,
     AssignThroughImmutableRef,
     MutReceiverNotMutRef,
+    NoDerefMutImpl,
 }
+
+/// Why a place is not usable as a mutable place; mapped to a context-specific
+/// [`MutckError`] at the use site (assignment, `&mut`, `&mut self` receiver).
+enum PlaceImmutability {
+    /// The place is (rooted in) an immutable binding.
+    ImmutableVar,
+    /// The place is behind a `&` (or a deref chain ending in one).
+    ImmutableRef,
+    /// The place is behind a `Deref` type that does not implement `DerefMut`.
+    NoDerefMut,
+}
+
+/// For each expression whose deref steps reach a mutably used place (`FieldAccess` /
+/// `MthdCall` chains and explicit `Deref` nodes), the index of the first step to lower
+/// via `DerefMut::deref_mut`; all trait steps from that index on are `deref_mut` calls.
+/// Explicit `Deref` nodes use index 0.
+pub type DerefMutMarks = HashMap<hlr::ExprId, usize>;
 
 #[allow(clippy::mutable_key_type)]
 pub fn mutck<'ctxt>(
     hlr_fns: &[hlr::Fn<'ctxt>],
     typings: &HashMap<fns::Fn<'ctxt>, HlrTyping<'ctxt>>,
-) -> Result<(), MutckError> {
+) -> Result<DerefMutMarks, MutckError> {
+    let mut marks = DerefMutMarks::new();
     for hlr_fn in hlr_fns {
         if let Some(typing) = typings.get(&hlr_fn.fn_) {
-            Mutck::check_fn(hlr_fn, typing)?;
+            marks.extend(Mutck::check_fn(hlr_fn, typing)?);
         }
     }
-    Ok(())
+    Ok(marks)
 }
 
 struct Mutck<'a, 'ctxt> {
     typing: &'a HlrTyping<'ctxt>,
     mutable_vars: HashSet<hlr::VarId>,
+    deref_mut_marks: DerefMutMarks,
 }
 
 impl<'a, 'ctxt> Mutck<'a, 'ctxt> {
-    fn check_fn(hlr_fn: &hlr::Fn<'ctxt>, typing: &'a HlrTyping<'ctxt>) -> Result<(), MutckError> {
+    fn check_fn(hlr_fn: &hlr::Fn<'ctxt>, typing: &'a HlrTyping<'ctxt>) -> Result<DerefMutMarks, MutckError> {
         let mut mutck = Mutck {
             typing,
             mutable_vars: HashSet::new(),
+            deref_mut_marks: DerefMutMarks::new(),
         };
 
         for (param, &var_id) in hlr_fn.fn_.params.iter().zip(&hlr_fn.param_var_ids) {
@@ -48,7 +69,8 @@ impl<'a, 'ctxt> Mutck<'a, 'ctxt> {
             }
         }
 
-        mutck.check_expr(hlr_fn.body)
+        mutck.check_expr(hlr_fn.body)?;
+        Ok(mutck.deref_mut_marks)
     }
 
     fn check_expr(&mut self, expr: hlr::Expr<'ctxt>) -> Result<(), MutckError> {
@@ -65,8 +87,12 @@ impl<'a, 'ctxt> Mutck<'a, 'ctxt> {
                 self.check_exprs(args)
             }
             MthdCall { receiver, args, .. } => {
-                if self.mthd_call_takes_mut_receiver(expr.1) && !self.receiver_is_mutable(*receiver, expr.1) {
-                    return Err(MutckError::MutReceiverNotMutRef);
+                if self.mthd_call_takes_mut_receiver(expr.1) {
+                    self.check_chain_mutable(expr.1, *receiver, self.mthd_call_steps(expr.1))
+                        .map_err(|reason| match reason {
+                            PlaceImmutability::NoDerefMut => MutckError::NoDerefMutImpl,
+                            _ => MutckError::MutReceiverNotMutRef,
+                        })?;
                 }
                 self.check_expr(*receiver)?;
                 self.check_exprs(args)
@@ -80,19 +106,26 @@ impl<'a, 'ctxt> Mutck<'a, 'ctxt> {
             FieldAccess { base, .. } => self.check_expr(*base),
             Tuple(exprs) => self.check_exprs(exprs),
             Assign { target, value } => {
-                self.check_assign_place(*target)?;
+                self.check_place_mutable(*target).map_err(|reason| match reason {
+                    PlaceImmutability::ImmutableVar => MutckError::AssignToImmutablePlace,
+                    PlaceImmutability::ImmutableRef => MutckError::AssignThroughImmutableRef,
+                    PlaceImmutability::NoDerefMut => MutckError::NoDerefMutImpl,
+                })?;
                 self.check_expr(*target)?;
                 self.check_expr(*value)
             }
             Deref(inner) => self.check_expr(*inner),
             AddrOf(inner) => self.check_expr(*inner),
             AddrOfMut(inner) => {
-                if !self.place_is_mutable(*inner) {
-                    return Err(MutckError::AddrOfMutOfImmutablePlace);
-                }
+                self.check_place_mutable(*inner).map_err(|reason| match reason {
+                    PlaceImmutability::NoDerefMut => MutckError::NoDerefMutImpl,
+                    _ => MutckError::AddrOfMutOfImmutablePlace,
+                })?;
                 self.check_expr(*inner)
             }
             As { expr: inner, .. } => self.check_expr(*inner),
+            // Closures capture by copy and closure params are always immutable, so the body
+            // is checked as-is: captured vars keep the mutability of their original binding.
             Closure { body, .. } => self.check_expr(*body),
             If { cond, then, else_ } => {
                 self.check_expr(*cond)?;
@@ -165,97 +198,108 @@ impl<'a, 'ctxt> Mutck<'a, 'ctxt> {
         }
     }
 
-    fn check_assign_place(&self, place: hlr::Expr<'ctxt>) -> Result<(), MutckError> {
+    /// Checks that `place` is usable as a mutable place (assignment target, `&mut`
+    /// operand, `&mut self` receiver). On success, records in `deref_mut_marks` which
+    /// trait deref steps along the way must lower via `DerefMut::deref_mut`.
+    fn check_place_mutable(&mut self, place: hlr::Expr<'ctxt>) -> Result<(), PlaceImmutability> {
         match place.0 {
             hlr::ExprDef::Val(hlr::Val::Var(var_id)) => {
                 if self.mutable_vars.contains(var_id) {
                     Ok(())
                 } else {
-                    Err(MutckError::AssignToImmutablePlace)
+                    Err(PlaceImmutability::ImmutableVar)
                 }
             }
             hlr::ExprDef::FieldAccess { base, .. } => {
-                self.check_chain_assignable(*base, self.field_access_steps(place.1))
+                self.check_chain_mutable(place.1, *base, self.field_access_steps(place.1))
             }
-            hlr::ExprDef::Deref(inner) => {
-                if matches!(self.expr_ty(*inner).0, TyDef::RefMut(_) | TyDef::Ptr(_)) {
+            hlr::ExprDef::Deref(inner) => match self.typing.expr_extra.get(&place.1) {
+                Some(ExprExtra::DerefMthd { mthd_mut, .. }) => {
+                    if mthd_mut.is_none() {
+                        return Err(PlaceImmutability::NoDerefMut);
+                    }
+                    // `deref_mut` takes `&mut self`, so the dereferenced place itself
+                    // must be mutable.
+                    self.check_place_mutable(*inner)?;
+                    self.deref_mut_marks.insert(place.1, 0);
                     Ok(())
-                } else {
-                    Err(MutckError::AssignThroughImmutableRef)
                 }
-            }
-            // typeck already validated that assignment targets are places.
+                _ => {
+                    if matches!(self.expr_ty(*inner).0, TyDef::RefMut(_) | TyDef::Ptr(_)) {
+                        Ok(())
+                    } else {
+                        Err(PlaceImmutability::ImmutableRef)
+                    }
+                }
+            },
+            // Anything else is a temporary, which is mutable. (For assignments, typeck
+            // already validated that the target is a place.)
             _ => Ok(()),
         }
     }
 
-    fn place_is_mutable(&self, place: hlr::Expr<'ctxt>) -> bool {
-        match place.0 {
-            hlr::ExprDef::Val(hlr::Val::Var(var_id)) => self.mutable_vars.contains(var_id),
-            hlr::ExprDef::FieldAccess { base, .. } => {
-                self.chain_target_mutable(*base, self.field_access_steps(place.1))
-            }
-            hlr::ExprDef::Deref(inner) => matches!(self.expr_ty(*inner).0, TyDef::RefMut(_) | TyDef::Ptr(_)),
-            // Anything else is a temporary, which is mutable.
-            _ => true,
-        }
-    }
-
-    /// Whether the place reached by dereferencing `base` through `steps` is mutable.
+    /// Checks that the place reached by dereferencing `base` through `steps` is mutable.
     /// HLR field accesses and method receivers carry their auto-deref steps in
     /// `expr_extra` rather than as explicit `Deref` nodes, so place-mutability must walk
-    /// them: a custom (`Deref`-trait) step yields an immutable `&Target`, and an all-builtin
-    /// chain is mutable iff the pointer dereferenced by the last step is `&mut`/`*`.
-    fn chain_target_mutable(&self, base: hlr::Expr<'ctxt>, steps: &[DerefStep<'ctxt>]) -> bool {
+    /// them. The steps after the last builtin step form the `deref_mut` suffix: each of
+    /// those trait steps must mutate its target, so it needs `DerefMut`. Steps before it
+    /// only ever read (a builtin step merely copies the pointer out of its source place),
+    /// so they stay `deref`, and the pointer dereferenced by the last builtin step must
+    /// be `&mut`/`*`. If there is no builtin step, the suffix starts at `base`, whose
+    /// place must itself be mutable.
+    fn check_chain_mutable(
+        &mut self,
+        expr_id: hlr::ExprId,
+        base: hlr::Expr<'ctxt>,
+        steps: &[DerefStep<'ctxt>],
+    ) -> Result<(), PlaceImmutability> {
         if steps.is_empty() {
-            return self.place_is_mutable(base);
+            return self.check_place_mutable(base);
         }
-        if steps.iter().any(|s| matches!(s, DerefStep::Trait(_))) {
-            return false;
-        }
-        let mut ty = self.expr_ty(base);
-        for _ in 0..steps.len() - 1 {
-            ty = match ty.0 {
-                &TyDef::Ref(inner) | &TyDef::RefMut(inner) | &TyDef::Ptr(inner) => inner,
-                _ => return false,
-            };
-        }
-        matches!(ty.0, TyDef::RefMut(_) | TyDef::Ptr(_))
-    }
-
-    /// Assignability counterpart of [`chain_target_mutable`], reporting the appropriate error.
-    fn check_chain_assignable(&self, base: hlr::Expr<'ctxt>, steps: &[DerefStep<'ctxt>]) -> Result<(), MutckError> {
-        if steps.is_empty() {
-            return self.check_assign_place(base);
-        }
-        if steps.iter().any(|s| matches!(s, DerefStep::Trait(_))) {
-            return Err(MutckError::AssignThroughImmutableRef);
-        }
-        let mut ty = self.expr_ty(base);
-        for _ in 0..steps.len() - 1 {
-            ty = match ty.0 {
-                &TyDef::Ref(inner) | &TyDef::RefMut(inner) | &TyDef::Ptr(inner) => inner,
-                _ => return Err(MutckError::AssignThroughImmutableRef),
-            };
-        }
-        if matches!(ty.0, TyDef::RefMut(_) | TyDef::Ptr(_)) {
-            Ok(())
-        } else {
-            Err(MutckError::AssignThroughImmutableRef)
-        }
-    }
-
-    fn receiver_is_mutable(&self, receiver: hlr::Expr<'ctxt>, mthd_call_id: hlr::ExprId) -> bool {
-        let steps = match self.typing.expr_extra.get(&mthd_call_id) {
-            Some(ExprExtra::MthdCall { steps, .. }) => steps.as_slice(),
-            _ => &[],
+        let mut_from = match steps.iter().rposition(|s| matches!(s, DerefStep::Builtin)) {
+            Some(last_builtin) => {
+                let mut ty = self.expr_ty(base);
+                for step in &steps[..last_builtin] {
+                    ty = match step {
+                        DerefStep::Builtin => match ty.0 {
+                            &TyDef::Ref(inner) | &TyDef::RefMut(inner) | &TyDef::Ptr(inner) => inner,
+                            _ => return Err(PlaceImmutability::ImmutableRef),
+                        },
+                        DerefStep::Trait { target_ty, .. } => *target_ty,
+                    };
+                }
+                if !matches!(ty.0, TyDef::RefMut(_) | TyDef::Ptr(_)) {
+                    return Err(PlaceImmutability::ImmutableRef);
+                }
+                last_builtin + 1
+            }
+            None => {
+                self.check_place_mutable(base)?;
+                0
+            }
         };
-        self.chain_target_mutable(receiver, steps)
+        if steps[mut_from..]
+            .iter()
+            .any(|s| matches!(s, DerefStep::Trait { mthd_mut: None, .. }))
+        {
+            return Err(PlaceImmutability::NoDerefMut);
+        }
+        if mut_from < steps.len() {
+            self.deref_mut_marks.insert(expr_id, mut_from);
+        }
+        Ok(())
     }
 
-    fn field_access_steps(&self, expr_id: hlr::ExprId) -> &[DerefStep<'ctxt>] {
+    fn field_access_steps(&self, expr_id: hlr::ExprId) -> &'a [DerefStep<'ctxt>] {
         match self.typing.expr_extra.get(&expr_id) {
             Some(ExprExtra::FieldAccess { steps, .. }) => steps,
+            _ => &[],
+        }
+    }
+
+    fn mthd_call_steps(&self, expr_id: hlr::ExprId) -> &'a [DerefStep<'ctxt>] {
+        match self.typing.expr_extra.get(&expr_id) {
+            Some(ExprExtra::MthdCall { steps, .. }) => steps,
             _ => &[],
         }
     }
