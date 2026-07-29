@@ -97,6 +97,7 @@ impl<'borrow, 'ty> Unify<'borrow, 'ty> {
             (&ty::TyDef::Ref(ty_1), &ty::TyDef::Ref(ty_2)) => self.unify(ty_1, ty_2),
             (&ty::TyDef::RefMut(ty_1), &ty::TyDef::RefMut(ty_2)) => self.unify(ty_1, ty_2),
             (&ty::TyDef::Ptr(ty_1), &ty::TyDef::Ptr(ty_2)) => self.unify(ty_1, ty_2),
+            (&ty::TyDef::Slice(ty_1), &ty::TyDef::Slice(ty_2)) => self.unify(ty_1, ty_2),
 
             (
                 &ty::TyDef::Struct {

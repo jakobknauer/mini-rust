@@ -192,6 +192,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             FnInst(_) => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             Never => self.iw_ctxt.i8_type().as_any_type_enum(),
             InfVar(_) => return Err("InfVar type should not occur at MLR lowering".to_string()),
+            Slice(_) => todo!("slice types"),
         };
 
         Ok(*self.types.entry(ty).or_insert(inkwell_type))

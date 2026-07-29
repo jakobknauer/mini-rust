@@ -236,6 +236,11 @@ impl<'ty> TyReg<'ty> {
         self.register_ty(ptr_ty)
     }
 
+    pub fn slice(&self, inner_ty: Ty<'ty>) -> Ty<'ty> {
+        let slice_ty = TyDef::Slice(inner_ty);
+        self.register_ty(slice_ty)
+    }
+
     pub fn gen_var(&self, gen_var: GenVar<'ty>) -> Ty<'ty> {
         let gen_var_ty = TyDef::GenVar(gen_var);
         self.register_ty(gen_var_ty)
@@ -352,6 +357,10 @@ impl<'ty> TyReg<'ty> {
             Ptr(inner) => {
                 let inner = self.resolve_opaque_in_ty(inner);
                 self.ptr(inner)
+            }
+            Slice(inner) => {
+                let inner = self.resolve_opaque_in_ty(inner);
+                self.slice(inner)
             }
             Tuple(items) => {
                 let items: Vec<_> = items.iter().map(|&t| self.resolve_opaque_in_ty(t)).collect();
@@ -544,6 +553,10 @@ impl<'ty> TyReg<'ty> {
             Ptr(inner_ty) => {
                 let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
                 self.ptr(new_inner_ty)
+            }
+            Slice(inner_ty) => {
+                let new_inner_ty = self.substitute(inner_ty, gen_vars, self_ty);
+                self.slice(new_inner_ty)
             }
             Struct { struct_, gen_args } => {
                 let gen_args = self.substitute_on_slice(gen_args, gen_vars, self_ty);

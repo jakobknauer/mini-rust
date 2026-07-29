@@ -95,6 +95,7 @@ impl<'ctxt> Ctxt<'ctxt> {
             &Ref(ty) => self.tys.ref_(norm(ty)),
             &RefMut(ty) => self.tys.ref_mut(norm(ty)),
             &Ptr(ty) => self.tys.ptr(norm(ty)),
+            &Slice(ty) => self.tys.slice(norm(ty)),
             GenVar(_) => ty,
             TraitSelf(_) => ty,
             Closure { .. } => ty,

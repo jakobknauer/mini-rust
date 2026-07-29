@@ -96,6 +96,11 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 self.ctxt.tys.ptr(inner)
             }
 
+            Slice(inner) => {
+                let inner = self.normalize(inner);
+                self.ctxt.tys.slice(inner)
+            }
+
             AssocTy {
                 base_ty,
                 trait_inst,
