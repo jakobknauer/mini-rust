@@ -99,6 +99,14 @@ where
     }
 }
 
+impl<T> Deref for Vec<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        slice_from_raw_parts(self.ptr, self.len)
+    }
+}
+
 impl<T> IntoIterator for Vec<T> {
     type Item = T;
     type IntoIter = VecIter<T>;
