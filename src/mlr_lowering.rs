@@ -159,8 +159,8 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             Struct { .. } => self.define_struct(ty)?,
             Enum { .. } => self.define_enum(ty)?,
             Tuple(..) => self.define_tuple_ty(ty)?,
-            FnPtr { .. } | Ptr(..) => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
-            Ref(inner) | RefMut(inner) => {
+            FnPtr { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Ref(inner) | RefMut(inner) | Ptr(inner) => {
                 if matches!(*self.mr_ctxt.normalize_ty(inner).0, Slice(_)) {
                     self.fat_ptr_type().as_any_type_enum()
                 } else {
