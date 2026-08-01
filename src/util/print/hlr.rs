@@ -81,6 +81,7 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
             // would write to perform them explicitly: a deref coercion as one `*`
             // per deref step, an as-coercion as a trailing `as <target>`.
             Some(Coercion::Deref(steps)) => {
+                write!(self.writer, "&")?;
                 for _ in &steps {
                     write!(self.writer, "*")?;
                 }

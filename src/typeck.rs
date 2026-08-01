@@ -245,11 +245,13 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
         }
 
         let mut steps = vec![];
-        for (step, next_ty) in self.deref_chain(ty) {
+        let mut current = ty;
+        while let Some((next_ty, step)) = self.try_deref_step(current) {
             steps.push(step);
-            if next_ty == hint {
+            if self.ctxt.tys.ref_(next_ty) == hint {
                 return Some(Coercion::Deref(steps));
             }
+            current = next_ty;
         }
         None
     }
@@ -279,6 +281,8 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
 
     /// Pointer-weakening coercions: `&mut T -> &T`, `&T -> *T`, `&mut T -> *T`.
     /// All lower identically to a `PtrLike` as-cast (a no-op at the LLVM level).
+    /// The `&mut T -> &T` arm is actually unreachable: `try_deref_coercion` runs first
+    /// and already matches that pair (via the builtin deref step, re-wrapped in `&`).
     fn try_ptr_weaken_coercion(&mut self, ty: ty::Ty<'ctxt>, hint: ty::Ty<'ctxt>) -> Option<Coercion<'ctxt>> {
         let pointee_pair = match (ty.0, hint.0) {
             (&ty::TyDef::RefMut(src), &ty::TyDef::Ref(tgt))

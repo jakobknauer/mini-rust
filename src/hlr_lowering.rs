@@ -159,7 +159,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             Coercion::Deref(steps) => {
                 let place = lowered.into_place(&mut self.builder);
                 let derefed = self.apply_deref_steps(place, &steps);
-                self.builder.copy_val(derefed).into()
+                self.builder.insert_addr_of_val(derefed).into()
             }
             Coercion::AsCast { target_ty, kind } => {
                 let op = lowered.into_op(&mut self.builder);

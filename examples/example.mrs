@@ -1,6 +1,10 @@
 fn main() -> i32 {
     let mut x = 5;
     print_i32(&mut x);
+
+    let b = Box::new(42);
+    print_i32(&b);
+
     x
 }
 
