@@ -4,12 +4,7 @@ fn main() -> i32 {
     v.push(2);
     v.push(3);
 
-    let vs: &[i32] = &*v;
-    let mut sum = 0;
-    for x in vs {
-        sum = sum + *x;
-    }
-    sum
+    sum_slice(&v)  // coercion of Vec<i32> to &[i32]
 }
 
 fn print_i32(x: &i32) {
@@ -42,4 +37,6 @@ impl Point {
     }
 }
 
-fn consume_slice(slice: &[i32]) {}
+fn sum_slice(slice: &[i32]) -> i32 {
+    slice.into_iter().map(|x| *x).sum()  // uses the IntoIter impl for slices
+}
