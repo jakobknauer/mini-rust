@@ -8,7 +8,7 @@ As backend [LLVM](https://llvm.org/) is used via the [inkwell](https://github.co
 Supported features include:
 - Basic syntax (functions, variables, control flow with `if/else`, `match`, `loop`, `while`, `for` etc.)
 - Type inference within functions
-- Primitive types, tuples, structs and enums, references and raw pointers, function pointers, never type
+- Primitive types, tuples, structs and enums, references and raw pointers, function pointers, never type, slices
 - Traits and impls, including associated types and functions, and default method implementations
 - Generics (functions, structs and enums, traits and impls) with constraints (for functions, methods, and impls)
 - Opaque return types (`impl Trait`/`impl Fn`)
