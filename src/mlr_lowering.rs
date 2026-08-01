@@ -142,11 +142,7 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
                         I16 => self.iw_ctxt.i16_type().as_any_type_enum(),
                         I32 => self.iw_ctxt.i32_type().as_any_type_enum(),
                         I64 => self.iw_ctxt.i64_type().as_any_type_enum(),
-                        ISize => {
-                            let layout = self.iw_module.get_data_layout();
-                            let target_data = TargetData::create(layout.as_str().to_str().unwrap_or(""));
-                            self.iw_ctxt.ptr_sized_int_type(&target_data, None).as_any_type_enum()
-                        }
+                        ISize => self.isize_type().as_any_type_enum(),
                     }
                 }
                 Float(w) => {
@@ -163,8 +159,13 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             Struct { .. } => self.define_struct(ty)?,
             Enum { .. } => self.define_enum(ty)?,
             Tuple(..) => self.define_tuple_ty(ty)?,
-            FnPtr { .. } | Ref(..) | RefMut(..) | Ptr(..) => {
-                self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum()
+            FnPtr { .. } => self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum(),
+            Ref(inner) | RefMut(inner) | Ptr(inner) => {
+                if matches!(*self.mr_ctxt.normalize_ty(inner).0, Slice(_)) {
+                    self.fat_ptr_type().as_any_type_enum()
+                } else {
+                    self.iw_ctxt.ptr_type(AddressSpace::default()).as_any_type_enum()
+                }
             }
             Closure { captures_ty, .. } => self.get_ty(captures_ty)?,
             GenVar(gen_var) => {
@@ -192,9 +193,22 @@ impl<'iw, 'a, 'ctxt> MlrLowerer<'iw, 'a, 'ctxt> {
             FnInst(_) => self.iw_ctxt.struct_type(&[], false).as_any_type_enum(),
             Never => self.iw_ctxt.i8_type().as_any_type_enum(),
             InfVar(_) => return Err("InfVar type should not occur at MLR lowering".to_string()),
+            Slice(_) => return Err(format!("type '{ty}' is unsized and cannot be used directly")),
         };
 
         Ok(*self.types.entry(ty).or_insert(inkwell_type))
+    }
+
+    fn isize_type(&self) -> inkwell::types::IntType<'iw> {
+        let layout = self.iw_module.get_data_layout();
+        let target_data = TargetData::create(layout.as_str().to_str().unwrap_or(""));
+        self.iw_ctxt.ptr_sized_int_type(&target_data, None)
+    }
+
+    fn fat_ptr_type(&self) -> inkwell::types::StructType<'iw> {
+        let ptr_type = self.iw_ctxt.ptr_type(AddressSpace::default());
+        let len_type = self.isize_type();
+        self.iw_ctxt.struct_type(&[ptr_type.into(), len_type.into()], false)
     }
 
     fn get_ty_as_basic_type_enum(&mut self, ty: mr_tys::Ty<'ctxt>) -> Result<BasicTypeEnum<'iw>, String> {

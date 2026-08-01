@@ -590,6 +590,7 @@ pub enum TyAnnotKind<'ast> {
     Path(Path<'ast>),
     QualifiedPath(QualifiedPath<'ast>),
     Tuple(TyAnnotSlice<'ast>),
+    Slice(TyAnnot<'ast>),
     Ref(TyAnnot<'ast>),
     RefMut(#[allow(unused)] TyAnnot<'ast>),
     Ptr(TyAnnot<'ast>),

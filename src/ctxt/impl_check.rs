@@ -292,7 +292,12 @@ impl<'ctxt> super::Ctxt<'ctxt> {
                 else {
                     return false;
                 };
-                actual_param_tys == param_tys && actual_return_ty == return_ty
+                actual_param_tys.len() == param_tys.len()
+                    && actual_param_tys
+                        .iter()
+                        .zip(param_tys.iter())
+                        .all(|(&a, &p)| self.normalize_ty(a) == self.normalize_ty(p))
+                    && self.normalize_ty(actual_return_ty) == self.normalize_ty(return_ty)
             }
             ty::ConstraintRequirement::AssocTyEq(eq_ty) => {
                 let subject = self.normalize_ty(subject);

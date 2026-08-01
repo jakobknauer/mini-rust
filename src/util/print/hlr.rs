@@ -539,6 +539,11 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                 write!(self.writer, "*")?;
                 self.print_ty_annot(inner)
             }
+            Slice(inner) => {
+                write!(self.writer, "[")?;
+                self.print_ty_annot(inner)?;
+                write!(self.writer, "]")
+            }
             Fn { params, ret } => {
                 write!(self.writer, "fn(")?;
                 for (i, &p) in params.iter().enumerate() {

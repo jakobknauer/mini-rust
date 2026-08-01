@@ -12,6 +12,8 @@ pub enum Token {
     RBrace,             // }
     LParen,             // (
     RParen,             // )
+    LBracket,           // [
+    RBracket,           // ]
     Semicolon,          // ;
     Comma,              // ,
     Equal,              // =

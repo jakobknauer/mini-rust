@@ -44,6 +44,7 @@ pub enum TyDef<'ty> {
     Ref(Ty<'ty>),
     RefMut(Ty<'ty>),
     Ptr(Ty<'ty>),
+    Slice(Ty<'ty>),
     GenVar(GenVar<'ty>),
     TraitSelf(traits::Trait<'ty>),
     /// `captures_ty` is always an instance of the captures struct, whose gen_params are exactly
@@ -432,6 +433,7 @@ impl std::fmt::Display for TyDef<'_> {
             &Ref(ty) => write!(f, "&{}", ty),
             &RefMut(ty) => write!(f, "&mut {}", ty),
             &Ptr(ty) => write!(f, "*{}", ty),
+            &Slice(ty) => write!(f, "[{}]", ty),
             GenVar(gv) => write!(f, "{}", gv.name()),
             &Struct { struct_, gen_args } => {
                 write!(f, "{}", struct_.name)?;

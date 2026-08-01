@@ -309,6 +309,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             ast::TyAnnotKind::ImplTrait(_) => {
                 return Err(AstLoweringError::ImplTraitInArgPosition);
             }
+            &ast::TyAnnotKind::Slice(ty_annot) => hlr::TyAnnotDef::Slice(self.lower_ty_annot(ty_annot)?),
         };
 
         let ty_annot = self.hlr.ty_annot(ty_annot);

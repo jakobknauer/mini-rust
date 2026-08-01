@@ -4,6 +4,9 @@ use crate::ctxt::{fns::Fn, traits::Trait, ty::Struct};
 pub struct LanguageItems<'ctxt> {
     pub size_of: Option<Fn<'ctxt>>,
     pub ptr_offset: Option<Fn<'ctxt>>,
+    pub slice_from_raw_parts: Option<Fn<'ctxt>>,
+    pub slice_len: Option<Fn<'ctxt>>,
+    pub slice_at: Option<Fn<'ctxt>>,
     pub panic_fn: Option<Fn<'ctxt>>,
     pub add_trait: Option<Trait<'ctxt>>,
     pub sub_trait: Option<Trait<'ctxt>>,

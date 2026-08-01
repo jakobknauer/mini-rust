@@ -228,7 +228,14 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
                 let result = self.build_call(callable, &args.clone())?;
                 Ok(result)
             }
-            AddrOf(place) => self.build_place(place).map(|ptr| ptr.as_basic_value_enum()),
+            AddrOf(place) => {
+                if let mlr::PlaceDef::Deref(op) = *place.0
+                    && let value @ BasicValueEnum::StructValue(_) = self.build_op(op)?
+                {
+                    return Ok(value);
+                }
+                self.build_place(place).map(|ptr| ptr.as_basic_value_enum())
+            }
             As { op, target_ty, kind } => match kind {
                 mlr::AsCastKind::Never => {
                     let iw_ty = self
@@ -328,10 +335,16 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
 
                 Ok(variant_ptr)
             }
-            Deref(op) => {
-                let ptr_value = self.build_op(op)?.into_pointer_value();
-                Ok(ptr_value)
-            }
+            Deref(op) => match self.build_op(op)? {
+                BasicValueEnum::PointerValue(ptr) => Ok(ptr),
+                BasicValueEnum::StructValue(fat) => Ok(self
+                    .iw_builder
+                    .build_extract_value(fat, 0, "deref_addr")?
+                    .into_pointer_value()),
+                value => Err(MlrFnLoweringError::Bug(format!(
+                    "unexpected value kind when dereferencing: {value:?}"
+                ))),
+            },
             ClosureCaptures(base) => self.build_place(base),
         }
     }

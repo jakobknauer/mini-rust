@@ -1,0 +1,31 @@
+fn slice_from_raw_parts<T>(ptr: *T, len: isize) -> &[T];
+fn slice_len<T>(s: &[T]) -> isize;
+fn slice_at<T>(s: &[T], index: isize) -> &T;
+
+struct SliceIter<T> {
+    slice: &[T],
+    idx: isize,
+}
+
+impl<T> IntoIterator for &[T] {
+    type Item = &T;
+    type IntoIter = SliceIter<T>;
+
+    fn into_iter(self) -> SliceIter<T> {
+        SliceIter { slice: self, idx: 0isize }
+    }
+}
+
+impl<T> Iterator for SliceIter<T> {
+    type Item = &T;
+
+    fn next(&mut self) -> Option<&T> {
+        if self.idx >= slice_len(self.slice) {
+            Option::None
+        } else {
+            let item = slice_at(self.slice, self.idx);
+            self.idx = self.idx + 1isize;
+            Option::Some { item }
+        }
+    }
+}

@@ -117,6 +117,9 @@ impl<'arena> Driver<'_, 'arena> {
             }
             Wildcard => panic!("wildcard type annotation not supported at this position"),
             Never => Some(self.ctxt.tys.never()),
+            &Slice(ty_annot) => self
+                .try_resolve_ast_ty_annot(ty_annot, res_ctxt, false)
+                .map(|inner| self.ctxt.tys.slice(inner)),
         }
     }
 

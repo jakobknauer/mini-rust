@@ -1,11 +1,10 @@
 fn main() -> i32 {
-    let mut x = 5;
-    print_i32(&mut x);
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    v.push(2);
+    v.push(3);
 
-    let b = Box::new(42);
-    print_i32(&b);
-
-    x
+    sum_slice(&v)  // coercion of Vec<i32> to &[i32]
 }
 
 fn print_i32(x: &i32) {
@@ -36,4 +35,8 @@ impl Point {
     fn new(x: i32, y: i32) -> Self {
         Point { x, y }
     }
+}
+
+fn sum_slice(slice: &[i32]) -> i32 {
+    slice.into_iter().map(|x| *x).sum()  // uses the IntoIter impl for slices
 }
