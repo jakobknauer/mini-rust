@@ -2,6 +2,19 @@ fn slice_from_raw_parts<T>(ptr: *T, len: isize) -> &[T];
 fn slice_len<T>(s: &[T]) -> isize;
 fn slice_at<T>(s: &[T], index: isize) -> &T;
 
+impl<T> [T] {
+    fn len(&self) -> isize {
+        slice_len(self)
+    }
+
+    fn at(&self, index: isize) -> &T {
+        if index < 0isize || index >= self.len() {
+            panic("slice index out of bounds\n");
+        }
+        slice_at(self, index)
+    }
+}
+
 struct SliceIter<T> {
     slice: &[T],
     idx: isize,

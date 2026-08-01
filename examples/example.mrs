@@ -4,7 +4,12 @@ fn main() -> i32 {
     v.push(2);
     v.push(3);
 
-    sum_slice(&v)  // coercion of Vec<i32> to &[i32]
+    let s: &[i32] = &v;
+    printf("len=%d at(1)=%d\n", s.len() as i32, *s.at(1isize));
+    printf("about to go out of bounds\n");
+    s.at(10isize);
+
+    sum_slice(&v)
 }
 
 fn print_i32(x: &i32) {
@@ -38,5 +43,5 @@ impl Point {
 }
 
 fn sum_slice(slice: &[i32]) -> i32 {
-    slice.into_iter().map(|x| *x).sum()  // uses the IntoIter impl for slices
+    slice.into_iter().map(|x| *x).sum()
 }
