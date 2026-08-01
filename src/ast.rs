@@ -395,6 +395,12 @@ pub enum ExprKind<'ast> {
         obj: Expr<'ast>,
         field: FieldDescriptor<'ast>,
     },
+    Index {
+        #[allow(unused)]
+        obj: Expr<'ast>,
+        #[allow(unused)]
+        index: Expr<'ast>,
+    },
     Block(Block<'ast>),
     If {
         cond: Expr<'ast>,

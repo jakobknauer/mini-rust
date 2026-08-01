@@ -709,6 +709,11 @@ impl<'ast, 'token> AstParser<'ast, 'token> {
                         acc = self.builder.field_access(acc, FieldDescriptor::Named(member));
                     }
                 }
+            } else if self.tokens.advance_if(Token::LBracket) {
+                // indexing
+                let index = self.parse_expr(true)?;
+                self.tokens.expect_token(Token::RBracket)?;
+                acc = self.builder.index(acc, index);
             } else {
                 break;
             }

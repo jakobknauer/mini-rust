@@ -282,6 +282,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 body,
             } => self.lower_closure_expr(params, return_ty, body),
             &Range { start, end, inclusive } => self.lower_range_expr(start, end, inclusive),
+            &Index { .. } => unimplemented!("indexing"),
         }
     }
 

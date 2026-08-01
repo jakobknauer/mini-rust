@@ -92,6 +92,10 @@ impl<'ast> AstBuilder<'ast> {
         self.ast.expr(ExprKind::FieldAccess { obj, field })
     }
 
+    pub fn index(&self, obj: Expr<'ast>, index: Expr<'ast>) -> Expr<'ast> {
+        self.ast.expr(ExprKind::Index { obj, index })
+    }
+
     pub fn block(&self, block: Block<'ast>) -> Expr<'ast> {
         self.ast.expr(ExprKind::Block(block))
     }
