@@ -1,17 +1,17 @@
 fn main() -> i32 {
-    let p: *i32 = alloc_n::<i32>(3);
-    *p = 10;
-    *(p.offset(1)) = 20;
-    *(p.offset(2)) = 30;
+    let p: *i32 = alloc_n::<i32>(3isize);
+    *p.offset(0isize) = 10;
+    *p.offset(1isize) = 20;
+    *p.offset(2isize) = 30;
 
-    let s: &[i32] = slice_from_raw_parts(p, 3);
+    let s: &[i32] = slice_from_raw_parts(p, 3isize);
     let n = slice_len(s);
-    let a = *slice_at(s, 0);
-    let b = *slice_at(s, 1);
-    let c = *slice_at(s, 2);
+    let a = *slice_at(s, 0isize);
+    let b = *slice_at(s, 1isize);
+    let c = *slice_at(s, 2isize);
     printf("len=%d a=%d b=%d c=%d\n", n as i32, a, b, c);
 
-    x
+    a + b + c
 }
 
 fn print_i32(x: &i32) {
