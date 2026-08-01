@@ -53,6 +53,11 @@ trait Deref {
     fn deref(&self) -> &<Self as Deref>::Target;
 }
 
+trait Index<Idx> {
+    type Output;
+    fn index(&self, index: Idx) -> &<Self as Index<Idx>>::Output;
+}
+
 impl Add<i8> for i8 {
     type Output = i8;
     fn add(self, rhs: i8) -> i8 { self + rhs }

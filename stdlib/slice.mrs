@@ -15,6 +15,14 @@ impl<T> [T] {
     }
 }
 
+impl<T> Index<isize> for [T] {
+    type Output = T;
+
+    fn index(&self, index: isize) -> &T {
+        self.at(index)
+    }
+}
+
 struct SliceIter<T> {
     slice: &[T],
     idx: isize,
