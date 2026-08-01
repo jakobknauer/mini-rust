@@ -314,6 +314,23 @@ impl<'a, 'arena> Driver<'a, 'arena> {
             ))?;
         self.ctxt.language_items.ptr_offset = Some(ptr_offset);
 
+        self.ctxt.language_items.slice_from_raw_parts = Some(
+            self.ctxt
+                .fns
+                .get_fn_by_name("slice_from_raw_parts")
+                .ok_or(DriverError::ContextBuild(
+                    "Missing slice_from_raw_parts function (is slice.mrs included?)",
+                ))?,
+        );
+
+        self.ctxt.language_items.slice_len = Some(self.ctxt.fns.get_fn_by_name("slice_len").ok_or(
+            DriverError::ContextBuild("Missing slice_len function (is slice.mrs included?)"),
+        )?);
+
+        self.ctxt.language_items.slice_at = Some(self.ctxt.fns.get_fn_by_name("slice_at").ok_or(
+            DriverError::ContextBuild("Missing slice_at function (is slice.mrs included?)"),
+        )?);
+
         Ok(())
     }
 

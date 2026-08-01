@@ -24,6 +24,15 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         if Some(fn_inst.fn_) == lang.ptr_offset {
             return Ok(Some(self.build_ptr_offset_intrinsic(fn_inst, args)?));
         }
+        if Some(fn_inst.fn_) == lang.slice_from_raw_parts {
+            return Ok(Some(self.build_slice_from_raw_parts_intrinsic(args)?));
+        }
+        if Some(fn_inst.fn_) == lang.slice_len {
+            return Ok(Some(self.build_slice_len_intrinsic(args)?));
+        }
+        if Some(fn_inst.fn_) == lang.slice_at {
+            return Ok(Some(self.build_slice_at_intrinsic(fn_inst, args)?));
+        }
         Ok(None)
     }
 
@@ -212,6 +221,68 @@ impl<'parent, 'iw, 'a, 'ctxt> MlrFnLowerer<'parent, 'iw, 'a, 'ctxt> {
         let offset = self.build_op(offset)?.into_int_value();
 
         let result = unsafe { self.iw_builder.build_gep(iw_pointee_ty, ptr, &[offset], "ptr_offset")? };
+        Ok(result.as_basic_value_enum())
+    }
+
+    fn build_slice_from_raw_parts_intrinsic(
+        &mut self,
+        args: &[mlr::Op<'ctxt>],
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
+        let &[ptr, len] = args else {
+            return Err(MlrFnLoweringError::Bug(format!(
+                "intrinsic 'slice_from_raw_parts' expects 2 arguments, got {}",
+                args.len()
+            )));
+        };
+
+        let ptr = self.build_op(ptr)?.into_pointer_value();
+        let len = self.build_op(len)?.into_int_value();
+
+        let fat_ptr_ty = self.parent.fat_ptr_type();
+        let undef = fat_ptr_ty.get_undef();
+        let with_ptr = self.iw_builder.build_insert_value(undef, ptr, 0, "slice_with_ptr")?;
+        let with_len = self.iw_builder.build_insert_value(with_ptr, len, 1, "slice_with_len")?;
+        Ok(with_len.as_basic_value_enum())
+    }
+
+    fn build_slice_len_intrinsic(&mut self, args: &[mlr::Op<'ctxt>]) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
+        let &[slice] = args else {
+            return Err(MlrFnLoweringError::Bug(format!(
+                "intrinsic 'slice_len' expects 1 argument, got {}",
+                args.len()
+            )));
+        };
+
+        let slice_val = self.build_op(slice)?.into_struct_value();
+        let len = self.iw_builder.build_extract_value(slice_val, 1, "slice_len")?;
+        Ok(len)
+    }
+
+    fn build_slice_at_intrinsic(
+        &mut self,
+        fn_inst: mr_fns::FnInst<'ctxt>,
+        args: &[mlr::Op<'ctxt>],
+    ) -> MlrFnLoweringResult<BasicValueEnum<'iw>> {
+        let &[slice, index] = args else {
+            return Err(MlrFnLoweringError::Bug(format!(
+                "intrinsic 'slice_at' expects 2 arguments, got {}",
+                args.len()
+            )));
+        };
+
+        let gen_args = self.substitute_slice(fn_inst.gen_args);
+        let elem_ty = gen_args[0];
+        let iw_elem_ty = self.get_ty_as_basic_type_enum(elem_ty)?;
+
+        let slice_val = self.build_op(slice)?.into_struct_value();
+        let data_ptr = self
+            .iw_builder
+            .build_extract_value(slice_val, 0, "slice_data")?
+            .into_pointer_value();
+
+        let index = self.build_op(index)?.into_int_value();
+
+        let result = unsafe { self.iw_builder.build_gep(iw_elem_ty, data_ptr, &[index], "slice_at")? };
         Ok(result.as_basic_value_enum())
     }
 }

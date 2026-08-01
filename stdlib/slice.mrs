@@ -1,0 +1,3 @@
+fn slice_from_raw_parts<T>(ptr: *T, len: isize) -> &[T];
+fn slice_len<T>(s: &[T]) -> isize;
+fn slice_at<T>(s: &[T], index: isize) -> &T;

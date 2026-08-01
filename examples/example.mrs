@@ -1,9 +1,15 @@
 fn main() -> i32 {
-    let mut x = 5;
-    print_i32(&mut x);
+    let p: *i32 = alloc_n::<i32>(3);
+    *p = 10;
+    *(p.offset(1)) = 20;
+    *(p.offset(2)) = 30;
 
-    let b = Box::new(42);
-    print_i32(&b);
+    let s: &[i32] = slice_from_raw_parts(p, 3);
+    let n = slice_len(s);
+    let a = *slice_at(s, 0);
+    let b = *slice_at(s, 1);
+    let c = *slice_at(s, 2);
+    printf("len=%d a=%d b=%d c=%d\n", n as i32, a, b, c);
 
     x
 }
