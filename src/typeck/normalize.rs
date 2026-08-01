@@ -203,6 +203,10 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
                 resolution: self.normalize_mthd_resolution(resolution),
                 steps: self.normalize_deref_steps(steps),
             },
+            ExprExtra::Index { resolution, steps } => ExprExtra::Index {
+                resolution: self.normalize_mthd_resolution(resolution),
+                steps: self.normalize_deref_steps(steps),
+            },
             ExprExtra::FieldAccess { steps, index } => ExprExtra::FieldAccess {
                 steps: self.normalize_deref_steps(steps),
                 index,

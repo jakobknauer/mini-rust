@@ -50,6 +50,11 @@ pub enum ExprDef<'hlr> {
         field: FieldSpec,
     },
 
+    Index {
+        obj: Expr<'hlr>,
+        index: Expr<'hlr>,
+    },
+
     Tuple(ExprSlice<'hlr>),
 
     Assign {

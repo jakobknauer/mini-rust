@@ -5,7 +5,7 @@ fn main() -> i32 {
     v.push(3);
 
     let slc: &[i32] = &v;
-    *slc.index(2isize)
+    *slc[2isize]
 }
 
 fn print_i32(x: &i32) {

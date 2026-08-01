@@ -78,6 +78,10 @@ impl<'a, 'ctxt> Mutck<'a, 'ctxt> {
                 Ok(())
             }
             FieldAccess { base, .. } => self.check_expr(*base),
+            Index { obj, index } => {
+                self.check_expr(*obj)?;
+                self.check_expr(*index)
+            }
             Tuple(exprs) => self.check_exprs(exprs),
             Assign { target, value } => {
                 self.check_assign_place(*target)?;

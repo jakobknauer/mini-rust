@@ -165,6 +165,12 @@ impl<'ctxt, 'a, W: Write> HlrPrinter<'ctxt, 'a, W> {
                     hlr::FieldSpec::Index(idx) => write!(self.writer, ".{}", idx),
                 }
             }
+            Index { obj, index } => {
+                self.print_expr(*obj)?;
+                write!(self.writer, "[")?;
+                self.print_expr(*index)?;
+                write!(self.writer, "]")
+            }
             Tuple(exprs) => {
                 write!(self.writer, "(")?;
                 for (i, &e) in exprs.iter().enumerate() {

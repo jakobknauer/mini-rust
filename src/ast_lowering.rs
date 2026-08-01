@@ -282,7 +282,7 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
                 body,
             } => self.lower_closure_expr(params, return_ty, body),
             &Range { start, end, inclusive } => self.lower_range_expr(start, end, inclusive),
-            &Index { .. } => unimplemented!("indexing"),
+            &Index { obj, index } => self.lower_index_expr(obj, index),
         }
     }
 
@@ -743,6 +743,17 @@ impl<'a, 'ctxt, 'ast> AstLowerer<'a, 'ctxt> {
             base: obj,
             field: field_spec,
         };
+        Ok(self.hlr.expr(expr))
+    }
+
+    fn lower_index_expr(
+        &mut self,
+        obj: ast::Expr<'ast>,
+        index: ast::Expr<'ast>,
+    ) -> AstLoweringResult<hlr::Expr<'ctxt>> {
+        let obj = self.lower_expr(obj)?;
+        let index = self.lower_expr(index)?;
+        let expr = hlr::ExprDef::Index { obj, index };
         Ok(self.hlr.expr(expr))
     }
 

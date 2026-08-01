@@ -67,6 +67,11 @@ pub enum ExprExtra<'ty> {
         resolution: MthdResolution<'ty>,
         steps: Vec<DerefStep<'ty>>,
     },
+    #[allow(dead_code)]
+    Index {
+        resolution: MthdResolution<'ty>,
+        steps: Vec<DerefStep<'ty>>,
+    },
     FieldAccess {
         steps: Vec<DerefStep<'ty>>,
         index: usize,
@@ -183,6 +188,7 @@ impl<'a, 'ctxt: 'a> Typeck<'a, 'ctxt> {
             } => self.check_mthd_call(expr.1, *receiver, mthd_name, *gen_args, args),
             hlr::ExprDef::Struct { constructor, fields } => self.check_struct_expr(constructor, fields),
             hlr::ExprDef::FieldAccess { base, field } => self.check_field_access(expr.1, *base, field),
+            hlr::ExprDef::Index { .. } => todo!("index typeck"),
             hlr::ExprDef::Tuple(exprs) => self.check_tuple_expr(exprs),
             hlr::ExprDef::Assign { target, value } => self.check_assignment(*target, *value),
             hlr::ExprDef::Deref(inner) => self.check_deref(expr.1, *inner),

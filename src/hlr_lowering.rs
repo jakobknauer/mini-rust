@@ -134,6 +134,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             MthdCall { receiver, args, .. } => self.lower_mthd_call(expr_id, *receiver, args),
             Struct { constructor, fields } => self.lower_struct_expr(expr_id, constructor, fields),
             FieldAccess { base, .. } => self.lower_field_access(expr_id, *base),
+            Index { .. } => todo!("index lowering"),
             Tuple(exprs) => self.lower_tuple(exprs),
             Assign { target, value } => self.lower_assign(*target, *value),
             Deref(inner) => self.lower_deref(expr_id, *inner),
