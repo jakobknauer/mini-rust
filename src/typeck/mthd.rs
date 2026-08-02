@@ -224,6 +224,7 @@ impl<'a, 'ctxt: 'a> super::Typeck<'a, 'ctxt> {
 
         let all_gen_var_subst = inst.get_subst();
 
-        self.ctxt.tys.substitute(fn_ty, &all_gen_var_subst, Some(inst.impl_ty))
+        let substituted = self.ctxt.tys.substitute(fn_ty, &all_gen_var_subst, Some(inst.impl_ty));
+        self.normalize(substituted)
     }
 }

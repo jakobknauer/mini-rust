@@ -257,6 +257,8 @@ impl<'a, 'ctxt> MlrBuilder<'a, 'ctxt> {
 
         let all_subst = inst.get_subst();
 
-        self.ctxt.tys.substitute(fn_ty, &all_subst, Some(inst.impl_ty))
+        let substituted = self.ctxt.tys.substitute(fn_ty, &all_subst, Some(inst.impl_ty));
+        let constraints: Vec<_> = self.fn_.all_constraints().cloned().collect();
+        self.ctxt.normalize_ty_with_constraints(substituted, &constraints)
     }
 }
