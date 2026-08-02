@@ -83,6 +83,10 @@ pub enum TypeckError<'ctxt> {
         left_ty: ty::Ty<'ctxt>,
         right_ty: ty::Ty<'ctxt>,
     },
+    IndexTraitNotImplemented {
+        obj_ty: ty::Ty<'ctxt>,
+        index_ty: ty::Ty<'ctxt>,
+    },
     UnaryOpTypeMismatch {
         operator: hlr::UnaryOperator,
         operand_ty: ty::Ty<'ctxt>,

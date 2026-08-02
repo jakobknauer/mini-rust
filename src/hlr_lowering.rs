@@ -134,7 +134,7 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             MthdCall { receiver, args, .. } => self.lower_mthd_call(expr_id, *receiver, args),
             Struct { constructor, fields } => self.lower_struct_expr(expr_id, constructor, fields),
             FieldAccess { base, .. } => self.lower_field_access(expr_id, *base),
-            Index { .. } => todo!("index lowering"),
+            Index { obj, index } => self.lower_index(expr_id, *obj, *index),
             Tuple(exprs) => self.lower_tuple(exprs),
             Assign { target, value } => self.lower_assign(*target, *value),
             Deref(inner) => self.lower_deref(expr_id, *inner),
@@ -393,6 +393,29 @@ impl<'a, 'ctxt: 'a> HlrLowerer<'a, 'ctxt> {
             .collect();
 
         self.builder.insert_call_val(callee_op, call_args).into()
+    }
+
+    fn lower_index(
+        &mut self,
+        expr_id: hlr::ExprId,
+        obj: hlr::Expr<'ctxt>,
+        index: hlr::Expr<'ctxt>,
+    ) -> LoweredExpr<'ctxt> {
+        let ExprExtra::Index { resolution, steps } = &self.typing.expr_extra[&expr_id] else {
+            panic!("expected Index extra for Index")
+        };
+        let callee_op = self.lower_mthd_resolution_to_op(resolution);
+
+        let base_place = self.lower_deref_chain_to_place(obj, steps);
+        let addr_val = self.builder.insert_addr_of_val(base_place);
+        let addr_place = self.builder.store_val(addr_val);
+        let obj_op = self.builder.insert_copy_op(addr_place);
+
+        let index_op = self.lower_to_op(index);
+
+        let call_val = self.builder.insert_call_val(callee_op, vec![obj_op, index_op]);
+        let call_op = LoweredExpr::from(call_val).into_op(&mut self.builder);
+        self.builder.insert_deref_place(call_op).into()
     }
 
     fn lower_qualified_mthd(&mut self, expr_id: hlr::ExprId) -> LoweredExpr<'ctxt> {

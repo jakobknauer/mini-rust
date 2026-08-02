@@ -4,8 +4,8 @@ fn main() -> i32 {
     v.push(2);
     v.push(3);
 
-    let slc: &[i32] = &v;
-    *slc[2isize]
+    let w: &[i32] = &v;
+    v[1isize] + v[2isize]
 }
 
 fn print_i32(x: &i32) {

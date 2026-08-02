@@ -222,6 +222,9 @@ fn format_typeck_error<'ctxt>(err: &TypeckError<'ctxt>) -> String {
             "operator '{:?}' is not implemented for '{}' and '{}'",
             operator, left_ty, right_ty
         ),
+        IndexTraitNotImplemented { obj_ty, index_ty } => {
+            format!("type '{}' cannot be indexed by '{}'", obj_ty, index_ty)
+        }
         UnaryOpTypeMismatch { operator, operand_ty } => {
             format!("operator '{:?}' cannot be applied to '{}'", operator, operand_ty)
         }
