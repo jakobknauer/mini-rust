@@ -107,6 +107,17 @@ impl<T> Deref for Vec<T> {
     }
 }
 
+impl<T> Index<isize> for Vec<T> {
+    type Output = T;
+
+    fn index(&self, index: isize) -> &T {
+        match self.get(index) {
+            Option::Some { item } => item,
+            Option::None => panic("vec index out of bounds\n"),
+        }
+    }
+}
+
 impl<T> IntoIterator for Vec<T> {
     type Item = T;
     type IntoIter = VecIter<T>;
