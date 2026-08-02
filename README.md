@@ -19,6 +19,7 @@ Supported features include:
     - `==` and `!=` via the `Eq` trait, providing a default impl for `!=`
     - Unary `-` and `!` via the `Neg` and `Not` traits, respectively
     - Unary `*` via the `Deref` trait, also used for deref coercion
+    - Indexing `[]` via the `Index` trait
 
 Major missing features include:
 - Lifetimes and borrow checking
