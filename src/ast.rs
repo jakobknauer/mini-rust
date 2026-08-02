@@ -396,9 +396,7 @@ pub enum ExprKind<'ast> {
         field: FieldDescriptor<'ast>,
     },
     Index {
-        #[allow(unused)]
         obj: Expr<'ast>,
-        #[allow(unused)]
         index: Expr<'ast>,
     },
     Block(Block<'ast>),
@@ -443,7 +441,6 @@ pub enum ExprKind<'ast> {
         return_ty: Option<TyAnnot<'ast>>,
         body: Block<'ast>,
     },
-    #[allow(dead_code)]
     Range {
         start: Expr<'ast>,
         end: Expr<'ast>,
